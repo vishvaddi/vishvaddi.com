@@ -19,7 +19,18 @@ const pages = defineCollection({
     title: z.string(),
     description: z.string().optional(),
     ogImage: z.string().optional(),
+    updatedDate: z.coerce.date().optional(),
   }),
 });
 
-export const collections = { notes, pages };
+const years = defineCollection({
+  loader: glob({ pattern: "*.md", base: "./src/content/years" }),
+  schema: z.object({
+    title: z.string(),
+    description: z.string().optional(),
+    ogImage: z.string().optional(),
+    updatedDate: z.coerce.date().optional(),
+  }),
+});
+
+export const collections = { notes, pages, years };

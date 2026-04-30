@@ -1,0 +1,63 @@
+---
+import Base from "../layouts/Base.astro";
+import { getCollection } from "astro:content";
+
+const notes = await getCollection("notes", ({ data }) => !data.draft);
+const pages = await getCollection("pages");
+const years = await getCollection("years");
+
+interface FeedItem {
+  href: string;
+  title: string;
+  date: Date;
+  type: "page" | "note" | "year";
+}
+
+const feed: FeedItem[] = [
+  ...pages.map((p) => ({
+    href: `/${p.id}/`,
+    title: p.data.title,
+    date: p.data.updatedDate ?? new Date(0),
+    type: "page" as const,
+  })),
+  ...notes.map((n) => ({
+    href: `/notes/${n.id}/`,
+    title: n.data.title,
+    date: n.data.updatedDate ?? n.data.pubDate,
+    type: "note" as const,
+  })),
+  ...years.map((y) => ({
+    href: `/year/${y.id}/`,
+    title: y.data.title,
+    date: y.data.updatedDate ?? new Date(0),
+    type: "year" as const,
+  })),
+].sort((a, b) => b.date.valueOf() - a.date.valueOf());
+
+const dateFmt = new Intl.DateTimeFormat("en-AU", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+});
+---
+
+<Base
+  title="Latest"
+  description="Recent additions and updates across the site."
+  ogImage="/og/index.png"
+>
+  <h1>Latest</h1>
+  <p>
+    Recent additions and updates across the site, newest first. The site is a working document; everything here is editable.
+  </p>
+  <ul>
+    {feed.slice(0, 60).map((item) => (
+      <li>
+        <a href={item.href}>{item.title}</a>
+        <span style="color: var(--muted); font-size: 0.875rem;">
+          {" · "}{item.type}{" · "}{dateFmt.format(item.date)}
+        </span>
+      </li>
+    ))}
+  </ul>
+</Base>

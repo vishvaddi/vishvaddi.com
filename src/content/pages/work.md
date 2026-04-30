@@ -2,6 +2,7 @@
 title: Work
 description: Vish Vaddi — estimator, retail and commercial fit-out, Sydney.
 ogImage: /og/work.png
+updatedDate: 2026-04-30
 ---
 
 # Work

@@ -2,6 +2,7 @@
 title: Now
 description: What I'm focused on right now.
 ogImage: /og/now.png
+updatedDate: 2026-04-30
 ---
 
 # Now

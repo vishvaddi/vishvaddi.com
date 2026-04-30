@@ -2,6 +2,7 @@
 title: About
 description: About Vish Vaddi.
 ogImage: /og/about.png
+updatedDate: 2026-04-30
 ---
 
 # About

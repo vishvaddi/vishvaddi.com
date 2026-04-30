@@ -2,6 +2,7 @@
 title: Blog
 description: Longer writing — less curated than /notes.
 ogImage: /og/blog.png
+updatedDate: 2026-04-30
 ---
 
 # Blog

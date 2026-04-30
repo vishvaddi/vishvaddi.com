@@ -2,6 +2,7 @@
 title: Prepping
 description: Bushcraft, survival, first aid, and self-sufficiency notes — written from an Australian context.
 ogImage: /og/prepping.png
+updatedDate: 2026-04-30
 ---
 
 # Prepping and survival
