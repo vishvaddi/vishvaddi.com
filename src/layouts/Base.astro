@@ -1,0 +1,53 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = "Vish Vaddi",
+  description = "Vish Vaddi — senior estimator, builder, writer.",
+} = Astro.props;
+
+const fullTitle = title === "Vish Vaddi" ? title : `${title} · Vish Vaddi`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{fullTitle}</title>
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a href="/"><strong>Vish Vaddi</strong></a>
+        <span> · </span>
+        <a href="/work">Work</a>
+        <span> · </span>
+        <a href="/notes">Notes</a>
+        <span> · </span>
+        <a href="/now">Now</a>
+        <span> · </span>
+        <a href="/about">About</a>
+      </nav>
+      <hr />
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer>
+      <hr />
+      <p style="font-size: 0.875rem; color: #888;">
+        © {new Date().getFullYear()} Vish Vaddi · Sydney ·
+        <a href="mailto:vishvaddi@gmail.com">vishvaddi@gmail.com</a>
+      </p>
+    </footer>
+  </body>
+</html>

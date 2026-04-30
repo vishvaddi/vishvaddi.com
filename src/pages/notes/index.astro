@@ -1,0 +1,42 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+
+const notes = (await getCollection("notes", ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+);
+
+const dateFmt = new Intl.DateTimeFormat("en-AU", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+});
+---
+
+<Base
+  title="Notes"
+  description="Essays and evergreen notes by Vish Vaddi."
+>
+  <h1>Notes</h1>
+  <p>
+    Essays and atomic ideas. Some are durable, some are wrong, all are written
+    in my own voice. Newest first.
+  </p>
+
+  {
+    notes.length === 0 ? (
+      <p style="color: #888;">Nothing published yet.</p>
+    ) : (
+      <ul>
+        {notes.map((note) => (
+          <li>
+            <a href={`/notes/${note.id}`}>{note.data.title}</a>
+            <span style="color: #888; font-size: 0.875rem;">
+              {" · "}{dateFmt.format(note.data.pubDate)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+</Base>

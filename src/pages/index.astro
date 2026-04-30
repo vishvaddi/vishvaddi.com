@@ -1,17 +1,39 @@
 ---
-
+import Base from "../layouts/Base.astro";
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<Base>
+  <h1>Vish Vaddi</h1>
+  <p>
+    Senior estimator in Sydney — shopfitting, retail fitout, tendering. I price
+    construction work for a living and build software on the side.
+  </p>
+  <p>
+    This site is half a CV, half a notebook. Work on the right, writing on the
+    left, both honest.
+  </p>
+
+  <hr />
+
+  <h2>Three doors</h2>
+  <ul>
+    <li>
+      <a href="/work"><strong>Work</strong></a> — what I do professionally,
+      project list, how to hire me.
+    </li>
+    <li>
+      <a href="/notes"><strong>Notes</strong></a> — essays, evergreen ideas,
+      things I've changed my mind about.
+    </li>
+    <li>
+      <a href="/now"><strong>Now</strong></a> — what I'm focused on this month
+      (<a href="https://nownownow.com/about">nownownow convention</a>).
+    </li>
+  </ul>
+
+  <hr />
+
+  <p style="font-size: 0.875rem; color: #888;">
+    More about the person behind this on the <a href="/about">about page</a>.
+  </p>
+</Base>
