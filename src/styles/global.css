@@ -6,10 +6,39 @@
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
+:root {
+  --bg: #fafaf7;
+  --fg: #1a1a1a;
+  --muted: #888;
+  --rule: #e5e5e0;
+  --link-underline: #c9c9c9;
+  --code-bg: #efefe8;
+}
+
+:root[data-theme="dark"] {
+  --bg: #161613;
+  --fg: #e8e8e4;
+  --muted: #888;
+  --rule: #2a2a26;
+  --link-underline: #555;
+  --code-bg: #2a2a26;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161613;
+    --fg: #e8e8e4;
+    --muted: #888;
+    --rule: #2a2a26;
+    --link-underline: #555;
+    --code-bg: #2a2a26;
+  }
+}
+
 html {
   font-family: var(--font-serif);
-  color: #1a1a1a;
-  background: #fafaf7;
+  color: var(--fg);
+  background: var(--bg);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -34,12 +63,12 @@ h2 { font-size: 1.375rem; margin-top: 2.5rem; }
 h3 { font-size: 1.125rem; margin-top: 2rem; }
 
 a {
-  color: #1a1a1a;
+  color: var(--fg);
   text-decoration: underline;
-  text-decoration-color: #c9c9c9;
+  text-decoration-color: var(--link-underline);
   text-underline-offset: 3px;
 }
-a:hover { text-decoration-color: #1a1a1a; }
+a:hover { text-decoration-color: var(--fg); }
 
 p { margin: 1rem 0; }
 
@@ -48,22 +77,27 @@ li { margin: 0.25rem 0; }
 
 hr {
   border: none;
-  border-top: 1px solid #e5e5e0;
+  border-top: 1px solid var(--rule);
   margin: 2.5rem 0;
 }
 
 code {
   font-family: var(--font-mono);
   font-size: 0.9em;
-  background: #efefe8;
+  background: var(--code-bg);
   padding: 0.1em 0.35em;
   border-radius: 3px;
 }
 
-@media (prefers-color-scheme: dark) {
-  html { color: #e8e8e4; background: #161613; }
-  a { color: #e8e8e4; text-decoration-color: #555; }
-  a:hover { text-decoration-color: #e8e8e4; }
-  hr { border-top-color: #2a2a26; }
-  code { background: #2a2a26; }
+.theme-toggle {
+  background: none;
+  border: none;
+  font: inherit;
+  color: var(--fg);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-color: var(--link-underline);
+  text-underline-offset: 3px;
 }
+.theme-toggle:hover { text-decoration-color: var(--fg); }

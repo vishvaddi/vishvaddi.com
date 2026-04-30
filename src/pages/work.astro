@@ -1,81 +1,16 @@
 ---
 import Base from "../layouts/Base.astro";
+import { getEntry, render } from "astro:content";
+
+const entry = await getEntry("pages", "work");
+if (!entry) throw new Error("pages/work.md not found");
+const { Content } = await render(entry);
 ---
 
 <Base
-  title="Work"
-  description="Vish Vaddi — senior estimator, retail and commercial fit-out, Sydney."
+  title={entry.data.title}
+  description={entry.data.description}
+  ogImage={entry.data.ogImage}
 >
-  <h1>Work</h1>
-  <p>
-    I price construction work. Specifically, retail and commercial fit-out at
-    the premium end — projects where the brand cares about a millimetre, the
-    deadline cares about a day, and the client cares about both. Sydney based,
-    mostly shopfitting, regularly Italian and European luxury, always under
-    programmes that don't allow for guesswork.
-  </p>
-
-  <h2>What I do</h2>
-  <ul>
-    <li>Tender pricing for retail and commercial fit-out — the kind of work where the difference between winning and losing is whether you spotted the assumption nobody asked you to question.</li>
-    <li>Scope generation from architect drawings, increasingly with AI tooling I've built myself because the off-the-shelf stuff doesn't know what it's looking at.</li>
-    <li>Subcontractor rate management and trade-by-trade build-up. The boring part most estimators skip — and the part most variations come from.</li>
-    <li>Value engineering without quietly removing the things that made the design good.</li>
-    <li>Multi-trade coordination on programmes that don't forgive miscommunication.</li>
-  </ul>
-
-  <h2>Where I work</h2>
-  <ul>
-    <li><strong>Premium beauty and personal care</strong> — Mecca, Aesop, and similar.</li>
-    <li><strong>Italian and European luxury fashion</strong> — MaxMara and similar. The brands whose tender docs are translated from Milan and assume conventions Australia doesn't share.</li>
-    <li><strong>Premium specialist retail</strong> — Kinokuniya, Libertine Parfumerie, and similar.</li>
-    <li><strong>Commercial fit-out</strong> — interior fit-out for retail and food and beverage tenants across Sydney and Melbourne.</li>
-  </ul>
-
-  <h2>Selected projects</h2>
-  <ul>
-    <li><strong>Aesop</strong> — Sydney Airport T1.</li>
-    <li><strong>MaxMara</strong> — Chadstone (Melbourne flagship).</li>
-    <li><strong>Kinokuniya</strong> — Chatswood Chase.</li>
-    <li><strong>Libertine Parfumerie</strong> — Chatswood Chase and Armadale (Melbourne).</li>
-  </ul>
-
-  <h2>How I think about the craft</h2>
-  <p>
-    Estimating is a discipline of named risk. Every number you submit is a
-    defensible position on every assumption underneath it — drawings,
-    finishes, sub-trade rates, programme, scope splits, the cost of every
-    minor inclusion that the next site meeting will reveal wasn't actually
-    minor. The estimators who win consistently aren't the cheapest. They're
-    the ones who treat every hidden assumption as a future variation waiting
-    to happen, and either price it in or kill it as a clarification before
-    the tender goes out.
-  </p>
-  <p>
-    Same discipline runs through the tooling I build. Generic estimating
-    software loses to estimator-built tools because the builder knows which
-    assumptions are dangerous and which are decoration. The customer is the
-    builder. See <a href="/notes/domain-expertise-vs-ai">Domain expertise is
-    the moat AI cannot replicate</a>.
-  </p>
-
-  <h2>Currently building</h2>
-  <p>
-    AI-assisted scope-generation tooling for shopfitting estimators, used on
-    my own tenders first. Bottom-up: identify the recurring three-hour grind
-    in a real estimate, build a small targeted tool that compresses it to
-    twenty minutes, validate by using it on the next tender. Then maybe sell
-    it. More as the work matures and I have something worth showing.
-  </p>
-
-  <h2>Hire me, or talk to me</h2>
-  <p>
-    Best at <a href="mailto:vishvaddi@gmail.com">vishvaddi@gmail.com</a>. I'm
-    open to:
-  </p>
-  <ul>
-    <li>Senior estimator roles in fit-out, shopfitting, premium retail. Sydney.</li>
-    <li>Estimating consulting on individual tenders — second-set-of-eyes work or full-quote builds.</li>
-    <li>A long conversation with anyone building software for the AU construction industry. There's a lot to fix and not enough people who actually know what's broken.</li>
-  </ul>
+  <Content />
 </Base>

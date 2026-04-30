@@ -2,8 +2,8 @@
 import Base from "../layouts/Base.astro";
 import { getEntry, render } from "astro:content";
 
-const entry = await getEntry("pages", "now");
-if (!entry) throw new Error("pages/now.md not found");
+const entry = await getEntry("pages", "movies");
+if (!entry) throw new Error("pages/movies.md not found");
 const { Content } = await render(entry);
 ---
 

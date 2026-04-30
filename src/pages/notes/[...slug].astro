@@ -20,7 +20,11 @@ const dateFmt = new Intl.DateTimeFormat("en-AU", {
 });
 ---
 
-<Base title={note.data.title} description={note.data.description}>
+<Base
+  title={note.data.title}
+  description={note.data.description}
+  ogImage={`/og/notes/${note.id}.png`}
+>
   <article>
     <h1>{note.data.title}</h1>
     <p style="color: #888; font-size: 0.875rem;">
