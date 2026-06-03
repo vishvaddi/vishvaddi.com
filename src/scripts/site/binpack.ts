@@ -1,42 +1,51 @@
-// First-fit-decreasing 1D bin packing for cut lists. Pure, deterministic, no I/O.
+// 1D cut-list packing. Best-fit-decreasing across one OR several stock lengths.
+// Pure, deterministic, no I/O.
 export interface CutPiece { name: string; length: number; qty: number }
 export interface Placed { name: string; length: number }
-export interface Bin { pieces: Placed[]; used: number; remaining: number; stock: number }
+export interface Bin { stock: number; pieces: Placed[]; used: number; remaining: number }
 export interface PackResult {
   bins: Bin[];
-  oversize: Placed[]; // pieces longer than a stock length — cannot be cut
+  oversize: Placed[]; // longer than the longest stock — cannot be cut
 }
 
-export function binPackFFD(pieces: CutPiece[], stockLen: number, kerf: number): PackResult {
+export function pack(pieces: CutPiece[], stocks: number[], kerf: number): PackResult {
   const flat: Placed[] = [];
   for (const p of pieces) {
     for (let i = 0; i < p.qty; i++) flat.push({ name: p.name, length: p.length });
   }
   flat.sort((a, b) => b.length - a.length);
 
+  // unique stock lengths, ascending (so we can pick the smallest that fits)
+  const stockSorted = [...new Set(stocks.filter((s) => s > 0))].sort((a, b) => a - b);
+  const maxStock = stockSorted.length ? stockSorted[stockSorted.length - 1] : 0;
+
   const bins: Bin[] = [];
   const oversize: Placed[] = [];
 
   for (const piece of flat) {
-    if (piece.length > stockLen) { oversize.push(piece); continue; }
-    let placed = false;
+    if (!maxStock || piece.length > maxStock) {
+      oversize.push(piece);
+      continue;
+    }
+    // best-fit into an existing bin (smallest leftover wins → tightest pack)
+    let best: Bin | null = null;
+    let bestLeft = Infinity;
     for (const bin of bins) {
-      // each additional piece in a bin needs a kerf (saw cut) before it
-      if (bin.remaining >= piece.length + kerf) {
-        bin.pieces.push(piece);
-        bin.used += piece.length + kerf;
-        bin.remaining -= piece.length + kerf;
-        placed = true;
-        break;
+      const need = piece.length + (bin.pieces.length ? kerf : 0);
+      if (bin.remaining >= need) {
+        const left = bin.remaining - need;
+        if (left < bestLeft) { bestLeft = left; best = bin; }
       }
     }
-    if (!placed) {
-      bins.push({
-        pieces: [piece],
-        used: piece.length,
-        remaining: stockLen - piece.length,
-        stock: stockLen,
-      });
+    if (best) {
+      const need = piece.length + (best.pieces.length ? kerf : 0);
+      best.pieces.push(piece);
+      best.used += piece.length;
+      best.remaining -= need;
+    } else {
+      // open a new bin on the smallest stock length that fits this piece
+      const stock = stockSorted.find((s) => s >= piece.length)!;
+      bins.push({ stock, pieces: [piece], used: piece.length, remaining: stock - piece.length });
     }
   }
   return { bins, oversize };

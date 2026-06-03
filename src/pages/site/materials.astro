@@ -16,12 +16,13 @@ import "../../styles/site.css";
 
     <div class="btn-row no-print">
       <button type="button" class="btn" id="print">Save as PDF</button>
+      <button type="button" class="btn btn-ghost" id="email">Email to myself</button>
     </div>
     <p class="note-foot">Estimates only — allow for laps, cuts and site conditions. <a href="/site">← all tools</a></p>
   </div>
 
   <script>
-    import { mountCalcs, type CalcSpec } from "../../scripts/site/calc";
+    import { mountCalcs, wireActions, type CalcSpec } from "../../scripts/site/calc";
 
     const f2 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 2 });
     const f0 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 0 });
@@ -141,7 +142,8 @@ import "../../styles/site.css";
       },
     ];
 
-    mountCalcs(document.getElementById("calcs")!, specs);
-    document.getElementById("print")!.addEventListener("click", () => window.print());
+    const root = document.getElementById("calcs")!;
+    mountCalcs(root, specs);
+    wireActions(root, "Material calculators");
   </script>
 </Base>

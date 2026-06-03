@@ -179,3 +179,78 @@ export function initConverter() {
   fill();
   convert();
 }
+
+// Build a plain-text summary of every calculator's current result (for email).
+export function summarize(root: HTMLElement, title: string): string {
+  const lines = [`${title} — vishvaddi.com`, ""];
+  root.querySelectorAll(".calc").forEach((sec) => {
+    const h = sec.querySelector("h2")?.textContent ?? "";
+    const stats: string[] = [];
+    sec.querySelectorAll(".stat").forEach((s) => {
+      const n = s.querySelector(".n")?.textContent ?? "";
+      const l = s.querySelector(".l")?.textContent ?? "";
+      if (n) stats.push(`${l}: ${n}`);
+    });
+    if (stats.length) lines.push(`${h} — ${stats.join("; ")}`);
+  });
+  lines.push("", location.href);
+  return lines.join("\n");
+}
+
+// Wire a "Save as PDF" + "Email to myself" button pair for a calc page.
+export function wireActions(root: HTMLElement, title: string) {
+  const print = document.getElementById("print");
+  const email = document.getElementById("email");
+  print?.addEventListener("click", () => window.print());
+  email?.addEventListener("click", () => {
+    location.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(summarize(root, title))}`;
+  });
+}
+
+// Roadmap voting. If `endpoint` is set, reads/writes live tallies from the
+// isolated votes Worker; otherwise falls back to an email suggestion. Output is
+// numeric/textContent only — XSS-safe.
+export function initRoadmap(endpoint: string) {
+  const list = document.getElementById("roadmap");
+  if (!list) return;
+  const setCount = (opt: string, n: number) => {
+    const el = list.querySelector<HTMLElement>(`[data-count="${opt}"]`);
+    if (el) { el.textContent = String(n); el.hidden = false; }
+  };
+
+  async function load() {
+    if (!endpoint) return;
+    try {
+      const r = await fetch(endpoint, { method: "GET" });
+      const t = (await r.json()) as Record<string, number>;
+      for (const k of Object.keys(t)) setCount(k, Number(t[k]) || 0);
+    } catch { /* worker not deployed yet — page still works */ }
+  }
+
+  list.querySelectorAll<HTMLElement>("[data-option]").forEach((item) => {
+    const opt = item.dataset.option!;
+    const btn = item.querySelector<HTMLButtonElement>(".vote-btn");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      if (!endpoint) {
+        location.href = `mailto:?subject=${encodeURIComponent("Tool request: " + opt)}&body=${encodeURIComponent("I'd use this tool: " + opt + "\n" + location.href)}`;
+        return;
+      }
+      btn.disabled = true;
+      try {
+        const r = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ option: opt }),
+        });
+        const t = (await r.json()) as { tally?: Record<string, number> };
+        if (t.tally) for (const k of Object.keys(t.tally)) setCount(k, Number(t.tally[k]) || 0);
+        btn.textContent = "Voted ✓";
+      } catch {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  load();
+}
