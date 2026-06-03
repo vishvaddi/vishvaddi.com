@@ -154,6 +154,12 @@
 .rec-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #d33; margin-right: 0.4rem; animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: 0.3; } }
 
+/* pdf editor */
+.pdf-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid var(--site-line); }
+.pdf-label { font-family: var(--font-mono); font-size: 0.85rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pdf-ctrls { display: flex; gap: 0.25rem; white-space: nowrap; }
+.dropzone { border: 1.5px dashed var(--site-line-strong); border-radius: 8px; padding: 1.25rem; text-align: center; color: var(--muted); }
+
 @media print {
   header, footer, .no-print, .blueprint::before { display: none !important; }
   body { max-width: none; padding: 0; }

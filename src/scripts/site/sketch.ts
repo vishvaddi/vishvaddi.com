@@ -80,6 +80,21 @@ export function initSketch() {
       if (blob) download(`sketch-${new Date().toISOString().slice(0, 10)}.png`, URL.createObjectURL(blob));
     }, "image/png");
   });
+  document.getElementById("pdf")?.addEventListener("click", () => {
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const L = await import("pdf-lib");
+      const doc = await L.PDFDocument.create();
+      const png = await doc.embedPng(new Uint8Array(await blob.arrayBuffer()));
+      const maxW = 1000;
+      const scale = png.width > maxW ? maxW / png.width : 1;
+      const w = png.width * scale, h = png.height * scale;
+      const page = doc.addPage([w, h]);
+      page.drawImage(png, { x: 0, y: 0, width: w, height: h });
+      const out = await doc.save();
+      download(`sketch-${new Date().toISOString().slice(0, 10)}.pdf`, URL.createObjectURL(new Blob([out], { type: "application/pdf" })));
+    }, "image/png");
+  });
 
   fit();
 }
