@@ -6,6 +6,7 @@ interface Props {
   description?: string;
   ogImage?: string;
   updatedDate?: Date;
+  siteNav?: boolean;
 }
 
 const {
@@ -13,7 +14,24 @@ const {
   description = "Vish Vaddi — senior estimator, builder, writer.",
   ogImage = "/og/index.png",
   updatedDate,
+  siteNav = false,
 } = Astro.props;
+
+const siteTools: [string, string][] = [
+  ["/site", "All tools"],
+  ["/site/cut-list", "Cut List"],
+  ["/site/sheet", "2D Sheet"],
+  ["/site/materials", "Materials"],
+  ["/site/geometry", "Geometry"],
+  ["/site/convert", "Converter"],
+  ["/site/rate", "Rate Builder"],
+  ["/site/sketch", "Sketchpad"],
+  ["/site/voice", "Voice Notes"],
+  ["/site/pdf", "PDF Editor"],
+  ["/site/resources", "Resources"],
+  ["/site/roadmap", "Roadmap"],
+];
+const here = Astro.url.pathname.replace(/\/$/, "");
 
 const fullTitle = title === "Vish Vaddi" ? title : `${title} · Vish Vaddi`;
 const canonical = new URL(Astro.url.pathname, Astro.site);
@@ -89,6 +107,21 @@ const updatedFmt = updatedDate
       <hr />
     </header>
     <main>
+      {siteNav && (
+        <>
+          <nav class="site-rail" aria-label="Site tools">
+            <span class="rail-title">Site Tools</span>
+            {siteTools.map(([href, label]) => (
+              <a href={href} class={here === href.replace(/\/$/, "") ? "active" : ""}>{label}</a>
+            ))}
+          </nav>
+          <nav class="site-chips" aria-label="Site tools">
+            {siteTools.map(([href, label]) => (
+              <a href={href} class={here === href.replace(/\/$/, "") ? "active" : ""}>{label}</a>
+            ))}
+          </nav>
+        </>
+      )}
       <slot />
     </main>
     <footer>
