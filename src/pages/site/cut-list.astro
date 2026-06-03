@@ -1,0 +1,264 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+---
+
+<Base
+  title="Cut List Optimizer"
+  description="Free cut list optimiser — pack pieces into stock lengths, minimise offcut waste, print or email a cut plan. Runs entirely in your browser."
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Cut list</p>
+    <h1>Cut List Optimizer</h1>
+    <p>
+      Enter your pieces and stock length — this packs them to waste the least
+      material (first-fit-decreasing), accounting for saw kerf. All lengths in
+      millimetres. Nothing leaves your browser.
+    </p>
+
+    <form id="form" autocomplete="off" novalidate>
+      <div class="row-grid" style="grid-template-columns:1fr 1fr;">
+        <div class="field">
+          <label for="stock">Stock length (mm)</label>
+          <input type="number" id="stock" min="1" step="1" inputmode="numeric" />
+        </div>
+        <div class="field">
+          <label for="kerf">Saw kerf (mm)</label>
+          <input type="number" id="kerf" min="0" step="0.5" inputmode="decimal" />
+        </div>
+      </div>
+
+      <h2 style="font-size:1rem;margin-top:1.5rem;">Pieces</h2>
+      <div id="rows"></div>
+      <div class="btn-row no-print">
+        <button type="button" class="btn btn-ghost btn-sm" id="add-row">+ Add piece</button>
+      </div>
+    </form>
+
+    <div id="out" class="result" aria-live="polite"></div>
+
+    <div id="actions" class="btn-row no-print" hidden>
+      <button type="button" class="btn" id="save-pdf">Save as PDF</button>
+      <button type="button" class="btn btn-ghost" id="email">Email to myself</button>
+      <button type="button" class="btn btn-ghost" id="copy">Copy share link</button>
+      <span id="copied" style="align-self:center;font-size:0.85rem;color:var(--muted)" hidden>Link copied ✓</span>
+    </div>
+
+    <p class="note-foot">
+      Estimates only — always verify on site. <a href="/site">← all tools</a>
+    </p>
+  </div>
+
+  <script>
+    import { binPackFFD, type CutPiece } from "../../scripts/site/binpack";
+
+    const q = <T extends Element>(s: string, r: ParentNode = document) =>
+      r.querySelector(s) as T | null;
+
+    const rowsEl = q<HTMLDivElement>("#rows")!;
+    const stockEl = q<HTMLInputElement>("#stock")!;
+    const kerfEl = q<HTMLInputElement>("#kerf")!;
+    const out = q<HTMLDivElement>("#out")!;
+    const actions = q<HTMLDivElement>("#actions")!;
+
+    const num = (v: string, min = 0): number => {
+      const n = parseFloat(v);
+      return Number.isFinite(n) && n >= min ? n : 0;
+    };
+    const intNum = (v: string): number => {
+      const n = Math.floor(parseFloat(v));
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
+    const fmt = (n: number) =>
+      n.toLocaleString("en-AU", { maximumFractionDigits: 0 });
+
+    function addRow(name = "", length = "", qty = "1") {
+      const row = document.createElement("div");
+      row.className = "row-grid";
+      row.innerHTML =
+        '<div class="field"><label>Label</label><input type="text" class="r-name" maxlength="40" placeholder="Piece"></div>' +
+        '<div class="field"><label>Length (mm)</label><input type="number" class="r-len" min="0" step="1" inputmode="numeric"></div>' +
+        '<div class="field"><label>Qty</label><input type="number" class="r-qty" min="1" step="1" inputmode="numeric"></div>' +
+        '<button type="button" class="btn btn-ghost btn-sm r-del no-print" aria-label="Remove piece">✕</button>';
+      // user values set via .value (never interpolated into HTML)
+      q<HTMLInputElement>(".r-name", row)!.value = name;
+      q<HTMLInputElement>(".r-len", row)!.value = length;
+      q<HTMLInputElement>(".r-qty", row)!.value = qty;
+      q<HTMLButtonElement>(".r-del", row)!.addEventListener("click", () => {
+        row.remove();
+        compute();
+      });
+      row.addEventListener("input", compute);
+      rowsEl.appendChild(row);
+    }
+
+    function readState() {
+      const stock = num(stockEl.value);
+      const kerf = num(kerfEl.value);
+      const pieces: CutPiece[] = [];
+      rowsEl.querySelectorAll(".row-grid").forEach((row) => {
+        const name = q<HTMLInputElement>(".r-name", row)!.value.trim() || "Piece";
+        const length = num(q<HTMLInputElement>(".r-len", row)!.value);
+        const qty = intNum(q<HTMLInputElement>(".r-qty", row)!.value);
+        if (length > 0 && qty > 0) pieces.push({ name, length, qty });
+      });
+      return { stock, kerf, pieces };
+    }
+
+    function syncURL(stock: number, kerf: number, pieces: CutPiece[]) {
+      const p = new URLSearchParams();
+      if (stock) p.set("s", String(stock));
+      if (kerf) p.set("k", String(kerf));
+      const enc = pieces
+        .map((pc) => `${encodeURIComponent(pc.name)}:${pc.length}:${pc.qty}`)
+        .join(",");
+      if (enc) p.set("p", enc);
+      history.replaceState(null, "", p.toString() ? `?${p.toString()}` : location.pathname);
+    }
+
+    function stat(n: string, l: string) {
+      const d = document.createElement("div");
+      d.className = "stat";
+      const a = document.createElement("div");
+      a.className = "n";
+      a.textContent = n;
+      const b = document.createElement("div");
+      b.className = "l";
+      b.textContent = l;
+      d.append(a, b);
+      return d;
+    }
+
+    function compute() {
+      const { stock, kerf, pieces } = readState();
+      syncURL(stock, kerf, pieces);
+      out.textContent = "";
+      if (stock <= 0 || pieces.length === 0) {
+        actions.hidden = true;
+        return;
+      }
+      const { bins, oversize } = binPackFFD(pieces, stock, kerf);
+      let usedLen = 0;
+      for (const b of bins) usedLen += b.pieces.reduce((s, p) => s + p.length, 0);
+      const bars = bins.length;
+      const totalStock = bars * stock;
+      const waste = Math.max(0, totalStock - usedLen);
+      const wastePct = totalStock ? (waste / totalStock) * 100 : 0;
+
+      const grid = document.createElement("div");
+      grid.className = "stat-grid";
+      grid.append(
+        stat(String(bars), bars === 1 ? "stock length" : "stock lengths"),
+        stat(fmt(totalStock) + " mm", "total stock"),
+        stat(wastePct.toFixed(1) + "%", "waste"),
+        stat(fmt(waste) + " mm", "offcut total"),
+      );
+      out.append(grid);
+
+      if (oversize.length) {
+        const w = document.createElement("p");
+        w.className = "warn";
+        w.textContent =
+          `⚠ ${oversize.length} piece(s) longer than the stock length can't be cut: ` +
+          oversize.map((o) => `${o.name} ${fmt(o.length)}mm`).join(", ");
+        out.append(w);
+      }
+
+      const wrap = document.createElement("div");
+      wrap.className = "bars";
+      bins.forEach((bin, i) => {
+        const lbl = document.createElement("div");
+        lbl.className = "bar-label";
+        lbl.textContent =
+          `#${i + 1} · ${fmt(bin.stock)}mm · ${bin.pieces.length} cut${bin.pieces.length > 1 ? "s" : ""} · offcut ${fmt(bin.remaining)}mm`;
+        const bar = document.createElement("div");
+        bar.className = "bar";
+        bin.pieces.forEach((p) => {
+          const seg = document.createElement("div");
+          seg.className = "seg";
+          seg.style.width = (p.length / bin.stock) * 100 + "%";
+          seg.textContent = fmt(p.length);
+          seg.title = `${p.name} — ${fmt(p.length)}mm`;
+          bar.append(seg);
+        });
+        if (bin.remaining > 0) {
+          const seg = document.createElement("div");
+          seg.className = "seg offcut";
+          seg.style.width = (bin.remaining / bin.stock) * 100 + "%";
+          seg.textContent = fmt(bin.remaining);
+          seg.title = `offcut — ${fmt(bin.remaining)}mm`;
+          bar.append(seg);
+        }
+        wrap.append(lbl, bar);
+      });
+      out.append(wrap);
+      actions.hidden = false;
+    }
+
+    function summary(): string {
+      const { stock, kerf, pieces } = readState();
+      const { bins, oversize } = binPackFFD(pieces, stock, kerf);
+      let usedLen = 0;
+      for (const b of bins) usedLen += b.pieces.reduce((s, p) => s + p.length, 0);
+      const totalStock = bins.length * stock;
+      const waste = Math.max(0, totalStock - usedLen);
+      const lines = [
+        "Cut list — vishvaddi.com/site/cut-list",
+        `Stock length: ${fmt(stock)}mm  |  Kerf: ${kerf}mm`,
+        `Result: ${bins.length} stock length(s), ${(totalStock ? (waste / totalStock) * 100 : 0).toFixed(1)}% waste, ${fmt(waste)}mm offcut total`,
+        "",
+      ];
+      bins.forEach((b, i) => {
+        lines.push(
+          `#${i + 1}: ${b.pieces.map((p) => `${p.name} ${fmt(p.length)}`).join(" + ")}  (offcut ${fmt(b.remaining)}mm)`,
+        );
+      });
+      if (oversize.length)
+        lines.push("", "Won't fit: " + oversize.map((o) => `${o.name} ${fmt(o.length)}mm`).join(", "));
+      lines.push("", "Reopen this list: " + location.href);
+      return lines.join("\n");
+    }
+
+    // actions
+    q<HTMLButtonElement>("#add-row")!.addEventListener("click", () => {
+      addRow();
+      compute();
+    });
+    q<HTMLButtonElement>("#save-pdf")!.addEventListener("click", () => window.print());
+    q<HTMLButtonElement>("#email")!.addEventListener("click", () => {
+      const body = encodeURIComponent(summary());
+      location.href = `mailto:?subject=${encodeURIComponent("Cut list")}&body=${body}`;
+    });
+    q<HTMLButtonElement>("#copy")!.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(location.href);
+        const c = q<HTMLElement>("#copied")!;
+        c.hidden = false;
+        setTimeout(() => (c.hidden = true), 1800);
+      } catch {
+        /* clipboard blocked — the URL bar already holds the share link */
+      }
+    });
+
+    // init: from shared URL, else sensible defaults
+    function init() {
+      const u = new URLSearchParams(location.search);
+      stockEl.value = u.has("s") ? String(num(u.get("s")!)) : "5400";
+      kerfEl.value = u.has("k") ? String(num(u.get("k")!)) : "3";
+      const p = u.get("p");
+      if (p) {
+        p.split(",").forEach((seg) => {
+          const [name, len, qty] = seg.split(":");
+          addRow(decodeURIComponent(name || "").slice(0, 40), String(num(len || "")), String(intNum(qty || "1") || 1));
+        });
+      } else {
+        addRow("Stile", "2400", "4");
+        addRow("Rail", "760", "6");
+      }
+      stockEl.addEventListener("input", compute);
+      kerfEl.addEventListener("input", compute);
+      compute();
+    }
+    init();
+  </script>
+</Base>

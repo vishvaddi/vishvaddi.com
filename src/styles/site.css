@@ -1,0 +1,132 @@
+/* Blueprint skin for the /site tools section. Scoped under .blueprint so it
+   never touches the rest of the site. Pure CSS — no JS, CSP-clean. */
+
+.blueprint {
+  --site-accent: #2f6df0;
+  --site-line: color-mix(in srgb, var(--fg) 12%, transparent);
+  --site-line-strong: color-mix(in srgb, var(--fg) 22%, transparent);
+  position: relative;
+}
+
+:root[data-theme="dark"] .blueprint,
+:root:not([data-theme="light"]) .blueprint {
+  --site-accent: #6ea0ff;
+}
+
+/* graph-paper backdrop */
+.blueprint::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(var(--site-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--site-line) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(circle at 50% 30%, #000 60%, transparent 100%);
+  mask-image: radial-gradient(circle at 50% 30%, #000 60%, transparent 100%);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.blueprint .eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--site-accent);
+  margin-bottom: 0.4rem;
+}
+
+/* tool cards on the hub */
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.75rem;
+  padding: 0;
+  margin: 1.5rem 0;
+  list-style: none;
+}
+.tool-grid li { margin: 0; }
+.tool-card {
+  display: block;
+  border: 1px solid var(--site-line-strong);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  text-decoration: none;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  transition: border-color 0.15s, transform 0.15s;
+}
+.tool-card:hover { border-color: var(--site-accent); transform: translateY(-2px); }
+.tool-card[aria-disabled="true"] { opacity: 0.5; pointer-events: none; }
+.tool-card .t { font-family: var(--font-sans); font-weight: 600; display: block; }
+.tool-card .d { font-size: 0.85rem; color: var(--muted); margin-top: 0.2rem; display: block; }
+.tool-card .tag {
+  font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--site-accent);
+}
+
+/* forms */
+.tool form { margin: 1.25rem 0; }
+.field { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.6rem 0; }
+.field label { font-size: 0.8rem; color: var(--muted); font-family: var(--font-sans); }
+.tool input[type="number"],
+.tool input[type="text"],
+.tool select {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--site-line-strong);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  width: 100%;
+}
+.tool input:focus, .tool select:focus { outline: 2px solid var(--site-accent); outline-offset: 1px; }
+
+.row-grid { display: grid; grid-template-columns: 1fr 6rem 4rem auto; gap: 0.5rem; align-items: end; }
+.row-grid .field { margin: 0.25rem 0; }
+
+.btn {
+  font-family: var(--font-sans); font-size: 0.95rem; font-weight: 600;
+  padding: 0.55rem 1rem; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--site-accent); background: var(--site-accent); color: #fff;
+}
+.btn:hover { filter: brightness(1.08); }
+.btn-ghost { background: none; color: var(--fg); border-color: var(--site-line-strong); }
+.btn-sm { font-size: 0.8rem; padding: 0.35rem 0.6rem; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+
+/* results */
+.result { border-top: 1px solid var(--site-line-strong); margin-top: 1.5rem; padding-top: 1rem; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: 0.5rem; }
+.stat { border: 1px solid var(--site-line); border-radius: 6px; padding: 0.6rem 0.75rem; }
+.stat .n { font-family: var(--font-mono); font-size: 1.3rem; font-weight: 600; }
+.stat .l { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.warn { color: #b4540a; font-size: 0.9rem; }
+:root[data-theme="dark"] .warn, :root:not([data-theme="light"]) .warn { color: #f0a868; }
+
+/* cut diagram bars */
+.bars { display: flex; flex-direction: column; gap: 0.55rem; margin: 1rem 0; }
+.bar-label { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); margin-bottom: 0.15rem; }
+.bar {
+  display: flex; height: 30px; border-radius: 4px; overflow: hidden;
+  border: 1px solid var(--site-line-strong); font-family: var(--font-mono);
+}
+.seg {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: #fff; background: var(--site-accent);
+  border-right: 1px solid color-mix(in srgb, #000 22%, transparent);
+  overflow: hidden; white-space: nowrap; min-width: 0;
+}
+.seg:last-child { border-right: none; }
+.seg.offcut { background: color-mix(in srgb, var(--fg) 14%, transparent); color: var(--muted); }
+.note-foot { font-size: 0.8rem; color: var(--muted); margin-top: 1.5rem; }
+
+@media print {
+  header, footer, .no-print, .blueprint::before { display: none !important; }
+  body { max-width: none; padding: 0; }
+  .tool input, .tool select { border-color: #999; }
+  .btn, .btn-row { display: none !important; }
+}
