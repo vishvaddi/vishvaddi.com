@@ -1,0 +1,133 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+---
+
+<Base
+  title="Geometry & Setout"
+  description="Free on-site setout tools — 3-4-5 square check, stair calculator, fall/gradient, area and roof pitch. Runs entirely in your browser."
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Geometry</p>
+    <h1>Geometry & Setout</h1>
+    <p>Setting-out maths for the field. Updates as you type; nothing leaves your browser.</p>
+
+    <div id="calcs"></div>
+
+    <div class="btn-row no-print">
+      <button type="button" class="btn" id="print">Save as PDF</button>
+    </div>
+    <p class="note-foot">Estimates only — verify against your spec and standards. <a href="/site">← all tools</a></p>
+  </div>
+
+  <script>
+    import { mountCalcs, type CalcSpec } from "../../scripts/site/calc";
+
+    const f2 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 2 });
+    const f0 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 0 });
+    const f1 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 1 });
+
+    const specs: CalcSpec[] = [
+      {
+        id: "square",
+        title: "Square it (3-4-5)",
+        blurb: "Measure the diagonal — if it matches, the corner is square (90°).",
+        fields: [
+          { id: "a", label: "Side A (mm)", def: "3000", min: "0", step: "1" },
+          { id: "b", label: "Side B (mm)", def: "4000", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          if (v.a <= 0 || v.b <= 0) return null;
+          return { rows: [[f0(Math.hypot(v.a, v.b)) + " mm", "diagonal for square"]] };
+        },
+      },
+      {
+        id: "stairs",
+        title: "Stairs",
+        blurb: "Comfort range (AS1657): riser 115–190 mm, going 240–355 mm.",
+        fields: [
+          { id: "rise", label: "Total rise (mm)", def: "1000", min: "1", step: "1" },
+          { id: "going", label: "Going / tread (mm)", def: "250", min: "1", step: "1" },
+          { id: "maxr", label: "Max riser (mm)", def: "190", min: "1", step: "1" },
+        ],
+        compute: (v) => {
+          if (v.rise <= 0 || v.maxr <= 0) return null;
+          const risers = Math.max(1, Math.ceil(v.rise / v.maxr));
+          const riserH = v.rise / risers;
+          const treads = risers - 1;
+          const run = treads * v.going;
+          const ok = riserH >= 115 && riserH <= 190 && v.going >= 240 && v.going <= 355;
+          return {
+            rows: [
+              [String(risers), "risers"],
+              [f1(riserH) + " mm", "riser height"],
+              [String(treads), "treads"],
+              [f0(run) + " mm", "total run"],
+            ],
+            warn: ok ? undefined : "Outside the AS1657 comfort range — adjust riser or going.",
+          };
+        },
+      },
+      {
+        id: "fall",
+        title: "Fall / gradient",
+        blurb: "Drainage minimums: stormwater ~1:100, sewer ~1:60.",
+        fields: [
+          { id: "len", label: "Length (m)", def: "5", min: "0", step: "0.1" },
+          { id: "ratio", label: "Gradient 1 : ", def: "80", min: "1", step: "1" },
+        ],
+        compute: (v) => {
+          if (v.len <= 0 || v.ratio <= 0) return null;
+          const fall = (v.len * 1000) / v.ratio;
+          return {
+            rows: [
+              [f0(fall) + " mm", "total fall"],
+              [f2(100 / v.ratio) + " %", "gradient"],
+            ],
+          };
+        },
+      },
+      {
+        id: "area",
+        title: "Room area",
+        blurb: "Rectangle area and perimeter — feed into the material calcs.",
+        fields: [
+          { id: "l", label: "Length (m)", def: "4", min: "0", step: "0.1" },
+          { id: "w", label: "Width (m)", def: "3", min: "0", step: "0.1" },
+        ],
+        compute: (v) => {
+          if (v.l <= 0 || v.w <= 0) return null;
+          return {
+            rows: [
+              [f2(v.l * v.w) + " m²", "area"],
+              [f2(2 * (v.l + v.w)) + " m", "perimeter"],
+            ],
+          };
+        },
+      },
+      {
+        id: "roof",
+        title: "Roof pitch",
+        blurb: "Rise and rafter length from span and pitch (excludes overhang).",
+        fields: [
+          { id: "span", label: "Span (mm)", def: "6000", min: "0", step: "1" },
+          { id: "pitch", label: "Pitch (degrees)", def: "22.5", min: "0", step: "0.5" },
+        ],
+        compute: (v) => {
+          if (v.span <= 0 || v.pitch <= 0 || v.pitch >= 90) return null;
+          const run = v.span / 2;
+          const rad = (v.pitch * Math.PI) / 180;
+          return {
+            rows: [
+              [f0(run * Math.tan(rad)) + " mm", "rise"],
+              [f0(run / Math.cos(rad)) + " mm", "rafter length"],
+            ],
+          };
+        },
+      },
+    ];
+
+    mountCalcs(document.getElementById("calcs")!, specs);
+    document.getElementById("print")!.addEventListener("click", () => window.print());
+  </script>
+</Base>

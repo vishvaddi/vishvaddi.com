@@ -124,6 +124,19 @@
 .seg.offcut { background: color-mix(in srgb, var(--fg) 14%, transparent); color: var(--muted); }
 .note-foot { font-size: 0.8rem; color: var(--muted); margin-top: 1.5rem; }
 
+/* multi-calculator pages */
+.calc { border-top: 1px solid var(--site-line-strong); padding-top: 1.25rem; margin-top: 1.75rem; }
+.calc:first-child { border-top: none; padding-top: 0; margin-top: 1rem; }
+.calc h2 { font-size: 1.05rem; margin-top: 0; }
+.calc-blurb { font-size: 0.85rem; color: var(--muted); margin: 0.25rem 0 0.6rem; }
+.calc-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 0.5rem; }
+.calc-result { border-top: none; margin-top: 1rem; padding-top: 0; }
+
+/* converter */
+.conv-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0.6rem; align-items: end; }
+.conv-swap { align-self: end; margin-bottom: 0.1rem; }
+.conv-out { font-family: var(--font-mono); font-size: 1.5rem; font-weight: 600; margin-top: 1rem; word-break: break-word; }
+
 @media print {
   header, footer, .no-print, .blueprint::before { display: none !important; }
   body { max-width: none; padding: 0; }

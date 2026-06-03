@@ -1,0 +1,147 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+---
+
+<Base
+  title="Material Calculators"
+  description="Free material calculators — paint, tiles, plasterboard, concrete and skirting quantities. Runs entirely in your browser."
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Materials</p>
+    <h1>Material Calculators</h1>
+    <p>Quick quantities for common trades. Everything updates as you type and stays in your browser. Save the page to PDF below.</p>
+
+    <div id="calcs"></div>
+
+    <div class="btn-row no-print">
+      <button type="button" class="btn" id="print">Save as PDF</button>
+    </div>
+    <p class="note-foot">Estimates only — allow for laps, cuts and site conditions. <a href="/site">← all tools</a></p>
+  </div>
+
+  <script>
+    import { mountCalcs, type CalcSpec } from "../../scripts/site/calc";
+
+    const f2 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 2 });
+    const f0 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 0 });
+    const up = (n: number) => Math.max(0, Math.ceil(n));
+
+    const specs: CalcSpec[] = [
+      {
+        id: "paint",
+        title: "Paint",
+        blurb: "Litres for one surface. Typical coverage is ~11 m²/L per coat.",
+        fields: [
+          { id: "area", label: "Surface area (m²)", def: "12", min: "0", step: "0.1" },
+          { id: "openings", label: "Subtract openings (m²)", def: "2", min: "0", step: "0.1" },
+          { id: "coats", label: "Coats", def: "2", min: "1", step: "1" },
+          { id: "cov", label: "Coverage (m²/L)", def: "11", min: "0.1", step: "0.5" },
+        ],
+        compute: (v) => {
+          const net = Math.max(0, v.area - v.openings);
+          if (v.cov <= 0) return null;
+          const litres = (net * v.coats) / v.cov;
+          return {
+            rows: [
+              [f2(litres) + " L", "paint needed"],
+              [f0(net) + " m²", "net area × " + (v.coats || 0) + " coats"],
+            ],
+          };
+        },
+      },
+      {
+        id: "tiles",
+        title: "Tiles / flooring",
+        blurb: "Number of tiles or planks, including wastage for cuts.",
+        fields: [
+          { id: "area", label: "Floor/wall area (m²)", def: "10", min: "0", step: "0.1" },
+          { id: "w", label: "Tile width (mm)", def: "300", min: "1", step: "1" },
+          { id: "h", label: "Tile length (mm)", def: "600", min: "1", step: "1" },
+          { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          const tileArea = (v.w / 1000) * (v.h / 1000);
+          if (tileArea <= 0 || v.area <= 0) return null;
+          const perM2 = 1 / tileArea;
+          const tiles = up(v.area * (1 + v.waste / 100) * perM2);
+          return {
+            rows: [
+              [f0(tiles), "tiles (incl. wastage)"],
+              [f2(perM2), "tiles / m²"],
+            ],
+          };
+        },
+      },
+      {
+        id: "sheet",
+        title: "Plasterboard / sheets",
+        blurb: "Standard sheet is 1200 × 2400 mm (2.88 m²).",
+        fields: [
+          { id: "area", label: "Area to line (m²)", def: "30", min: "0", step: "0.1" },
+          { id: "w", label: "Sheet width (mm)", def: "1200", min: "1", step: "1" },
+          { id: "h", label: "Sheet length (mm)", def: "2400", min: "1", step: "1" },
+          { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          const sheetArea = (v.w / 1000) * (v.h / 1000);
+          if (sheetArea <= 0 || v.area <= 0) return null;
+          const sheets = up((v.area * (1 + v.waste / 100)) / sheetArea);
+          return {
+            rows: [
+              [f0(sheets), "sheets"],
+              [f2(sheetArea) + " m²", "per sheet"],
+            ],
+          };
+        },
+      },
+      {
+        id: "concrete",
+        title: "Concrete",
+        blurb: "Volume and 20 kg bags (≈ 0.0108 m³ yield per bag).",
+        fields: [
+          { id: "l", label: "Length (m)", def: "3", min: "0", step: "0.1" },
+          { id: "w", label: "Width (m)", def: "3", min: "0", step: "0.1" },
+          { id: "d", label: "Depth (mm)", def: "100", min: "0", step: "1" },
+          { id: "waste", label: "Wastage (%)", def: "5", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          const vol = v.l * v.w * (v.d / 1000) * (1 + v.waste / 100);
+          if (vol <= 0) return null;
+          const bags = up(vol / 0.0108);
+          return {
+            rows: [
+              [f2(vol) + " m³", "concrete"],
+              [f0(bags), "× 20 kg bags"],
+            ],
+            warn: vol > 1.5 ? "Over ~1.5 m³ — pre-mixed delivery is usually cheaper than bags." : undefined,
+          };
+        },
+      },
+      {
+        id: "skirt",
+        title: "Skirting / linear",
+        blurb: "Lengths to buy for skirting, trim or top-hat.",
+        fields: [
+          { id: "perim", label: "Run / perimeter (m)", def: "20", min: "0", step: "0.1" },
+          { id: "open", label: "Subtract openings (m)", def: "0.9", min: "0", step: "0.1" },
+          { id: "stock", label: "Stock length (m)", def: "5.4", min: "0.1", step: "0.1" },
+          { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          const net = Math.max(0, v.perim - v.open) * (1 + v.waste / 100);
+          if (v.stock <= 0 || net <= 0) return null;
+          return {
+            rows: [
+              [f2(net) + " m", "total length"],
+              [f0(up(net / v.stock)), "lengths to buy"],
+            ],
+          };
+        },
+      },
+    ];
+
+    mountCalcs(document.getElementById("calcs")!, specs);
+    document.getElementById("print")!.addEventListener("click", () => window.print());
+  </script>
+</Base>
