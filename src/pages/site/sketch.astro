@@ -1,0 +1,48 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+
+const colors = [
+  { c: "#1a1a1a", name: "Black" },
+  { c: "#2f6df0", name: "Blue" },
+  { c: "#d33", name: "Red" },
+  { c: "#1a7f37", name: "Green" },
+  { c: "#e6a700", name: "Amber" },
+];
+---
+
+<Base
+  title="Sketchpad"
+  description="A quick sketchpad for site marks and details. Draw with mouse, touch or stylus and export a PNG. Runs entirely in your browser."
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site Tools</a> / Sketchpad</p>
+    <h1>Sketchpad</h1>
+    <p>Quick marks, details and mark-ups — mouse, touch or stylus. Export a PNG to drop into an email or quote.</p>
+
+    <div class="btn-row no-print" style="align-items:center;">
+      {colors.map((c, i) => (
+        <button type="button" class={`swatch${i === 0 ? " active" : ""}`} data-color={c.c} style={`background:${c.c}`} aria-label={c.name}></button>
+      ))}
+      <button type="button" class="btn btn-ghost btn-sm" id="eraser">Eraser</button>
+      <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.85rem;color:var(--muted)">
+        Size <input type="range" id="brush" min="1" max="24" value="3" style="width:90px" />
+      </label>
+    </div>
+
+    <div class="pad-wrap"><canvas id="pad"></canvas></div>
+
+    <div class="btn-row no-print">
+      <button type="button" class="btn" id="png">Export PNG</button>
+      <button type="button" class="btn btn-ghost" id="clear">Clear</button>
+    </div>
+
+    <p class="disclosure">Your sketch never leaves this browser. (PDF export arrives with the PDF tools.)</p>
+    <p class="note-foot"><a href="/site">← all tools</a></p>
+  </div>
+
+  <script>
+    import { initSketch } from "../../scripts/site/sketch";
+    initSketch();
+  </script>
+</Base>

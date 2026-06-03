@@ -99,10 +99,24 @@ export function mountCalcs(root: HTMLElement, specs: CalcSpec[]) {
       }
     };
 
-    fields.addEventListener("input", run);
+    fields.addEventListener("input", () => { sec.dataset.touched = "1"; run(); });
     root.append(sec);
     run();
   }
+}
+
+// Shared helpers (importing these into a single-use tool module forces Astro to
+// bundle that tool to an external 'self' chunk instead of inlining it — which
+// the strict CSP would block).
+export const auFmt = (n: number, max = 2) =>
+  n.toLocaleString("en-AU", { maximumFractionDigits: max });
+
+export function download(filename: string, href: string) {
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename;
+  a.click();
+  if (href.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(href), 1500);
 }
 
 // ── Unit converter ──────────────────────────────────────────────────────────

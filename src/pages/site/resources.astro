@@ -1,0 +1,66 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+
+const standards = [
+  ["AS 1428.1", "Design for access and mobility"],
+  ["AS 1657", "Fixed platforms, walkways, stairways & ladders"],
+  ["AS 1170", "Structural design actions (loads)"],
+  ["AS 1288", "Glass in buildings — selection & installation"],
+  ["AS 2047", "Windows & external glazed doors"],
+  ["AS 3600", "Concrete structures"],
+  ["AS 1684", "Residential timber-framed construction"],
+  ["AS 3740", "Waterproofing of domestic wet areas"],
+  ["AS 1530", "Fire tests — building materials & structures"],
+  ["AS 4386", "Cabinetry — kitchen units & components"],
+];
+
+const links = [
+  ["Standards Australia store", "https://www.standards.org.au", "Buy the standards themselves (they're copyright — link, don't pirate)."],
+  ["NCC / BCA (ABCB)", "https://ncc.abcb.gov.au", "The National Construction Code — free to read after a no-cost sign-up."],
+  ["Bureau of Meteorology", "http://www.bom.gov.au", "Wind regions, rainfall intensity, climate data for set-out."],
+  ["WorkSafe / SafeWork (your state)", "https://www.safeworkaustralia.gov.au", "Codes of practice, SWMS templates, height & silica guidance."],
+];
+
+const refs = [
+  ["Common stock lengths", "Timber/trim 5.4 / 4.8 / 3.6 / 2.4 m · SHS/RHS 6.5 / 8 m · plasterboard sheet 1200 × 2400/2700/3000 mm"],
+  ["Paint coverage", "≈ 10–12 m²/L per coat on a sealed surface (always check the data sheet)."],
+  ["Concrete bag yield", "20 kg pre-mix ≈ 0.0108 m³; ~92 bags per m³."],
+  ["Tile wastage", "Allow 10% standard, 15% for diagonal/large-format or patterned lays."],
+  ["Stair comfort (AS 1657)", "Riser 115–190 mm · going 240–355 mm · 2R + G ≈ 550–700 mm."],
+];
+---
+
+<Base
+  title="Resources"
+  description="Handy construction references — Australian Standards, the NCC, and quick rules of thumb. Plus the free Site Tools."
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site Tools</a> / Resources</p>
+    <h1>Resources</h1>
+    <p>Pointers I reach for — standards, the code, and a few rules of thumb. General references only; nothing client-specific.</p>
+
+    <h2 style="font-size:1.05rem;">Australian Standards (commonly referenced in fit-out)</h2>
+    <ul>
+      {standards.map(([n, t]) => (<li><strong style="font-family:var(--font-mono)">{n}</strong> — {t}</li>))}
+    </ul>
+    <p class="disclosure">Standards are copyright to Standards Australia — buy them from the official store; this is a reference to the numbers, not the content.</p>
+
+    <h2 style="font-size:1.05rem;">Useful links</h2>
+    <ul>
+      {links.map(([t, u, d]) => (<li><a href={u} rel="noopener noreferrer external">{t}</a> — {d}</li>))}
+    </ul>
+
+    <h2 style="font-size:1.05rem;">Rules of thumb</h2>
+    <ul>
+      {refs.map(([t, d]) => (<li><strong>{t}:</strong> {d}</li>))}
+    </ul>
+
+    <h2 style="font-size:1.05rem;">The tools</h2>
+    <ul>
+      <li><a href="/site/cut-list">Cut List Optimizer</a> · <a href="/site/materials">Materials</a> · <a href="/site/geometry">Geometry &amp; Setout</a> · <a href="/site/convert">Converter</a> · <a href="/site/rate">Rate builder</a> · <a href="/site/sketch">Sketchpad</a> · <a href="/site/voice">Voice notes</a></li>
+    </ul>
+
+    <p class="note-foot">Estimates and references only — verify against the current standard. <a href="/site">← all tools</a></p>
+  </div>
+</Base>

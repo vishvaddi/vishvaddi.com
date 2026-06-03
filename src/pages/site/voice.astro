@@ -1,0 +1,47 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+---
+
+<Base
+  title="Voice Notes"
+  description="Speak and it transcribes live — annotate site notes hands-free, record audio, and export. Runs in your browser."
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site Tools</a> / Voice notes</p>
+    <h1>Voice Notes</h1>
+    <p>Hit record and talk — it transcribes as you speak so you can take site notes hands-free, then edit, timestamp and export.</p>
+
+    <p class="disclosure">
+      The transcript and any audio stay on your device. One exception: the live
+      speech-to-text is done by your browser's speech service (in Chrome that
+      means audio is sent to Google to transcribe) — so don't dictate anything
+      confidential. Works in Chrome, Edge and Safari.
+    </p>
+
+    <div class="btn-row no-print" style="align-items:center;">
+      <button type="button" class="btn" id="rec">Record</button>
+      <button type="button" class="btn btn-ghost" id="stamp">+ Timestamp</button>
+      <span id="rec-status" style="color:var(--muted);font-size:0.9rem"></span>
+    </div>
+
+    <p id="no-speech" class="warn" hidden>Live transcription isn't supported in this browser — try Chrome, Edge or Safari. You can still record audio and type notes.</p>
+    <div class="interim" id="interim"></div>
+    <textarea id="transcript" placeholder="Your words appear here as you speak — and you can edit freely."></textarea>
+
+    <div class="btn-row no-print">
+      <button type="button" class="btn btn-ghost" id="txt">Download .txt</button>
+      <button type="button" class="btn btn-ghost" id="dl-audio" hidden>Download audio</button>
+      <button type="button" class="btn btn-ghost" id="email">Email to myself</button>
+      <button type="button" class="btn btn-ghost" id="copy">Copy</button>
+      <button type="button" class="btn btn-ghost" id="clear">Clear</button>
+    </div>
+
+    <p class="note-foot"><a href="/site">← all tools</a></p>
+  </div>
+
+  <script>
+    import { initVoice } from "../../scripts/site/voice";
+    initVoice();
+  </script>
+</Base>

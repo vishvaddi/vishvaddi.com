@@ -1,0 +1,49 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+---
+
+<Base
+  title="Rate Builder"
+  description="Build up a unit rate from materials, labour, plant and margin. Save your own rates locally. Runs entirely in your browser."
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site Tools</a> / Rate builder</p>
+    <h1>Rate Builder</h1>
+    <p>Build a unit rate from first principles — material + labour + plant + margin. No rates ship with this tool; anything you save stays on your device.</p>
+
+    <form id="rate-form" autocomplete="off">
+      <div class="field">
+        <label for="r-desc">Description</label>
+        <input type="text" id="r-desc" maxlength="60" placeholder="e.g. Install 100x100 SHS bracket" />
+      </div>
+      <div class="calc-fields">
+        <div class="field"><label for="r-mat">Material ($)</label><input type="number" id="r-mat" min="0" step="0.01" inputmode="decimal" value="40" /></div>
+        <div class="field"><label for="r-hrs">Labour (hours)</label><input type="number" id="r-hrs" min="0" step="0.25" inputmode="decimal" value="1.5" /></div>
+        <div class="field"><label for="r-lrate">Labour rate ($/h)</label><input type="number" id="r-lrate" min="0" step="1" inputmode="decimal" value="65" /></div>
+        <div class="field"><label for="r-plant">Plant / other ($)</label><input type="number" id="r-plant" min="0" step="0.01" inputmode="decimal" value="0" /></div>
+        <div class="field"><label for="r-markup">Margin (%)</label><input type="number" id="r-markup" min="0" step="1" inputmode="decimal" value="15" /></div>
+        <div class="field"><label for="r-qty">Quantity (opt.)</label><input type="number" id="r-qty" min="0" step="1" inputmode="decimal" value="0" /></div>
+      </div>
+    </form>
+
+    <div id="r-out" class="result" aria-live="polite"></div>
+
+    <div class="btn-row no-print">
+      <button type="button" class="btn" id="r-save">Save rate</button>
+      <button type="button" class="btn btn-ghost" id="r-export">Email my rates</button>
+      <button type="button" class="btn btn-ghost" id="r-clear">Clear saved</button>
+    </div>
+
+    <h2 style="font-size:1rem;margin-top:1.5rem;">Saved rates</h2>
+    <div id="r-saved"></div>
+    <p class="disclosure">Saved rates are stored only in this browser (localStorage) — never uploaded, never seen by anyone but you. Clear them any time.</p>
+
+    <p class="note-foot">Estimates only. <a href="/site">← all tools</a></p>
+  </div>
+
+  <script>
+    import { initRate } from "../../scripts/site/rate";
+    initRate();
+  </script>
+</Base>
