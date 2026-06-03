@@ -2,6 +2,7 @@
 title: "Hello, world"
 description: "Why this site exists."
 pubDate: 2026-04-30
+draft: true
 tags: ["meta"]
 ---
 

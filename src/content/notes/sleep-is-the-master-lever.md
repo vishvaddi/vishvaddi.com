@@ -2,6 +2,7 @@
 title: "Sleep is the master lever — it multiplies every other effort"
 description: "Sleep is not one variable among many. It is the substrate that determines the value of every other variable. No supplement, habit, or strategy operates at full effectiveness on five hours."
 pubDate: 2026-03-08
+draft: true
 tags: ["health", "performance", "sleep"]
 ---
 

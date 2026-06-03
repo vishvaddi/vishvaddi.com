@@ -2,6 +2,7 @@
 title: "Commitment architecture replaces willpower"
 description: "Willpower is finite, unreliable, and the wrong tool for sustained behaviour change. Make the decision now — when your rational mind is engaged — that removes your future self's ability to opt out in the moment."
 pubDate: 2026-03-08
+draft: true
 tags: ["habits", "decision-making", "self-development"]
 ---
 

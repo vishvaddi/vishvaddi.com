@@ -220,7 +220,7 @@ The traditional survival list (shelter, fire, water) covers acute crises. Slow-m
 - **Physical** — Zone 2 aerobic base, joint-bulletproofing mobility, austere medicine literacy. The body is the only vehicle that doesn't need fuel.
 - **Mental** — psychological flexibility (ACT — Russ Harris's *The Happiness Trap* is the standard), epistemic hygiene, decision-making under uncertainty (*Thinking in Bets*).
 - **Financial** — Taleb's barbell strategy: hyper-safe assets on one end, asymmetric upside bets on the other, nothing in the boring middle that can wipe you out.
-- **Strategic** — antifragility. Build systems that gain from disorder rather than just survive it. [More on this](/notes/antifragility).
+- **Strategic** — antifragility. Build systems that gain from disorder rather than just survive it.
 
 ## The everyday baseline
 
@@ -231,10 +231,3 @@ Not bunkers. Just enough that a disruption doesn't force you into bad choices:
 - Encrypted USB with copies of the documents you'd hate to lose. Plus cloud backup.
 - A basic first aid kit. Bunnings, $30. Most people don't have one.
 - One person in the household with a current first aid certificate.
-
-## Principles I keep coming back to
-
-- [Resilience requires redundancy](/notes/resilience-requires-redundancy)
-- [Self-sufficiency compounds](/notes/self-sufficiency-compounds)
-- [Catastrophe planning has to happen before the catastrophe](/notes/catastrophe-planning)
-- [Antifragility means gaining from disorder](/notes/antifragility)

@@ -2,6 +2,7 @@
 title: "Environment design drives behaviour more than willpower"
 description: "People act on what is in front of them, not on what they intend. One hour spent redesigning your environment beats weeks of trying harder."
 pubDate: 2026-03-08
+draft: true
 tags: ["habits", "behaviour-change", "self-development"]
 ---
 

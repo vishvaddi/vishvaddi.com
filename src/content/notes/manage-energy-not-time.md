@@ -2,6 +2,7 @@
 title: "Manage energy, not time — energy is volatile, time is fixed"
 description: "Time is fixed and equal for everyone. Energy is volatile, renewable, and trainable. The high performers aren't the people with more hours — they're the people who match high-energy windows to high-leverage work."
 pubDate: 2026-04-18
+draft: true
 tags: ["productivity", "performance", "self-development"]
 ---
 

@@ -7,15 +7,11 @@ updatedDate: 2026-04-30
 
 # Music
 
-I listen to a lot of music and produce some of my own. Casio CDP-S110 for piano, Reaper for production. Most of what I make stays on my hard drive.
+I listen to a lot of music and produce some of my own.
 
 Working lists below — building them slowly. Send recommendations to [vishvaddi@gmail.com](mailto:vishvaddi@gmail.com).
 
 ## Currently listening
-
-*(Working on this list.)*
-
-## On the piano
 
 *(Working on this list.)*
 

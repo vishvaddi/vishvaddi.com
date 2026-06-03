@@ -2,6 +2,7 @@
 title: "Resilience requires redundancy, not single points of control"
 description: "When a system has a single point of failure, that point isn't a component — it's the entire system. True resilience is independent backups across every domain where failure is genuinely costly."
 pubDate: 2026-03-16
+draft: true
 tags: ["resilience", "self-sufficiency", "systems"]
 ---
 

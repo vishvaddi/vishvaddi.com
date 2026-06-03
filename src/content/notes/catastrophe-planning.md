@@ -2,6 +2,7 @@
 title: "Catastrophe planning must happen before the catastrophe"
 description: "The only time catastrophe planning is effective is before the catastrophe. Mid-crisis, cognitive load is maximal and options narrow rapidly. The documents you didn't sign and the conversations you didn't have when conditions were good become unaffordable when they aren't."
 pubDate: 2026-03-11
+draft: true
 tags: ["resilience", "stoicism", "decision-making"]
 ---
 

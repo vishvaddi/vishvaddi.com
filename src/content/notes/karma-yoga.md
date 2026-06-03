@@ -2,6 +2,7 @@
 title: "Karma yoga — act fully, release the fruit"
 description: "The Bhagavad Gita's antidote to overthinking: do the work with everything you have, then release attachment to the outcome. The grasping doesn't change the result. It only adds suffering."
 pubDate: 2026-04-18
+draft: true
 tags: ["philosophy", "indian-philosophy", "stoicism", "decision-making"]
 ---
 

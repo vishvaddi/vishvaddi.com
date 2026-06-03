@@ -2,6 +2,7 @@
 title: "Negative capability — the trained ability to sit in uncertainty without grasping for closure"
 description: "Keats's term for the highest mark of imaginative intelligence: the capacity to dwell in not-knowing without forcing premature resolution. The philosophical opposite of overthinking."
 pubDate: 2026-04-18
+draft: true
 tags: ["philosophy", "decision-making", "self-development"]
 ---
 

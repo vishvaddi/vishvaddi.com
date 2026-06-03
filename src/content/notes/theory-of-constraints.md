@@ -2,6 +2,7 @@
 title: "Theory of Constraints — the one bottleneck that limits everything else"
 description: "Every system has exactly one binding constraint at any moment. Optimising anything else is waste — the system can only move at the speed of the constraint. The actual constraint is usually the thing you avoid looking at."
 pubDate: 2026-04-18
+draft: true
 tags: ["mental-models", "systems", "productivity", "self-development"]
 ---
 

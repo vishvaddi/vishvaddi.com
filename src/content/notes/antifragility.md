@@ -2,6 +2,7 @@
 title: "Antifragility means gaining from disorder, not just surviving it"
 description: "Fragile things break under stress. Robust things withstand it. Antifragile things get stronger from it. Most of what matters in life — muscles, skills, resilience, immunity — is antifragile by design."
 pubDate: 2026-03-25
+draft: true
 tags: ["mental-models", "resilience", "self-development"]
 ---
 

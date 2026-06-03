@@ -15,13 +15,11 @@ Films I keep coming back to. Working list — building it slowly. Send recommend
 
 ## Films I keep coming back to
 
-- *Mad unicorn*
-
 *(Building this. More to come.)*
 
 ## By director
 
-*(For directors with multiple films I love — Kubrick, Kurosawa, Villeneuve, etc. Working on this.)*
+*(Working on this.)*
 
 ## By category
 

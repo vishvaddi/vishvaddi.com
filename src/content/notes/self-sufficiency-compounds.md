@@ -2,6 +2,7 @@
 title: "Self-sufficiency compounds — each pillar strengthens the others"
 description: "Solar powers the pump. The pump moves rainwater. The rainwater feeds the garden. The garden frees money for more solar. Resilience is a multiplicative system, not an additive one."
 pubDate: 2026-03-16
+draft: true
 tags: ["resilience", "self-sufficiency", "systems"]
 ---
 

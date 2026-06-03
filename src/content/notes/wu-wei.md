@@ -2,6 +2,7 @@
 title: "Wu wei — the most effective action has no controller behind it"
 description: "The Tao Te Ching's central practical principle. Not passivity, not laziness — action that flows naturally from the situation, without the ego forcing or straining against the grain."
 pubDate: 2026-03-23
+draft: true
 tags: ["philosophy", "taoism", "self-development"]
 ---
 

@@ -2,6 +2,7 @@
 title: "A sharp edge maintained regularly outlasts a neglected one by decades"
 description: "Thirty seconds of honing before each use prevents the micro-damage that compounds into expensive repair. The same principle governs tools, skills, and habits: the cost of upkeep is always lower than the cost of neglect."
 pubDate: 2026-03-16
+draft: true
 tags: ["maintenance", "discipline", "self-development"]
 ---
 

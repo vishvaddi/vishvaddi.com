@@ -2,6 +2,7 @@
 title: "Never miss twice — the one rule above all others"
 description: "Missing one day is acceptable and inevitable. Missing two consecutive days is not a pause — it's a restart. The gap between one miss and two misses is the gap between a blip and a broken streak."
 pubDate: 2026-03-08
+draft: true
 tags: ["habits", "consistency", "self-development"]
 ---
 
