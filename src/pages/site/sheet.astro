@@ -1,0 +1,208 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+---
+
+<Base
+  title="2D Sheet Optimizer"
+  description="Free 2D sheet/panel nesting — lay out parts on ply, MDF or melamine sheets, minimise waste, print the cutting layout. Runs entirely in your browser."
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site Tools</a> / 2D sheet</p>
+    <h1>2D Sheet Optimizer</h1>
+    <p>
+      Nest rectangular parts onto sheets (ply, MDF, melamine, glass) to waste the
+      least material. Shelf/guillotine layout with optional grain-free rotation —
+      easy to cut. All in millimetres, all in your browser.
+    </p>
+
+    <form id="form" autocomplete="off" novalidate>
+      <div class="calc-fields">
+        <div class="field"><label for="sw">Sheet width (mm)</label><input type="number" id="sw" min="1" step="1" inputmode="numeric" /></div>
+        <div class="field"><label for="sh">Sheet height (mm)</label><input type="number" id="sh" min="1" step="1" inputmode="numeric" /></div>
+        <div class="field"><label for="kerf">Saw kerf (mm)</label><input type="number" id="kerf" min="0" step="0.5" inputmode="decimal" /></div>
+        <div class="field" style="justify-content:end;"><label style="display:flex;align-items:center;gap:0.4rem;"><input type="checkbox" id="rot" checked /> Allow rotation</label></div>
+      </div>
+
+      <h2 style="font-size:1rem;margin-top:1.5rem;">Parts</h2>
+      <div id="rows"></div>
+      <div class="btn-row no-print"><button type="button" class="btn btn-ghost btn-sm" id="add-row">+ Add part</button></div>
+    </form>
+
+    <div id="out" class="result" aria-live="polite"></div>
+
+    <div id="actions" class="btn-row no-print" hidden>
+      <button type="button" class="btn" id="save-pdf">Save as PDF</button>
+      <button type="button" class="btn btn-ghost" id="copy">Copy share link</button>
+      <span id="copied" style="align-self:center;font-size:0.85rem;color:var(--muted)" hidden>Link copied ✓</span>
+    </div>
+
+    <p class="note-foot">Estimates only — check grain and cut order before you cut. <a href="/site">← all tools</a></p>
+  </div>
+
+  <script>
+    import { pack2d, type Part2D } from "../../scripts/site/binpack2d";
+    import { auFmt } from "../../scripts/site/calc";
+
+    const NS = "http://www.w3.org/2000/svg";
+    const q = <T extends Element>(s: string, r: ParentNode = document) => r.querySelector(s) as T | null;
+    const rowsEl = q<HTMLDivElement>("#rows")!;
+    const swEl = q<HTMLInputElement>("#sw")!;
+    const shEl = q<HTMLInputElement>("#sh")!;
+    const kerfEl = q<HTMLInputElement>("#kerf")!;
+    const rotEl = q<HTMLInputElement>("#rot")!;
+    const out = q<HTMLDivElement>("#out")!;
+    const actions = q<HTMLDivElement>("#actions")!;
+
+    const num = (v: string) => { const n = parseFloat(v); return Number.isFinite(n) && n >= 0 ? n : 0; };
+    const int = (v: string) => { const n = Math.floor(parseFloat(v)); return Number.isFinite(n) && n > 0 ? n : 0; };
+
+    function addRow(name = "", w = "", h = "", qty = "1") {
+      const row = document.createElement("div");
+      row.className = "row-grid";
+      row.style.gridTemplateColumns = "1.4fr 1fr 1fr 0.7fr auto";
+      row.innerHTML =
+        '<div class="field"><label>Label</label><input type="text" class="r-name" maxlength="40" placeholder="Part"></div>' +
+        '<div class="field"><label>Width</label><input type="number" class="r-w" min="0" step="1" inputmode="numeric"></div>' +
+        '<div class="field"><label>Height</label><input type="number" class="r-h" min="0" step="1" inputmode="numeric"></div>' +
+        '<div class="field"><label>Qty</label><input type="number" class="r-q" min="1" step="1" inputmode="numeric"></div>' +
+        '<button type="button" class="btn btn-ghost btn-sm r-del no-print" aria-label="Remove part">✕</button>';
+      q<HTMLInputElement>(".r-name", row)!.value = name;
+      q<HTMLInputElement>(".r-w", row)!.value = w;
+      q<HTMLInputElement>(".r-h", row)!.value = h;
+      q<HTMLInputElement>(".r-q", row)!.value = qty;
+      q<HTMLButtonElement>(".r-del", row)!.addEventListener("click", () => { row.remove(); compute(); });
+      row.addEventListener("input", compute);
+      rowsEl.appendChild(row);
+    }
+
+    function readParts(): Part2D[] {
+      const parts: Part2D[] = [];
+      rowsEl.querySelectorAll(".row-grid").forEach((row) => {
+        const name = q<HTMLInputElement>(".r-name", row)!.value.trim() || "Part";
+        const w = num(q<HTMLInputElement>(".r-w", row)!.value);
+        const h = num(q<HTMLInputElement>(".r-h", row)!.value);
+        const qty = int(q<HTMLInputElement>(".r-q", row)!.value);
+        if (w > 0 && h > 0 && qty > 0) parts.push({ name, w, h, qty });
+      });
+      return parts;
+    }
+
+    function syncURL(parts: Part2D[]) {
+      const p = new URLSearchParams();
+      p.set("w", String(num(swEl.value)));
+      p.set("h", String(num(shEl.value)));
+      if (num(kerfEl.value)) p.set("k", String(num(kerfEl.value)));
+      if (!rotEl.checked) p.set("r", "0");
+      const enc = parts.map((pc) => `${encodeURIComponent(pc.name)}:${pc.w}:${pc.h}:${pc.qty}`).join(",");
+      if (enc) p.set("p", enc);
+      history.replaceState(null, "", `?${p.toString()}`);
+    }
+
+    function stat(n: string, l: string) {
+      const d = document.createElement("div"); d.className = "stat";
+      const a = document.createElement("div"); a.className = "n"; a.textContent = n;
+      const b = document.createElement("div"); b.className = "l"; b.textContent = l;
+      d.append(a, b); return d;
+    }
+
+    function svgSheet(parts: any[], sw: number, sh: number) {
+      const svg = document.createElementNS(NS, "svg");
+      svg.setAttribute("viewBox", `0 0 ${sw} ${sh}`);
+      svg.setAttribute("class", "sheet-svg");
+      svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      const fs = Math.max(sw, sh) * 0.02;
+      for (const p of parts) {
+        const r = document.createElementNS(NS, "rect");
+        r.setAttribute("x", String(p.x)); r.setAttribute("y", String(p.y));
+        r.setAttribute("width", String(p.w)); r.setAttribute("height", String(p.h));
+        r.setAttribute("class", "part");
+        const tt = document.createElementNS(NS, "title");
+        tt.textContent = `${p.name} ${auFmt(p.w)}×${auFmt(p.h)}${p.rot ? " (rotated)" : ""}`;
+        r.append(tt);
+        svg.append(r);
+        if (p.w > sw * 0.05 && p.h > sh * 0.05) {
+          const t = document.createElementNS(NS, "text");
+          t.setAttribute("x", String(p.x + p.w / 2)); t.setAttribute("y", String(p.y + p.h / 2));
+          t.setAttribute("text-anchor", "middle"); t.setAttribute("dominant-baseline", "central");
+          t.setAttribute("font-size", String(fs));
+          t.textContent = p.name + (p.rot ? " ⟳" : "");
+          svg.append(t);
+        }
+      }
+      return svg;
+    }
+
+    function compute() {
+      const sw = num(swEl.value), sh = num(shEl.value), kerf = num(kerfEl.value);
+      const parts = readParts();
+      syncURL(parts);
+      out.textContent = "";
+      if (sw <= 0 || sh <= 0 || parts.length === 0) { actions.hidden = true; return; }
+
+      const res = pack2d(parts, sw, sh, kerf, rotEl.checked);
+      const sheetsN = res.sheets.length;
+      const totalArea = sheetsN * sw * sh;
+      const eff = totalArea ? (res.usedArea / totalArea) * 100 : 0;
+      const placed = res.sheets.reduce((s, sh2) => s + sh2.parts.length, 0);
+
+      const grid = document.createElement("div");
+      grid.className = "stat-grid";
+      grid.append(
+        stat(String(sheetsN), sheetsN === 1 ? "sheet" : "sheets"),
+        stat(eff.toFixed(1) + "%", "efficiency"),
+        stat(String(placed), "parts placed"),
+        stat(auFmt(res.usedArea / 1e6) + " m²", "part area"),
+      );
+      out.append(grid);
+
+      if (res.oversize.length) {
+        const w = document.createElement("p");
+        w.className = "warn";
+        w.textContent = `⚠ ${res.oversize.length} part(s) bigger than the sheet won't fit: ` +
+          res.oversize.map((o) => `${o.name} ${auFmt(o.w)}×${auFmt(o.h)}`).join(", ");
+        out.append(w);
+      }
+
+      const wrap = document.createElement("div");
+      wrap.className = "sheets";
+      res.sheets.forEach((sheet, i) => {
+        const lbl = document.createElement("div");
+        lbl.className = "bar-label";
+        lbl.textContent = `Sheet ${i + 1} of ${sheetsN} · ${auFmt(sw)}×${auFmt(sh)} · ${sheet.parts.length} parts`;
+        wrap.append(lbl, svgSheet(sheet.parts, sw, sh));
+      });
+      out.append(wrap);
+      actions.hidden = false;
+    }
+
+    q<HTMLButtonElement>("#add-row")!.addEventListener("click", () => { addRow(); compute(); });
+    q<HTMLButtonElement>("#save-pdf")!.addEventListener("click", () => window.print());
+    q<HTMLButtonElement>("#copy")!.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(location.href); const c = q<HTMLElement>("#copied")!; c.hidden = false; setTimeout(() => (c.hidden = true), 1800); } catch { /* */ }
+    });
+
+    function init() {
+      const u = new URLSearchParams(location.search);
+      swEl.value = u.get("w") ? String(num(u.get("w")!)) : "2400";
+      shEl.value = u.get("h") ? String(num(u.get("h")!)) : "1200";
+      kerfEl.value = u.get("k") ? String(num(u.get("k")!)) : "3";
+      if (u.get("r") === "0") rotEl.checked = false;
+      const p = u.get("p");
+      if (p) {
+        p.split(",").forEach((seg) => {
+          const [name, w, h, qty] = seg.split(":");
+          addRow(decodeURIComponent(name || "").slice(0, 40), String(num(w || "")), String(num(h || "")), String(int(qty || "1") || 1));
+        });
+      } else {
+        addRow("Door", "597", "720", "4");
+        addRow("Shelf", "564", "300", "8");
+        addRow("Side", "300", "720", "6");
+      }
+      [swEl, shEl, kerfEl].forEach((el) => el.addEventListener("input", compute));
+      rotEl.addEventListener("change", compute);
+      compute();
+    }
+    init();
+  </script>
+</Base>
