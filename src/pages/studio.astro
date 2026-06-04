@@ -68,7 +68,7 @@ import Base from "../layouts/Base.astro";
     padding: 8px 12px; margin-bottom: 6px;
   }
   .wa-lcd-seg { font-size: 20px; color: #22ee55; text-shadow: 0 0 8px #11aa33; letter-spacing: 0.1em; }
-  .wa-transport { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
+  .wa-transport { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 7px; }
   .wa-btn {
     font-family: inherit; font-size: 16px; color: #e0e0e8; cursor: pointer;
     background: linear-gradient(#4d4d5e, #38384a);
@@ -129,4 +129,38 @@ import Base from "../layouts/Base.astro";
   .wa-ch { display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .wa-fader { writing-mode: vertical-lr; direction: rtl; width: 28px; height: 200px; accent-color: #22ee55; }
   .wa-ch-name { font-size: 10px; letter-spacing: 0.06em; color: #a8a8bc; text-transform: uppercase; }
+
+  /* swing + metro + disabled */
+  .wa-swing { display: flex; align-items: center; gap: 6px; }
+  .wa-swing-in { width: 90px; accent-color: #22ee55; }
+  .wa-toggle.active { color: #22ee55; border-color: #15151c #6c6c84 #6c6c84 #15151c; background: linear-gradient(#2a3a2e, #1f2a22); }
+  .wa-btn[disabled] { opacity: 0.5; cursor: default; }
+
+  /* mixer mute / solo */
+  .wa-ms { display: flex; gap: 4px; }
+  .wa-ms button {
+    font-family: inherit; font-size: 11px; width: 24px; height: 22px; cursor: pointer;
+    color: #cfcfe0; background: linear-gradient(#45455a, #33333f); border: 1px solid #15151c; border-radius: 2px;
+  }
+  .wa-mute.active { color: #111; background: linear-gradient(#ff8a5d, #d8521f); }
+  .wa-solo.active { color: #111; background: linear-gradient(#ffe24d, #e0b820); }
+
+  /* export */
+  .wa-export { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 6px; }
+  .wa-export select { font-family: inherit; font-size: 13px; background: #1a1a22; color: #cfe; border: 1px solid #15151c; padding: 5px 6px; }
+  .wa-status { font-size: 13px; color: #22ee55; }
+  .wa-help { font-size: 12px; color: #9a9ab0; margin: 0 0 4px; }
+
+  /* fullscreen / flip-to-landscape */
+  .wa-win.wa-rotated {
+    position: fixed; inset: 0; z-index: 9999; margin: 0;
+    width: 100vw; height: 100vh; max-width: none; overflow: auto; border-radius: 0;
+  }
+  @media (max-width: 860px) and (orientation: portrait) {
+    .wa-win.wa-rotated {
+      inset: auto; top: 0; left: 100%;
+      width: 100vh; height: 100vw;
+      transform: rotate(90deg); transform-origin: top left;
+    }
+  }
 </style>
