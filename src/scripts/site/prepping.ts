@@ -390,6 +390,240 @@ export function initPrepping(): void {
   btnRow.append(sosBtn);
   sosSec.append(morse, btnRow);
   root.append(sosSec);
+
+  buildHazardCards(root);
+  buildSouthCross(root);
+  buildScheduler(root);
+  buildVehicleRecovery(root);
+}
+
+// ── Australian hazard protocol cards ─────────────────────────────────────────
+const HAZARDS = [
+  {
+    key: "snake", name: "Snakebite", icon: "🐍",
+    warn: "PIB is for ALL Australian snakes. Delays absorption — antivenom cures it.",
+    steps: [
+      "Stay calm. Do NOT wash the bite — venom residue helps ID the snake.",
+      "Apply pressure immobilisation bandage (PIB) immediately starting at the bite site.",
+      "Bandage firmly from bite site toward the heart and over it — as firm as for a sprain.",
+      "Bandage the entire limb. Splint it. Keep patient completely still.",
+      "Do NOT cut, suck, tourniquet, or apply ice.",
+      "Call 000. Do not drive the patient yourself — wait for ambulance.",
+      "Note the time of the bite. PIB stays on until antivenom is administered at hospital.",
+    ],
+  },
+  {
+    key: "funnel", name: "Funnel-web spider", icon: "🕷️",
+    warn: "Male Sydney funnel-web venom is lethal within 15 min. PIB + antivenom saves lives.",
+    steps: [
+      "URGENT — call 000 immediately. Funnel-web can kill in 15–30 min without treatment.",
+      "Apply pressure immobilisation bandage (PIB) as for snakebite.",
+      "Bandage firmly from bite site up the entire limb. Splint. Immobilise completely.",
+      "Do NOT tourniquet, cut, or suck.",
+      "Capture the spider safely if possible — for species confirmation.",
+      "Get to hospital with antivenom as fast as possible.",
+    ],
+  },
+  {
+    key: "redback", name: "Redback spider", icon: "🕷️",
+    warn: "No PIB for redback — opposite to snakebite/funnel-web. Ice + hospital.",
+    steps: [
+      "Redback bites cause pain, sweating, nausea — rarely immediately life-threatening.",
+      "Do NOT apply PIB — increases local pain and damage for redback venom.",
+      "Apply an ice pack to the bite site for pain relief.",
+      "Call Poisons Information: 131 126.",
+      "Seek medical attention — antivenom is available and effective.",
+      "Escalate to 000 if systemic effects develop (sweating, muscle pain, headache, vomiting).",
+    ],
+  },
+  {
+    key: "marine", name: "Bluebottle / Box jellyfish", icon: "🪼",
+    warn: "Hot water for bluebottle. Vinegar for box jellyfish. Treatment differs — know the species.",
+    steps: [
+      "BLUEBOTTLE (Physalia): remove tentacles with fingers or towel. Rinse with seawater (not fresh). Immerse in hot water (~45°C, as hot as tolerable) for 20 min.",
+      "BOX JELLYFISH (Chironex): call 000 immediately. Flood sting with vinegar. Remove tentacles after vinegar. Start CPR if patient collapses.",
+      "Do NOT use urine, fresh water, sand, or alcohol on either species.",
+      "For either: seek medical attention if chest pain, difficulty breathing, or box jellyfish sting.",
+    ],
+  },
+];
+
+function buildHazardCards(root: HTMLElement): void {
+  const sec = section("Australian hazard protocols");
+  sec.append(blurb("Tap a card for the full protocol. Offline — no network needed."));
+  const grid = mk("div", "hazard-grid");
+  for (const h of HAZARDS) {
+    const card = document.createElement("details"); card.className = "hazard-card";
+    const sum = document.createElement("summary"); sum.className = "hazard-summary";
+    sum.append(mk("span", "hazard-icon", h.icon), mk("span", "hazard-name", h.name));
+    card.append(sum);
+    if (h.warn) card.append(mk("p", "hazard-warn", "⚠ " + h.warn));
+    const ol = document.createElement("ol"); ol.className = "hazard-steps";
+    for (const step of h.steps) { const li = document.createElement("li"); li.textContent = step; ol.append(li); }
+    card.append(ol); grid.append(card);
+  }
+  sec.append(grid); root.append(sec);
+}
+
+// ── Southern Cross navigation ─────────────────────────────────────────────────
+function buildSouthCross(root: HTMLElement): void {
+  const sec = section("Find South — Southern Cross");
+  sec.append(blurb("No compass? Use the Southern Cross (Crux) to find south at night."));
+
+  // SVG star diagram
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("viewBox", "0 0 280 190");
+  svg.setAttribute("width", "100%");
+  svg.setAttribute("style", "max-width:280px;display:block;margin:1rem 0;background:#060618;border-radius:8px;padding:8px;");
+  const addStar = (cx: number, cy: number, r: number, label: string) => {
+    const c = document.createElementNS(svgNS, "circle");
+    c.setAttribute("cx", String(cx)); c.setAttribute("cy", String(cy)); c.setAttribute("r", String(r)); c.setAttribute("fill", "white");
+    svg.append(c);
+    const t = document.createElementNS(svgNS, "text");
+    t.setAttribute("x", String(cx + r + 3)); t.setAttribute("y", String(cy + 4));
+    t.setAttribute("fill", "#aaa"); t.setAttribute("font-size", "8"); t.textContent = label;
+    svg.append(t);
+  };
+  // Crux: long axis top=γ (110,30) bottom=α (110,100). Short axis β (140,65) δ (80,65)
+  addStar(110, 30,  4.5, "γ (top)");
+  addStar(110, 100, 5,   "α Acrux");
+  addStar(140, 65,  3.5, "β");
+  addStar(80,  65,  3,   "δ");
+  addStar(115, 55,  2,   "ε");
+  // Pointer stars (Alpha + Beta Centauri, right side)
+  addStar(210, 50,  4, "α Cen");
+  addStar(210, 85,  3.5, "β Cen");
+  // Long axis extended to SCP — 4.5× the cross length (70px) = 315px → fits to ~415, clip at 175
+  const axisLine = document.createElementNS(svgNS, "line");
+  axisLine.setAttribute("x1", "110"); axisLine.setAttribute("y1", "30");
+  axisLine.setAttribute("x2", "110"); axisLine.setAttribute("y2", "175");
+  axisLine.setAttribute("stroke", "#4488ff"); axisLine.setAttribute("stroke-width", "1"); axisLine.setAttribute("stroke-dasharray", "4,3");
+  svg.append(axisLine);
+  const scp = document.createElementNS(svgNS, "circle");
+  scp.setAttribute("cx", "110"); scp.setAttribute("cy", "170"); scp.setAttribute("r", "4"); scp.setAttribute("fill", "#ff4444");
+  const scpLabel = document.createElementNS(svgNS, "text");
+  scpLabel.setAttribute("x", "118"); scpLabel.setAttribute("y", "174");
+  scpLabel.setAttribute("fill", "#ff6644"); scpLabel.setAttribute("font-size", "9"); scpLabel.textContent = "→ South";
+  svg.append(scp, scpLabel);
+  sec.append(svg);
+
+  const steps = [
+    "Find the Southern Cross — 4 stars in a compact cross shape, about 6° long.",
+    "Draw an imaginary line along the long axis from the top star (γ) through the bottom star (Acrux).",
+    "Extend this line 4.5 times the length of the cross beyond Acrux.",
+    "That point is the South Celestial Pole (SCP). Drop a line straight down to the horizon.",
+    "That point on the horizon is true South.",
+    "Pointer stars shortcut: find Alpha and Beta Centauri (bright pair to the left of the Cross). A perpendicular from their midpoint to the long axis of the Cross also gives the SCP.",
+  ];
+  const ol = document.createElement("ol"); ol.className = "hazard-steps";
+  for (const s of steps) { const li = document.createElement("li"); li.textContent = s; ol.append(li); }
+  sec.append(ol);
+
+  // Magnetic declination table
+  sec.append(mk("p", "calc-blurb", "Magnetic declination — compass correction by state (approx. 2025). Add easterly declination to your magnetic bearing to get true bearing."));
+  const table = document.createElement("table"); table.className = "ref-table";
+  const thead = document.createElement("thead"); const hrow = document.createElement("tr");
+  ["State / Territory", "Declination", "Correction"].forEach((h) => {
+    const th = document.createElement("th"); th.textContent = h; hrow.append(th);
+  });
+  thead.append(hrow); table.append(thead);
+  const tbody = document.createElement("tbody");
+  const decls: [string, string, string][] = [
+    ["NSW / ACT (Sydney)",  "≈ +12.5° E", "Add 12.5° to magnetic bearing"],
+    ["VIC (Melbourne)",     "≈ +11.8° E", "Add 11.8°"],
+    ["QLD (Brisbane)",     "≈ +11.0° E", "Add 11.0°"],
+    ["SA (Adelaide)",      "≈ +5.5° E",  "Add 5.5°"],
+    ["WA (Perth)",         "≈ −1.5° W",  "Subtract 1.5°"],
+    ["TAS (Hobart)",       "≈ +13.5° E", "Add 13.5°"],
+    ["NT (Darwin)",        "≈ +3.0° E",  "Add 3.0°"],
+  ];
+  for (const [loc, dec, corr] of decls) {
+    const tr = document.createElement("tr");
+    [loc, dec, corr].forEach((v) => { const td = document.createElement("td"); td.textContent = v; tr.append(td); });
+    tbody.append(tr);
+  }
+  table.append(tbody); sec.append(table); root.append(sec);
+}
+
+// ── 52-week maintenance scheduler ─────────────────────────────────────────────
+const SCHED_ITEMS = [
+  { label: "Water rotation",              weeks: 26 },
+  { label: "Food rotation",               weeks: 4  },
+  { label: "Kit check",                   weeks: 12 },
+  { label: "Document review",             weeks: 52 },
+  { label: "First aid kit restock",       weeks: 26 },
+  { label: "Battery & electronics check", weeks: 13 },
+];
+
+function buildScheduler(root: HTMLElement): void {
+  const sec = section("Maintenance scheduler");
+  sec.append(blurb("Enter a start date — your full prep calendar generates automatically. Stored in this browser."));
+  const wrap = mk("div", "field");
+  const lab = mk("label", undefined, "Start date"); wrap.append(lab);
+  const dateIn = document.createElement("input"); dateIn.type = "date";
+  const savedStart = localStorage.getItem("vv_prep_sched_start") || today();
+  dateIn.value = savedStart; wrap.append(dateIn); sec.append(wrap);
+  const out = mk("div", "sched-out"); sec.append(out);
+
+  function render(): void {
+    out.textContent = "";
+    const start = new Date(dateIn.value + "T00:00:00");
+    if (isNaN(start.getTime())) return;
+    const now = Date.now();
+    const events: { date: Date; label: string; overdue: boolean }[] = [];
+    for (const item of SCHED_ITEMS) {
+      let d = new Date(start);
+      for (let w = 0; w <= 52; w += item.weeks) {
+        const ev = new Date(d); ev.setDate(ev.getDate() + w * 7);
+        if (ev.getTime() >= now - 7 * 86400000) events.push({ date: ev, label: item.label, overdue: ev.getTime() < now });
+      }
+    }
+    events.sort((a, b) => a.date.getTime() - b.date.getTime());
+    for (const ev of events.slice(0, 24)) {
+      const row = mk("div", "saved-row");
+      const dateStr = ev.date.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+      const days = Math.ceil((ev.date.getTime() - now) / 86400000);
+      const tag = ev.overdue ? " ⚠ Overdue" : days <= 14 ? ` ⚠ in ${days}d` : "";
+      row.append(mk("span", ev.overdue ? "hazard-warn-inline" : undefined, dateStr + tag), mk("span", "l", ev.label));
+      out.append(row);
+    }
+    if (!events.length) out.textContent = "No events — check the start date.";
+  }
+
+  dateIn.addEventListener("change", () => { localStorage.setItem("vv_prep_sched_start", dateIn.value); render(); });
+  render(); root.append(sec);
+}
+
+// ── Vehicle recovery checklist ────────────────────────────────────────────────
+const RECOVERY_STEPS = [
+  "Assess the situation — is it safe to attempt recovery? Is the vehicle stable?",
+  "Deflate tyres to 20 PSI on soft ground (sand / mud) before mechanical recovery.",
+  "Try self-recovery first: dig out wheels, place traction boards (MaxTrax) under drive wheels.",
+  "If winching: identify anchor point — use a tree trunk protector if attaching to a tree.",
+  "Attach snatch strap or winch cable. Never stand in line with a tensioned strap or cable.",
+  "Spotter directs — all bystanders move to the side, minimum 1.5× cable length away.",
+  "Recover slowly and steadily. Stop if the vehicle shows signs of going deeper.",
+  "Once free: reinflate tyres, check underneath for damage before driving on.",
+];
+
+function buildVehicleRecovery(root: HTMLElement): void {
+  const recState = load<Record<number, boolean>>("vv_prep_recovery", {});
+  const sec = section("Vehicle recovery checklist");
+  sec.append(blurb("Off-road recovery sequence. Check off as you go. Resets between incidents. Saved in this browser."));
+  const cbs: HTMLInputElement[] = [];
+  RECOVERY_STEPS.forEach((step, i) => {
+    const row = mk("label", "saved-row"); row.style.cursor = "pointer";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.style.width = "auto"; cb.checked = !!recState[i];
+    cb.addEventListener("change", () => { recState[i] = cb.checked; save("vv_prep_recovery", recState); });
+    row.append(mk("span", undefined, step), cb); sec.append(row); cbs.push(cb);
+  });
+  const resetBtn = mk("button", "btn btn-ghost btn-sm") as HTMLButtonElement;
+  resetBtn.type = "button"; resetBtn.textContent = "Reset checklist";
+  resetBtn.addEventListener("click", () => {
+    cbs.forEach((cb, i) => { cb.checked = false; recState[i] = false; }); save("vv_prep_recovery", recState);
+  });
+  const br = mk("div", "btn-row no-print"); br.append(resetBtn); sec.append(br); root.append(sec);
 }
 
 // ── On-this-page navigation ──────────────────────────────────────────────────

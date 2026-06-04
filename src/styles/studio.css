@@ -124,6 +124,50 @@
 .wa-status { font-size: 13px; color: #22ee55; }
 .wa-help { font-size: 12px; color: #9a9ab0; margin: 0 0 4px; }
 
+/* ── Pattern selector ── */
+.wa-pat-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.wa-pat-btn {
+  font-family: inherit; font-size: 13px; letter-spacing: 0.12em; cursor: pointer;
+  color: #b8b8c8; background: linear-gradient(#41414f, #313140);
+  border: 1px solid #15151c; padding: 5px 14px; min-width: 36px; border-radius: 2px;
+}
+.wa-pat-btn.active { color: #22ee55; background: linear-gradient(#2a2a36, #1e1e2a); border-color: #22ee55; }
+
+/* ── Per-drum sound design panel ── */
+.wa-sd-panel {
+  background: #161620; border: 1px solid #2a2a3c; border-radius: 3px;
+  padding: 10px 12px 8px; margin: 2px 0 6px 85px;
+}
+.wa-sd-row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 8px; }
+.wa-sd-item { display: flex; flex-direction: column; gap: 4px; min-width: 90px; flex: 1 1 90px; }
+.wa-sd-lbl { font-size: 9px; letter-spacing: 0.14em; color: #7a7a94; text-transform: uppercase; }
+.wa-sd-val { font-size: 11px; color: #22ee55; min-width: 48px; }
+.wa-sd-item input[type=range] { accent-color: #22ee55; width: 100%; height: 4px; }
+.wa-sd-actions { display: flex; gap: 6px; }
+
+/* Drum label active state when SD panel is open */
+.wa-drum.active { color: #22ee55; background: linear-gradient(#22301e, #1a241a); }
+
+/* ── Velocity popup ── */
+.wa-vel-popup {
+  position: fixed; z-index: 9999; display: none;
+  align-items: center; gap: 8px;
+  background: #2c2c38; border: 1px solid #5a5a72; border-radius: 4px;
+  padding: 7px 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+  font-family: var(--font-mono, monospace);
+}
+.wa-vel-slider { width: 100px; accent-color: #22ee55; }
+.wa-vel-num { font-size: 13px; color: #22ee55; min-width: 28px; }
+
+/* ── Reverb row in mixer ── */
+.wa-rv-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 0 0; border-top: 1px solid #1a1a22; margin-top: 10px;
+}
+
+/* ── Horizontal divider in synth panel ── */
+.wa-sep-h { height: 1px; background: #1e1e28; margin: 12px 0; }
+
 /* fullscreen / flip-to-landscape */
 .wa-win.wa-rotated {
   position: fixed; inset: 0; z-index: 9999; margin: 0;
