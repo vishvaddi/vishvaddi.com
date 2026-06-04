@@ -2,9 +2,9 @@
    never touches the rest of the site. Pure CSS — no JS, CSP-clean. */
 
 .blueprint {
-  --site-accent: #2f6df0;
+  --site-accent: #2c63d6;
   --site-line: color-mix(in srgb, var(--fg) 12%, transparent);
-  --site-line-strong: color-mix(in srgb, var(--fg) 22%, transparent);
+  --site-line-strong: color-mix(in srgb, var(--fg) 18%, transparent);
   position: relative;
 }
 
@@ -25,7 +25,7 @@
   background-size: 22px 22px;
   -webkit-mask-image: radial-gradient(circle at 50% 30%, #000 60%, transparent 100%);
   mask-image: radial-gradient(circle at 50% 30%, #000 60%, transparent 100%);
-  opacity: 0.55;
+  opacity: 0.32;
   pointer-events: none;
 }
 
@@ -39,7 +39,7 @@
 }
 
 /* site tools nav — chips (mobile) + fixed rail (desktop) */
-.site-rail, .site-chips { --rail-accent: #2f6df0; }
+.site-rail, .site-chips { --rail-accent: #2c63d6; }
 :root[data-theme="dark"] .site-rail, :root:not([data-theme="light"]) .site-rail,
 :root[data-theme="dark"] .site-chips, :root:not([data-theme="light"]) .site-chips { --rail-accent: #6ea0ff; }
 
