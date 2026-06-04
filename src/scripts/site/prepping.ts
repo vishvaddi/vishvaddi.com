@@ -530,10 +530,13 @@ export function buildPreppingNav(): void {
   if (heads.length < 4) return;
 
   const used = new Set<string>();
-  const items: { id: string; label: string }[] = [];
+  type Group = "Notes" | "Tools";
+  const items: { id: string; label: string; group: Group }[] = [];
   for (const h of heads) {
     const label = (h.textContent || "").trim();
     if (!label) continue;
+    const inApp = !!h.closest("#prep-app");
+    const inToolsIntro = !inApp && !!h.closest("#prep-tools");
     let id = h.id || slug(label);
     const base = id;
     let n = 2;
@@ -541,30 +544,37 @@ export function buildPreppingNav(): void {
     used.add(id);
     h.id = id;
     h.style.scrollMarginTop = "5rem";
-    items.push({ id, label });
+    // The "Field tools" intro heading is covered by the Tools group label.
+    if (inToolsIntro) continue;
+    items.push({ id, label, group: inApp ? "Tools" : "Notes" });
   }
   if (!items.length) return;
 
-  const makeList = (): HTMLUListElement => {
-    const ul = document.createElement("ul");
-    for (const it of items) {
-      const li = document.createElement("li");
-      const a = document.createElement("a");
-      a.href = `#${it.id}`;
-      a.textContent = it.label;
-      a.dataset.toc = it.id;
-      li.append(a);
-      ul.append(li);
+  const groups: Group[] = ["Notes", "Tools"];
+  const buildInto = (container: HTMLElement, labelClass: string): void => {
+    for (const g of groups) {
+      const inGroup = items.filter((it) => it.group === g);
+      if (!inGroup.length) continue;
+      container.append(mk("div", labelClass, g));
+      const ul = document.createElement("ul");
+      for (const it of inGroup) {
+        const li = document.createElement("li");
+        const a = document.createElement("a");
+        a.href = `#${it.id}`;
+        a.textContent = it.label;
+        a.dataset.toc = it.id;
+        li.append(a);
+        ul.append(li);
+      }
+      container.append(ul);
     }
-    return ul;
   };
 
   // Desktop: fixed rail appended to body.
   const rail = document.createElement("nav");
   rail.className = "prep-toc no-print";
   rail.setAttribute("aria-label", "On this page");
-  const title = mk("div", "prep-toc-title", "On this page");
-  rail.append(title, makeList());
+  buildInto(rail, "prep-toc-title");
   document.body.append(rail);
 
   // Mobile: collapsible dropdown at the top of the content.
@@ -572,7 +582,8 @@ export function buildPreppingNav(): void {
   det.className = "prep-toc-m no-print";
   const sum = document.createElement("summary");
   sum.textContent = "On this page";
-  det.append(sum, makeList());
+  det.append(sum);
+  buildInto(det, "prep-toc-m-group");
   main.prepend(det);
   det.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => det.removeAttribute("open")));
 

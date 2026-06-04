@@ -33,6 +33,23 @@ const siteTools: [string, string][] = [
 ];
 const here = Astro.url.pathname.replace(/\/$/, "");
 
+const navPrimary: [string, string][] = [
+  ["/work", "Work"],
+  ["/notes", "Notes"],
+  ["/blog", "Blog"],
+  ["/prepping", "Prepping"],
+  ["/site", "Site"],
+  ["/about", "About"],
+];
+const navMore: [string, string][] = [
+  ["/latest", "Latest"],
+  ["/music", "Music"],
+  ["/movies", "Movies"],
+  ["/books", "Books"],
+];
+const isActive = (href: string) => here === href || here.startsWith(href + "/");
+const showRail = siteNav && here !== "/site";
+
 const fullTitle = title === "Vish Vaddi" ? title : `${title} · Vish Vaddi`;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const ogImageUrl = new URL(ogImage, Astro.site);
@@ -74,40 +91,32 @@ const updatedFmt = updatedDate
   </head>
   <body>
     <header>
-      <nav>
-        <a href="/"><strong>Vish Vaddi</strong></a>
-        <span> · </span>
-        <a href="/latest">Latest</a>
-        <span> · </span>
-        <a href="/work">Work</a>
-        <span> · </span>
-        <a href="/notes">Notes</a>
-        <span> · </span>
-        <a href="/blog">Blog</a>
-        <span> · </span>
-        <a href="/music">Music</a>
-        <span> · </span>
-        <a href="/movies">Movies</a>
-        <span> · </span>
-        <a href="/books">Books</a>
-        <span> · </span>
-        <a href="/prepping">Prepping</a>
-        <span> · </span>
-        <a href="/site">Site</a>
-        <span> · </span>
-        <a href="/about">About</a>
-        <span> · </span>
+      <nav class="topnav" aria-label="Primary">
+        <a class="brand" href="/"><strong>Vish Vaddi</strong></a>
+        <div class="navlinks">
+          {navPrimary.map(([href, label]) => (
+            <a href={href} class={isActive(href) ? "active" : ""}>{label}</a>
+          ))}
+          <details class="nav-more">
+            <summary>More</summary>
+            <div class="nav-more-menu">
+              {navMore.map(([href, label]) => (
+                <a href={href} class={isActive(href) ? "active" : ""}>{label}</a>
+              ))}
+            </div>
+          </details>
+        </div>
         <button
           type="button"
           class="theme-toggle"
           id="theme-toggle"
           aria-label="Toggle dark mode"
-        >Theme</button>
+        >◐</button>
       </nav>
       <hr />
     </header>
     <main>
-      {siteNav && (
+      {showRail && (
         <>
           <nav class="site-rail" aria-label="Site tools">
             <span class="rail-title">Site Tools</span>
