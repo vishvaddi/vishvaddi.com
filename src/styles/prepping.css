@@ -1,0 +1,134 @@
+/* Shared styling for the two Prepping pages (Knowledge + Tools). */
+
+/* Section swap tabs at the top of both pages. */
+.prep-modes {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--rule);
+  margin: 0 0 1.75rem;
+}
+.prep-modes a {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 1.1rem;
+  text-decoration: none;
+  color: var(--muted);
+  padding: 0.5rem 1.1rem 0.7rem;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.prep-modes a:hover { color: var(--fg); }
+.prep-modes a.active { color: var(--fg); border-bottom-color: var(--fg); }
+
+/* Collapsible knowledge groups. */
+.np-group { border-top: 1px solid var(--rule); scroll-margin-top: 5rem; }
+.np-group:last-of-type { border-bottom: 1px solid var(--rule); }
+.np-group > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 1.3rem;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+  padding: 1.05rem 0;
+}
+.np-group > summary::-webkit-details-marker { display: none; }
+.np-group > summary::after {
+  content: "+";
+  font-weight: 400;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--muted);
+}
+.np-group[open] > summary::after { content: "\2013"; }
+.np-group-body { padding-bottom: 1.25rem; }
+.np-group-body > :first-child { margin-top: 0.25rem; }
+.np-group-body h2 { font-size: 1.1rem; margin-top: 1.75rem; }
+.np-group-body h3 { font-size: 1rem; }
+
+/* On-this-page TOC: mobile dropdown by default; fixed rail on wide screens. */
+.prep-toc { display: none; }
+.prep-toc-m {
+  margin: 0 0 1.75rem;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem;
+}
+.prep-toc-m summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  font-family: var(--font-mono, monospace);
+}
+.prep-toc-m ul {
+  list-style: none;
+  margin: 0.6rem 0 0.2rem;
+  padding: 0;
+  columns: 2;
+  column-gap: 1.2rem;
+  font-size: 0.82rem;
+}
+.prep-toc-m li { margin: 0; break-inside: avoid; }
+.prep-toc-m a { display: block; padding: 0.18rem 0; color: var(--muted); text-decoration: none; }
+.prep-toc-m a.active { color: var(--fg); }
+.prep-toc-m-group {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0.6rem 0 0.2rem;
+}
+.prep-toc-m ul + .prep-toc-m-group { margin-top: 0.85rem; }
+
+@media (min-width: 1100px) {
+  .prep-toc-m { display: none; }
+  .prep-toc {
+    display: block;
+    position: fixed;
+    top: 5.5rem;
+    left: max(1rem, calc((100vw - 38rem) / 2 - 14rem));
+    width: 12rem;
+    max-height: calc(100vh - 8rem);
+    overflow-y: auto;
+    font-size: 0.82rem;
+    line-height: 1.3;
+    scrollbar-width: thin;
+  }
+  .prep-toc-title {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+  .prep-toc ul { list-style: none; margin: 0; padding: 0; }
+  .prep-toc ul + .prep-toc-title { margin-top: 1rem; }
+  .prep-toc li { margin: 0; }
+  .prep-toc a {
+    display: block;
+    color: var(--muted);
+    text-decoration: none;
+    padding: 0.22rem 0.5rem;
+    border-left: 2px solid transparent;
+    border-radius: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .prep-toc a:hover { color: var(--fg); }
+  .prep-toc a.active {
+    color: var(--fg);
+    border-left-color: #2c63d6;
+    background: color-mix(in srgb, currentColor 7%, transparent);
+  }
+  :root[data-theme="dark"] .prep-toc a.active,
+  :root:not([data-theme="light"]) .prep-toc a.active { border-left-color: #6ea0ff; }
+}
+@media print { .prep-toc, .prep-toc-m, .prep-modes { display: none !important; } }

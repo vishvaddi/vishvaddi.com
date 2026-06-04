@@ -415,8 +415,6 @@ const NOTE_GROUPS: { title: string; slugs: string[] }[] = [
 export function buildPreppingNav(): void {
   const main = document.querySelector("main");
   if (!main) return;
-  const toolsZone = document.getElementById("prep-tools");
-
   // Give every heading a stable id + scroll offset.
   const used = new Set<string>();
   for (const h of Array.from(main.querySelectorAll<HTMLElement>("h2"))) {
@@ -431,21 +429,15 @@ export function buildPreppingNav(): void {
     h.style.scrollMarginTop = "5rem";
   }
 
-  // ── Group the note sections into collapsible accordions ──
-  // A "section" = an h2 (before the tools zone) and its following siblings up to
-  // the next h2; each is moved into a themed <details>.
-  const kids = Array.from(main.children) as HTMLElement[];
-  const firstNoteH2 = kids.find((el) => el.tagName === "H2");
+  // ── Group the knowledge sections into collapsible accordions ──
+  // Only sections inside #prep-knowledge are grouped (the Tools page has none).
   const noteGroupLinks: { id: string; label: string }[] = [];
-  if (firstNoteH2) {
-    const startIdx = kids.indexOf(firstNoteH2);
-    const ti = toolsZone ? kids.indexOf(toolsZone) : -1;
-    const range = kids.slice(startIdx, ti === -1 ? kids.length : ti);
-
+  const know = document.getElementById("prep-knowledge");
+  if (know) {
     const sections = new Map<string, HTMLElement[]>();
     const order: string[] = [];
     let curKey: string | null = null;
-    for (const el of range) {
+    for (const el of Array.from(know.children) as HTMLElement[]) {
       if (el.tagName === "H2") { curKey = el.id; sections.set(curKey, [el]); order.push(curKey); }
       else if (curKey) sections.get(curKey)!.push(el);
     }
@@ -453,23 +445,24 @@ export function buildPreppingNav(): void {
     const assigned = new Set<string>();
     let firstOpen = true;
     const addGroup = (title: string, keys: string[]) => {
-      if (!keys.length) return;
+      const ks = keys.filter((k) => sections.has(k));
+      if (!ks.length) return;
       const det = document.createElement("details");
       det.className = "np-group";
       det.id = `g-${slug(title)}`;
       if (firstOpen) { det.open = true; firstOpen = false; }
       det.append(mk("summary", "np-group-title", title));
       const body = mk("div", "np-group-body");
-      for (const k of keys) {
+      for (const k of ks) {
         for (const node of sections.get(k)!) body.append(node);
         assigned.add(k);
       }
       det.append(body);
-      if (toolsZone) main.insertBefore(det, toolsZone); else main.append(det);
+      know.append(det);
       noteGroupLinks.push({ id: det.id, label: title });
     };
 
-    for (const def of NOTE_GROUPS) addGroup(def.title, def.slugs.filter((s) => sections.has(s)));
+    for (const def of NOTE_GROUPS) addGroup(def.title, def.slugs);
     addGroup("More", order.filter((k) => !assigned.has(k))); // any unexpected headings
   }
 
@@ -482,7 +475,7 @@ export function buildPreppingNav(): void {
 
   // ── TOC (desktop rail + mobile dropdown) ──
   const tocGroups: { title: string; links: { id: string; label: string }[]; opensAccordion?: boolean }[] = [
-    { title: "Notes", links: noteGroupLinks, opensAccordion: true },
+    { title: "Knowledge", links: noteGroupLinks, opensAccordion: true },
     { title: "Tools", links: toolLinks },
   ];
   const buildInto = (container: HTMLElement, labelClass: string): void => {

@@ -8,8 +8,8 @@ import Base from "../layouts/Base.astro";
 >
   <h1>Studio</h1>
   <p>
-    A little Web-Audio workstation — a step-sequencer drum machine, a subtractive
-    synth (play the on-screen keys or your <strong>A–K</strong> row), and a mixer,
+    A Web-Audio workstation — a step-sequencer drum machine, a subtractive synth
+    (play the on-screen keys or your <strong>A–K</strong> row), and a mixer,
     dressed in the skin of a certain late-'90s media player. Nothing is recorded
     or uploaded; it all runs in your browser.
   </p>
@@ -29,96 +29,104 @@ import Base from "../layouts/Base.astro";
 </Base>
 
 <style is:global>
-  .wa-wrap { display: flex; justify-content: center; margin: 1.75rem 0; }
+  /* Break out of the text column to near-full width. */
+  .wa-wrap {
+    width: 96vw;
+    margin-left: calc(50% - 48vw);
+    display: flex;
+    justify-content: center;
+    margin-top: 1.5rem;
+    margin-bottom: 2rem;
+  }
   .wa-win {
     width: 100%;
-    max-width: 560px;
+    max-width: 1080px;
     font-family: var(--font-mono, monospace);
     background: linear-gradient(#3c3c4a, #2e2e38);
     border: 2px solid;
     border-color: #5a5a6e #1a1a22 #1a1a22 #5a5a6e;
     border-radius: 3px;
-    padding: 3px;
+    padding: 4px;
     color: #c8c8d0;
-    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
     user-select: none;
   }
   .wa-title {
     display: flex; align-items: center; justify-content: space-between;
     background: linear-gradient(#4a4a66, #353550);
-    border: 1px solid #1a1a22; height: 18px; padding: 0 6px; margin-bottom: 3px;
+    border: 1px solid #1a1a22; height: 24px; padding: 0 8px; margin-bottom: 4px;
   }
-  .wa-title-text { font-size: 10px; letter-spacing: 0.14em; color: #d8d8ff; text-shadow: 0 1px 0 #000; }
+  .wa-title-text { font-size: 12px; letter-spacing: 0.16em; color: #d8d8ff; text-shadow: 0 1px 0 #000; }
   .wa-title-dots {
-    flex: 1; margin-left: 8px; height: 7px;
+    flex: 1; margin-left: 10px; height: 9px;
     background: repeating-linear-gradient(#2a2a3a, #2a2a3a 1px, transparent 1px, transparent 3px);
     opacity: 0.5;
   }
   .wa-lcd {
-    display: flex; gap: 12px; align-items: center;
-    background: #000; box-shadow: inset 0 0 6px #021a06;
-    padding: 5px 9px; margin-bottom: 4px;
+    display: flex; gap: 18px; align-items: center;
+    background: #000; box-shadow: inset 0 0 8px #021a06;
+    padding: 8px 12px; margin-bottom: 6px;
   }
-  .wa-lcd-seg { font-size: 13px; color: #22ee55; text-shadow: 0 0 6px #11aa33; letter-spacing: 0.1em; }
-  .wa-transport { display: flex; align-items: center; gap: 4px; margin-bottom: 5px; }
+  .wa-lcd-seg { font-size: 20px; color: #22ee55; text-shadow: 0 0 8px #11aa33; letter-spacing: 0.1em; }
+  .wa-transport { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
   .wa-btn {
-    font-family: inherit; font-size: 12px; color: #e0e0e8; cursor: pointer;
+    font-family: inherit; font-size: 16px; color: #e0e0e8; cursor: pointer;
     background: linear-gradient(#4d4d5e, #38384a);
     border: 2px solid; border-color: #6c6c84 #15151c #15151c #6c6c84;
-    border-radius: 2px; min-width: 30px; height: 24px; padding: 0 8px; line-height: 1;
+    border-radius: 2px; min-width: 42px; height: 34px; padding: 0 12px; line-height: 1;
   }
   .wa-btn:active { border-color: #15151c #6c6c84 #6c6c84 #15151c; background: linear-gradient(#34343f, #44445a); }
-  .wa-btn-sm { min-width: 22px; height: 20px; padding: 0 6px; }
-  .wa-sep { width: 1px; height: 18px; background: #1a1a22; margin: 0 4px; }
-  .wa-lbl { font-size: 9px; letter-spacing: 0.14em; color: #8a8aa0; text-transform: uppercase; }
-  .wa-bpm { font-size: 13px; color: #22ee55; min-width: 30px; text-align: center; text-shadow: 0 0 5px #11aa33; }
+  .wa-btn-sm { min-width: 30px; height: 28px; font-size: 15px; padding: 0 9px; }
+  .wa-sep { width: 1px; height: 24px; background: #1a1a22; margin: 0 6px; }
+  .wa-lbl { font-size: 11px; letter-spacing: 0.14em; color: #8a8aa0; text-transform: uppercase; }
+  .wa-bpm { font-size: 20px; color: #22ee55; min-width: 42px; text-align: center; text-shadow: 0 0 6px #11aa33; }
 
-  .wa-tabs { display: flex; gap: 2px; margin-bottom: 4px; }
+  .wa-tabs { display: flex; gap: 3px; margin-bottom: 5px; }
   .wa-tab {
-    font-family: inherit; font-size: 10px; letter-spacing: 0.08em; cursor: pointer;
+    font-family: inherit; font-size: 13px; letter-spacing: 0.08em; cursor: pointer;
     color: #b8b8c8; background: linear-gradient(#41414f, #313140);
-    border: 1px solid #15151c; padding: 4px 10px;
+    border: 1px solid #15151c; padding: 7px 18px;
   }
   .wa-tab.active { color: #22ee55; background: linear-gradient(#2a2a36, #222230); }
-  .wa-panels { background: #23232c; border: 1px solid #15151c; padding: 8px; }
+  .wa-panels { background: #23232c; border: 1px solid #15151c; padding: 16px; min-height: 380px; }
 
-  .wa-grid { display: flex; flex-direction: column; gap: 3px; }
-  .wa-row { display: flex; align-items: center; gap: 3px; }
+  .wa-grid { display: flex; flex-direction: column; gap: 5px; }
+  .wa-row { display: flex; align-items: center; gap: 5px; }
   .wa-drum {
-    width: 46px; flex: 0 0 46px; font-family: inherit; font-size: 9px; color: #cfcfe0;
+    width: 80px; flex: 0 0 80px; font-family: inherit; font-size: 12px; color: #cfcfe0;
     cursor: pointer; background: linear-gradient(#45455a, #33333f);
-    border: 1px solid #15151c; height: 18px; text-align: left; padding: 0 4px;
+    border: 1px solid #15151c; height: 30px; text-align: left; padding: 0 8px;
   }
   .wa-cell {
-    flex: 1 1 0; height: 18px; min-width: 0; cursor: pointer;
-    background: #1a1a22; border: 1px solid #0c0c12; border-radius: 1px; padding: 0;
+    flex: 1 1 0; height: 30px; min-width: 0; cursor: pointer;
+    background: #1a1a22; border: 1px solid #0c0c12; border-radius: 2px; padding: 0;
   }
   .wa-cell.wa-beat { background: #24242f; }
-  .wa-cell.on { background: linear-gradient(#33ff66, #16b23e); box-shadow: inset 0 0 3px #aaffbb; }
-  .wa-cell.play { outline: 1px solid #ffdd33; outline-offset: -1px; }
+  .wa-cell.on { background: linear-gradient(#33ff66, #16b23e); box-shadow: inset 0 0 4px #aaffbb; }
+  .wa-cell.play { outline: 2px solid #ffdd33; outline-offset: -2px; }
   .wa-cell.on.play { background: linear-gradient(#ffe24d, #e0b820); }
-  .wa-row-tools { margin-top: 6px; }
+  .wa-row-tools { margin-top: 10px; }
 
-  .wa-knobs { display: flex; gap: 3px; margin: 4px 0 8px; }
-  .wa-slider-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
-  .wa-slider { flex: 1; accent-color: #22ee55; }
-  .wa-val { font-size: 11px; color: #22ee55; min-width: 40px; text-align: right; }
-  .wa-keys { position: relative; display: flex; margin-top: 6px; height: 96px; }
+  .wa-knobs { display: flex; gap: 4px; margin: 6px 0 12px; }
+  .wa-slider-row { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
+  .wa-slider { flex: 1; accent-color: #22ee55; height: 6px; }
+  .wa-val { font-size: 14px; color: #22ee55; min-width: 52px; text-align: right; }
+  .wa-keys { position: relative; display: flex; margin-top: 10px; height: 180px; }
   .wa-key {
-    position: relative; flex: 1 1 0; height: 96px;
+    position: relative; flex: 1 1 0; height: 180px;
     background: linear-gradient(#fff, #e6e6ee); border: 1px solid #555;
-    border-radius: 0 0 3px 3px; cursor: pointer;
+    border-radius: 0 0 4px 4px; cursor: pointer;
   }
   .wa-key.down { background: linear-gradient(#9fe6ff, #5bc6f0); }
   .wa-key-black {
-    position: absolute; top: 0; right: -9px; width: 18px; height: 58px;
+    position: absolute; top: 0; right: -12px; width: 24px; height: 112px;
     background: linear-gradient(#333, #000); border: 1px solid #000; z-index: 2;
-    border-radius: 0 0 2px 2px;
+    border-radius: 0 0 3px 3px;
   }
   .wa-key-black.down { background: linear-gradient(#2a8fc0, #16607f); }
 
-  .wa-mixer { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; padding: 6px 0; }
-  .wa-ch { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-  .wa-fader { writing-mode: vertical-lr; direction: rtl; width: 22px; height: 96px; accent-color: #22ee55; }
-  .wa-ch-name { font-size: 8px; letter-spacing: 0.06em; color: #a8a8bc; text-transform: uppercase; }
+  .wa-mixer { display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; padding: 10px 0; }
+  .wa-ch { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .wa-fader { writing-mode: vertical-lr; direction: rtl; width: 28px; height: 200px; accent-color: #22ee55; }
+  .wa-ch-name { font-size: 10px; letter-spacing: 0.06em; color: #a8a8bc; text-transform: uppercase; }
 </style>
