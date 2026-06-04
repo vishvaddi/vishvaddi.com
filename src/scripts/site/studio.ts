@@ -1,3 +1,5 @@
+import "../../styles/studio.css";
+
 // VishAmp Studio — a Winamp-styled mini-DAW: step-sequencer drum machine,
 // subtractive synth and mixer, with swing, metronome, per-track mute/solo and
 // WAV/MP3 export. Pure Web Audio. Drum/synth sound design ported from the
