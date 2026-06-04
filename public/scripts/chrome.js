@@ -32,6 +32,22 @@
     });
   }
 
+  // Remember recently used /site tools (most-recent first, capped) so the hub
+  // can surface them. Stays in this browser.
+  try {
+    var p = location.pathname.replace(/\/+$/, "");
+    if (/^\/site\/[^/]+$/.test(p)) {
+      var key = "vv_site_recents";
+      var arr = JSON.parse(localStorage.getItem(key) || "[]");
+      if (!Array.isArray(arr)) arr = [];
+      arr = arr.filter(function (x) { return x !== p; });
+      arr.unshift(p);
+      localStorage.setItem(key, JSON.stringify(arr.slice(0, 6)));
+    }
+  } catch (e) {
+    /* ignore */
+  }
+
   var more = document.querySelector(".nav-more");
   if (more) {
     document.addEventListener("click", function (e) {
