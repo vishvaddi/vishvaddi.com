@@ -115,7 +115,37 @@
   color: var(--fg);
   width: 100%;
 }
-.tool input:focus, .tool select:focus { outline: 2px solid var(--site-accent); outline-offset: 1px; }
+.tool input:focus, .tool select:focus, .tool textarea:focus { outline: 2px solid var(--site-accent); outline-offset: 1px; }
+.tool textarea {
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--site-line-strong);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  width: 100%;
+  resize: vertical;
+}
+
+/* site records registers */
+.rec-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 1rem 0 1.25rem; }
+.rec-card {
+  border: 1px solid var(--site-line);
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  margin: 0.6rem 0;
+}
+.rec-card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
+.rec-title { font-family: var(--font-sans); font-weight: 600; }
+.rec-chip {
+  font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--site-accent);
+  border: 1px solid var(--site-line-strong); border-radius: 999px;
+  padding: 0.12rem 0.5rem; white-space: nowrap;
+}
+.rec-sub { font-size: 0.9rem; margin-top: 0.25rem; }
+.rec-meta { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); margin-top: 0.4rem; }
 
 .row-grid { display: grid; grid-template-columns: 1fr 6rem 4rem auto; gap: 0.5rem; align-items: end; }
 .row-grid .field { margin: 0.25rem 0; }
