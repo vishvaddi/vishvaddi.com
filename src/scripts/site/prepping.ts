@@ -277,6 +277,120 @@ export function initPrepping(): void {
   // ── Calculators ──
   mountCalcs(root, calcs);
 
+  // ── Find nearby (live map; tiles + Overpass proxied same-origin) ──
+  const nearby = section("Find nearby");
+  nearby.append(blurb("Maps essentials within ~2 km — water, toilets, fuel, hospital, pharmacy, police, supermarkets. Your location is sent only to this site's own server to run the lookup; it is never stored."));
+  const loadBtn = mk("button", "btn") as HTMLButtonElement;
+  loadBtn.type = "button";
+  loadBtn.textContent = "Load map";
+  const loadRow = mk("div", "btn-row no-print");
+  loadRow.append(loadBtn);
+  nearby.append(loadRow);
+  const mapWrap = mk("div");
+  mapWrap.id = "prep-map";
+  mapWrap.style.cssText = "height:360px;border:1px solid var(--site-line-strong);border-radius:6px;overflow:hidden;margin-top:0.5rem;display:none;";
+  nearby.append(mapWrap);
+  const poiRow = mk("div", "btn-row no-print");
+  poiRow.style.display = "none";
+  nearby.append(poiRow);
+  const nbStatus = mk("p", "calc-blurb");
+  nearby.append(nbStatus);
+  root.append(nearby);
+
+  const POI: [string, string, string, string][] = [
+    ["drinking_water", "Water", "amenity", "drinking_water"],
+    ["toilets", "Toilets", "amenity", "toilets"],
+    ["fuel", "Petrol", "amenity", "fuel"],
+    ["hospital", "Hospital", "amenity", "hospital"],
+    ["pharmacy", "Pharmacy", "amenity", "pharmacy"],
+    ["police", "Police", "amenity", "police"],
+    ["supermarket", "Supermarket", "shop", "supermarket"],
+    ["atm", "ATM", "amenity", "atm"],
+  ];
+
+  loadBtn.addEventListener("click", async () => {
+    loadBtn.disabled = true;
+    loadBtn.textContent = "Loading map…";
+    let L: any;
+    try {
+      const mod: any = await import("leaflet");
+      L = mod.default ?? mod;
+      await import("leaflet/dist/leaflet.css");
+    } catch {
+      nbStatus.textContent = "Map failed to load — check your connection or ad blocker.";
+      loadBtn.disabled = false;
+      loadBtn.textContent = "Load map";
+      return;
+    }
+    loadBtn.style.display = "none";
+    mapWrap.style.display = "block";
+    poiRow.style.display = "flex";
+
+    const map = L.map(mapWrap).setView([-33.87, 151.21], 13); // Sydney fallback
+    L.tileLayer("/api/poi/tiles/{z}/{x}/{y}", { attribution: "© OpenStreetMap contributors", maxZoom: 19 }).addTo(map);
+
+    let here: { lat: number; lon: number } | null = null;
+    const layers = new Map<string, any>();
+    const active = new Set<string>();
+
+    const locate = mk("button", "btn btn-ghost btn-sm") as HTMLButtonElement;
+    locate.type = "button";
+    locate.textContent = "📍 My location";
+    locate.addEventListener("click", () => {
+      if (!navigator.geolocation) { nbStatus.textContent = "Geolocation not available on this device."; return; }
+      nbStatus.textContent = "Locating…";
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          here = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+          map.setView([here.lat, here.lon], 15);
+          L.circleMarker([here.lat, here.lon], { radius: 8, color: "#2f6df0", fillColor: "#2f6df0", fillOpacity: 0.6 }).addTo(map).bindPopup("You are here");
+          nbStatus.textContent = "";
+        },
+        () => { nbStatus.textContent = "Couldn't get your location — allow access and tap “My location” again."; }
+      );
+    });
+    poiRow.append(locate);
+
+    async function overpass(k: string, v: string, lat: number, lon: number): Promise<any[]> {
+      const q = `[out:json][timeout:15];(node["${k}"="${v}"](around:2000,${lat},${lon}););out body;`;
+      try {
+        const r = await fetch("/api/poi/overpass", { method: "POST", body: q });
+        if (!r.ok) return [];
+        const data = await r.json();
+        return data.elements || [];
+      } catch { return []; }
+    }
+
+    for (const [id, label, k, v] of POI) {
+      const b = mk("button", "btn btn-ghost btn-sm") as HTMLButtonElement;
+      b.type = "button";
+      b.textContent = label;
+      b.addEventListener("click", async () => {
+        const c = map.getCenter();
+        const center = here ?? { lat: c.lat, lon: c.lng };
+        if (active.has(id)) {
+          active.delete(id); b.style.borderColor = "";
+          const lg = layers.get(id); if (lg) map.removeLayer(lg); layers.delete(id);
+          return;
+        }
+        active.add(id); b.style.borderColor = "var(--site-accent)";
+        nbStatus.textContent = `Searching ${label.toLowerCase()}…`;
+        const els = await overpass(k, v, center.lat, center.lon);
+        const lg = L.layerGroup();
+        for (const e of els) {
+          if (e.lat == null || e.lon == null) continue;
+          const name = (e.tags && (e.tags.name || e.tags.amenity || e.tags.shop)) || label;
+          L.circleMarker([e.lat, e.lon], { radius: 6, color: "#1f7a3d", fillColor: "#28a745", fillOpacity: 0.85 }).bindPopup(name).addTo(lg);
+        }
+        lg.addTo(map); layers.set(id, lg);
+        nbStatus.textContent = els.length ? `${els.length} ${label.toLowerCase()} within 2 km.` : `No ${label.toLowerCase()} found within 2 km.`;
+      });
+      poiRow.append(b);
+    }
+
+    locate.click(); // try to centre on the user immediately
+  });
+
   // ── Kit maintenance tracker ──
   const kitState = load<Record<string, string>>("vv_prep_kit", {});
   const kitSec = section("Kit maintenance");

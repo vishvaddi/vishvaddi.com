@@ -337,10 +337,3 @@ Preparedness isn't a weekend project, it's maintenance. One small task a week ke
 50. Practise basic first aid scenarios (choking, CPR)
 51. Final FIFO food rotation for the year
 52. Year-end review and set goals for next year
-
-## Principles I keep coming back to
-
-- [Resilience requires redundancy](/notes/resilience-requires-redundancy)
-- [Self-sufficiency compounds](/notes/self-sufficiency-compounds)
-- [Catastrophe planning has to happen before the catastrophe](/notes/catastrophe-planning)
-- [Antifragility means gaining from disorder](/notes/antifragility)
