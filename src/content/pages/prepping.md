@@ -2,7 +2,7 @@
 title: Prepping
 description: Bushcraft, survival, first aid, and self-sufficiency notes — written from an Australian context.
 ogImage: /og/prepping.png
-updatedDate: 2026-04-30
+updatedDate: 2026-06-04
 ---
 
 # Prepping and survival
@@ -83,6 +83,12 @@ The order survival sources converge on, derived from the Rule of Threes:
 4. **Signalling** — being found beats self-rescue.
 5. **Food** — last. You can wait weeks.
 
+## Bradley's 14 survival needs
+
+A more granular audit than the five priorities — Ron Bradley's fourteen needs. Run a kit or a plan against the whole list and the gaps show up fast:
+
+Positive mental attitude, first aid, shelter, fire, signalling, personal protection (clothing), the will to survive, food, water, navigation, tools and knives, rope and cordage, cross-training, and luck. Attitude leads the list and luck closes it for a reason — the first does the most work, and you never plan to rely on the last but you account for it.
+
 ## Shelter
 
 Site selection matters more than shelter design. Avoid flood zones, dead trees overhead, hilltops (wind), and valley bottoms (cold air pools). Insulate from the ground — it conducts body heat 25× faster than air.
@@ -127,6 +133,16 @@ The last priority. Three weeks is the runway. The principle to keep in mind: cal
 - Trapping is more energy-efficient than hunting. Snares, deadfalls, fish traps.
 - Never eat wild plants without positive identification from multiple sources.
 
+## Emergency numbers — Australia
+
+Keep these somewhere you can reach without unlocking a screen — a card in the kit, on the fridge, in the wallet.
+
+- **000** — Police, Fire, Ambulance. From a mobile, **112** also connects and will try any available network when yours has no signal.
+- **132 500** — SES, for flood and storm damage that isn't immediately life-threatening.
+- **13 11 26** — Poisons Information Centre. Bites, stings, chemical exposure, accidental ingestion.
+- **1800 641 792** — Marine Rescue / Coast Guard.
+- **106** — text-based emergency line for the deaf, or hard-of-hearing and speech-impaired.
+
 ## First aid — DRSABCD
 
 The Australian sequence taught by St John and the Australian Resuscitation Council:
@@ -154,6 +170,16 @@ For situations where help isn't coming soon. Drawn mostly from Werner's *Where T
 
 Pressure immobilisation bandage for any Australian snake bite. Firm — as for a sprained ankle. Bandage over the bite site, then the entire limb toward the heart, then splint to prevent movement. Keep the person still and calm. Don't wash the bite (venom on the skin is used for identification). Don't cut, suck, or tourniquet. Call 000.
 
+## Other Australian bites and stings
+
+The treatment splits sharply by creature, and the wrong first aid makes several of these worse. Learn which is which before you're standing over someone.
+
+- **Funnel-web spider** — treat as life-threatening. Pressure immobilisation, exactly as for snake bite. Keep still, leave the bandage on, get to hospital. Antivenom exists.
+- **Redback spider** — do *not* use pressure immobilisation. Cold pack to the bite, seek medical help. Very painful but rarely life-threatening; antivenom available.
+- **Box jellyfish** — life-threatening, northern waters. Douse the tentacles with vinegar for at least 30 seconds before removing them, never rub, and be ready for CPR. Call 000.
+- **Blue-ringed octopus** — no antivenom. Pressure immobilisation and be ready for CPR; the venom paralyses while the person stays conscious, so keep talking to them and reassure them. Call 000.
+- **Bluebottle / Pacific man o' war** — hot water, *not* vinegar (vinegar makes a bluebottle sting worse). Pick the tentacles off without rubbing, then immerse the sting in 45°C water for 20 minutes.
+
 ## Six knots that cover most situations
 
 1. **Bowline** — fixed loop, doesn't slip. The king of knots.
@@ -168,6 +194,18 @@ Best free reference: [animatedknots.com](https://www.animatedknots.com). Tie eac
 ## Sharp tools, briefly
 
 A dull knife is more dangerous than a sharp one — it needs more force, slips more often. The basic principle of whetstone work: consistency of angle matters more than the angle itself. Start with a 1000/6000 grit combination stone, learn to feel for the burr, finish with a leather strop. Hone before each cooking session. Never use a knife as a pry bar.
+
+## Seasonal threat calendar — NSW
+
+What the year actually throws at you, so the kit and the plan track the season rather than the calendar:
+
+| Window | Primary threats |
+|---|---|
+| Jan–Feb | Heatwave, severe thunderstorms, bushfire at its peak |
+| Mar–May | East Coast Lows, flooding, cyclone tail-ends |
+| Jun–Aug | Cold fronts, fog, storm surge |
+| Sep–Nov | Bushfire season onset, spring storms |
+| Oct–Mar | Elevated fire danger — the window to stay kit-ready |
 
 ## Australian-specific
 
@@ -184,7 +222,7 @@ Aboriginal Australians have 65,000+ years of bushcraft knowledge — the longest
 
 - **Stick and shadow** — vertical stick in the ground, mark the shadow tip, wait 30 minutes, mark the new tip. The line between them runs east–west; the first mark is west.
 - **Watch method** — point 12 at the sun. True north bisects the angle between 12 and the hour hand.
-- **Southern Cross** — extend the long axis 4.5× the length of the cross, drop perpendicular to the horizon: that's south.
+- **Southern Cross** — extend the long axis of the cross 4.5× its own length and drop straight to the horizon: that point is due south. Confirm it with the two bright Pointer stars (Alpha and Beta Centauri) nearby — the perpendicular bisector of the line between them meets the Cross's extended axis at the same south point.
 - **Orion's belt** (visible Nov–May) — the top star always rises due east and sets due west.
 
 ## Self-sufficiency at home — four pillars
@@ -220,7 +258,7 @@ The traditional survival list (shelter, fire, water) covers acute crises. Slow-m
 - **Physical** — Zone 2 aerobic base, joint-bulletproofing mobility, austere medicine literacy. The body is the only vehicle that doesn't need fuel.
 - **Mental** — psychological flexibility (ACT — Russ Harris's *The Happiness Trap* is the standard), epistemic hygiene, decision-making under uncertainty (*Thinking in Bets*).
 - **Financial** — Taleb's barbell strategy: hyper-safe assets on one end, asymmetric upside bets on the other, nothing in the boring middle that can wipe you out.
-- **Strategic** — antifragility. Build systems that gain from disorder rather than just survive it.
+- **Strategic** — antifragility. Build systems that gain from disorder rather than just survive it. [More on this](/notes/antifragility).
 
 ## The everyday baseline
 
@@ -231,3 +269,78 @@ Not bunkers. Just enough that a disruption doesn't force you into bad choices:
 - Encrypted USB with copies of the documents you'd hate to lose. Plus cloud backup.
 - A basic first aid kit. Bunnings, $30. Most people don't have one.
 - One person in the household with a current first aid certificate.
+
+## The 52-week prep routine
+
+Preparedness isn't a weekend project, it's maintenance. One small task a week keeps the kit live, the skills warm, and the documents current — without it ever becoming a second job. A full year:
+
+**Q1 — weeks 1–13**
+
+1. Audit your grab bag — replace expired items
+2. Check water storage — taste and condition
+3. Practise fire-starting without matches
+4. Review evacuation route on foot
+5. Update emergency contact card
+6. Rotate canned food stock (FIFO)
+7. Check first aid kit — restock bandages and gloves
+8. Test battery-powered radio
+9. Learn or review tourniquet application
+10. Check fuel levels in vehicles
+11. Practise shelter setup (tarp/tent)
+12. Check all flashlights and spare batteries
+13. Review financial emergency plan
+
+**Q2 — weeks 14–26**
+
+14. Check medications — expiry dates
+15. Walk or drive alternate exit routes
+16. Verify document backups (digital and hard copy)
+17. Practise navigation with map and compass (no GPS)
+18. Stock-take food pantry
+19. Test smoke and CO detectors
+20. Review BOM seasonal outlook
+21. Check fire extinguisher pressure and expiry
+22. Practise basic knots (bowline, clove hitch, figure-8)
+23. Review communications plan with household
+24. Check water filtration kit (filter, tablets)
+25. Audit spare clothing in grab bag
+26. Stock-check power bank and solar charger
+
+**Q3 — weeks 27–39**
+
+27. Review bushfire plan if in a risk zone
+28. Practise hands-free comms (radio, whistle signals)
+29. Check tyre pressures and spare tyre
+30. Learn or review wound irrigation technique
+31. Test and refill gas canister stash
+32. Practise fire evacuation drill
+33. Update emergency plan for kids or elderly in the household
+34. Check rain catchment setup
+35. Review cyber-resilience (password manager, 2FA)
+36. Stock-check seeds for the garden (food resilience)
+37. Practise water purification end-to-end
+38. Check footwear in grab bag — fit and condition
+39. Review SES flood map for your area
+
+**Q4 — weeks 40–52**
+
+40. Restock personal hygiene items
+41. Practise signalling techniques (mirror, whistle)
+42. Check generator fuel and test run (if applicable)
+43. Review any changes to local emergency services
+44. Test UV water purification device
+45. Practise building an emergency shelter
+46. Stock-check duct tape, zip ties, cordage
+47. Full grab-bag rehearsal — pack in under 10 minutes
+48. Update digital cloud backup
+49. Review annual prepping budget
+50. Practise basic first aid scenarios (choking, CPR)
+51. Final FIFO food rotation for the year
+52. Year-end review and set goals for next year
+
+## Principles I keep coming back to
+
+- [Resilience requires redundancy](/notes/resilience-requires-redundancy)
+- [Self-sufficiency compounds](/notes/self-sufficiency-compounds)
+- [Catastrophe planning has to happen before the catastrophe](/notes/catastrophe-planning)
+- [Antifragility means gaining from disorder](/notes/antifragility)
