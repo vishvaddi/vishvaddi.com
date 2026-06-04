@@ -55,6 +55,37 @@ const { Content } = await render(entry);
 </style>
 
 <style is:global>
+  /* Collapsible note groups — the long reference is grouped into a few themes. */
+  .np-group { border-top: 1px solid var(--rule); scroll-margin-top: 5rem; }
+  .np-group:last-of-type { border-bottom: 1px solid var(--rule); }
+  .np-group > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 1.3rem;
+    letter-spacing: -0.01em;
+    color: var(--fg);
+    padding: 1.05rem 0;
+  }
+  .np-group > summary::-webkit-details-marker { display: none; }
+  .np-group > summary::after {
+    content: "+";
+    font-weight: 400;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--muted);
+  }
+  .np-group[open] > summary::after { content: "\2013"; }
+  .np-group-body { padding-bottom: 1.25rem; }
+  .np-group-body > :first-child { margin-top: 0.25rem; }
+  .np-group-body h2 { font-size: 1.1rem; margin-top: 1.75rem; }
+  .np-group-body h3 { font-size: 1rem; }
+
   /* On-this-page TOC. Mobile dropdown by default; fixed rail on wide screens. */
   .prep-toc { display: none; }
   .prep-toc-m {

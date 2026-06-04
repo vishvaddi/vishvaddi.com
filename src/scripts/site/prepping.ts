@@ -20,28 +20,12 @@ const blurb = (text: string): HTMLElement => mk("p", "calc-blurb", text);
 const today = (): string => new Date().toISOString().slice(0, 10);
 
 // ── reference data ───────────────────────────────────────────────────────────
-const RULE3: [string, string][] = [
-  ["3 sec", "Attitude — the will to act"],
-  ["3 min", "Air, or uncontrolled bleeding"],
-  ["3 hr", "Shelter in harsh conditions"],
-  ["3 days", "Water"],
-  ["3 wks", "Food"],
-];
-
 const CONTACTS: [string, string][] = [
   ["000", "Police / Fire / Ambulance"],
   ["112", "Emergency from mobile (any network)"],
   ["132500", "SES — flood & storm"],
   ["131126", "Poisons Information"],
   ["1800641792", "Marine Rescue / Coast Guard"],
-];
-
-const THREATS: [string, string][] = [
-  ["Jan–Feb", "Heatwave, severe storms, bushfire (peak)"],
-  ["Mar–May", "East Coast Lows, flooding, cyclone tail-ends"],
-  ["Jun–Aug", "Cold fronts, fog, storm surge"],
-  ["Sep–Nov", "Bushfire onset, spring storms"],
-  ["Oct–Mar", "Elevated fire danger — stay kit-ready"],
 ];
 
 const BRADLEY14 = [
@@ -57,61 +41,6 @@ const KIT: KitItem[] = [
   { key: "kit", label: "Kit check", days: 90, cadence: "every 3 months" },
   { key: "water", label: "Water rotation", days: 180, cadence: "every 6 months" },
   { key: "food", label: "Food rotation", days: 30, cadence: "monthly" },
-];
-
-const WEEK52 = [
-  "Audit your grab bag — replace expired items",
-  "Check water storage — taste & condition",
-  "Practise fire-starting without matches",
-  "Review evacuation route on foot",
-  "Update emergency contact card",
-  "Rotate canned food stock (FIFO)",
-  "Check first aid kit — restock bandages & gloves",
-  "Test battery-powered radio",
-  "Learn or review tourniquet application",
-  "Check fuel levels in vehicles",
-  "Practise shelter setup (tarp/tent)",
-  "Check all flashlights + spare batteries",
-  "Review financial emergency plan",
-  "Check medications — expiry dates",
-  "Walk/drive alternate exit routes",
-  "Verify document backups (digital + hard copy)",
-  "Practise navigation with map + compass (no GPS)",
-  "Stock-take food pantry",
-  "Test smoke & CO detectors",
-  "Review BOM seasonal outlook",
-  "Check fire extinguisher pressure + expiry",
-  "Practise basic knots (bowline, clove hitch, figure-8)",
-  "Review communications plan with household",
-  "Check water filtration kit (filter, tablets)",
-  "Audit spare clothing in grab bag",
-  "Stock-check power bank + solar charger",
-  "Review bushfire plan if in a risk zone",
-  "Practise hands-free comms (radio, whistle signals)",
-  "Check tyre pressures + spare tyre",
-  "Learn or review wound irrigation technique",
-  "Test & refill gas canister stash",
-  "Practise fire evacuation drill",
-  "Update emergency plan for kids/elderly in household",
-  "Check rain catchment setup",
-  "Review cyber-resilience (password manager, 2FA)",
-  "Stock-check seeds for the garden (food resilience)",
-  "Practise water purification end-to-end",
-  "Check footwear in grab bag — fit & condition",
-  "Review SES flood map for your area",
-  "Restock personal hygiene items",
-  "Practise signalling techniques (mirror, whistle)",
-  "Check generator fuel + test run (if applicable)",
-  "Review any changes to local emergency services",
-  "Test UV water purification device",
-  "Practise building an emergency shelter",
-  "Stock-check duct tape, zip ties, cordage",
-  "Full grab-bag rehearsal — pack in under 10 min",
-  "Update digital cloud backup",
-  "Review annual prepping budget",
-  "Practise basic first aid scenarios (choking, CPR)",
-  "Final FIFO food rotation for the year",
-  "Year-end review + set goals for next year",
 ];
 
 // ── localStorage helpers ─────────────────────────────────────────────────────
@@ -262,17 +191,6 @@ export function initPrepping(): void {
     contacts.append(a);
   }
   root.append(contacts);
-
-  // ── Rule of threes ──
-  const r3 = section("Rule of threes");
-  const r3grid = mk("div", "stat-grid");
-  for (const [time, label] of RULE3) {
-    const cell = mk("div", "stat");
-    cell.append(mk("div", "n", time), mk("div", "l", label));
-    r3grid.append(cell);
-  }
-  r3.append(r3grid);
-  root.append(r3);
 
   // ── Calculators ──
   mountCalcs(root, calcs);
@@ -460,47 +378,6 @@ export function initPrepping(): void {
   pillarSec.append(pillarFields);
   root.append(pillarSec);
 
-  // ── 52-week routine ──
-  const startOfYear = new Date(new Date().getFullYear(), 0, 1).getTime();
-  const week = Math.min(52, Math.max(1, Math.ceil((Date.now() - startOfYear) / (7 * 86400000))));
-  const weekSec = section("This week's prep task");
-  weekSec.append(mk("p", "calc-blurb", `Week ${week} of 52`));
-  const weekStat = mk("div", "stat");
-  weekStat.append(mk("div", "n", `Wk ${week}`), mk("div", "l", WEEK52[week - 1]));
-  weekSec.append(weekStat);
-  const det = document.createElement("details");
-  det.style.marginTop = "0.9rem";
-  const sum = document.createElement("summary");
-  sum.textContent = "Full 52-week routine";
-  sum.style.cursor = "pointer";
-  det.append(sum);
-  const ol = document.createElement("ol");
-  ol.style.fontSize = "0.85rem";
-  ol.style.lineHeight = "1.8";
-  ol.style.color = "var(--muted)";
-  WEEK52.forEach((task, i) => {
-    const li = mk("li", undefined, task);
-    if (i + 1 === week) { li.style.color = "var(--fg)"; li.style.fontWeight = "600"; }
-    ol.append(li);
-  });
-  det.append(ol);
-  weekSec.append(det);
-  root.append(weekSec);
-
-  // ── Seasonal threat calendar ──
-  const threatSec = section("Seasonal threat calendar — NSW");
-  for (const [months, threat] of THREATS) {
-    const row = mk("div", "saved-row");
-    const m = mk("span", undefined, months);
-    m.style.color = "var(--site-accent)";
-    m.style.minWidth = "5rem";
-    const t = mk("span", "l", threat);
-    t.style.textAlign = "right";
-    row.append(m, t);
-    threatSec.append(row);
-  }
-  root.append(threatSec);
-
   // ── SOS morse signaller ──
   const sosSec = section("SOS signaller");
   sosSec.append(blurb("Plays · · · — — — · · · as sound, screen flash and vibration. Use only in a genuine emergency."));
@@ -523,20 +400,28 @@ function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "section";
 }
 
+// The ~28 note sections, grouped into a handful of collapsible themes. Sections
+// are matched by heading slug, so order/insertions stay robust.
+const NOTE_GROUPS: { title: string; slugs: string[] }[] = [
+  { title: "Survival basics", slugs: ["rule-of-threes", "survival-the-mindset-mnemonic", "the-5cs", "the-10cs", "the-urban-10cs", "the-five-priorities", "bradley-s-14-survival-needs"] },
+  { title: "Shelter, fire, water & food", slugs: ["shelter", "fire", "water", "signalling", "food"] },
+  { title: "First aid & Australian hazards", slugs: ["emergency-numbers-australia", "first-aid-drsabcd", "beyond-first-aid-austere-medicine", "snake-bite-australian-protocol", "other-australian-bites-and-stings"] },
+  { title: "Bush skills", slugs: ["six-knots-that-cover-most-situations", "sharp-tools-briefly", "natural-navigation-in-the-southern-hemisphere"] },
+  { title: "Australian conditions", slugs: ["seasonal-threat-calendar-nsw", "australian-specific"] },
+  { title: "Self-sufficiency at home", slugs: ["self-sufficiency-at-home-four-pillars", "gardening-principles", "diy-and-the-case-for-traditional-skills", "future-proofing-the-2026-angle", "the-everyday-baseline"] },
+  { title: "Maintenance", slugs: ["the-52-week-prep-routine"] },
+];
+
 export function buildPreppingNav(): void {
   const main = document.querySelector("main");
   if (!main) return;
-  const heads = Array.from(main.querySelectorAll("h2")) as HTMLElement[];
-  if (heads.length < 4) return;
+  const toolsZone = document.getElementById("prep-tools");
 
+  // Give every heading a stable id + scroll offset.
   const used = new Set<string>();
-  type Group = "Notes" | "Tools";
-  const items: { id: string; label: string; group: Group }[] = [];
-  for (const h of heads) {
+  for (const h of Array.from(main.querySelectorAll<HTMLElement>("h2"))) {
     const label = (h.textContent || "").trim();
     if (!label) continue;
-    const inApp = !!h.closest("#prep-app");
-    const inToolsIntro = !inApp && !!h.closest("#prep-tools");
     let id = h.id || slug(label);
     const base = id;
     let n = 2;
@@ -544,25 +429,74 @@ export function buildPreppingNav(): void {
     used.add(id);
     h.id = id;
     h.style.scrollMarginTop = "5rem";
-    // The "Field tools" intro heading is covered by the Tools group label.
-    if (inToolsIntro) continue;
-    items.push({ id, label, group: inApp ? "Tools" : "Notes" });
   }
-  if (!items.length) return;
 
-  const groups: Group[] = ["Notes", "Tools"];
+  // ── Group the note sections into collapsible accordions ──
+  // A "section" = an h2 (before the tools zone) and its following siblings up to
+  // the next h2; each is moved into a themed <details>.
+  const kids = Array.from(main.children) as HTMLElement[];
+  const firstNoteH2 = kids.find((el) => el.tagName === "H2");
+  const noteGroupLinks: { id: string; label: string }[] = [];
+  if (firstNoteH2) {
+    const startIdx = kids.indexOf(firstNoteH2);
+    const ti = toolsZone ? kids.indexOf(toolsZone) : -1;
+    const range = kids.slice(startIdx, ti === -1 ? kids.length : ti);
+
+    const sections = new Map<string, HTMLElement[]>();
+    const order: string[] = [];
+    let curKey: string | null = null;
+    for (const el of range) {
+      if (el.tagName === "H2") { curKey = el.id; sections.set(curKey, [el]); order.push(curKey); }
+      else if (curKey) sections.get(curKey)!.push(el);
+    }
+
+    const assigned = new Set<string>();
+    let firstOpen = true;
+    const addGroup = (title: string, keys: string[]) => {
+      if (!keys.length) return;
+      const det = document.createElement("details");
+      det.className = "np-group";
+      det.id = `g-${slug(title)}`;
+      if (firstOpen) { det.open = true; firstOpen = false; }
+      det.append(mk("summary", "np-group-title", title));
+      const body = mk("div", "np-group-body");
+      for (const k of keys) {
+        for (const node of sections.get(k)!) body.append(node);
+        assigned.add(k);
+      }
+      det.append(body);
+      if (toolsZone) main.insertBefore(det, toolsZone); else main.append(det);
+      noteGroupLinks.push({ id: det.id, label: title });
+    };
+
+    for (const def of NOTE_GROUPS) addGroup(def.title, def.slugs.filter((s) => sections.has(s)));
+    addGroup("More", order.filter((k) => !assigned.has(k))); // any unexpected headings
+  }
+
+  // ── Tool section links (the real tools live inside #prep-app) ──
+  const toolLinks: { id: string; label: string }[] = [];
+  document.querySelectorAll<HTMLElement>("#prep-app h2").forEach((h) => {
+    if (h.id) toolLinks.push({ id: h.id, label: (h.textContent || "").trim() });
+  });
+  if (!noteGroupLinks.length && !toolLinks.length) return;
+
+  // ── TOC (desktop rail + mobile dropdown) ──
+  const tocGroups: { title: string; links: { id: string; label: string }[]; opensAccordion?: boolean }[] = [
+    { title: "Notes", links: noteGroupLinks, opensAccordion: true },
+    { title: "Tools", links: toolLinks },
+  ];
   const buildInto = (container: HTMLElement, labelClass: string): void => {
-    for (const g of groups) {
-      const inGroup = items.filter((it) => it.group === g);
-      if (!inGroup.length) continue;
-      container.append(mk("div", labelClass, g));
+    for (const grp of tocGroups) {
+      if (!grp.links.length) continue;
+      container.append(mk("div", labelClass, grp.title));
       const ul = document.createElement("ul");
-      for (const it of inGroup) {
+      for (const it of grp.links) {
         const li = document.createElement("li");
         const a = document.createElement("a");
         a.href = `#${it.id}`;
         a.textContent = it.label;
         a.dataset.toc = it.id;
+        if (grp.opensAccordion) a.dataset.opens = it.id;
         li.append(a);
         ul.append(li);
       }
@@ -570,28 +504,40 @@ export function buildPreppingNav(): void {
     }
   };
 
-  // Desktop: fixed rail appended to body.
   const rail = document.createElement("nav");
   rail.className = "prep-toc no-print";
   rail.setAttribute("aria-label", "On this page");
   buildInto(rail, "prep-toc-title");
   document.body.append(rail);
 
-  // Mobile: collapsible dropdown at the top of the content.
   const det = document.createElement("details");
   det.className = "prep-toc-m no-print";
-  const sum = document.createElement("summary");
-  sum.textContent = "On this page";
-  det.append(sum);
+  det.append(mk("summary", undefined, "On this page"));
   buildInto(det, "prep-toc-m-group");
   main.prepend(det);
   det.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => det.removeAttribute("open")));
 
-  // Scrollspy: highlight the link for the section currently in view.
+  // Open the targeted accordion when its TOC link (or a #g- hash) is used.
+  const openTarget = (id: string | null) => {
+    if (!id) return;
+    const el = document.getElementById(id);
+    if (el && el.tagName === "DETAILS") (el as HTMLDetailsElement).open = true;
+  };
+  document.querySelectorAll<HTMLAnchorElement>("a[data-opens]").forEach((a) =>
+    a.addEventListener("click", () => openTarget(a.dataset.opens || null))
+  );
+  if (location.hash.startsWith("#g-")) openTarget(location.hash.slice(1));
+  window.addEventListener("hashchange", () => {
+    if (location.hash.startsWith("#g-")) openTarget(location.hash.slice(1));
+  });
+
+  // ── Scrollspy on group containers + tool headings ──
   const linksById = new Map<string, HTMLElement[]>();
   document.querySelectorAll<HTMLElement>("[data-toc]").forEach((a) => {
     const id = a.dataset.toc!;
-    (linksById.get(id) ?? linksById.set(id, []).get(id)!).push(a);
+    const arr = linksById.get(id) ?? [];
+    arr.push(a);
+    linksById.set(id, arr);
   });
   if ("IntersectionObserver" in window) {
     const obs = new IntersectionObserver(
@@ -602,8 +548,9 @@ export function buildPreppingNav(): void {
           (linksById.get((e.target as HTMLElement).id) ?? []).forEach((x) => x.classList.add("active"));
         }
       },
-      { rootMargin: "-10% 0px -80% 0px" }
+      { rootMargin: "-10% 0px -75% 0px" }
     );
-    heads.forEach((h) => obs.observe(h));
+    document.querySelectorAll<HTMLElement>(".np-group").forEach((g) => obs.observe(g));
+    document.querySelectorAll<HTMLElement>("#prep-app h2").forEach((h) => obs.observe(h));
   }
 }
