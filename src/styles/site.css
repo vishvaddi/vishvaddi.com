@@ -44,7 +44,7 @@
 :root[data-theme="dark"] .site-chips, :root:not([data-theme="light"]) .site-chips { --rail-accent: #6ea0ff; }
 
 .site-rail { display: none; }
-.site-chips { display: flex; gap: 0.4rem; overflow-x: auto; padding-bottom: 0.5rem; margin: 0 0 1.25rem; -webkit-overflow-scrolling: touch; }
+.site-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 1.25rem; }
 .site-chips a { white-space: nowrap; font-size: 0.82rem; padding: 0.3rem 0.75rem; border: 1px solid color-mix(in srgb, var(--fg) 20%, transparent); border-radius: 999px; color: var(--fg); text-decoration: none; }
 .site-chips a.active { background: var(--rail-accent); color: #fff; border-color: var(--rail-accent); }
 
