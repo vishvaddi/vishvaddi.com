@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import { getEntry, render } from "astro:content";
+import "../styles/site.css";
 
 const entry = await getEntry("pages", "prepping");
 if (!entry) throw new Error("pages/prepping.md not found");
@@ -14,4 +15,32 @@ const { Content } = await render(entry);
   updatedDate={entry.data.updatedDate}
 >
   <Content />
+
+  <section id="prep-tools" class="blueprint">
+    <h2>Field tools</h2>
+    <p>
+      The working version of the notes above — reserve calculators, a get-home
+      estimate, a live nearby map, a kit-maintenance tracker and an SOS
+      signaller. Everything runs in your browser; only the map's location lookup
+      leaves your device.
+    </p>
+    <div id="prep-app"></div>
+  </section>
+
+  <script>
+    import { initPrepping } from "../scripts/site/prepping";
+    initPrepping();
+  </script>
 </Base>
+
+<style>
+  #prep-tools {
+    margin-top: 2.5rem;
+    border-top: 1px solid var(--border, color-mix(in srgb, currentColor 18%, transparent));
+    padding-top: 0.5rem;
+  }
+  /* This embed borrows the blueprint tool styling but not its fixed graph-paper backdrop. */
+  #prep-tools.blueprint::before {
+    display: none;
+  }
+</style>

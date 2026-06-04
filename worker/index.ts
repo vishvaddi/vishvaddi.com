@@ -15,21 +15,36 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // Overpass POI lookup proxy
+    // Overpass POI lookup proxy. overpass-api.de is the fastest instance that
+    // reliably returns full data (~2-3s); kumi is kept only as a slow backstop.
+    // A hard per-request timeout means a stalled instance fails over (or returns
+    // empty) instead of hanging the map.
     if (path === "/api/poi/overpass" && request.method === "POST") {
       const body = await request.text();
       if (!body || body.length > 1000 || !/around:/.test(body)) {
         return new Response("[]", { status: 400, headers: { "Content-Type": "application/json" } });
       }
-      const upstream = await fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        headers: { "Content-Type": "text/plain", "User-Agent": UA },
-        body,
-      });
-      return new Response(upstream.body, {
-        status: upstream.status,
-        headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" },
-      });
+      const mirrors = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+      ];
+      const jsonHeaders = { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" };
+      for (const endpoint of mirrors) {
+        try {
+          const upstream = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain", "User-Agent": UA },
+            body,
+            signal: AbortSignal.timeout(15000),
+          });
+          if (upstream.ok) {
+            return new Response(upstream.body, { status: 200, headers: jsonHeaders });
+          }
+        } catch {
+          /* timeout or network error — try the next mirror */
+        }
+      }
+      return new Response("[]", { status: 502, headers: jsonHeaders });
     }
 
     // OpenStreetMap raster tile proxy
