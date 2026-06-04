@@ -514,3 +514,85 @@ export function initPrepping(): void {
   sosSec.append(morse, btnRow);
   root.append(sosSec);
 }
+
+// ── On-this-page navigation ──────────────────────────────────────────────────
+// Builds a scrollspy table of contents from every h2 on the page (prose
+// sections + tool sections), in document order. Fixed left rail on desktop, a
+// collapsible dropdown on mobile. CSP-clean: DOM built via createElement.
+function slug(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "section";
+}
+
+export function buildPreppingNav(): void {
+  const main = document.querySelector("main");
+  if (!main) return;
+  const heads = Array.from(main.querySelectorAll("h2")) as HTMLElement[];
+  if (heads.length < 4) return;
+
+  const used = new Set<string>();
+  const items: { id: string; label: string }[] = [];
+  for (const h of heads) {
+    const label = (h.textContent || "").trim();
+    if (!label) continue;
+    let id = h.id || slug(label);
+    const base = id;
+    let n = 2;
+    while (used.has(id)) id = `${base}-${n++}`;
+    used.add(id);
+    h.id = id;
+    h.style.scrollMarginTop = "5rem";
+    items.push({ id, label });
+  }
+  if (!items.length) return;
+
+  const makeList = (): HTMLUListElement => {
+    const ul = document.createElement("ul");
+    for (const it of items) {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = `#${it.id}`;
+      a.textContent = it.label;
+      a.dataset.toc = it.id;
+      li.append(a);
+      ul.append(li);
+    }
+    return ul;
+  };
+
+  // Desktop: fixed rail appended to body.
+  const rail = document.createElement("nav");
+  rail.className = "prep-toc no-print";
+  rail.setAttribute("aria-label", "On this page");
+  const title = mk("div", "prep-toc-title", "On this page");
+  rail.append(title, makeList());
+  document.body.append(rail);
+
+  // Mobile: collapsible dropdown at the top of the content.
+  const det = document.createElement("details");
+  det.className = "prep-toc-m no-print";
+  const sum = document.createElement("summary");
+  sum.textContent = "On this page";
+  det.append(sum, makeList());
+  main.prepend(det);
+  det.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => det.removeAttribute("open")));
+
+  // Scrollspy: highlight the link for the section currently in view.
+  const linksById = new Map<string, HTMLElement[]>();
+  document.querySelectorAll<HTMLElement>("[data-toc]").forEach((a) => {
+    const id = a.dataset.toc!;
+    (linksById.get(id) ?? linksById.set(id, []).get(id)!).push(a);
+  });
+  if ("IntersectionObserver" in window) {
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          document.querySelectorAll("[data-toc].active").forEach((x) => x.classList.remove("active"));
+          (linksById.get((e.target as HTMLElement).id) ?? []).forEach((x) => x.classList.add("active"));
+        }
+      },
+      { rootMargin: "-10% 0px -80% 0px" }
+    );
+    heads.forEach((h) => obs.observe(h));
+  }
+}
