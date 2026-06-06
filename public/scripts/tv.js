@@ -7,7 +7,7 @@ var CHANNELS = {
   6: { type: "off",     label: "CH 6 · OFF" }
 };
 
-var currentCh = 1;
+var currentCh = 4;
 var exploredLoaded = false;
 var windyLoaded = false;
 var noiseAnim = null;
@@ -51,11 +51,12 @@ function hideAll() {
 // ── Switch ──
 function switchTo(ch) {
   if (ch === currentCh) return;
-  showFlash(function () { applyChannel(ch); });
+  var prev = currentCh;
   currentCh = ch;
   document.querySelectorAll(".ch-btn").forEach(function (b) {
     b.classList.toggle("active", Number(b.dataset.ch) === ch);
   });
+  showFlash(function () { applyChannel(ch); });
 }
 
 function applyChannel(ch) {
@@ -94,12 +95,17 @@ function randomiseTargets() {
   }
 }
 
+var lofiStarted = false;
+
 function startLofi() {
   lofiCanvas.style.display = "block";
   var p = lofiCanvas.parentElement;
   lofiCanvas.width = p.clientWidth;
   lofiCanvas.height = p.clientHeight;
-  lofiAudio.src = LOFI_STREAM;
+  if (!lofiStarted) {
+    lofiStarted = true;
+    lofiAudio.src = LOFI_STREAM;
+  }
   lofiAudio.play().catch(function () {});
   randomiseTargets();
   lofiAnim = requestAnimationFrame(tickLofi);
@@ -289,4 +295,4 @@ document.querySelectorAll(".ch-btn").forEach(function (btn) {
   btn.addEventListener("click", function () { switchTo(Number(btn.dataset.ch)); });
 });
 
-applyChannel(1);
+applyChannel(4);
