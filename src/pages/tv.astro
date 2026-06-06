@@ -1,0 +1,332 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="TV" description="Retro CRT TV — channels, lofi, NASA, and more.">
+  <style>
+    .tv-wrap {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 2rem 1rem 3rem;
+      min-height: 70vh;
+    }
+
+    /* ── TV Body ── */
+    .tv-body {
+      background: #1a1a1a;
+      border-radius: 20px;
+      padding: 24px 28px 28px;
+      width: min(700px, 100%);
+      box-shadow:
+        0 0 0 2px #111,
+        0 4px 8px rgba(0,0,0,0.6),
+        0 12px 40px rgba(0,0,0,0.5),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+      position: relative;
+    }
+
+    /* ── Brand label ── */
+    .tv-brand {
+      text-align: center; color: #555; font-size: 0.65rem;
+      letter-spacing: 0.25em; text-transform: uppercase;
+      margin-bottom: 14px; font-family: var(--font-sans);
+    }
+
+    /* ── Screen bezel ── */
+    .tv-bezel {
+      background: #0d0d0d;
+      border-radius: 12px;
+      padding: 10px;
+      box-shadow:
+        inset 0 2px 10px rgba(0,0,0,0.8),
+        inset 0 0 0 1px #000;
+      position: relative;
+    }
+
+    /* ── Screen ── */
+    .tv-screen {
+      position: relative; border-radius: 8px; overflow: hidden;
+      aspect-ratio: 4/3; background: #000;
+      box-shadow: 0 0 30px rgba(0,255,80,0.08);
+    }
+
+    /* Phosphor glow tint overlay */
+    .tv-screen::before {
+      content: ""; position: absolute; inset: 0; z-index: 10;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%);
+      pointer-events: none; border-radius: 8px;
+    }
+
+    /* Scanlines */
+    .tv-screen::after {
+      content: ""; position: absolute; inset: 0; z-index: 11;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px, transparent 2px,
+        rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px
+      );
+      pointer-events: none; border-radius: 8px;
+    }
+
+    /* Channel indicator */
+    .channel-indicator {
+      position: absolute; top: 10px; right: 12px; z-index: 20;
+      color: #39ff60; font-family: var(--font-mono); font-size: 0.7rem;
+      text-shadow: 0 0 8px #39ff60;
+      background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 3px;
+      pointer-events: none;
+    }
+
+    /* iframe / canvas fill screen */
+    .screen-content {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      border: none; z-index: 1;
+    }
+
+    canvas.screen-content { display: none; }
+
+    #noise-label {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      color: #aaa; font-family: var(--font-mono); font-size: 1.1rem;
+      letter-spacing: 0.15em; z-index: 15; pointer-events: none;
+      display: none; text-shadow: 0 0 8px #aaa;
+    }
+
+    /* White flash */
+    .tv-flash {
+      position: absolute; inset: 0; z-index: 50;
+      background: #fff; opacity: 0; pointer-events: none;
+      border-radius: 8px; transition: opacity 0.06s;
+    }
+    .tv-flash.on { opacity: 1; }
+
+    /* Rage fallback bar */
+    #rage-fallback {
+      display: none; position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+      z-index: 20; background: rgba(0,0,0,0.7);
+      padding: 4px 10px; border-radius: 4px;
+    }
+    #rage-fallback a {
+      color: #39ff60; font-size: 0.75rem; font-family: var(--font-sans);
+      text-decoration: none;
+    }
+
+    /* ── Controls bar ── */
+    .tv-controls {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 18px;
+    }
+    .channel-btns {
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .ch-btn {
+      background: #2a2a2a; border: none; color: #bbb;
+      border-radius: 50%; width: 36px; height: 36px;
+      font-family: var(--font-sans); font-size: 0.75rem;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s, color 0.15s;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+    .ch-btn:hover { background: #383838; color: #fff; }
+    .ch-btn.active {
+      background: #39ff60; color: #000;
+      box-shadow: 0 0 10px rgba(57,255,96,0.4), 0 2px 4px rgba(0,0,0,0.4);
+    }
+
+    .tv-knob-group {
+      display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+    }
+    .tv-knob {
+      width: 28px; height: 28px; border-radius: 50%; background: #333;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    .ch-label {
+      color: #555; font-size: 0.65rem; font-family: var(--font-sans);
+      text-align: center; margin-top: 4px; letter-spacing: 0.05em;
+    }
+
+    @media (max-width: 480px) {
+      .tv-body { padding: 16px 16px 20px; }
+      .ch-btn { width: 30px; height: 30px; font-size: 0.65rem; }
+    }
+  </style>
+
+  <div class="tv-wrap">
+    <div class="tv-body">
+      <div class="tv-brand">VISHVISION · MODEL VI</div>
+      <div class="tv-bezel">
+        <div class="tv-screen" id="tv-screen">
+          <div class="channel-indicator" id="ch-indicator">CH 2</div>
+          <div class="tv-flash" id="tv-flash"></div>
+
+          <!-- RAGE iframe (ch1) -->
+          <iframe id="iframe-rage" class="screen-content" src="" title="RAGE" allow="autoplay" style="display:none"></iframe>
+          <div id="rage-fallback"><a href="https://www.rageagain.com" target="_blank" rel="noopener">Open RAGE in new tab ↗</a></div>
+
+          <!-- YouTube iframe (ch 2-5) -->
+          <iframe id="iframe-yt" class="screen-content" src="" title="TV Channel"
+            allow="autoplay; encrypted-media" allowfullscreen style="display:none"></iframe>
+
+          <!-- OFF: noise canvas -->
+          <canvas id="noise-canvas" class="screen-content"></canvas>
+          <div id="noise-label">NO SIGNAL</div>
+        </div>
+      </div>
+
+      <div class="tv-controls">
+        <div>
+          <div class="channel-btns" id="channel-btns">
+            <div>
+              <button class="ch-btn" data-ch="1">1</button>
+              <div class="ch-label">RAGE</div>
+            </div>
+            <div>
+              <button class="ch-btn active" data-ch="2">2</button>
+              <div class="ch-label">Lofi</div>
+            </div>
+            <div>
+              <button class="ch-btn" data-ch="3">3</button>
+              <div class="ch-label">NASA</div>
+            </div>
+            <div>
+              <button class="ch-btn" data-ch="4">4</button>
+              <div class="ch-label">Calm</div>
+            </div>
+            <div>
+              <button class="ch-btn" data-ch="5">5</button>
+              <div class="ch-label">BBG</div>
+            </div>
+            <div>
+              <button class="ch-btn" data-ch="6">6</button>
+              <div class="ch-label">OFF</div>
+            </div>
+          </div>
+        </div>
+        <div class="tv-knob-group">
+          <div class="tv-knob"></div>
+          <div class="tv-knob"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</Base>
+
+<script>
+var CHANNELS = {
+  1: { type: "rage", label: "CH 1 · RAGE" },
+  2: { type: "yt",   src: "https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&mute=0", label: "CH 2 · LOFI" },
+  3: { type: "yt",   src: "https://www.youtube.com/embed/21X5lGlDOfg?autoplay=1",         label: "CH 3 · NASA" },
+  4: { type: "yt",   src: "https://www.youtube.com/embed/Q-GFHiuNXoI?autoplay=1",         label: "CH 4 · CALM" },
+  5: { type: "yt",   src: "https://www.youtube.com/embed/dp8PhLsUcFE?autoplay=1",         label: "CH 5 · BBG" },
+  6: { type: "off",  label: "CH 6 · OFF" }
+};
+
+var currentCh = 2;
+var loaded = {}; // track lazily loaded src per ch number
+var noiseAnim = null;
+
+var iframeYt   = document.getElementById("iframe-yt");
+var iframeRage = document.getElementById("iframe-rage");
+var noiseCanvas = document.getElementById("noise-canvas");
+var noiseLabel = document.getElementById("noise-label");
+var rageFallback = document.getElementById("rage-fallback");
+var indicator = document.getElementById("ch-indicator");
+var flash = document.getElementById("tv-flash");
+
+function showFlash (cb) {
+  flash.classList.add("on");
+  setTimeout(function () {
+    flash.classList.remove("on");
+    cb();
+  }, 130);
+}
+
+function stopNoise () {
+  if (noiseAnim) { cancelAnimationFrame(noiseAnim); noiseAnim = null; }
+  noiseCanvas.style.display = "none";
+  noiseLabel.style.display = "none";
+}
+
+function startNoise () {
+  noiseCanvas.style.display = "block";
+  noiseLabel.style.display = "block";
+  var ctx = noiseCanvas.getContext("2d");
+  var W = noiseCanvas.parentElement.clientWidth;
+  var H = noiseCanvas.parentElement.clientHeight;
+  noiseCanvas.width = W;
+  noiseCanvas.height = H;
+  var cols = Math.ceil(W / 3);
+  var rows = Math.ceil(H / 3);
+
+  function tick () {
+    var img = ctx.createImageData(cols, rows);
+    for (var i = 0; i < img.data.length; i += 4) {
+      var v = Math.random() * 200 | 0;
+      img.data[i] = v; img.data[i+1] = v; img.data[i+2] = v; img.data[i+3] = 255;
+    }
+    // Scale up
+    var offscreen = document.createElement("canvas");
+    offscreen.width = cols; offscreen.height = rows;
+    offscreen.getContext("2d").putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(offscreen, 0, 0, W, H);
+    noiseAnim = requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function switchTo (ch) {
+  if (ch === currentCh) return;
+  showFlash(function () {
+    applyChannel(ch);
+  });
+  currentCh = ch;
+
+  document.querySelectorAll(".ch-btn").forEach(function (b) {
+    b.classList.toggle("active", Number(b.dataset.ch) === ch);
+  });
+}
+
+function applyChannel (ch) {
+  var conf = CHANNELS[ch];
+  indicator.textContent = conf.label;
+
+  // Hide everything
+  iframeYt.style.display = "none";
+  iframeRage.style.display = "none";
+  rageFallback.style.display = "none";
+  stopNoise();
+
+  if (conf.type === "rage") {
+    iframeRage.style.display = "block";
+    if (!loaded[ch]) {
+      iframeRage.src = "https://www.rageagain.com";
+      loaded[ch] = true;
+    }
+    // Show fallback link in case iframe blocked
+    rageFallback.style.display = "block";
+
+  } else if (conf.type === "yt") {
+    iframeYt.style.display = "block";
+    if (!loaded[ch]) {
+      iframeYt.src = conf.src;
+      loaded[ch] = true;
+    } else if (iframeYt.src !== conf.src) {
+      iframeYt.src = conf.src;
+    }
+
+  } else if (conf.type === "off") {
+    startNoise();
+  }
+}
+
+document.querySelectorAll(".ch-btn").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    switchTo(Number(btn.dataset.ch));
+  });
+});
+
+// Boot on lofi (ch2)
+applyChannel(2);
+loaded[2] = true;
+</script>

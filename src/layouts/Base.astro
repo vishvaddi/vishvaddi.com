@@ -36,17 +36,22 @@ const here = Astro.url.pathname.replace(/\/$/, "");
 const navPrimary: [string, string][] = [
   ["/work", "Work"],
   ["/notes", "Notes"],
-  ["/blog", "Blog"],
   ["/prepping", "Prepping"],
-  ["/site", "Site"],
-  ["/about", "About"],
+  ["/site", "Site Tools"],
 ];
 const navMore: [string, string][] = [
-  ["/latest", "Latest"],
   ["/studio", "Studio"],
+  ["/radio", "Radio"],
+  ["/tv", "TV"],
+  ["/reader", "Reader"],
+  ["/feeds", "Feeds"],
+  ["/transit", "Transit"],
+  ["/ambient", "Standby"],
   ["/music", "Music"],
   ["/movies", "Movies"],
   ["/books", "Books"],
+  ["/blog", "Blog"],
+  ["/about", "About"],
 ];
 const isActive = (href: string) => here === href || here.startsWith(href + "/");
 const showRail = siteNav && here !== "/site";
@@ -78,6 +83,9 @@ const updatedFmt = updatedDate
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="generator" content={Astro.generator} />
     <link rel="canonical" href={canonical} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300..900;1,8..60,300..900&display=swap" rel="stylesheet" />
     <link rel="alternate" type="application/rss+xml" title="Vish Vaddi — Notes" href="/rss.xml" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />

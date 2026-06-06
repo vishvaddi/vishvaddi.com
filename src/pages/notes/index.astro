@@ -6,11 +6,7 @@ const notes = (await getCollection("notes", ({ data }) => !data.draft)).sort(
   (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
 );
 
-const dateFmt = new Intl.DateTimeFormat("en-AU", {
-  year: "numeric",
-  month: "short",
-  day: "numeric",
-});
+const dateFmt = new Intl.DateTimeFormat("en-AU", { year: "numeric", month: "short" });
 ---
 
 <Base
@@ -19,24 +15,25 @@ const dateFmt = new Intl.DateTimeFormat("en-AU", {
   ogImage="/og/notes.png"
 >
   <h1>Notes</h1>
-  <p>
-    Essays and atomic ideas. <a href="/rss.xml">RSS</a>.
+  <p style="color: var(--muted); font-size: 0.9rem;">
+    Essays and atomic ideas. Durable, opinionated, in my own voice. <a href="/rss.xml">RSS</a>.
   </p>
 
-  {
-    notes.length === 0 ? (
-      <p style="color: #888;">Nothing published yet.</p>
-    ) : (
-      <ul>
-        {notes.map((note) => (
-          <li>
-            <a href={`/notes/${note.id}`}>{note.data.title}</a>
-            <span style="color: #888; font-size: 0.875rem;">
-              {" · "}{dateFmt.format(note.data.pubDate)}
-            </span>
-          </li>
-        ))}
-      </ul>
-    )
-  }
+  {notes.length === 0 ? (
+    <p style="color: var(--muted);">Nothing published yet.</p>
+  ) : (
+    <div style="margin-top: 1.5rem;">
+      {notes.map((note) => (
+        <a class="note-row" href={`/notes/${note.id}`}>
+          <div>
+            <div class="note-title">{note.data.title}</div>
+            {note.data.description && (
+              <div class="note-desc">{note.data.description}</div>
+            )}
+          </div>
+          <span class="note-date">{dateFmt.format(note.data.pubDate)}</span>
+        </a>
+      ))}
+    </div>
+  )}
 </Base>

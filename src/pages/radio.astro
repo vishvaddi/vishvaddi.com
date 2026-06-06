@@ -1,0 +1,269 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Radio" description="Live radio player — Australian stations.">
+  <h1>Radio</h1>
+
+  <!-- Now-playing bar -->
+  <div
+    id="now-bar"
+    style="display: none; position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--rule); padding: 0.6rem 0; margin-bottom: 1rem; display: none;"
+  >
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <img id="now-favicon" src="" alt="" width="16" height="16" style="border-radius: 2px; flex-shrink: 0;" onerror="this.style.display='none'" />
+      <div id="eq" style="display: flex; align-items: flex-end; gap: 2px; height: 16px; flex-shrink: 0;">
+        <span class="eq-bar"></span>
+        <span class="eq-bar"></span>
+        <span class="eq-bar"></span>
+      </div>
+      <span id="now-name" style="font-family: var(--font-sans); font-size: 0.875rem; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+      <button id="play-pause-btn" aria-label="Play/pause" style="background: none; border: none; cursor: pointer; font-size: 1.125rem; color: var(--fg); flex-shrink: 0; padding: 0 0.25rem;">⏸</button>
+      <input
+        id="volume-slider"
+        type="range"
+        min="0"
+        max="1"
+        step="0.02"
+        value="0.8"
+        style="width: 70px; flex-shrink: 0; accent-color: #C5683F;"
+        aria-label="Volume"
+      />
+    </div>
+  </div>
+
+  <audio id="radio-audio" style="display: none;"></audio>
+
+  <div style="margin-bottom: 1rem;">
+    <input
+      id="station-search"
+      type="search"
+      placeholder="Search stations…"
+      style="width: 100%; box-sizing: border-box; font-family: var(--font-sans); font-size: 0.875rem; padding: 0.45rem 0.65rem; background: var(--code-bg); border: 1px solid var(--rule); color: var(--fg); border-radius: 3px;"
+    />
+  </div>
+
+  <h2 style="font-size: 0.8125rem; font-family: var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0; margin-bottom: 0.25rem;">Favourites</h2>
+  <div id="favourites-list"></div>
+
+  <h2 style="font-size: 0.8125rem; font-family: var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">Australian Stations</h2>
+  <div id="stations-list">
+    <p style="color: var(--muted); font-size: 0.875rem;">Loading…</p>
+  </div>
+</Base>
+
+<style>
+  .station-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--rule);
+    cursor: pointer;
+    text-decoration: none;
+    color: var(--fg);
+    background: none;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    width: 100%;
+    text-align: left;
+    font-family: var(--font-serif);
+  }
+  .station-row:first-of-type { border-top: 1px solid var(--rule); }
+  .station-row:hover .station-name { text-decoration: underline; text-decoration-color: var(--fg); }
+  .station-row.active { background: color-mix(in srgb, #C5683F 8%, transparent); }
+  .station-row.active .station-name { color: #C5683F; }
+  .station-favicon {
+    width: 16px;
+    height: 16px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    object-fit: contain;
+  }
+  .station-name {
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-decoration: underline;
+    text-decoration-color: var(--link-underline);
+    text-underline-offset: 3px;
+  }
+  .station-tags {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* equaliser animation */
+  .eq-bar {
+    display: block;
+    width: 3px;
+    border-radius: 1px;
+    background: #C5683F;
+    animation: eq-bounce 0s ease-in-out infinite alternate;
+    height: 4px;
+  }
+  .eq-bar:nth-child(1) { animation-duration: 0.5s; animation-delay: 0s; }
+  .eq-bar:nth-child(2) { animation-duration: 0.7s; animation-delay: 0.15s; }
+  .eq-bar:nth-child(3) { animation-duration: 0.6s; animation-delay: 0.3s; }
+  #eq.playing .eq-bar { animation-duration: inherit; }
+  #eq.playing .eq-bar:nth-child(1) { animation-duration: 0.5s; }
+  #eq.playing .eq-bar:nth-child(2) { animation-duration: 0.7s; }
+  #eq.playing .eq-bar:nth-child(3) { animation-duration: 0.6s; }
+
+  @keyframes eq-bounce {
+    from { height: 3px; }
+    to { height: 14px; }
+  }
+</style>
+
+<script>
+  const FAVOURITES = [
+    { name: "triple j", url: "http://live-radio01.mediahubaustralia.com/2TJW_aac/", tags: "indie alt" },
+    { name: "ABC Classic", url: "http://live-radio01.mediahubaustralia.com/FMW_aac/", tags: "classical" },
+    { name: "FBI Radio", url: "https://stream.fbiradio.com/fbi-hd.mp3", tags: "indie sydney" },
+  ];
+
+  const API = "https://de1.api.radio-browser.info/json/stations/bycountrycodeexact/AU?limit=50&order=votes&reverse=true&hidebroken=true";
+
+  const audio = document.getElementById("radio-audio");
+  const nowBar = document.getElementById("now-bar");
+  const nowFavicon = document.getElementById("now-favicon");
+  const nowName = document.getElementById("now-name");
+  const playPauseBtn = document.getElementById("play-pause-btn");
+  const volumeSlider = document.getElementById("volume-slider");
+  const eq = document.getElementById("eq");
+  const searchInput = document.getElementById("station-search");
+
+  let currentUrl = null;
+  let allStations = [];
+
+  audio.volume = parseFloat(volumeSlider.value);
+
+  function faviconUrl(stationUrl) {
+    try {
+      const origin = new URL(stationUrl).origin;
+      return `${origin}/favicon.ico`;
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function play(station) {
+    if (currentUrl === station.url && !audio.paused) return;
+    currentUrl = station.url;
+    audio.src = station.url;
+    audio.play().catch(() => {});
+
+    nowBar.style.display = "block";
+    nowName.textContent = station.name;
+    nowFavicon.src = station.favicon || faviconUrl(station.url);
+    nowFavicon.style.display = "inline";
+    playPauseBtn.textContent = "⏸";
+    setEqPlaying(true);
+
+    document.querySelectorAll(".station-row").forEach(row => {
+      row.classList.toggle("active", row.dataset.url === station.url);
+    });
+  }
+
+  function setEqPlaying(playing) {
+    if (playing) {
+      eq.classList.add("playing");
+      eq.querySelectorAll(".eq-bar").forEach(b => {
+        b.style.animationDuration = "";
+      });
+    } else {
+      eq.classList.remove("playing");
+      eq.querySelectorAll(".eq-bar").forEach(b => {
+        b.style.animationDuration = "0s";
+      });
+    }
+  }
+
+  playPauseBtn.addEventListener("click", () => {
+    if (audio.paused) {
+      audio.play().catch(() => {});
+      playPauseBtn.textContent = "⏸";
+      setEqPlaying(true);
+    } else {
+      audio.pause();
+      playPauseBtn.textContent = "▶";
+      setEqPlaying(false);
+    }
+  });
+
+  volumeSlider.addEventListener("input", () => {
+    audio.volume = parseFloat(volumeSlider.value);
+  });
+
+  function makeRow(station) {
+    const btn = document.createElement("button");
+    btn.className = "station-row";
+    btn.dataset.url = station.url;
+    btn.dataset.name = (station.name || "").toLowerCase();
+    btn.dataset.tags = (station.tags || "").toLowerCase();
+
+    const favicon = document.createElement("img");
+    favicon.className = "station-favicon";
+    favicon.src = station.favicon || faviconUrl(station.url);
+    favicon.alt = "";
+    favicon.onerror = () => { favicon.style.display = "none"; };
+
+    const name = document.createElement("span");
+    name.className = "station-name";
+    name.textContent = station.name;
+
+    const tags = document.createElement("span");
+    tags.className = "station-tags";
+    tags.textContent = station.tags || "";
+
+    btn.append(favicon, name, tags);
+    btn.addEventListener("click", () => play(station));
+    return btn;
+  }
+
+  function renderFavourites() {
+    const list = document.getElementById("favourites-list");
+    FAVOURITES.forEach(s => list.appendChild(makeRow(s)));
+  }
+
+  async function loadStations() {
+    const list = document.getElementById("stations-list");
+    try {
+      const res = await fetch(API, { headers: { "User-Agent": "vishvaddi.com/radio" } });
+      allStations = await res.json();
+      list.innerHTML = "";
+      allStations.forEach(s => {
+        const station = {
+          name: s.name,
+          url: s.url_resolved || s.url,
+          tags: s.tags ? s.tags.split(",").slice(0, 3).join(" ") : "",
+          favicon: s.favicon,
+        };
+        list.appendChild(makeRow(station));
+      });
+    } catch (err) {
+      list.innerHTML = '<p style="color: var(--muted); font-size: 0.875rem;">Could not load station list.</p>';
+    }
+  }
+
+  searchInput.addEventListener("input", () => {
+    const q = searchInput.value.toLowerCase().trim();
+    document.querySelectorAll("#stations-list .station-row").forEach(row => {
+      const match = !q || row.dataset.name.includes(q) || row.dataset.tags.includes(q);
+      row.style.display = match ? "" : "none";
+    });
+  });
+
+  renderFavourites();
+  loadStations();
+</script>

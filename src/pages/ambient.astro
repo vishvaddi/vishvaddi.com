@@ -1,0 +1,252 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Standby" description="Ambient standby clock with weather and now playing.">
+  <style>
+    /* ── Entry screen ── */
+    .entry-screen {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 60vh; gap: 1.5rem;
+      font-family: var(--font-sans);
+    }
+    .entry-screen p { color: var(--muted); font-size: 0.9rem; margin: 0; }
+
+    .clock-btn {
+      background: none; border: 2px solid var(--fg); color: var(--fg);
+      border-radius: 8px; padding: 0.75rem 2.5rem;
+      font-family: var(--font-mono); font-size: 1.4rem; cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      letter-spacing: 0.08em;
+    }
+    .clock-btn:hover { background: var(--fg); color: var(--bg); }
+
+    .lfm-row {
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .lfm-row input {
+      padding: 0.4rem 0.6rem; border: 1px solid var(--rule);
+      background: var(--bg); color: var(--fg); font-family: var(--font-sans);
+      font-size: 0.85rem; border-radius: 4px; width: 180px;
+    }
+    .lfm-row label { font-size: 0.85rem; color: var(--muted); }
+
+    /* ── Ambient overlay ── */
+    #ambient {
+      display: none;
+      position: fixed; inset: 0; z-index: 9999;
+      background: #0d0d0a;
+      flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer;
+    }
+    #ambient.active { display: flex; }
+
+    .amb-clock {
+      font-family: var(--font-mono);
+      font-size: clamp(4rem, 12vw, 9rem);
+      color: #e8e2d4; font-weight: 300;
+      letter-spacing: -0.02em; line-height: 1;
+      text-shadow: 0 0 40px rgba(232,226,212,0.15);
+    }
+    .amb-date {
+      font-family: var(--font-mono); font-size: clamp(0.9rem, 2vw, 1.2rem);
+      color: #5a5650; margin-top: 0.6rem; letter-spacing: 0.08em;
+    }
+
+    .amb-weather {
+      margin-top: 2rem; font-family: var(--font-mono);
+      font-size: clamp(0.75rem, 1.5vw, 0.95rem); color: #5a5650;
+      display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center;
+    }
+    .amb-weather span { display: flex; align-items: center; gap: 0.35rem; }
+
+    /* Now playing */
+    .amb-np {
+      margin-top: 1.5rem; display: flex; align-items: center; gap: 0.75rem;
+      font-family: var(--font-mono); font-size: clamp(0.7rem, 1.4vw, 0.85rem);
+      color: #5a5650; max-width: 500px; text-align: center;
+    }
+    .amb-np-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Equaliser */
+    .eq {
+      display: flex; align-items: flex-end; gap: 2px; height: 14px;
+    }
+    .eq-bar {
+      width: 3px; background: #5a5650; border-radius: 1px;
+      animation: eq-bounce 0.6s ease-in-out infinite alternate;
+    }
+    .eq-bar:nth-child(1) { animation-duration: 0.5s; }
+    .eq-bar:nth-child(2) { animation-duration: 0.7s; animation-delay: 0.1s; }
+    .eq-bar:nth-child(3) { animation-duration: 0.45s; animation-delay: 0.2s; }
+    .eq.paused .eq-bar { animation-play-state: paused; height: 4px; }
+
+    @keyframes eq-bounce {
+      from { height: 3px; }
+      to   { height: 14px; }
+    }
+
+    .hint {
+      position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+      font-family: var(--font-mono); font-size: 0.65rem; color: #3a3834;
+      pointer-events: none;
+    }
+  </style>
+
+  <!-- Entry -->
+  <div class="entry-screen" id="entry">
+    <p>Standby mode</p>
+    <button class="clock-btn" id="enter-btn">Enter</button>
+    <div class="lfm-row">
+      <label for="lfm-input">Last.fm user</label>
+      <input type="text" id="lfm-input" placeholder="username" autocomplete="off" />
+    </div>
+  </div>
+
+  <!-- Ambient overlay -->
+  <div id="ambient">
+    <div class="amb-clock" id="amb-clock">00:00:00</div>
+    <div class="amb-date" id="amb-date"></div>
+
+    <div class="amb-weather" id="amb-weather">
+      <span id="wx-temp">—°C</span>
+      <span id="wx-feels">feels —°C</span>
+      <span id="wx-wind">— km/h</span>
+      <span id="wx-hum">—%</span>
+    </div>
+
+    <div class="amb-np" id="amb-np" style="display:none">
+      <div class="eq" id="amb-eq">
+        <div class="eq-bar"></div>
+        <div class="eq-bar"></div>
+        <div class="eq-bar"></div>
+      </div>
+      <div class="amb-np-text" id="amb-np-text"></div>
+    </div>
+
+    <div class="hint">click or press any key to exit</div>
+  </div>
+</Base>
+
+<script>
+var LFM_KEY = "b25b959554ed76058ac220b7b2e0a026";
+var ambient = document.getElementById("ambient");
+var lfmInput = document.getElementById("lfm-input");
+var lfmUsername = "";
+
+var clockTimer = null;
+var weatherTimer = null;
+var lfmTimer = null;
+
+// WMO weather code → short description
+var WX_CODES = {
+  0:"Clear",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",
+  45:"Foggy",48:"Icy fog",51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",
+  61:"Light rain",63:"Rain",65:"Heavy rain",71:"Light snow",73:"Snow",75:"Heavy snow",
+  80:"Showers",81:"Showers",82:"Heavy showers",
+  95:"Thunderstorm",96:"Hail storm",99:"Hail storm"
+};
+
+function enter () {
+  lfmUsername = (lfmInput.value || "").trim();
+  document.getElementById("entry").style.display = "none";
+  ambient.classList.add("active");
+
+  tickClock();
+  clockTimer = setInterval(tickClock, 1000);
+
+  fetchWeather();
+  weatherTimer = setInterval(fetchWeather, 5 * 60 * 1000);
+
+  if (lfmUsername) {
+    fetchNowPlaying();
+    lfmTimer = setInterval(fetchNowPlaying, 30 * 1000);
+  }
+
+  if (document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(function () {});
+  }
+}
+
+function exit () {
+  ambient.classList.remove("active");
+  document.getElementById("entry").style.display = "flex";
+
+  clearInterval(clockTimer);
+  clearInterval(weatherTimer);
+  clearInterval(lfmTimer);
+
+  if (document.exitFullscreen && document.fullscreenElement) {
+    document.exitFullscreen().catch(function () {});
+  }
+}
+
+document.getElementById("enter-btn").addEventListener("click", enter);
+ambient.addEventListener("click", exit);
+document.addEventListener("keydown", function (e) {
+  if (ambient.classList.contains("active")) exit();
+});
+
+// ── Clock ──
+function tickClock () {
+  var now = new Date();
+  var h = String(now.getHours()).padStart(2, "0");
+  var m = String(now.getMinutes()).padStart(2, "0");
+  var s = String(now.getSeconds()).padStart(2, "0");
+  document.getElementById("amb-clock").textContent = h + ":" + m + ":" + s;
+
+  var days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  document.getElementById("amb-date").textContent =
+    days[now.getDay()] + " · " + now.getDate() + " " + months[now.getMonth()] + " " + now.getFullYear();
+}
+
+// ── Weather (Sydney Open-Meteo) ──
+async function fetchWeather () {
+  try {
+    var url = "https://api.open-meteo.com/v1/forecast?latitude=-33.8688&longitude=151.2093" +
+      "&current=temperature_2m,apparent_temperature,weathercode,windspeed_10m,relativehumidity_2m";
+    var r = await fetch(url);
+    var data = await r.json();
+    var c = data.current;
+    var code = c.weathercode;
+    var desc = WX_CODES[code] || ("Code " + code);
+    document.getElementById("wx-temp").textContent = Math.round(c.temperature_2m) + "°C · " + desc;
+    document.getElementById("wx-feels").textContent = "feels " + Math.round(c.apparent_temperature) + "°C";
+    document.getElementById("wx-wind").textContent = Math.round(c.windspeed_10m) + " km/h";
+    document.getElementById("wx-hum").textContent = c.relativehumidity_2m + "%";
+  } catch (e) {
+    // silent fail — weather is decorative
+  }
+}
+
+// ── Last.fm now playing ──
+async function fetchNowPlaying () {
+  if (!lfmUsername) return;
+  try {
+    var url = "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=" +
+      encodeURIComponent(lfmUsername) + "&api_key=" + LFM_KEY + "&format=json&limit=1";
+    var r = await fetch(url);
+    var data = await r.json();
+    var tracks = data.recenttracks && data.recenttracks.track;
+    if (!tracks || !tracks.length) { hideNp(); return; }
+    var track = Array.isArray(tracks) ? tracks[0] : tracks;
+    var nowPlaying = track["@attr"] && track["@attr"].nowplaying === "true";
+    var artist = track.artist && (track.artist["#text"] || track.artist.name || "");
+    var name = track.name || "";
+    if (!name) { hideNp(); return; }
+    var np = document.getElementById("amb-np");
+    var npText = document.getElementById("amb-np-text");
+    var eq = document.getElementById("amb-eq");
+    np.style.display = "flex";
+    npText.textContent = (nowPlaying ? "▶ " : "") + artist + (artist ? " — " : "") + name;
+    eq.classList.toggle("paused", !nowPlaying);
+  } catch (e) {
+    hideNp();
+  }
+}
+
+function hideNp () {
+  document.getElementById("amb-np").style.display = "none";
+}
+</script>

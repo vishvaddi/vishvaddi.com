@@ -1,0 +1,530 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Reader" description="Read classic books from Project Gutenberg.">
+  <style>
+    .reader-wrap { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem; }
+
+    .search-bar {
+      display: flex; gap: 0.5rem; margin-bottom: 2rem;
+    }
+    .search-bar input {
+      flex: 1; padding: 0.5rem 0.75rem; border: 1px solid var(--rule);
+      background: var(--bg); color: var(--fg); font-family: var(--font-sans);
+      font-size: 0.95rem; border-radius: 4px;
+    }
+    .search-bar button {
+      padding: 0.5rem 1rem; background: var(--fg); color: var(--bg);
+      border: none; border-radius: 4px; cursor: pointer; font-family: var(--font-sans);
+      font-size: 0.95rem;
+    }
+
+    .book-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1.25rem;
+    }
+    .book-card {
+      cursor: pointer; text-align: center;
+      transition: transform 0.15s;
+    }
+    .book-card:hover { transform: translateY(-3px); }
+    .book-card img {
+      width: 100%; aspect-ratio: 2/3; object-fit: cover;
+      border-radius: 3px; border: 1px solid var(--rule);
+      background: var(--code-bg);
+    }
+    .book-card .bk-title {
+      font-size: 0.78rem; margin-top: 0.4rem; line-height: 1.3;
+      color: var(--fg); font-family: var(--font-serif);
+    }
+    .book-card .bk-author { font-size: 0.7rem; color: var(--muted); margin-top: 0.15rem; }
+
+    /* ── Reader UI ── */
+    #reader-ui { display: none; }
+
+    .reader-header {
+      display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem;
+    }
+    .reader-header button {
+      background: none; border: 1px solid var(--rule); color: var(--fg);
+      padding: 0.3rem 0.6rem; border-radius: 4px; cursor: pointer;
+      font-family: var(--font-sans); font-size: 0.85rem;
+    }
+    .reader-header h2 { flex: 1; font-size: 1rem; color: var(--muted); font-weight: 400; margin: 0; }
+
+    /* Spread */
+    .spread-wrap {
+      position: relative; perspective: 2000px; user-select: none;
+    }
+    .spread {
+      display: grid; grid-template-columns: 1fr 1fr;
+      background: #faf7f0; border-radius: 3px;
+      box-shadow: 0 2px 20px rgba(0,0,0,0.18);
+      min-height: 520px; position: relative;
+    }
+    /* Spine shadow */
+    .spread::after {
+      content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
+      background: linear-gradient(to right, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.05) 6px, transparent 6px);
+      transform: translateX(-50%);
+      box-shadow: 2px 0 8px rgba(0,0,0,0.10), -2px 0 8px rgba(0,0,0,0.10);
+    }
+
+    .page-panel {
+      padding: 2.5rem 2rem; font-family: var(--font-serif); font-size: 0.95rem;
+      line-height: 1.75; color: #3a2e20; overflow: hidden;
+      position: relative; min-height: 520px;
+    }
+    .page-panel.left { border-radius: 3px 0 0 3px; }
+    .page-panel.right { border-radius: 0 3px 3px 0; }
+    .page-num {
+      position: absolute; bottom: 1rem;
+      font-size: 0.75rem; color: #9a8a72; font-family: var(--font-sans);
+    }
+    .page-panel.left .page-num { left: 2rem; }
+    .page-panel.right .page-num { right: 2rem; }
+
+    /* 3D flip */
+    .page-flipper {
+      position: absolute; top: 0; left: 50%; bottom: 0; width: 50%;
+      transform-origin: left center;
+      transform-style: preserve-3d;
+      transition: transform 0.5s ease;
+      pointer-events: none; z-index: 5;
+    }
+    .page-flipper.flip-fwd { transform: rotateY(-180deg); }
+    .page-flipper.flip-back { transform: rotateY(0deg); }
+    .flipper-face, .flipper-back {
+      position: absolute; inset: 0;
+      background: #faf7f0; backface-visibility: hidden;
+      padding: 2.5rem 2rem; font-family: var(--font-serif); font-size: 0.95rem;
+      line-height: 1.75; color: #3a2e20; overflow: hidden;
+    }
+    .flipper-back { transform: rotateY(180deg); }
+
+    .nav-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 1rem;
+    }
+    .nav-row button {
+      background: none; border: 1px solid var(--rule); color: var(--fg);
+      padding: 0.4rem 1rem; border-radius: 4px; cursor: pointer;
+      font-family: var(--font-sans); font-size: 0.9rem;
+    }
+    .nav-row button:disabled { opacity: 0.3; cursor: default; }
+    .nav-row .page-info { font-size: 0.85rem; color: var(--muted); }
+
+    /* Mobile: single page */
+    @media (max-width: 640px) {
+      .spread { grid-template-columns: 1fr; }
+      .page-panel.right { display: none; }
+      .spread::after { display: none; }
+      .page-flipper { display: none; }
+    }
+
+    /* Annotations */
+    .note-btn {
+      position: fixed; background: #f5c542; color: #222;
+      border: none; border-radius: 4px; padding: 0.3rem 0.7rem;
+      cursor: pointer; font-size: 0.85rem; display: none; z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .note-popup {
+      position: fixed; background: var(--bg); border: 1px solid var(--rule);
+      border-radius: 6px; padding: 1rem; z-index: 101; width: 260px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: none;
+    }
+    .note-popup textarea {
+      width: 100%; height: 80px; resize: none; border: 1px solid var(--rule);
+      background: var(--code-bg); color: var(--fg); font-family: var(--font-sans);
+      font-size: 0.85rem; border-radius: 3px; padding: 0.4rem; box-sizing: border-box;
+    }
+    .note-colors { display: flex; gap: 0.4rem; margin: 0.5rem 0; }
+    .note-colors button {
+      width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent;
+      cursor: pointer;
+    }
+    .note-colors button.active { border-color: var(--fg); }
+    .note-popup-btns { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
+    .note-popup-btns button {
+      background: none; border: 1px solid var(--rule); color: var(--fg);
+      padding: 0.25rem 0.6rem; border-radius: 3px; cursor: pointer; font-size: 0.8rem;
+    }
+    .note-popup-btns button.save { background: var(--fg); color: var(--bg); }
+
+    mark.ann-yellow { background: #ffe66a; color: inherit; border-radius: 2px; }
+    mark.ann-green  { background: #b4f0a0; color: inherit; border-radius: 2px; }
+    mark.ann-pink   { background: #fbb6ce; color: inherit; border-radius: 2px; }
+
+    .loading { color: var(--muted); font-size: 0.9rem; padding: 2rem 0; }
+    .error-msg { color: #c0392b; font-size: 0.9rem; padding: 1rem 0; }
+  </style>
+
+  <div class="reader-wrap">
+    <div id="library-ui">
+      <div class="search-bar">
+        <input type="text" id="search-input" placeholder="Search Gutenberg…" />
+        <button id="search-btn">Search</button>
+      </div>
+      <div id="status" class="loading">Loading classics…</div>
+      <div id="book-grid" class="book-grid"></div>
+    </div>
+
+    <div id="reader-ui">
+      <div class="reader-header">
+        <button id="back-btn">← Library</button>
+        <h2 id="book-title-label"></h2>
+      </div>
+
+      <div class="spread-wrap">
+        <div class="spread" id="spread">
+          <div class="page-panel left" id="left-panel">
+            <span class="page-num" id="left-num"></span>
+          </div>
+          <div class="page-panel right" id="right-panel">
+            <span class="page-num" id="right-num"></span>
+          </div>
+          <div class="page-flipper" id="page-flipper">
+            <div class="flipper-face" id="flipper-face"></div>
+            <div class="flipper-back" id="flipper-back"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="nav-row">
+        <button id="prev-btn">← Prev</button>
+        <span class="page-info" id="page-info"></span>
+        <button id="next-btn">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="note-btn" id="note-btn">Note</button>
+  <div class="note-popup" id="note-popup">
+    <textarea id="note-text" placeholder="Add a note…"></textarea>
+    <div class="note-colors">
+      <button style="background:#ffe66a" data-color="yellow" class="active" title="Yellow"></button>
+      <button style="background:#b4f0a0" data-color="green" title="Green"></button>
+      <button style="background:#fbb6ce" data-color="pink" title="Pink"></button>
+    </div>
+    <div class="note-popup-btns">
+      <button id="note-cancel">Cancel</button>
+      <button class="save" id="note-save">Save</button>
+    </div>
+  </div>
+</Base>
+
+<script>
+var CLASSICS = "1342,84,11,2701,345,174,1661,98,1400,2600,1514,16";
+var PAGE_SIZE = 1800;
+
+var books = [];
+var pages = [];
+var currentSpread = 0; // index of left page (0-based)
+var currentBook = null;
+var annotations = {}; // { [bookId+':'+pageIdx]: [{text, color, note}] }
+var noteSelection = null;
+var noteColor = "yellow";
+
+function $ (id) { return document.getElementById(id); }
+
+// ── Load annotations from localStorage ──
+function loadAnnotations (bookId) {
+  var raw = localStorage.getItem("reader-ann-" + bookId);
+  annotations = raw ? JSON.parse(raw) : {};
+}
+function saveAnnotations (bookId) {
+  localStorage.setItem("reader-ann-" + bookId, JSON.stringify(annotations));
+}
+
+// ── Gutendex ──
+async function fetchBooks (url) {
+  $("status").textContent = "Loading…";
+  $("status").className = "loading";
+  try {
+    var r = await fetch(url);
+    var data = await r.json();
+    books = data.results || [];
+    renderGrid();
+    $("status").textContent = books.length ? "" : "No results.";
+  } catch (e) {
+    $("status").textContent = "Failed to load books.";
+    $("status").className = "error-msg";
+  }
+}
+
+function renderGrid () {
+  var grid = $("book-grid");
+  grid.innerHTML = "";
+  books.forEach(function (b) {
+    var img = b.formats["image/jpeg"] || "";
+    var author = b.authors[0] ? b.authors[0].name : "Unknown";
+    var card = document.createElement("div");
+    card.className = "book-card";
+    card.innerHTML =
+      '<img src="' + img + '" alt="" loading="lazy" />' +
+      '<div class="bk-title">' + b.title + '</div>' +
+      '<div class="bk-author">' + author + '</div>';
+    card.addEventListener("click", function () { openBook(b); });
+    grid.appendChild(card);
+  });
+}
+
+// ── Text fetch + pagination ──
+async function openBook (b) {
+  currentBook = b;
+  loadAnnotations(String(b.id));
+  $("book-title-label").textContent = b.title;
+  $("library-ui").style.display = "none";
+  $("reader-ui").style.display = "block";
+  $("left-panel").innerHTML = '<span class="loading">Fetching text…</span>';
+  $("right-panel").innerHTML = "";
+
+  var textUrl = b.formats["text/plain; charset=utf-8"]
+    || b.formats["text/plain; charset=us-ascii"]
+    || b.formats["text/plain"]
+    || "";
+
+  if (!textUrl) {
+    $("left-panel").innerHTML = '<span class="error-msg">No plain text available for this book.</span>';
+    return;
+  }
+
+  try {
+    var proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent(textUrl);
+    var r = await fetch(proxyUrl);
+    var raw = await r.text();
+    pages = paginateText(raw);
+    currentSpread = 0;
+    renderSpread(false);
+  } catch (e) {
+    $("left-panel").innerHTML = '<span class="error-msg">Failed to load text. Try another book.</span>';
+  }
+}
+
+function paginateText (raw) {
+  // Strip Gutenberg header/footer
+  var start = raw.search(/\*\*\* START OF (THE|THIS) PROJECT GUTENBERG/i);
+  var end = raw.search(/\*\*\* END OF (THE|THIS) PROJECT GUTENBERG/i);
+  if (start !== -1) raw = raw.slice(raw.indexOf("\n", start) + 1);
+  if (end !== -1) raw = raw.slice(0, end);
+
+  var paras = raw.split(/\n\n+/).map(function (p) { return p.replace(/\s+/g, " ").trim(); }).filter(Boolean);
+  var result = [];
+  var cur = "";
+  for (var i = 0; i < paras.length; i++) {
+    var para = paras[i];
+    var candidate = cur ? cur + "\n\n" + para : para;
+    if (candidate.length > PAGE_SIZE && cur) {
+      result.push(cur);
+      cur = para;
+    } else {
+      cur = candidate;
+    }
+  }
+  if (cur) result.push(cur);
+  return result;
+}
+
+// ── Render ──
+function applyAnnotations (html, pageIdx) {
+  var key = String(currentBook.id) + ":" + pageIdx;
+  var anns = annotations[key] || [];
+  anns.forEach(function (ann) {
+    var escaped = ann.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    var rx = new RegExp("(" + escaped + ")", "g");
+    html = html.replace(rx, '<mark class="ann-' + ann.color + '" title="' + (ann.note || "") + '">$1</mark>');
+  });
+  return html;
+}
+
+function pageHTML (idx) {
+  if (idx < 0 || idx >= pages.length) return "";
+  var text = pages[idx];
+  var html = text.split(/\n\n/).map(function (p) { return "<p>" + p + "</p>"; }).join("");
+  return applyAnnotations(html, idx);
+}
+
+function renderSpread (animate, direction) {
+  var isMobile = window.innerWidth <= 640;
+  var leftIdx = currentSpread;
+  var rightIdx = isMobile ? -1 : currentSpread + 1;
+
+  var leftNum = document.createElement("span");
+  leftNum.className = "page-num";
+  leftNum.textContent = leftIdx + 1;
+
+  var rightNum = document.createElement("span");
+  rightNum.className = "page-num";
+  rightNum.textContent = rightIdx >= 0 ? rightIdx + 1 : "";
+
+  if (!animate || isMobile) {
+    var lp = $("left-panel");
+    lp.innerHTML = pageHTML(leftIdx);
+    lp.appendChild(leftNum);
+
+    var rp = $("right-panel");
+    rp.innerHTML = rightIdx >= 0 ? pageHTML(rightIdx) : "";
+    if (rightIdx >= 0) rp.appendChild(rightNum);
+  } else {
+    doFlip(leftIdx, rightIdx, direction);
+  }
+
+  $("prev-btn").disabled = currentSpread === 0;
+  $("next-btn").disabled = isMobile
+    ? currentSpread >= pages.length - 1
+    : currentSpread + 2 >= pages.length;
+
+  var total = isMobile ? pages.length : Math.ceil(pages.length / 2);
+  var current = isMobile ? currentSpread + 1 : Math.floor(currentSpread / 2) + 1;
+  $("page-info").textContent = "Spread " + current + " / " + total;
+}
+
+function doFlip (leftIdx, rightIdx, direction) {
+  var flipper = $("page-flipper");
+  var face = $("flipper-face");
+  var back = $("flipper-back");
+
+  // Face shows the outgoing page (right side going fwd, left side going back)
+  face.innerHTML = direction === "next" ? pageHTML(leftIdx - 2) : pageHTML(rightIdx + 2);
+  back.innerHTML = direction === "next" ? pageHTML(leftIdx + 1) : pageHTML(leftIdx - 1);
+
+  flipper.style.display = "block";
+  flipper.classList.remove("flip-fwd", "flip-back");
+
+  // Force reflow
+  flipper.getBoundingClientRect();
+
+  if (direction === "next") {
+    flipper.classList.add("flip-fwd");
+  } else {
+    flipper.style.transform = "rotateY(-180deg)";
+    flipper.getBoundingClientRect();
+    flipper.classList.add("flip-back");
+  }
+
+  setTimeout(function () {
+    var lp = $("left-panel");
+    lp.innerHTML = pageHTML(leftIdx);
+    var ln = document.createElement("span");
+    ln.className = "page-num";
+    ln.textContent = leftIdx + 1;
+    lp.appendChild(ln);
+
+    var rp = $("right-panel");
+    rp.innerHTML = rightIdx >= 0 ? pageHTML(rightIdx) : "";
+    if (rightIdx >= 0) {
+      var rn = document.createElement("span");
+      rn.className = "page-num";
+      rn.textContent = rightIdx + 1;
+      rp.appendChild(rn);
+    }
+
+    flipper.style.display = "none";
+    flipper.style.transform = "";
+    flipper.classList.remove("flip-fwd", "flip-back");
+  }, 520);
+}
+
+function goNext () {
+  var isMobile = window.innerWidth <= 640;
+  var step = isMobile ? 1 : 2;
+  if (currentSpread + step < pages.length) {
+    currentSpread += step;
+    renderSpread(true, "next");
+  }
+}
+
+function goPrev () {
+  var isMobile = window.innerWidth <= 640;
+  var step = isMobile ? 1 : 2;
+  if (currentSpread - step >= 0) {
+    currentSpread -= step;
+    renderSpread(true, "prev");
+  }
+}
+
+// ── Annotations UI ──
+var noteBtn = $("note-btn");
+var notePopup = $("note-popup");
+
+document.addEventListener("mouseup", function (e) {
+  if (notePopup.contains(e.target)) return;
+  var sel = window.getSelection();
+  if (!sel || sel.isCollapsed) { noteBtn.style.display = "none"; return; }
+  var str = sel.toString().trim();
+  if (!str) { noteBtn.style.display = "none"; return; }
+
+  var spread = $("spread");
+  if (!spread.contains(sel.anchorNode)) { noteBtn.style.display = "none"; return; }
+
+  noteSelection = { text: str };
+  var range = sel.getRangeAt(0);
+  var rect = range.getBoundingClientRect();
+  noteBtn.style.display = "block";
+  noteBtn.style.top = (window.scrollY + rect.bottom + 8) + "px";
+  noteBtn.style.left = (window.scrollX + rect.left) + "px";
+});
+
+noteBtn.addEventListener("click", function () {
+  noteBtn.style.display = "none";
+  notePopup.style.display = "block";
+  notePopup.style.top = noteBtn.style.top;
+  notePopup.style.left = noteBtn.style.left;
+  $("note-text").value = "";
+  $("note-text").focus();
+});
+
+document.querySelectorAll(".note-colors button").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    document.querySelectorAll(".note-colors button").forEach(function (b) { b.classList.remove("active"); });
+    btn.classList.add("active");
+    noteColor = btn.dataset.color;
+  });
+});
+
+$("note-cancel").addEventListener("click", function () {
+  notePopup.style.display = "none";
+  noteSelection = null;
+});
+
+$("note-save").addEventListener("click", function () {
+  if (!noteSelection || !currentBook) return;
+  var key = String(currentBook.id) + ":" + currentSpread;
+  if (!annotations[key]) annotations[key] = [];
+  annotations[key].push({ text: noteSelection.text, color: noteColor, note: $("note-text").value });
+  saveAnnotations(String(currentBook.id));
+  notePopup.style.display = "none";
+  noteSelection = null;
+  renderSpread(false);
+});
+
+// ── Nav events ──
+$("prev-btn").addEventListener("click", goPrev);
+$("next-btn").addEventListener("click", goNext);
+$("back-btn").addEventListener("click", function () {
+  $("reader-ui").style.display = "none";
+  $("library-ui").style.display = "block";
+  currentBook = null;
+  pages = [];
+});
+
+document.addEventListener("keydown", function (e) {
+  if ($("reader-ui").style.display === "none") return;
+  if (e.key === "ArrowRight") goNext();
+  if (e.key === "ArrowLeft") goPrev();
+});
+
+// ── Search ──
+$("search-btn").addEventListener("click", function () {
+  var q = $("search-input").value.trim();
+  if (!q) return;
+  fetchBooks("https://gutendex.com/books/?search=" + encodeURIComponent(q));
+});
+$("search-input").addEventListener("keydown", function (e) {
+  if (e.key === "Enter") $("search-btn").click();
+});
+
+// ── Init ──
+fetchBooks("https://gutendex.com/books/?ids=" + CLASSICS);
+</script>

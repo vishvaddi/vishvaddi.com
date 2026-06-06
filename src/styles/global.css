@@ -2,7 +2,7 @@
 
 @theme {
   --font-sans: ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Iowan Old Style", "Apple Garamond", Baskerville, "Times New Roman", serif;
+  --font-serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
@@ -13,6 +13,8 @@
   --rule: #e5e5e0;
   --link-underline: #c9c9c9;
   --code-bg: #efefe8;
+  --accent: #C5683F;
+  --accent-dark: #9e4e2e;
 }
 
 :root[data-theme="dark"] {
@@ -72,8 +74,39 @@ a:hover { text-decoration-color: var(--fg); }
 
 p { margin: 1rem 0; }
 
-ul, ol { padding-left: 1.25rem; }
+ul { list-style: disc; padding-left: 1.25rem; }
+ol { list-style: decimal; padding-left: 1.25rem; }
 li { margin: 0.25rem 0; }
+
+/* editorial note rows */
+.note-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--rule);
+  text-decoration: none;
+  color: var(--fg);
+}
+.note-row:first-of-type { border-top: 1px solid var(--rule); }
+.note-row:hover .note-title { text-decoration-color: var(--fg); }
+.note-title {
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--link-underline);
+  text-underline-offset: 3px;
+}
+.note-desc { font-size: 0.8125rem; color: var(--muted); margin-top: 0.15rem; }
+.note-date {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 
 hr {
   border: none;
