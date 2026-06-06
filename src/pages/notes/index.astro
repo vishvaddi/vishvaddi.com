@@ -15,9 +15,6 @@ const dateFmt = new Intl.DateTimeFormat("en-AU", { year: "numeric", month: "shor
   ogImage="/og/notes.png"
 >
   <h1>Notes</h1>
-  <p style="color: var(--muted); font-size: 0.9rem;">
-    Essays and atomic ideas. Durable, opinionated, in my own voice. <a href="/rss.xml">RSS</a>.
-  </p>
 
   {notes.length === 0 ? (
     <p style="color: var(--muted);">Nothing published yet.</p>

@@ -184,6 +184,8 @@ function exit () {
 document.getElementById("enter-btn").addEventListener("click", enter);
 ambient.addEventListener("click", exit);
 document.addEventListener("keydown", function (e) {
+  var tag = document.activeElement && document.activeElement.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA") return;
   if (ambient.classList.contains("active")) exit();
 });
 

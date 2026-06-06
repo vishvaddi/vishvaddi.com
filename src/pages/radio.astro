@@ -8,7 +8,7 @@ import Base from "../layouts/Base.astro";
   <!-- Now-playing bar -->
   <div
     id="now-bar"
-    style="display: none; position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--rule); padding: 0.6rem 0; margin-bottom: 1rem; display: none;"
+    style="display: none; position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--rule); padding: 0.6rem 0; margin-bottom: 1rem;"
   >
     <div style="display: flex; align-items: center; gap: 0.75rem;">
       <img id="now-favicon" src="" alt="" width="16" height="16" style="border-radius: 2px; flex-shrink: 0;" onerror="this.style.display='none'" />
@@ -127,8 +127,8 @@ import Base from "../layouts/Base.astro";
 
 <script>
   const FAVOURITES = [
-    { name: "triple j", url: "http://live-radio01.mediahubaustralia.com/2TJW_aac/", tags: "indie alt" },
-    { name: "ABC Classic", url: "http://live-radio01.mediahubaustralia.com/FMW_aac/", tags: "classical" },
+    { name: "triple j", url: "https://live-radio01.mediahubaustralia.com/2TJW_aac/", tags: "indie alt" },
+    { name: "ABC Classic", url: "https://live-radio01.mediahubaustralia.com/FMW_aac/", tags: "classical" },
     { name: "FBI Radio", url: "https://stream.fbiradio.com/fbi-hd.mp3", tags: "indie sydney" },
   ];
 
@@ -239,7 +239,7 @@ import Base from "../layouts/Base.astro";
   async function loadStations() {
     const list = document.getElementById("stations-list");
     try {
-      const res = await fetch(API, { headers: { "User-Agent": "vishvaddi.com/radio" } });
+      const res = await fetch(API);
       allStations = await res.json();
       list.innerHTML = "";
       allStations.forEach(s => {
