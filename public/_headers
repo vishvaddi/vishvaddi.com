@@ -1,5 +1,5 @@
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-jyDDNuvGOw9GKWbgrZDzC+xjYUZBse7JAudNCscuvxA=' 'sha256-mW/troyrH6u7f8ceVQLEE0UAxXWyKuvP3xk0P7DEUWc=' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-jyDDNuvGOw9GKWbgrZDzC+xjYUZBse7JAudNCscuvxA=' 'sha256-mW/troyrH6u7f8ceVQLEE0UAxXWyKuvP3xk0P7DEUWc=' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; media-src https:; frame-src https://www.youtube-nocookie.com; connect-src 'self' https://cloudflareinsights.com https://de1.api.radio-browser.info https://api.open-meteo.com https://ws.audioscrobbler.com https://api.allorigins.win https://gutendex.com https://www.gutenberg.org; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(self), geolocation=(self), browsing-topics=()
