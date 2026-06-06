@@ -51,6 +51,24 @@ function renderGrid() {
   });
 }
 
+async function fetchBookText(textUrl) {
+  var m = textUrl.match(/gutenberg\.org\/ebooks\/(\d+)\.txt/);
+  var directUrl = m
+    ? "https://www.gutenberg.org/cache/epub/" + m[1] + "/pg" + m[1] + ".txt"
+    : textUrl;
+  var controller = new AbortController();
+  var t = setTimeout(function () { controller.abort(); }, 20000);
+  try {
+    var r = await fetch("/api/book?url=" + encodeURIComponent(directUrl), { signal: controller.signal });
+    if (!r.ok) throw new Error("Book request failed: " + r.status);
+    var text = await r.text();
+    if (text.length < 1000) throw new Error("Book response was incomplete");
+    return text;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 async function openBook(b) {
   currentBook = b;
   loadAnnotations(String(b.id));
@@ -71,10 +89,9 @@ async function openBook(b) {
   }
 
   try {
-    var proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent(textUrl);
-    var r = await fetch(proxyUrl);
-    var raw = await r.text();
+    var raw = await fetchBookText(textUrl);
     pages = paginateText(raw);
+    if (!pages.length) throw new Error("Book contained no readable pages");
     currentSpread = 0;
     renderSpread(false);
   } catch (e) {

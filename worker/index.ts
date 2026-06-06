@@ -62,6 +62,31 @@ export default {
       });
     }
 
+    // Gutenberg text proxy — avoids CORS, caches at edge
+    if (path === "/api/book" && request.method === "GET") {
+      const bookUrl = url.searchParams.get("url") || "";
+      if (!bookUrl || !/^https:\/\/www\.gutenberg\.org\//.test(bookUrl)) {
+        return new Response("bad url", { status: 400 });
+      }
+      try {
+        const upstream = await fetch(bookUrl, {
+          headers: { "User-Agent": UA },
+          signal: AbortSignal.timeout(20000),
+        });
+        if (!upstream.ok) return new Response("upstream error", { status: 502 });
+        return new Response(upstream.body, {
+          status: 200,
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Cache-Control": "public, max-age=86400",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      } catch {
+        return new Response("fetch failed", { status: 504 });
+      }
+    }
+
     // Everything else: serve the built site.
     return env.ASSETS.fetch(request);
   },
