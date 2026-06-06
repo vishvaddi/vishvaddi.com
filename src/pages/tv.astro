@@ -159,16 +159,24 @@ import Base from "../layouts/Base.astro";
           <div class="channel-indicator" id="ch-indicator">CH 2</div>
           <div class="tv-flash" id="tv-flash"></div>
 
-          <!-- RAGE iframe (ch1) -->
-          <iframe id="iframe-rage" class="screen-content" src="" title="RAGE" allow="autoplay" style="display:none"></iframe>
-          <div id="rage-fallback"><a href="https://www.rageagain.com" target="_blank" rel="noopener">Open RAGE in new tab ↗</a></div>
+          <!-- CH1: Lofi audio + visualiser -->
+          <audio id="lofi-audio" preload="none"></audio>
+          <canvas id="lofi-canvas" class="screen-content" style="display:none; background:#0d0d0a;"></canvas>
 
-          <!-- YouTube iframe (ch 2-5) -->
-          <iframe id="iframe-yt" class="screen-content" src="" title="TV Channel"
-            allow="autoplay; encrypted-media" allowfullscreen style="display:none"></iframe>
+          <!-- CH2: Wildlife cam -->
+          <iframe id="iframe-explore" class="screen-content" src="" title="Wildlife Cam" allow="autoplay" style="display:none"></iframe>
 
-          <!-- OFF: noise canvas -->
-          <canvas id="noise-canvas" class="screen-content"></canvas>
+          <!-- CH3: Weather map -->
+          <iframe id="iframe-windy" class="screen-content" src="" title="Weather Map" style="display:none"></iframe>
+
+          <!-- CH4: Fire -->
+          <canvas id="fire-canvas" class="screen-content" style="display:none;"></canvas>
+
+          <!-- CH5: Starfield -->
+          <canvas id="stars-canvas" class="screen-content" style="display:none;"></canvas>
+
+          <!-- CH6: OFF noise -->
+          <canvas id="noise-canvas" class="screen-content" style="display:none;"></canvas>
           <div id="noise-label">NO SIGNAL</div>
         </div>
       </div>
@@ -177,24 +185,24 @@ import Base from "../layouts/Base.astro";
         <div>
           <div class="channel-btns" id="channel-btns">
             <div>
-              <button class="ch-btn" data-ch="1">1</button>
-              <div class="ch-label">RAGE</div>
-            </div>
-            <div>
-              <button class="ch-btn active" data-ch="2">2</button>
+              <button class="ch-btn active" data-ch="1">1</button>
               <div class="ch-label">Lofi</div>
             </div>
             <div>
+              <button class="ch-btn" data-ch="2">2</button>
+              <div class="ch-label">Wild</div>
+            </div>
+            <div>
               <button class="ch-btn" data-ch="3">3</button>
-              <div class="ch-label">NASA</div>
+              <div class="ch-label">Wind</div>
             </div>
             <div>
               <button class="ch-btn" data-ch="4">4</button>
-              <div class="ch-label">Calm</div>
+              <div class="ch-label">Fire</div>
             </div>
             <div>
               <button class="ch-btn" data-ch="5">5</button>
-              <div class="ch-label">BBG</div>
+              <div class="ch-label">Stars</div>
             </div>
             <div>
               <button class="ch-btn" data-ch="6">6</button>
