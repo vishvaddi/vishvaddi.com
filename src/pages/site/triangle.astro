@@ -1,0 +1,55 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+---
+
+<Base
+  title="Triangle Solver & Trig"
+  description="Free triangle solver (SSS, SAS, ASA, AAS, SSA) plus a trig calculator. Solves sides, angles, area and perimeter in your browser."
+  siteNav
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Triangle</p>
+    <h1>Triangle Solver &amp; Trig</h1>
+    <p>
+      Enter any 3 values (at least one side). Sides <code>a, b, c</code> sit
+      opposite angles <code>A, B, C</code>. Angles in degrees.
+    </p>
+
+    <div class="tri-grid">
+      <div class="field"><label for="tri-a">side a</label><input type="number" id="tri-a" inputmode="decimal" step="any" /></div>
+      <div class="field"><label for="tri-A">angle A°</label><input type="number" id="tri-A" inputmode="decimal" step="any" /></div>
+      <div class="field"><label for="tri-b">side b</label><input type="number" id="tri-b" inputmode="decimal" step="any" /></div>
+      <div class="field"><label for="tri-B">angle B°</label><input type="number" id="tri-B" inputmode="decimal" step="any" /></div>
+      <div class="field"><label for="tri-c">side c</label><input type="number" id="tri-c" inputmode="decimal" step="any" /></div>
+      <div class="field"><label for="tri-C">angle C°</label><input type="number" id="tri-C" inputmode="decimal" step="any" /></div>
+    </div>
+    <div class="btn-row">
+      <button type="button" id="tri-solve" class="btn">Solve</button>
+      <button type="button" id="tri-clear" class="btn btn-ghost">Clear</button>
+    </div>
+    <div id="tri-out" class="result" aria-live="polite"></div>
+
+    <h2>Trig calculator</h2>
+    <p>Quick sine, cosine, tangent and reciprocals for any angle.</p>
+    <div class="trig-bar">
+      <div class="field"><label for="trig-angle">angle</label><input type="number" id="trig-angle" value="30" inputmode="decimal" step="any" /></div>
+      <button type="button" id="trig-mode" class="btn btn-ghost" title="Toggle degrees / radians">DEG</button>
+    </div>
+    <div id="trig-out" class="result" aria-live="polite"></div>
+
+    <p class="note-foot">Runs entirely in your browser. <a href="/site">← all tools</a></p>
+  </div>
+
+  <style>
+    .tri-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem 1rem; margin: 1rem 0; }
+    .btn-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .trig-bar { display: flex; gap: 0.75rem; align-items: flex-end; margin: 0.75rem 0; }
+    .trig-bar .field { flex: 1; max-width: 12rem; }
+  </style>
+
+  <script>
+    import { initTriangle } from "../../scripts/site/triangle";
+    initTriangle();
+  </script>
+</Base>
