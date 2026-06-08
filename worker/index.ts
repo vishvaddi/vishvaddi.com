@@ -176,6 +176,34 @@ export default {
       }
     }
 
+    // Reader book proxy — fetch Project Gutenberg plain text same-origin so the
+    // strict CSP stays default-src 'self'. Locked to gutenberg.org only.
+    if (path === "/api/book" && request.method === "GET") {
+      const target = publicHttpsUrl(url.searchParams.get("url") || "");
+      if (!target || (target.hostname !== "www.gutenberg.org" && target.hostname !== "gutenberg.org")) {
+        return new Response("bad url", { status: 400 });
+      }
+      try {
+        const upstream = await fetchPublic(target, {
+          headers: { "User-Agent": UA, "Accept": "text/plain" },
+          signal: AbortSignal.timeout(20000),
+          cf: { cacheTtl: 86400, cacheEverything: true },
+        } as RequestInit);
+        if (!upstream.ok) return new Response("upstream error", { status: 502 });
+        const body = await upstream.arrayBuffer();
+        return new Response(body, {
+          status: 200,
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Cache-Control": "public, max-age=86400",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      } catch {
+        return new Response("fetch failed", { status: 504 });
+      }
+    }
+
     // Everything else: serve the built site.
     return env.ASSETS.fetch(request);
   },
