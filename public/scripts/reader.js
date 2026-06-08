@@ -263,11 +263,48 @@ function doFlip(leftIdx, rightIdx, direction) {
   }, 520);
 }
 
+/* ── Page-turn sound (procedural paper rustle — no audio files) ── */
+var sfxOn = true;
+var _actx = null;
+
+function playPageTurn() {
+  if (!sfxOn) return;
+  try {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!_actx) _actx = new AC();
+    var ctx = _actx;
+    if (ctx.state === "suspended") ctx.resume();
+
+    var dur = 0.26;
+    var frames = Math.floor(ctx.sampleRate * dur);
+    var buf = ctx.createBuffer(1, frames, ctx.sampleRate);
+    var data = buf.getChannelData(0);
+    for (var i = 0; i < frames; i++) {
+      var t = i / frames;
+      // fast attack, quick decay, with a double-swish so it reads as paper
+      var env = Math.pow(1 - t, 2.3) * (0.55 + 0.45 * Math.sin(t * 34));
+      data[i] = (Math.random() * 2 - 1) * env;
+    }
+    var src = ctx.createBufferSource();
+    src.buffer = buf;
+    var bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 2700;
+    bp.Q.value = 0.6;
+    var g = ctx.createGain();
+    g.gain.value = 0.16;
+    src.connect(bp); bp.connect(g); g.connect(ctx.destination);
+    src.start();
+  } catch (_) {}
+}
+
 function goNext() {
   var isMobile = window.innerWidth <= 640;
   var step = isMobile ? 1 : 2;
   if (currentSpread + step < pages.length) {
     currentSpread += step;
+    playPageTurn();
     renderSpread(true, "next");
   }
 }
@@ -277,6 +314,7 @@ function goPrev() {
   var step = isMobile ? 1 : 2;
   if (currentSpread - step >= 0) {
     currentSpread -= step;
+    playPageTurn();
     renderSpread(true, "prev");
   }
 }
@@ -391,7 +429,9 @@ function saveReaderSettings() {
     lh:    parseInt($("rs-lh").value),
     font:  $("rs-font").value,
     theme: $("rs-theme").value,
+    sound: $("rs-sound") ? $("rs-sound").value : "1",
   };
+  sfxOn = s.sound !== "0";
   localStorage.setItem(RS_KEY, JSON.stringify(s));
   applyReaderSettings(s);
   if (pages.length) renderSpread(false);
@@ -411,6 +451,8 @@ function initSettings() {
   if (s.lh)    { $("rs-lh").value   = s.lh;     $("rs-lh-val").textContent  = (s.lh / 100).toFixed(2); }
   if (s.font)  $("rs-font").value   = s.font;
   if (s.theme) $("rs-theme").value  = s.theme;
+  if (s.sound !== undefined) $("rs-sound").value = s.sound;
+  sfxOn = (s.sound === undefined) ? true : (s.sound !== "0");
   applyReaderSettings(s);
 
   $("rs-size").addEventListener("input", function () {
@@ -421,6 +463,7 @@ function initSettings() {
   });
   $("rs-font").addEventListener("change",  saveReaderSettings);
   $("rs-theme").addEventListener("change", saveReaderSettings);
+  $("rs-sound").addEventListener("change", saveReaderSettings);
 
   $("settings-btn").addEventListener("click", function () {
     $("reader-settings").classList.toggle("open");

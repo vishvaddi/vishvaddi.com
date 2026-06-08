@@ -31,6 +31,9 @@
   --code-bg: #efefe8;
   --accent: #C5683F;
   --accent-dark: #9e4e2e;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur: 0.45s;
+  --dur-fast: 0.18s;
 }
 
 :root[data-theme="dark"] {
@@ -87,6 +90,50 @@ a {
   text-underline-offset: 3px;
 }
 a:hover { text-decoration-color: var(--fg); }
+
+/* ── Motion & smoothness (Rajiv-inspired) ───────────────────────────────── */
+html { scroll-behavior: smooth; }
+
+/* Unified easing on the things people interact with. */
+a, button, summary, .theme-toggle, input, select,
+.nav-more-menu, .book-card, .site-rail a, .site-chips a {
+  transition:
+    color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
+}
+
+/* Scroll-reveal: add .reveal to a block; reveal.js adds .in when on screen. */
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  will-change: opacity, transform;
+}
+.reveal.in { opacity: 1; transform: none; }
+
+/* Editorial headline emphasis — large breathable serif with italic keywords. */
+.lede {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: clamp(1.5rem, 4.5vw, 2.4rem);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+.lede em { font-style: italic; color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+  .reveal { opacity: 1; transform: none; }
+}
 
 p { margin: 1rem 0; }
 
