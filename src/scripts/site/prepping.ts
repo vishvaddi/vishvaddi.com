@@ -110,73 +110,6 @@ export function initPrepping(): void {
   const root = document.getElementById("prep-app");
   if (!root) return;
 
-  // Calculators (declarative, XSS-safe via mountCalcs/textContent)
-  const calcs: CalcSpec[] = [
-    {
-      id: "food",
-      title: "Food reserve",
-      blurb: "How many calories a reserve needs to carry your household for a target window.",
-      fields: [
-        { id: "cal", label: "Cal / person / day", def: "2000", min: "800", step: "100" },
-        { id: "people", label: "People", def: "2", min: "1", step: "1" },
-        { id: "days", label: "Target days", def: "90", min: "1", step: "1" },
-      ],
-      compute: (v) => {
-        const total = v.cal * v.people * v.days;
-        if (!total) return null;
-        return {
-          rows: [
-            [total.toLocaleString("en-AU"), "Total calories"],
-            [`${(total / 1000).toFixed(0)}k`, "kcal"],
-            [`${v.people ? (total / 100 / v.people).toFixed(0) : "0"}`, "100-cal packs / person"],
-          ],
-        };
-      },
-    },
-    {
-      id: "water",
-      title: "Water need",
-      blurb: "Drinking and cooking water by household size, days and activity level.",
-      fields: [
-        { id: "persons", label: "Persons", def: "2", min: "1", step: "1" },
-        { id: "days", label: "Days", def: "3", min: "1", step: "1" },
-        { id: "perday", label: "L / person / day (2 rest – 6 heat)", def: "3", min: "1", step: "0.5" },
-        { id: "cook", label: "Cooking L / person / day", def: "0", min: "0", step: "0.5" },
-      ],
-      compute: (v) => {
-        const total = v.persons * v.days * (v.perday + v.cook);
-        if (!total) return null;
-        return {
-          rows: [
-            [`${total.toFixed(0)} L`, "Water needed"],
-            [`${Math.ceil(total / 20)}`, "20 L jerricans"],
-          ],
-        };
-      },
-    },
-    {
-      id: "gethome",
-      title: "Get-home walk",
-      blurb: "On-foot time to cover a distance home, allowing for terrain and load.",
-      fields: [
-        { id: "dist", label: "Distance home (km)", def: "10", min: "0", step: "0.5" },
-        { id: "pace", label: "Pace (km/h)", def: "4", min: "1", step: "0.5" },
-        { id: "factor", label: "Terrain / load factor", def: "1.3", min: "1", step: "0.1" },
-      ],
-      compute: (v) => {
-        if (!v.dist || !v.pace) return null;
-        const hours = (v.dist / v.pace) * (v.factor || 1);
-        return {
-          rows: [
-            [`${hours.toFixed(1)} h`, "Walk time"],
-            [`${(hours / 8).toFixed(1)}`, "Days @ 8h walking"],
-          ],
-          warn: hours > 8 ? "Over a day on foot — plan water, shelter and a rest point." : undefined,
-        };
-      },
-    },
-  ];
-
   // ── Emergency contacts ──
   const contacts = section("Emergency numbers");
   contacts.append(blurb("Australia. Tap to call. Save a copy off-screen too — a card in the kit and wallet."));
@@ -191,9 +124,6 @@ export function initPrepping(): void {
     contacts.append(a);
   }
   root.append(contacts);
-
-  // ── Calculators ──
-  mountCalcs(root, calcs);
 
   // ── Find nearby (live map; tiles + Overpass proxied same-origin) ──
   const nearby = section("Find nearby");
@@ -309,91 +239,6 @@ export function initPrepping(): void {
     locate.click(); // try to centre on the user immediately
   });
 
-  // ── Kit maintenance tracker ──
-  const kitState = load<Record<string, string>>("vv_prep_kit", {});
-  const kitSec = section("Kit maintenance");
-  kitSec.append(blurb("Log when each was last done. Stored only in this browser."));
-  for (const item of KIT) {
-    const wrap = mk("div", "field");
-    const lab = mk("label", undefined, `${item.label} — last done (${item.cadence})`);
-    const status = mk("span", "l");
-    const refresh = () => { status.textContent = statusText(daysUntilDue(kitState[item.key], item.days)); };
-    const input = document.createElement("input");
-    input.type = "date";
-    input.max = today();
-    if (kitState[item.key]) input.value = kitState[item.key];
-    input.addEventListener("change", () => {
-      kitState[item.key] = input.value;
-      save("vv_prep_kit", kitState);
-      refresh();
-    });
-    refresh();
-    lab.append(" — ", status);
-    wrap.append(lab, input);
-    kitSec.append(wrap);
-  }
-  root.append(kitSec);
-
-  // ── Bradley's 14 checklist ──
-  const b14State = load<Record<string, boolean>>("vv_prep_b14", {});
-  const b14Sec = section("Bradley's 14 needs");
-  b14Sec.append(blurb("A granular audit of everything that keeps you alive."));
-  BRADLEY14.forEach((need, i) => {
-    const row = mk("label", "saved-row");
-    row.style.cursor = "pointer";
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.style.width = "auto";
-    cb.checked = !!b14State[i];
-    cb.addEventListener("change", () => { b14State[i] = cb.checked; save("vv_prep_b14", b14State); });
-    const span = mk("span", undefined, need);
-    span.style.fontFamily = "var(--font-sans)";
-    row.append(span, cb);
-    b14Sec.append(row);
-  });
-  root.append(b14Sec);
-
-  // ── Four pillars ──
-  const pillarState = load<Record<string, number>>("vv_prep_pillars", {});
-  const pillarSec = section("Self-sufficiency pillars (0–5)");
-  pillarSec.append(blurb("Rate where you stand on each. Honest beats optimistic."));
-  const pillarFields = mk("div", "calc-fields");
-  for (const p of PILLARS) {
-    const wrap = mk("div", "field");
-    wrap.append(mk("label", undefined, p));
-    const input = document.createElement("input");
-    input.type = "number";
-    input.min = "0";
-    input.max = "5";
-    input.step = "1";
-    input.value = String(pillarState[p] ?? 0);
-    input.addEventListener("change", () => {
-      pillarState[p] = Math.max(0, Math.min(5, Number(input.value) || 0));
-      input.value = String(pillarState[p]);
-      save("vv_prep_pillars", pillarState);
-    });
-    wrap.append(input);
-    pillarFields.append(wrap);
-  }
-  pillarSec.append(pillarFields);
-  root.append(pillarSec);
-
-  // ── SOS morse signaller ──
-  const sosSec = section("SOS signaller");
-  sosSec.append(blurb("Plays · · · — — — · · · as sound, screen flash and vibration. Use only in a genuine emergency."));
-  const morse = mk("p", "conv-out", "· · · — — — · · ·");
-  const btnRow = mk("div", "btn-row no-print");
-  const sosBtn = mk("button", "btn") as HTMLButtonElement;
-  sosBtn.type = "button";
-  sosBtn.textContent = "▶ Play SOS";
-  sosBtn.addEventListener("click", playSOS);
-  btnRow.append(sosBtn);
-  sosSec.append(morse, btnRow);
-  root.append(sosSec);
-
-  buildHazardCards(root);
-  buildSouthCross(root);
-  buildScheduler(root);
   buildVehicleRecovery(root);
 }
 
@@ -637,13 +482,14 @@ function slug(s: string): string {
 // The ~28 note sections, grouped into a handful of collapsible themes. Sections
 // are matched by heading slug, so order/insertions stay robust.
 const NOTE_GROUPS: { title: string; slugs: string[] }[] = [
-  { title: "Survival basics", slugs: ["rule-of-threes", "survival-the-mindset-mnemonic", "the-5cs", "the-10cs", "the-urban-10cs", "the-five-priorities", "bradley-s-14-survival-needs"] },
-  { title: "Shelter, fire, water & food", slugs: ["shelter", "fire", "water", "signalling", "food"] },
-  { title: "First aid & Australian hazards", slugs: ["emergency-numbers-australia", "first-aid-drsabcd", "beyond-first-aid-austere-medicine", "snake-bite-australian-protocol", "other-australian-bites-and-stings"] },
-  { title: "Bush skills", slugs: ["six-knots-that-cover-most-situations", "sharp-tools-briefly", "natural-navigation-in-the-southern-hemisphere"] },
-  { title: "Australian conditions", slugs: ["seasonal-threat-calendar-nsw", "australian-specific"] },
-  { title: "Self-sufficiency at home", slugs: ["self-sufficiency-at-home-four-pillars", "gardening-principles", "diy-and-the-case-for-traditional-skills", "future-proofing-the-2026-angle", "the-everyday-baseline"] },
-  { title: "Maintenance", slugs: ["the-52-week-prep-routine"] },
+  { title: "Mindset & frameworks",   slugs: ["the-rule-of-threes", "survival-the-mindset-mnemonic", "the-five-priorities", "bradley-s-14-survival-needs"] },
+  { title: "Gear & kits",            slugs: ["the-5cs", "the-10cs", "the-urban-10cs"] },
+  { title: "Core survival skills",   slugs: ["shelter", "fire", "water", "signalling", "food"] },
+  { title: "First aid & hazards",    slugs: ["emergency-numbers-australia", "first-aid-drsabcd", "beyond-first-aid-austere-medicine", "snake-bite-australian-protocol", "other-australian-bites-and-stings"] },
+  { title: "Field craft",            slugs: ["six-knots-that-cover-most-situations", "sharp-tools-briefly", "natural-navigation-in-the-southern-hemisphere"] },
+  { title: "Australian context",     slugs: ["seasonal-threat-calendar-nsw", "australian-specific"] },
+  { title: "Home resilience",        slugs: ["the-everyday-baseline", "self-sufficiency-at-home-four-pillars", "gardening-principles", "diy-and-the-case-for-traditional-skills", "future-proofing-the-2026-angle"] },
+  { title: "Long-term maintenance",  slugs: ["the-52-week-prep-routine"] },
 ];
 
 export function buildPreppingNav(): void {

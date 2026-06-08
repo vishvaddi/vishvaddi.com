@@ -19,6 +19,7 @@ import Base from "../layouts/Base.astro";
         />
         <button
           id="feed-add-btn"
+          type="button"
           style="font-family: var(--font-sans); font-size: 0.8125rem; padding: 0.4rem 0.75rem; background: var(--accent); color: #fff; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap;"
         >Add</button>
       </div>
@@ -27,9 +28,10 @@ import Base from "../layouts/Base.astro";
   </details>
 
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-    <span id="feed-status" style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted);">Loading…</span>
+    <span id="feed-status" style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted);">Loading...</span>
     <button
       id="feed-refresh-btn"
+      type="button"
       style="font-family: var(--font-sans); font-size: 0.75rem; color: var(--muted); background: none; border: none; cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 3px;"
     >Refresh</button>
   </div>
@@ -82,152 +84,4 @@ import Base from "../layouts/Base.astro";
   .feed-remove-btn:hover { color: var(--fg); }
 </style>
 
-<script>
-  const DEFAULT_FEEDS = [
-    { name: "ABC News", url: "https://www.abc.net.au/news/feed/51120/rss.xml" },
-    { name: "Hacker News", url: "https://hnrss.org/frontpage" },
-    { name: "Kottke", url: "https://feeds.kottke.org/main" },
-    { name: "The Prepared", url: "https://theprepared.com/feed/" },
-  ];
-
-  const SOURCE_COLOURS = [
-    "#2563eb", "#16a34a", "#9333ea", "#b45309",
-    "#0891b2", "#c026d3", "#dc2626", "#0d9488",
-  ];
-
-  const PROXY = "https://api.allorigins.win/get?url=";
-  const REFRESH_MS = 10 * 60 * 1000;
-
-  function loadFeeds() {
-    try {
-      const raw = localStorage.getItem("rss_feeds");
-      if (raw) return JSON.parse(raw);
-    } catch (_) {}
-    return DEFAULT_FEEDS.map(f => ({ ...f }));
-  }
-
-  function saveFeeds(feeds) {
-    localStorage.setItem("rss_feeds", JSON.stringify(feeds));
-  }
-
-  function colourForIndex(i) {
-    return SOURCE_COLOURS[i % SOURCE_COLOURS.length];
-  }
-
-  function parseFeed(xml, feedName) {
-    const doc = new DOMParser().parseFromString(xml, "application/xml");
-    const items = Array.from(doc.querySelectorAll("item"));
-    return items.map(item => {
-      const title = item.querySelector("title")?.textContent?.trim() ?? "(no title)";
-      const link = item.querySelector("link")?.textContent?.trim() ?? "#";
-      const pubDate = item.querySelector("pubDate")?.textContent?.trim() ?? "";
-      const description = item.querySelector("description")?.textContent?.trim() ?? "";
-      const date = pubDate ? new Date(pubDate) : new Date(0);
-      return { title, link, date, description, source: feedName };
-    });
-  }
-
-  async function fetchFeed(feed) {
-    const url = PROXY + encodeURIComponent(feed.url);
-    const res = await fetch(url);
-    const json = await res.json();
-    return parseFeed(json.contents, feed.name);
-  }
-
-  const dateFmt = new Intl.DateTimeFormat("en-AU", {
-    day: "numeric", month: "short", year: "numeric",
-  });
-
-  function renderItems(items) {
-    const container = document.getElementById("feed-items");
-    if (!items.length) {
-      container.innerHTML = '<p style="color: var(--muted); font-size: 0.875rem;">No items.</p>';
-      return;
-    }
-    container.innerHTML = items.map((item, i) => {
-      const colour = item._colour;
-      const dateStr = item.date.valueOf() ? dateFmt.format(item.date) : "";
-      const desc = item.description
-        ? `<div class="note-desc">${item.description.replace(/<[^>]*>/g, "").slice(0, 120)}</div>`
-        : "";
-      return `
-        <a class="note-row" href="${item.link}" target="_blank" rel="noopener" style="align-items: flex-start;">
-          <div class="feed-row-left">
-            <span class="source-label" style="background: ${colour};">${item.source}</span>
-            <div>
-              <div class="note-title">${item.title}</div>
-              ${desc}
-            </div>
-          </div>
-          <span class="note-date">${dateStr}</span>
-        </a>
-      `;
-    }).join("");
-  }
-
-  function renderFeedList(feeds) {
-    const list = document.getElementById("feed-list");
-    list.innerHTML = feeds.map((feed, i) => `
-      <div class="feed-manage-row">
-        <span style="display: flex; align-items: center; gap: 0.5rem; min-width: 0;">
-          <span style="width: 8px; height: 8px; border-radius: 50%; background: ${colourForIndex(i)}; flex-shrink: 0; display: inline-block;"></span>
-          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${feed.name} — ${feed.url}</span>
-        </span>
-        <button class="feed-remove-btn" data-idx="${i}" aria-label="Remove ${feed.name}">✕</button>
-      </div>
-    `).join("");
-
-    list.querySelectorAll(".feed-remove-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const idx = parseInt(btn.dataset.idx, 10);
-        const feeds = loadFeeds();
-        feeds.splice(idx, 1);
-        saveFeeds(feeds);
-        renderFeedList(feeds);
-        loadAll();
-      });
-    });
-  }
-
-  async function loadAll() {
-    const status = document.getElementById("feed-status");
-    const feeds = loadFeeds();
-    renderFeedList(feeds);
-    status.textContent = "Loading…";
-
-    const results = await Promise.allSettled(feeds.map(f => fetchFeed(f)));
-    const all = [];
-    results.forEach((r, i) => {
-      if (r.status === "fulfilled") {
-        r.value.forEach(item => {
-          item._colour = colourForIndex(i);
-        });
-        all.push(...r.value);
-      }
-    });
-
-    all.sort((a, b) => b.date - a.date);
-    renderItems(all);
-
-    const now = new Date().toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
-    status.textContent = `${all.length} items · updated ${now}`;
-  }
-
-  document.getElementById("feed-add-btn").addEventListener("click", () => {
-    const input = document.getElementById("feed-url-input");
-    const url = input.value.trim();
-    if (!url) return;
-    const name = new URL(url).hostname.replace(/^www\./, "").split(".")[0];
-    const feeds = loadFeeds();
-    feeds.push({ name, url });
-    saveFeeds(feeds);
-    input.value = "";
-    renderFeedList(feeds);
-    loadAll();
-  });
-
-  document.getElementById("feed-refresh-btn").addEventListener("click", loadAll);
-
-  loadAll();
-  setInterval(loadAll, REFRESH_MS);
-</script>
+<script src="/scripts/feeds.js" defer></script>

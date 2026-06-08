@@ -57,6 +57,10 @@ document.addEventListener("keydown", function (e) {
   if (ambient.classList.contains("active")) exit();
 });
 
+if (new URLSearchParams(location.search).get("auto") === "1") {
+  enter();
+}
+
 function tickClock() {
   var now = new Date();
   var h = String(now.getHours()).padStart(2, "0");

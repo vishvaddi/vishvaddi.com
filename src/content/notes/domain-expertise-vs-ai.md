@@ -3,6 +3,7 @@ title: "Domain expertise is the moat AI cannot replicate"
 description: "As AI tools lower the barrier to building software, deep industry knowledge becomes the differentiator that compounds, not the one that erodes."
 pubDate: 2026-03-11
 tags: ["ai", "estimating", "construction", "moats"]
+draft: true
 ---
 
 As AI tools lower the barrier to building software, the differentiator shifts

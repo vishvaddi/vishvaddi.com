@@ -2,149 +2,69 @@
 import Base from "../layouts/Base.astro";
 ---
 
-<Base title="TV" description="Retro CRT TV — channels, lofi, NASA, and more.">
+<Base title="TV" description="Retro CRT TV.">
   <style>
     .tv-wrap {
       display: flex; flex-direction: column; align-items: center;
-      padding: 2rem 1rem 3rem;
-      min-height: 70vh;
+      padding: 2rem 1rem 3rem; min-height: 70vh;
     }
-
-    /* ── TV Body ── */
     .tv-body {
-      background: #1a1a1a;
-      border-radius: 20px;
-      padding: 24px 28px 28px;
+      background: #1a1a1a; border-radius: 20px; padding: 24px 28px 28px;
       width: min(700px, 100%);
-      box-shadow:
-        0 0 0 2px #111,
-        0 4px 8px rgba(0,0,0,0.6),
-        0 12px 40px rgba(0,0,0,0.5),
-        inset 0 1px 0 rgba(255,255,255,0.06);
-      position: relative;
+      box-shadow: 0 0 0 2px #111, 0 4px 8px rgba(0,0,0,0.6),
+        0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
     }
-
-    /* ── Brand label ── */
     .tv-brand {
       text-align: center; color: #555; font-size: 0.65rem;
       letter-spacing: 0.25em; text-transform: uppercase;
       margin-bottom: 14px; font-family: var(--font-sans);
     }
-
-    /* ── Screen bezel ── */
     .tv-bezel {
-      background: #0d0d0d;
-      border-radius: 12px;
-      padding: 10px;
-      box-shadow:
-        inset 0 2px 10px rgba(0,0,0,0.8),
-        inset 0 0 0 1px #000;
-      position: relative;
+      background: #0d0d0d; border-radius: 12px; padding: 10px;
+      box-shadow: inset 0 2px 10px rgba(0,0,0,0.8), inset 0 0 0 1px #000;
     }
-
-    /* ── Screen ── */
     .tv-screen {
       position: relative; border-radius: 8px; overflow: hidden;
       aspect-ratio: 4/3; background: #000;
-      box-shadow: 0 0 30px rgba(0,255,80,0.08);
     }
-
-    /* Phosphor glow tint overlay */
     .tv-screen::before {
       content: ""; position: absolute; inset: 0; z-index: 10;
       background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%);
       pointer-events: none; border-radius: 8px;
     }
-
-    /* Scanlines */
     .tv-screen::after {
       content: ""; position: absolute; inset: 0; z-index: 11;
-      background: repeating-linear-gradient(
-        to bottom,
-        transparent 0px, transparent 2px,
-        rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px
-      );
+      background: repeating-linear-gradient(to bottom,
+        transparent 0px, transparent 2px, rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px);
       pointer-events: none; border-radius: 8px;
     }
-
-    /* Channel indicator */
-    .channel-indicator {
-      position: absolute; top: 10px; right: 12px; z-index: 20;
-      color: #39ff60; font-family: var(--font-mono); font-size: 0.7rem;
-      text-shadow: 0 0 8px #39ff60;
-      background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 3px;
-      pointer-events: none;
-    }
-
-    /* iframe / canvas fill screen */
     .screen-content {
-      position: absolute; inset: 0; width: 100%; height: 100%;
-      border: none; z-index: 1;
+      position: absolute; inset: 0; width: 100%; height: 100%; border: none; z-index: 1;
     }
-
     canvas.screen-content { display: none; }
-
-    #noise-label {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-      color: #aaa; font-family: var(--font-mono); font-size: 1.1rem;
-      letter-spacing: 0.15em; z-index: 15; pointer-events: none;
-      display: none; text-shadow: 0 0 8px #aaa;
-    }
-
-    /* White flash */
-    .tv-flash {
-      position: absolute; inset: 0; z-index: 50;
-      background: #fff; opacity: 0; pointer-events: none;
-      border-radius: 8px; transition: opacity 0.06s;
-    }
-    .tv-flash.on { opacity: 1; }
-
-    /* Rage fallback bar */
-    #rage-fallback {
-      display: none; position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
-      z-index: 20; background: rgba(0,0,0,0.7);
-      padding: 4px 10px; border-radius: 4px;
-    }
-    #rage-fallback a {
-      color: #39ff60; font-size: 0.75rem; font-family: var(--font-sans);
-      text-decoration: none;
-    }
-
-    /* ── Controls bar ── */
     .tv-controls {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-top: 18px;
+      display: flex; align-items: center; justify-content: space-between; margin-top: 18px;
     }
-    .channel-btns {
-      display: flex; gap: 8px; flex-wrap: wrap;
-    }
+    .channel-btns { display: flex; gap: 8px; }
     .ch-btn {
-      background: #2a2a2a; border: none; color: #bbb;
-      border-radius: 50%; width: 36px; height: 36px;
-      font-family: var(--font-sans); font-size: 0.75rem;
+      background: #2a2a2a; border: none; color: #bbb; border-radius: 50%;
+      width: 36px; height: 36px; font-family: var(--font-sans); font-size: 0.75rem;
       cursor: pointer; display: flex; align-items: center; justify-content: center;
       transition: background 0.15s, color 0.15s;
       box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
     }
     .ch-btn:hover { background: #383838; color: #fff; }
-    .ch-btn.active {
-      background: #39ff60; color: #000;
-      box-shadow: 0 0 10px rgba(57,255,96,0.4), 0 2px 4px rgba(0,0,0,0.4);
+    .ch-btn.active { background: #39ff60; color: #000; box-shadow: 0 0 10px rgba(57,255,96,0.4); }
+    .ch-label { color: #555; font-size: 0.65rem; font-family: var(--font-sans); text-align: center; margin-top: 4px; }
+    .tv-knob-group { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+    .ch-nav {
+      background: #2a2a2a; border: none; color: #888; border-radius: 6px;
+      width: 34px; height: 34px; font-size: 0.7rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+      transition: background 0.15s, color 0.15s;
     }
-
-    .tv-knob-group {
-      display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
-    }
-    .tv-knob {
-      width: 28px; height: 28px; border-radius: 50%; background: #333;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
-    }
-
-    .ch-label {
-      color: #555; font-size: 0.65rem; font-family: var(--font-sans);
-      text-align: center; margin-top: 4px; letter-spacing: 0.05em;
-    }
-
+    .ch-nav:hover { background: #383838; color: #ddd; }
     @media (max-width: 480px) {
       .tv-body { padding: 16px 16px 20px; }
       .ch-btn { width: 30px; height: 30px; font-size: 0.65rem; }
@@ -156,67 +76,30 @@ import Base from "../layouts/Base.astro";
       <div class="tv-brand">VISHVISION · MODEL VI</div>
       <div class="tv-bezel">
         <div class="tv-screen" id="tv-screen">
-          <div class="channel-indicator" id="ch-indicator">CH 4 · FIRE</div>
-          <div class="tv-flash" id="tv-flash"></div>
-
-          <!-- CH1: Lofi audio + visualiser -->
-          <audio id="lofi-audio" preload="none"></audio>
-          <canvas id="lofi-canvas" class="screen-content" style="display:none; background:#0d0d0a;"></canvas>
-
-          <!-- CH2: Wildlife cam -->
-          <iframe id="iframe-explore" class="screen-content" src="" title="Wildlife Cam" allow="autoplay" style="display:none"></iframe>
-
-          <!-- CH3: Weather map -->
-          <iframe id="iframe-windy" class="screen-content" src="" title="Weather Map" style="display:none"></iframe>
-
-          <!-- CH4: Fire -->
-          <canvas id="fire-canvas" class="screen-content" style="display:none;"></canvas>
-
-          <!-- CH5: Starfield -->
-          <canvas id="stars-canvas" class="screen-content" style="display:none;"></canvas>
-
-          <!-- CH6: OFF noise -->
-          <canvas id="noise-canvas" class="screen-content" style="display:none;"></canvas>
-          <div id="noise-label">NO SIGNAL</div>
+          <iframe id="iframe-windy" class="screen-content" title="Weather Map" style="display:none"></iframe>
+          <canvas id="stars-canvas" class="screen-content"></canvas>
         </div>
       </div>
-
       <div class="tv-controls">
         <div>
-          <div class="channel-btns" id="channel-btns">
+          <div class="channel-btns">
             <div>
-              <button class="ch-btn" data-ch="1">1</button>
-              <div class="ch-label">Lofi</div>
-            </div>
-            <div>
-              <button class="ch-btn" data-ch="2">2</button>
-              <div class="ch-label">Wild</div>
-            </div>
-            <div>
-              <button class="ch-btn" data-ch="3">3</button>
+              <button class="ch-btn active" data-ch="1">1</button>
               <div class="ch-label">Wind</div>
             </div>
             <div>
-              <button class="ch-btn active" data-ch="4">4</button>
-              <div class="ch-label">Fire</div>
-            </div>
-            <div>
-              <button class="ch-btn" data-ch="5">5</button>
+              <button class="ch-btn" data-ch="2">2</button>
               <div class="ch-label">Stars</div>
-            </div>
-            <div>
-              <button class="ch-btn" data-ch="6">6</button>
-              <div class="ch-label">OFF</div>
             </div>
           </div>
         </div>
         <div class="tv-knob-group">
-          <div class="tv-knob"></div>
-          <div class="tv-knob"></div>
+          <button class="ch-nav" id="ch-prev" title="Previous channel">&#9664;</button>
+          <button class="ch-nav" id="ch-next" title="Next channel">&#9654;</button>
         </div>
       </div>
     </div>
   </div>
-</Base>
 
-<script src="/scripts/tv.js" defer></script>
+  <script src="/scripts/tv.js" defer></script>
+</Base>

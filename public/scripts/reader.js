@@ -1,7 +1,7 @@
-var CLASSICS = "1342,84,11,2701,345,174,1661,98,1400,2600,1514,16";
 var PAGE_SIZE = 1800;
 
 var books = [];
+var libraryBooks = [];
 var pages = [];
 var currentSpread = 0;
 var currentBook = null;
@@ -22,15 +22,21 @@ function saveAnnotations(bookId) {
 async function fetchBooks(url) {
   $("status").textContent = "Loading…";
   $("status").className = "loading";
+  var ctrl = new AbortController();
+  var timer = setTimeout(function () { ctrl.abort(); }, 20000);
   try {
-    var r = await fetch(url);
+    var r = await fetch(url, { signal: ctrl.signal });
+    if (!r.ok) throw new Error(String(r.status));
     var data = await r.json();
-    books = data.results || [];
+    libraryBooks = data.results || [];
+    books = libraryBooks.slice();
     renderGrid();
     $("status").textContent = books.length ? "" : "No results.";
   } catch (e) {
     $("status").textContent = "Failed to load books.";
     $("status").className = "error-msg";
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -51,21 +57,32 @@ function renderGrid() {
   });
 }
 
-async function fetchBookText(textUrl) {
-  var m = textUrl.match(/gutenberg\.org\/ebooks\/(\d+)\.txt/);
-  var directUrl = m
-    ? "https://www.gutenberg.org/cache/epub/" + m[1] + "/pg" + m[1] + ".txt"
-    : textUrl;
-  var controller = new AbortController();
-  var t = setTimeout(function () { controller.abort(); }, 20000);
+function toDirectUrl(textUrl) {
+  var m = textUrl.match(/gutenberg\.org\/(?:ebooks|cache\/epub)\/(\d+)/);
+  if (m) return "https://www.gutenberg.org/cache/epub/" + m[1] + "/pg" + m[1] + ".txt";
+  return textUrl;
+}
+
+async function tryFetch(url, ms) {
+  var ctrl = new AbortController();
+  var t = setTimeout(function() { ctrl.abort(); }, ms);
   try {
-    var r = await fetch("/api/book?url=" + encodeURIComponent(directUrl), { signal: controller.signal });
-    if (!r.ok) throw new Error("Book request failed: " + r.status);
-    var text = await r.text();
-    if (text.length < 1000) throw new Error("Book response was incomplete");
-    return text;
-  } finally {
+    var r = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
     clearTimeout(t);
+    if (!r.ok) throw new Error(r.status);
+    var text = await r.text();
+    if (text.length < 1000) throw new Error("too short");
+    return text;
+  } catch(e) { clearTimeout(t); throw e; }
+}
+
+async function fetchBookText(textUrl) {
+  var direct = toDirectUrl(textUrl);
+  var endpoint = "/api/book?url=" + encodeURIComponent(direct);
+  try {
+    return await tryFetch(endpoint, 25000);
+  } catch (_) {
+    return tryFetch(endpoint + "&retry=" + Date.now(), 25000);
   }
 }
 
@@ -90,7 +107,8 @@ async function openBook(b) {
 
   try {
     var raw = await fetchBookText(textUrl);
-    pages = paginateText(raw);
+    $("left-panel").innerHTML = '<span class="loading">Laying out pages…</span>';
+    pages = await paginateText(raw);
     if (!pages.length) throw new Error("Book contained no readable pages");
     currentSpread = 0;
     renderSpread(false);
@@ -99,27 +117,54 @@ async function openBook(b) {
   }
 }
 
-function paginateText(raw) {
+async function paginateText(raw) {
   var start = raw.search(/\*\*\* START OF (THE|THIS) PROJECT GUTENBERG/i);
   var end = raw.search(/\*\*\* END OF (THE|THIS) PROJECT GUTENBERG/i);
   if (start !== -1) raw = raw.slice(raw.indexOf("\n", start) + 1);
   if (end !== -1) raw = raw.slice(0, end);
+  raw = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-  var paras = raw.split(/\n\n+/).map(function (p) { return p.replace(/\s+/g, " ").trim(); }).filter(Boolean);
-  var result = [];
-  var cur = "";
+  var paras = raw.split(/\n\n+/)
+    .map(function (p) { return p.replace(/[ \t]+/g, " ").trim(); })
+    .filter(Boolean);
+
+  // Measure the actual panel so pagination matches what fits on screen
+  var panel = $("left-panel");
+  var H = panel ? panel.clientHeight : 520;
+  var W = panel ? panel.clientWidth : 380;
+
+  var probe = document.createElement("div");
+  probe.style.cssText = [
+    "position:absolute", "top:-9999px", "left:0",
+    "visibility:hidden", "pointer-events:none",
+    "width:" + W + "px", "height:auto", "overflow:visible",
+    "padding:2.5rem 2rem", "box-sizing:border-box",
+    "font-size:0.95rem", "line-height:1.75",
+    "font-family:Georgia,serif"
+  ].join(";");
+  document.body.appendChild(probe);
+
+  var limit = H - 32; // leave room for page number
+  var pages = [];
+  var batch = [];
+
   for (var i = 0; i < paras.length; i++) {
-    var para = paras[i];
-    var candidate = cur ? cur + "\n\n" + para : para;
-    if (candidate.length > PAGE_SIZE && cur) {
-      result.push(cur);
-      cur = para;
-    } else {
-      cur = candidate;
+    batch.push(paras[i]);
+    probe.innerHTML = batch.map(function (p) {
+      return "<p style=\"margin:0 0 1em 0\">" + p + "</p>";
+    }).join("");
+    if (probe.offsetHeight > limit && batch.length > 1) {
+      pages.push(batch.slice(0, -1).join("\n\n"));
+      batch = [paras[i]];
+    }
+    if (i > 0 && i % 150 === 0) {
+      await new Promise(function(resolve) { requestAnimationFrame(resolve); });
     }
   }
-  if (cur) result.push(cur);
-  return result;
+  if (batch.length) pages.push(batch.join("\n\n"));
+
+  document.body.removeChild(probe);
+  return pages;
 }
 
 function applyAnnotations(html, pageIdx) {
@@ -306,12 +351,82 @@ document.addEventListener("keydown", function (e) {
 });
 
 $("search-btn").addEventListener("click", function () {
-  var q = $("search-input").value.trim();
-  if (!q) return;
-  fetchBooks("https://gutendex.com/books/?search=" + encodeURIComponent(q));
+  var q = $("search-input").value.trim().toLowerCase();
+  books = q ? libraryBooks.filter(function (b) {
+    var authors = (b.authors || []).map(function (a) { return a.name || ""; }).join(" ");
+    return (b.title + " " + authors).toLowerCase().includes(q);
+  }) : libraryBooks.slice();
+  renderGrid();
+  $("status").textContent = books.length ? "" : "No matching books in this library.";
+  $("status").className = books.length ? "loading" : "error-msg";
 });
 $("search-input").addEventListener("keydown", function (e) {
   if (e.key === "Enter") $("search-btn").click();
 });
 
-fetchBooks("https://gutendex.com/books/?ids=" + CLASSICS);
+/* ── Reader settings ── */
+var RS_KEY = "reader-settings";
+
+function applyReaderSettings(s) {
+  var spread  = $("spread");
+  var panels  = document.querySelectorAll(".page-panel, .flipper-face, .flipper-back");
+  var pct     = (s.size || 100) / 100;
+  var lh      = (s.lh || 175) / 100;
+  var font    = s.font || "Georgia,serif";
+  var theme   = (s.theme || "#faf7f0,#3a2e20").split(",");
+  var bg      = theme[0], fg = theme[1];
+  if (spread) spread.style.background = bg;
+  panels.forEach(function (p) {
+    p.style.fontSize   = (0.95 * pct).toFixed(3) + "rem";
+    p.style.lineHeight = String(lh);
+    p.style.fontFamily = font;
+    p.style.background = bg;
+    p.style.color      = fg;
+  });
+}
+
+function saveReaderSettings() {
+  var s = {
+    size:  parseInt($("rs-size").value),
+    lh:    parseInt($("rs-lh").value),
+    font:  $("rs-font").value,
+    theme: $("rs-theme").value,
+  };
+  localStorage.setItem(RS_KEY, JSON.stringify(s));
+  applyReaderSettings(s);
+  if (pages.length) renderSpread(false);
+}
+
+function loadReaderSettings() {
+  try {
+    var raw = localStorage.getItem(RS_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw);
+  } catch (_) { return {}; }
+}
+
+function initSettings() {
+  var s = loadReaderSettings();
+  if (s.size)  { $("rs-size").value = s.size;   $("rs-size-val").textContent = s.size + "%"; }
+  if (s.lh)    { $("rs-lh").value   = s.lh;     $("rs-lh-val").textContent  = (s.lh / 100).toFixed(2); }
+  if (s.font)  $("rs-font").value   = s.font;
+  if (s.theme) $("rs-theme").value  = s.theme;
+  applyReaderSettings(s);
+
+  $("rs-size").addEventListener("input", function () {
+    $("rs-size-val").textContent = this.value + "%"; saveReaderSettings();
+  });
+  $("rs-lh").addEventListener("input", function () {
+    $("rs-lh-val").textContent = (this.value / 100).toFixed(2); saveReaderSettings();
+  });
+  $("rs-font").addEventListener("change",  saveReaderSettings);
+  $("rs-theme").addEventListener("change", saveReaderSettings);
+
+  $("settings-btn").addEventListener("click", function () {
+    $("reader-settings").classList.toggle("open");
+  });
+}
+
+initSettings();
+
+fetchBooks("/data/reader-classics.json");

@@ -1,0 +1,112 @@
+{
+  "results": [
+    {
+      "id": 1342,
+      "title": "Pride and Prejudice",
+      "authors": [{ "name": "Austen, Jane" }],
+      "formats": {
+        "image/jpeg": "https://www.gutenberg.org/cache/epub/1342/pg1342.cover.medium.jpg",
+        "text/plain; charset=utf-8": "https://www.gutenberg.org/cache/epub/1342/pg1342.txt"
+      }
+    },
+    {
+      "id": 84,
+      "title": "Frankenstein; Or, The Modern Prometheus",
+      "authors": [{ "name": "Shelley, Mary Wollstonecraft" }],
+      "formats": {
+        "image/jpeg": "https://www.gutenberg.org/cache/epub/84/pg84.cover.medium.jpg",
+        "text/plain; charset=utf-8": "https://www.gutenberg.org/cache/epub/84/pg84.txt"
+      }
+    },
+    {
+      "id": 11,
+      "title": "Alice's Adventures in Wonderland",
+      "authors": [{ "name": "Carroll, Lewis" }],
+      "formats": {
+        "image/jpeg": "https://www.gutenberg.org/cache/epub/11/pg11.cover.medium.jpg",
+        "text/plain; charset=utf-8": "https://www.gutenberg.org/cache/epub/11/pg11.txt"
+      }
+    },
+    {
+      "id": 2701,
+      "title": "Moby Dick; Or, The Whale",
+      "authors": [{ "name": "Melville, Herman" }],
+      "formats": {
+        "image/jpeg": "https://www.gutenberg.org/cache/epub/2701/pg2701.cover.medium.jpg",
+        "text/plain; charset=utf-8": "https://www.gutenberg.org/cache/epub/2701/pg2701.txt"
+      }
+    },
+    {
+      "id": 345,
+      "title": "Dracula",
+      "authors": [{ "name": "Stoker, Bram" }],
+      "formats": {
+        "image/jpeg": "https://www.gutenberg.org/cache/epub/345/pg345.cover.medium.jpg",
+        "text/plain; charset=utf-8": "https://www.gutenberg.org/cache/epub/345/pg345.txt"
+      }
+    },
+    {
+      "id": 174,
+      "title": "The Picture of Dorian Gray",
+      "authors": [{ "name": "Wilde, Oscar" }],
+      "formats": {
+        "image/jpeg": "https://www.gutenberg.org/cache/epub/174/pg174.cover.medium.jpg",
+        "text/plain; charset=utf-8": "https://www.gutenberg.org/cache/epub/174/pg174.txt"
+      }
+    },
+    {
+      "id": 1661,
+      "title": "The Adventures of Sherlock Holmes",
+      "authors": [{ "name": "Doyle, Arthur Conan" }],
+      "formats": {
+        "image/jpeg": "https://www.gutenberg.org/cache/epub/1661/pg1661.cover.medium.jpg",
+        "text/plain; charset=utf-8": "https://www.gutenberg.org/cache/epub/1661/pg1661.txt"
+      }
+    },
+    {
+      "id": 98,
+      "title": "A Tale of Two Cities",
+      "authors": [{ "name": "Dickens, Charles" }],
+      "formats": {
+        "image/jpeg": "https://www.gutenberg.org/cache/epub/98/pg98.cover.medium.jpg",
+        "text/plain; charset=utf-8": "https://www.gutenberg.org/cache/epub/98/pg98.txt"
+      }
+    },
+    {
+      "id": 1400,
+      "title": "Great Expectations",
+      "authors": [{ "name": "Dickens, Charles" }],
+      "formats": {
+        "image/jpeg": "https://www.gutenberg.org/cache/epub/1400/pg1400.cover.medium.jpg",
+        "text/plain; charset=utf-8": "https://www.gutenberg.org/cache/epub/1400/pg1400.txt"
+      }
+    },
+    {
+      "id": 2600,
+      "title": "War and Peace",
+      "authors": [{ "name": "Tolstoy, Leo" }],
+      "formats": {
+        "image/jpeg": "https://www.gutenberg.org/cache/epub/2600/pg2600.cover.medium.jpg",
+        "text/plain; charset=utf-8": "https://www.gutenberg.org/cache/epub/2600/pg2600.txt"
+      }
+    },
+    {
+      "id": 2542,
+      "title": "A Doll's House",
+      "authors": [{ "name": "Ibsen, Henrik" }],
+      "formats": {
+        "image/jpeg": "https://www.gutenberg.org/cache/epub/2542/pg2542.cover.medium.jpg",
+        "text/plain; charset=utf-8": "https://www.gutenberg.org/cache/epub/2542/pg2542.txt"
+      }
+    },
+    {
+      "id": 16,
+      "title": "Peter Pan",
+      "authors": [{ "name": "Barrie, J. M." }],
+      "formats": {
+        "image/jpeg": "https://www.gutenberg.org/cache/epub/16/pg16.cover.medium.jpg",
+        "text/plain; charset=utf-8": "https://www.gutenberg.org/cache/epub/16/pg16.txt"
+      }
+    }
+  ]
+}

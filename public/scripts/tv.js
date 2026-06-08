@@ -1,298 +1,194 @@
-var CHANNELS = {
-  1: { type: "lofi",    label: "CH 1 · LOFI" },
-  2: { type: "explore", label: "CH 2 · WILD" },
-  3: { type: "windy",   label: "CH 3 · WIND" },
-  4: { type: "fire",    label: "CH 4 · FIRE" },
-  5: { type: "stars",   label: "CH 5 · STARS" },
-  6: { type: "off",     label: "CH 6 · OFF" }
-};
+var WINDY_URL = "https://embed.windy.com/embed2.html?lat=-33.87&lon=151.21&zoom=5&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1";
 
-var currentCh = 4;
-var exploredLoaded = false;
-var windyLoaded = false;
-var noiseAnim = null;
-var fireAnim = null;
 var starsAnim = null;
-var lofiAnim = null;
+var windyLoaded = false;
+var MAX_CH = 2;
 
-var lofiAudio   = document.getElementById("lofi-audio");
-var lofiCanvas  = document.getElementById("lofi-canvas");
-var iframeExplore = document.getElementById("iframe-explore");
-var iframeWindy = document.getElementById("iframe-windy");
-var fireCanvas  = document.getElementById("fire-canvas");
-var starsCanvas = document.getElementById("stars-canvas");
-var noiseCanvas = document.getElementById("noise-canvas");
-var noiseLabel  = document.getElementById("noise-label");
-var indicator   = document.getElementById("ch-indicator");
-var flash       = document.getElementById("tv-flash");
+// ── Stars: geolocation constellation chart ────────────────────────────────────
+// [raDeg, decDeg, mag, name, showLabel]
+var STARS = [
+  [101.29, -16.72, -1.46, "Sirius",     1],
+  [95.99,  -52.70, -0.72, "Canopus",    1],
+  [219.92, -60.83, -0.27, "α Cen",      1],
+  [213.92,  19.18, -0.05, "Arcturus",   0],
+  [78.63,   -8.20,  0.12, "Rigel",      1],
+  [88.79,    7.41,  0.50, "Betelgeuse", 1],
+  [24.43,  -57.24,  0.46, "Achernar",   1],
+  [210.96, -60.37,  0.60, "β Cen",      0],
+  [247.35, -26.43,  0.96, "Antares",    1],
+  [201.30, -11.16,  0.97, "Spica",      1],
+  [191.93, -59.69,  1.25, "Mimosa",     0],
+  [186.65, -63.10,  1.40, "Acrux",      1],
+  [187.79, -57.11,  1.63, "Gacrux",     0],
+  [183.79, -58.75,  2.79, "δ Cru",      0],
+  [263.40, -37.10,  1.62, "Shaula",     1],
+  [241.36, -19.81,  2.50, "Graffias",   0],
+  [253.08, -38.05,  2.29, "ε Sco",      0],
+  [258.84, -43.00,  2.69, "μ Sco",      0],
+  [81.57,    6.35,  1.64, "Bellatrix",  0],
+  [83.82,   -0.30,  1.69, "Alnilam",    0],
+  [85.19,   -1.94,  1.77, "Alnitak",    0],
+  [86.94,   -9.67,  2.07, "Saiph",      0],
+  [114.83,   5.22,  0.38, "Procyon",    0],
+  [116.33,  28.03,  1.14, "Pollux",     0],
+  [152.09,  11.97,  1.35, "Regulus",    0],
+  [344.41, -29.62,  1.16, "Fomalhaut",  1],
+  [297.70,   8.87,  0.77, "Altair",     0],
+  [279.23,  38.78,  0.03, "Vega",       0],
+  [310.36,  45.28,  1.25, "Deneb",      0],
+];
 
-var LOFI_STREAM = "https://ice1.somafm.com/groovesalad-128-mp3";
-var EXPLORE_URL = "https://explore.org/embed/livecams/african-watering-hole";
-var WINDY_URL   = "https://embed.windy.com/embed2.html?lat=-33.87&lon=151.21&zoom=5&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1";
+// Pairs of STARS indices forming constellation lines
+var CONST_LINES = [
+  [11, 12], [10, 13],                   // Crux: long axis + short axis
+  [2, 7],                               // Centaurus pointers
+  [15, 8], [8, 16], [16, 17], [17, 14],// Scorpius tail
+  [18, 19], [19, 20],                   // Orion belt
+  [4, 19], [5, 18], [4, 21],            // Rigel/Betelgeuse to belt
+];
 
-// ── Flash transition ──
-function showFlash(cb) {
-  flash.classList.add("on");
-  setTimeout(function () { flash.classList.remove("on"); cb(); }, 130);
+var DEG = Math.PI / 180;
+
+function julianDate(d) { return d.getTime() / 86400000 + 2440587.5; }
+function gmstDeg(jd) { return ((280.46061837 + 360.98564736629 * (jd - 2451545.0)) % 360 + 360) % 360; }
+
+function starAltAz(raDeg, decDeg, latDeg, lstDeg) {
+  var ha = ((lstDeg - raDeg) % 360 + 360) % 360;
+  if (ha > 180) ha -= 360;
+  var haR = ha * DEG, decR = decDeg * DEG, latR = latDeg * DEG;
+  var sinAlt = Math.max(-1, Math.min(1, Math.sin(decR)*Math.sin(latR) + Math.cos(decR)*Math.cos(latR)*Math.cos(haR)));
+  var alt = Math.asin(sinAlt);
+  var cosAlt = Math.cos(alt);
+  var cosAz = cosAlt > 0.001 ? (Math.sin(decR) - sinAlt*Math.sin(latR)) / (cosAlt*Math.cos(latR)) : 0;
+  var az = Math.acos(Math.max(-1, Math.min(1, cosAz)));
+  if (Math.sin(haR) > 0) az = 2*Math.PI - az;
+  return { alt: alt/DEG, az: az/DEG };
 }
 
-// ── Helpers ──
+function skyXY(alt, az, W, H) {
+  var r = Math.max(0, (90 - alt) / 90);
+  var azR = az * DEG;
+  return { x: W/2 + r*W*0.44*Math.sin(azR), y: H/2 - r*H*0.44*Math.cos(azR) };
+}
+
+var skyLat = -33.87, skyLon = 151.21, skyLocKnown = false;
+
+function showStars() {
+  hideAll();
+  var c = document.getElementById("stars-canvas");
+  c.style.display = "block";
+  c.width  = c.parentElement.clientWidth;
+  c.height = c.parentElement.clientHeight;
+  function start() { starsAnim = requestAnimationFrame(tickStars); }
+  if (navigator.geolocation && !skyLocKnown) {
+    navigator.geolocation.getCurrentPosition(
+      function(pos) { skyLat = pos.coords.latitude; skyLon = pos.coords.longitude; skyLocKnown = true; start(); },
+      start
+    );
+  } else { start(); }
+}
+
+var lastStarDraw = -99999;
+function tickStars(ts) {
+  if (ts - lastStarDraw > 10000) { lastStarDraw = ts; drawSky(); }
+  starsAnim = requestAnimationFrame(tickStars);
+}
+
+function drawSky() {
+  var c = document.getElementById("stars-canvas");
+  if (!c) return;
+  var ctx = c.getContext("2d"), W = c.width, H = c.height;
+  var now = new Date();
+  var lst = (gmstDeg(julianDate(now)) + skyLon + 360) % 360;
+
+  ctx.fillStyle = "#040710"; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "rgba(50,70,120,0.25)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(W/2, H/2, Math.min(W,H)*0.44, 0, 2*Math.PI); ctx.stroke();
+
+  ctx.fillStyle = "rgba(80,110,170,0.45)"; ctx.font = "9px monospace";
+  var rr = Math.min(W,H)*0.46;
+  ctx.textAlign = "center";
+  ctx.fillText("N", W/2, H/2-rr+11); ctx.fillText("S", W/2, H/2+rr-1);
+  ctx.fillText("E", W/2+rr-5, H/2+4); ctx.fillText("W", W/2-rr+5, H/2+4);
+
+  var proj = STARS.map(function(s) {
+    var aa = starAltAz(s[0], s[1], skyLat, lst);
+    var p  = skyXY(aa.alt, aa.az, W, H);
+    return { x: p.x, y: p.y, alt: aa.alt, star: s };
+  });
+
+  for (var l = 0; l < CONST_LINES.length; l++) {
+    var a = proj[CONST_LINES[l][0]], b = proj[CONST_LINES[l][1]];
+    if (a.alt < -2 || b.alt < -2) continue;
+    ctx.strokeStyle = "rgba(70,110,210," + (Math.max(0, Math.min(a.alt, b.alt)/60)*0.5) + ")";
+    ctx.lineWidth = 0.7;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+
+  for (var i = 0; i < proj.length; i++) {
+    var p = proj[i], s = p.star;
+    if (p.alt < -3) continue;
+    var bri = Math.min(1, (p.alt+3)/15);
+    var sz  = Math.max(0.5, 3.2 - s[2]*0.7);
+    if (sz > 1.5) {
+      var grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, sz*2);
+      grad.addColorStop(0, "rgba(200,210,255,"+(bri*0.8)+")");
+      grad.addColorStop(1, "rgba(200,210,255,0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(p.x, p.y, sz*2, 0, 2*Math.PI); ctx.fill();
+    }
+    ctx.fillStyle = "rgba(210,220,255,"+(0.3+bri*0.7)+")";
+    ctx.beginPath(); ctx.arc(p.x, p.y, sz, 0, 2*Math.PI); ctx.fill();
+    if (s[4] && p.alt > 8) {
+      ctx.fillStyle = "rgba(140,170,220,"+(bri*0.65)+")";
+      ctx.font = "8px monospace"; ctx.textAlign = "left";
+      ctx.fillText(s[3], p.x+sz+2, p.y+3);
+    }
+  }
+
+  ctx.fillStyle = "rgba(60,80,130,0.65)"; ctx.font = "8px monospace";
+  ctx.textAlign = "left";
+  ctx.fillText((skyLocKnown?"📍 ":"🌐 ")+skyLat.toFixed(1)+"°, "+skyLon.toFixed(1)+"°", 8, H-7);
+  ctx.textAlign = "right";
+  ctx.fillText("UTC "+now.getUTCHours().toString().padStart(2,"0")+":"+now.getUTCMinutes().toString().padStart(2,"0"), W-8, H-7);
+}
+
+// ── Channel switching ─────────────────────────────────────────────────────────
 function hideAll() {
-  lofiCanvas.style.display    = "none";
-  iframeExplore.style.display = "none";
-  iframeWindy.style.display   = "none";
-  fireCanvas.style.display    = "none";
-  starsCanvas.style.display   = "none";
-  noiseCanvas.style.display   = "none";
-  noiseLabel.style.display    = "none";
-  stopLofi(); stopFire(); stopStars(); stopNoise();
+  document.getElementById("iframe-windy").style.display = "none";
+  document.getElementById("stars-canvas").style.display = "none";
+  if (starsAnim) { cancelAnimationFrame(starsAnim); starsAnim = null; }
 }
 
-// ── Switch ──
+function showWindy() {
+  hideAll();
+  var f = document.getElementById("iframe-windy");
+  if (!windyLoaded) { f.src = WINDY_URL; windyLoaded = true; }
+  f.style.display = "block";
+}
+
+var currentCh = 0;
 function switchTo(ch) {
-  if (ch === currentCh) return;
-  var prev = currentCh;
-  currentCh = ch;
-  document.querySelectorAll(".ch-btn").forEach(function (b) {
+  document.querySelectorAll(".ch-btn").forEach(function(b) {
     b.classList.toggle("active", Number(b.dataset.ch) === ch);
   });
-  showFlash(function () { applyChannel(ch); });
+  if (ch === currentCh) return;
+  currentCh = ch;
+  if (ch === 1) showWindy();
+  else if (ch === 2) showStars();
 }
 
-function applyChannel(ch) {
-  var conf = CHANNELS[ch];
-  indicator.textContent = conf.label;
-  hideAll();
-
-  if (conf.type === "lofi") {
-    startLofi();
-  } else if (conf.type === "explore") {
-    iframeExplore.style.display = "block";
-    if (!exploredLoaded) { iframeExplore.src = EXPLORE_URL; exploredLoaded = true; }
-  } else if (conf.type === "windy") {
-    iframeWindy.style.display = "block";
-    if (!windyLoaded) { iframeWindy.src = WINDY_URL; windyLoaded = true; }
-  } else if (conf.type === "fire") {
-    startFire();
-  } else if (conf.type === "stars") {
-    startStars();
-  } else if (conf.type === "off") {
-    startNoise();
-  }
-}
-
-// ── Lofi visualiser ──
-var BAR_COUNT = 28;
-var barH = new Float32Array(BAR_COUNT);
-var barT = new Float32Array(BAR_COUNT);
-var barTick = 0;
-
-function randomiseTargets() {
-  var mid = BAR_COUNT / 2;
-  for (var i = 0; i < BAR_COUNT; i++) {
-    var bell = 1 - Math.abs(i - mid) / mid * 0.35;
-    barT[i] = (0.08 + Math.random() * 0.82) * bell;
-  }
-}
-
-var lofiStarted = false;
-
-function startLofi() {
-  lofiCanvas.style.display = "block";
-  var p = lofiCanvas.parentElement;
-  lofiCanvas.width = p.clientWidth;
-  lofiCanvas.height = p.clientHeight;
-  if (!lofiStarted) {
-    lofiStarted = true;
-    lofiAudio.src = LOFI_STREAM;
-  }
-  lofiAudio.play().catch(function () {});
-  randomiseTargets();
-  lofiAnim = requestAnimationFrame(tickLofi);
-}
-
-function tickLofi() {
-  var ctx = lofiCanvas.getContext("2d");
-  var W = lofiCanvas.width, H = lofiCanvas.height;
-  ctx.fillStyle = "#0d0d0a";
-  ctx.fillRect(0, 0, W, H);
-
-  barTick++;
-  if (barTick % 22 === 0) randomiseTargets();
-
-  var bw = W / BAR_COUNT;
-  var maxH = H * 0.52;
-  var baseY = H * 0.6;
-
-  for (var i = 0; i < BAR_COUNT; i++) {
-    barH[i] += (barT[i] - barH[i]) * 0.07;
-    var bh = barH[i] * maxH;
-    var x = i * bw + bw * 0.18;
-    var w = bw * 0.64;
-    var grad = ctx.createLinearGradient(x, baseY - bh, x, baseY);
-    grad.addColorStop(0, "rgba(100,190,130,0.95)");
-    grad.addColorStop(0.6, "rgba(60,140,90,0.6)");
-    grad.addColorStop(1, "rgba(30,80,50,0.3)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(x, baseY - bh, w, bh);
-  }
-
-  ctx.fillStyle = "rgba(100,190,130,0.35)";
-  ctx.font = "bold 11px monospace";
-  ctx.textAlign = "center";
-  ctx.fillText("GROOVE SALAD · SOMAFM", W / 2, H * 0.78);
-  ctx.font = "9px monospace";
-  ctx.fillStyle = "rgba(100,190,130,0.18)";
-  ctx.fillText("ambient / electronica", W / 2, H * 0.84);
-
-  lofiAnim = requestAnimationFrame(tickLofi);
-}
-
-function stopLofi() {
-  if (lofiAnim) { cancelAnimationFrame(lofiAnim); lofiAnim = null; }
-  lofiAudio.pause();
-  lofiAudio.src = "";
-}
-
-// ── Fire (Doom algorithm) ──
-var FIRE_PAL = [];
-var fireBuf, fireW, fireH;
-(function initPalette() {
-  for (var i = 0; i < 256; i++) {
-    var r, g, b;
-    if (i < 85)       { r = i * 3;        g = 0;            b = 0; }
-    else if (i < 170) { r = 255;          g = (i - 85) * 3; b = 0; }
-    else              { r = 255;          g = 255;           b = (i - 170) * 3; }
-    FIRE_PAL[i] = [r, g, b];
-  }
-})();
-
-function startFire() {
-  fireCanvas.style.display = "block";
-  var p = fireCanvas.parentElement;
-  var W = p.clientWidth, H = p.clientHeight;
-  fireCanvas.width = W; fireCanvas.height = H;
-  fireW = Math.ceil(W / 2); fireH = Math.ceil(H / 2);
-  fireBuf = new Uint8Array(fireW * fireH);
-  for (var x = 0; x < fireW; x++) fireBuf[(fireH - 1) * fireW + x] = 255;
-  fireAnim = requestAnimationFrame(tickFire);
-}
-
-function tickFire() {
-  var ctx = fireCanvas.getContext("2d");
-  for (var y = 0; y < fireH - 1; y++) {
-    for (var x = 0; x < fireW; x++) {
-      var below = fireBuf[(y + 1) * fireW + x];
-      var rand = (Math.random() * 3) | 0;
-      var nx = x - rand + 1;
-      if (nx < 0) nx = 0;
-      if (nx >= fireW) nx = fireW - 1;
-      fireBuf[y * fireW + nx] = Math.max(0, below - (rand & 1));
-    }
-  }
-  var img = ctx.createImageData(fireW, fireH);
-  for (var i = 0; i < fireBuf.length; i++) {
-    var c = FIRE_PAL[fireBuf[i]];
-    var p = i * 4;
-    img.data[p] = c[0]; img.data[p+1] = c[1]; img.data[p+2] = c[2]; img.data[p+3] = 255;
-  }
-  var off = document.createElement("canvas");
-  off.width = fireW; off.height = fireH;
-  off.getContext("2d").putImageData(img, 0, 0);
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(off, 0, 0, fireCanvas.width, fireCanvas.height);
-  fireAnim = requestAnimationFrame(tickFire);
-}
-
-function stopFire() {
-  if (fireAnim) { cancelAnimationFrame(fireAnim); fireAnim = null; }
-  fireCanvas.style.display = "none";
-}
-
-// ── Starfield ──
-var starPool = [];
-var STAR_COUNT = 260;
-
-function newStar(scatter) {
-  var W = starsCanvas.width, H = starsCanvas.height;
-  return {
-    x: Math.random() * W - W / 2,
-    y: Math.random() * H - H / 2,
-    z: scatter ? Math.random() * W : W
-  };
-}
-
-function startStars() {
-  starsCanvas.style.display = "block";
-  var p = starsCanvas.parentElement;
-  starsCanvas.width = p.clientWidth; starsCanvas.height = p.clientHeight;
-  starPool = [];
-  for (var i = 0; i < STAR_COUNT; i++) starPool.push(newStar(true));
-  starsAnim = requestAnimationFrame(tickStars);
-}
-
-function tickStars() {
-  var ctx = starsCanvas.getContext("2d");
-  var W = starsCanvas.width, H = starsCanvas.height;
-  var cx = W / 2, cy = H / 2;
-  ctx.fillStyle = "#0d0d0a";
-  ctx.fillRect(0, 0, W, H);
-  for (var i = 0; i < starPool.length; i++) {
-    var s = starPool[i];
-    s.z -= 7;
-    if (s.z <= 0) { starPool[i] = newStar(false); continue; }
-    var px = (s.x / s.z) * W + cx;
-    var py = (s.y / s.z) * H + cy;
-    if (px < 0 || px > W || py < 0 || py > H) { starPool[i] = newStar(false); continue; }
-    var sz = Math.max(0.5, (1 - s.z / W) * 2.8);
-    var br = Math.floor((1 - s.z / W) * 255);
-    ctx.fillStyle = "rgb(" + br + "," + br + "," + Math.min(255, br + 25) + ")";
-    ctx.beginPath();
-    ctx.arc(px, py, sz, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  starsAnim = requestAnimationFrame(tickStars);
-}
-
-function stopStars() {
-  if (starsAnim) { cancelAnimationFrame(starsAnim); starsAnim = null; }
-  starsCanvas.style.display = "none";
-}
-
-// ── Noise (OFF) ──
-function startNoise() {
-  noiseCanvas.style.display = "block";
-  noiseLabel.style.display = "block";
-  var ctx = noiseCanvas.getContext("2d");
-  var p = noiseCanvas.parentElement;
-  var W = p.clientWidth, H = p.clientHeight;
-  noiseCanvas.width = W; noiseCanvas.height = H;
-  var cols = Math.ceil(W / 3), rows = Math.ceil(H / 3);
-  function tick() {
-    var img = ctx.createImageData(cols, rows);
-    for (var i = 0; i < img.data.length; i += 4) {
-      var v = Math.random() * 200 | 0;
-      img.data[i] = v; img.data[i+1] = v; img.data[i+2] = v; img.data[i+3] = 255;
-    }
-    var off = document.createElement("canvas");
-    off.width = cols; off.height = rows;
-    off.getContext("2d").putImageData(img, 0, 0);
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(off, 0, 0, W, H);
-    noiseAnim = requestAnimationFrame(tick);
-  }
-  tick();
-}
-
-function stopNoise() {
-  if (noiseAnim) { cancelAnimationFrame(noiseAnim); noiseAnim = null; }
-  noiseCanvas.style.display = "none";
-  noiseLabel.style.display = "none";
-}
-
-// ── Init ──
-document.querySelectorAll(".ch-btn").forEach(function (btn) {
-  btn.addEventListener("click", function () { switchTo(Number(btn.dataset.ch)); });
+document.querySelectorAll(".ch-btn").forEach(function(b) {
+  b.addEventListener("click", function() { switchTo(Number(b.dataset.ch)); });
 });
 
-applyChannel(4);
+var prevBtn = document.getElementById("ch-prev");
+var nextBtn = document.getElementById("ch-next");
+if (prevBtn) prevBtn.addEventListener("click", function() {
+  switchTo(currentCh <= 1 ? MAX_CH : currentCh - 1);
+});
+if (nextBtn) nextBtn.addEventListener("click", function() {
+  switchTo(currentCh >= MAX_CH ? 1 : currentCh + 1);
+});
+
+setTimeout(function() { switchTo(1); }, 50);

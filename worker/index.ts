@@ -9,6 +9,61 @@ interface Env {
 
 const TILE_RE = /^\/api\/poi\/tiles\/(\d+)\/(\d+)\/(\d+)$/;
 const UA = "vishvaddi.com field-survival tool (personal, low volume)";
+const MAX_FEED_BYTES = 2_000_000;
+
+function isBlockedHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  if (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal") ||
+    host.includes(":")
+  ) {
+    return true;
+  }
+  const parts = host.split(".");
+  if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {
+    const nums = parts.map(Number);
+    if (nums.some((n) => n < 0 || n > 255)) return true;
+    const [a, b] = nums;
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      a >= 224
+    );
+  }
+  return false;
+}
+
+function publicHttpsUrl(raw: string): URL | null {
+  try {
+    const target = new URL(raw);
+    if (target.protocol !== "https:" || target.username || target.password) return null;
+    if (target.port && target.port !== "443") return null;
+    if (isBlockedHost(target.hostname)) return null;
+    return target;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchPublic(target: URL, init: RequestInit): Promise<Response> {
+  let current = target;
+  for (let i = 0; i < 4; i++) {
+    const upstream = await fetch(current, { ...init, redirect: "manual" });
+    const location = upstream.headers.get("Location");
+    if (![301, 302, 303, 307, 308].includes(upstream.status) || !location) return upstream;
+    const next = publicHttpsUrl(new URL(location, current).toString());
+    if (!next) throw new Error("blocked redirect");
+    current = next;
+  }
+  throw new Error("too many redirects");
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -79,6 +134,40 @@ export default {
           headers: {
             "Content-Type": "text/plain; charset=utf-8",
             "Cache-Control": "public, max-age=86400",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      } catch {
+        return new Response("fetch failed", { status: 504 });
+      }
+    }
+
+    // RSS/Atom proxy for the Feeds page. It is intentionally HTTPS-only with
+    // private-host blocking and a small body cap so it cannot become a useful
+    // general open proxy.
+    if (path === "/api/feed" && request.method === "GET") {
+      const target = publicHttpsUrl(url.searchParams.get("url") || "");
+      if (!target) return new Response("bad url", { status: 400 });
+      try {
+        const upstream = await fetchPublic(target, {
+          headers: {
+            "User-Agent": UA,
+            "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, text/plain;q=0.8",
+          },
+          signal: AbortSignal.timeout(15000),
+          cf: { cacheTtl: 600, cacheEverything: true },
+        } as RequestInit);
+        if (!upstream.ok) return new Response("upstream error", { status: 502 });
+        const len = Number(upstream.headers.get("Content-Length") || "0");
+        if (len > MAX_FEED_BYTES) return new Response("feed too large", { status: 413 });
+        const contentType = upstream.headers.get("Content-Type") || "text/xml; charset=utf-8";
+        const body = await upstream.arrayBuffer();
+        if (body.byteLength > MAX_FEED_BYTES) return new Response("feed too large", { status: 413 });
+        return new Response(body, {
+          status: 200,
+          headers: {
+            "Content-Type": contentType,
+            "Cache-Control": "public, max-age=600",
             "Access-Control-Allow-Origin": "*",
           },
         });

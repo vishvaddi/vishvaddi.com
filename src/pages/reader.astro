@@ -3,7 +3,7 @@ import Base from "../layouts/Base.astro";
 ---
 
 <Base title="Reader" description="Read classic books from Project Gutenberg.">
-  <style>
+  <style is:global>
     .reader-wrap { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem; }
 
     .search-bar {
@@ -43,14 +43,30 @@ import Base from "../layouts/Base.astro";
     #reader-ui { display: none; }
 
     .reader-header {
-      display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem;
+      display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;
     }
     .reader-header button {
       background: none; border: 1px solid var(--rule); color: var(--fg);
       padding: 0.3rem 0.6rem; border-radius: 4px; cursor: pointer;
       font-family: var(--font-sans); font-size: 0.85rem;
     }
-    .reader-header h2 { flex: 1; font-size: 1rem; color: var(--muted); font-weight: 400; margin: 0; }
+    .reader-header h2 { flex: 1; font-size: 1rem; color: var(--muted); font-weight: 400; margin: 0; min-width: 0; }
+
+    /* Settings panel */
+    .reader-settings {
+      background: var(--code-bg); border: 1px solid var(--rule); border-radius: 6px;
+      padding: 0.75rem 1rem; margin-bottom: 1rem;
+      display: none; gap: 1.5rem; align-items: center; flex-wrap: wrap;
+    }
+    .reader-settings.open { display: flex; }
+    .rs-group { display: flex; align-items: center; gap: 0.5rem; }
+    .rs-group label { font-size: 0.8rem; color: var(--muted); font-family: var(--font-sans); white-space: nowrap; }
+    .rs-group input[type=range] { width: 90px; accent-color: var(--fg); }
+    .rs-group span { font-size: 0.8rem; color: var(--fg); font-family: monospace; min-width: 2.5rem; }
+    .rs-group select {
+      font-size: 0.8rem; font-family: var(--font-sans); background: var(--bg);
+      color: var(--fg); border: 1px solid var(--rule); border-radius: 3px; padding: 2px 4px;
+    }
 
     /* Spread */
     .spread-wrap {
@@ -60,7 +76,7 @@ import Base from "../layouts/Base.astro";
       display: grid; grid-template-columns: 1fr 1fr;
       background: #faf7f0; border-radius: 3px;
       box-shadow: 0 2px 20px rgba(0,0,0,0.18);
-      min-height: 520px; position: relative;
+      height: clamp(500px, 72vh, 840px); position: relative;
     }
     /* Spine shadow */
     .spread::after {
@@ -73,7 +89,7 @@ import Base from "../layouts/Base.astro";
     .page-panel {
       padding: 2.5rem 2rem; font-family: var(--font-serif); font-size: 0.95rem;
       line-height: 1.75; color: #3a2e20; overflow: hidden;
-      position: relative; min-height: 520px;
+      position: relative;
     }
     .page-panel.left { border-radius: 3px 0 0 3px; }
     .page-panel.right { border-radius: 0 3px 3px 0; }
@@ -163,7 +179,7 @@ import Base from "../layouts/Base.astro";
   <div class="reader-wrap">
     <div id="library-ui">
       <div class="search-bar">
-        <input type="text" id="search-input" placeholder="Search Gutenberg…" />
+        <input type="text" id="search-input" placeholder="Search this library…" />
         <button id="search-btn">Search</button>
       </div>
       <div id="status" class="loading">Loading classics…</div>
@@ -174,6 +190,36 @@ import Base from "../layouts/Base.astro";
       <div class="reader-header">
         <button id="back-btn">← Library</button>
         <h2 id="book-title-label"></h2>
+        <button id="settings-btn" title="Display settings">Aa</button>
+      </div>
+
+      <div class="reader-settings" id="reader-settings">
+        <div class="rs-group">
+          <label for="rs-size">Size</label>
+          <input type="range" id="rs-size" min="80" max="140" step="5" value="100">
+          <span id="rs-size-val">100%</span>
+        </div>
+        <div class="rs-group">
+          <label for="rs-lh">Spacing</label>
+          <input type="range" id="rs-lh" min="140" max="220" step="10" value="175">
+          <span id="rs-lh-val">1.75</span>
+        </div>
+        <div class="rs-group">
+          <label for="rs-font">Font</label>
+          <select id="rs-font">
+            <option value="Georgia,serif">Georgia</option>
+            <option value="'Palatino Linotype',serif">Palatino</option>
+            <option value="system-ui,sans-serif">Sans</option>
+          </select>
+        </div>
+        <div class="rs-group">
+          <label for="rs-theme">Theme</label>
+          <select id="rs-theme">
+            <option value="#faf7f0,#3a2e20">Parchment</option>
+            <option value="#fff,#1a1a1a">White</option>
+            <option value="#1c1c14,#d4c9a8">Dark</option>
+          </select>
+        </div>
       </div>
 
       <div class="spread-wrap">
