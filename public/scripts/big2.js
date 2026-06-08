@@ -197,6 +197,27 @@
   $("b2-sort").addEventListener("click", function () { sortHand(hands[0]); selected = []; render(); });
   $("b2-new").addEventListener("click", deal);
 
+  var hintBtn = $("b2-hint");
+  if (hintBtn) hintBtn.addEventListener("click", function () {
+    if (current !== 0 || over) return;
+    var cand = combos(hands[0]).map(function (set) { return { set: set, combo: classify(set) }; });
+    var pick = null;
+    if (!pile) {
+      var pool = isFirstTrickEver() ? cand.filter(function (x) { return hasStartCard(x.set); }) : cand;
+      pool = pool.filter(function (x) { return x.combo.count === 1; });
+      pool.sort(function (a, b) { return a.combo.key - b.combo.key; });
+      pick = pool[0] || null;
+    } else {
+      var bt = cand.filter(function (x) { return beats(x.combo, pile.combo); });
+      bt.sort(function (a, b) { return a.combo.cat - b.combo.cat || a.combo.key - b.combo.key; });
+      pick = bt[0] || null;
+    }
+    if (!pick) { msg("No legal move — you'll have to pass."); selected = []; render(); return; }
+    selected = pick.set.map(function (c) { return hands[0].indexOf(c); });
+    render();
+    msg("Hint: a valid play is selected — press Play.");
+  });
+
   function deal() {
     var d = newDeck();
     hands = [[], [], [], []];

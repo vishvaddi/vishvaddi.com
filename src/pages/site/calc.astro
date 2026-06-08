@@ -31,6 +31,50 @@ import "../../styles/site.css";
       <button type="button" id="calc-clear" class="btn btn-ghost" title="Clear history and variables">Clear</button>
     </div>
 
+    <div class="calc-pad" id="calc-pad">
+      <button data-ins="sin(">sin</button>
+      <button data-ins="cos(">cos</button>
+      <button data-ins="tan(">tan</button>
+      <button data-ins="pi" class="k-fn">π</button>
+      <button data-ins="e" class="k-fn">e</button>
+
+      <button data-ins="asin(">asin</button>
+      <button data-ins="acos(">acos</button>
+      <button data-ins="atan(">atan</button>
+      <button data-ins="^" class="k-op">x^y</button>
+      <button data-ins="sqrt(">√</button>
+
+      <button data-ins="ln(">ln</button>
+      <button data-ins="log(">log</button>
+      <button data-ins="(">(</button>
+      <button data-ins=")">)</button>
+      <button data-act="back" class="k-fn">⌫</button>
+
+      <button data-ins="7" class="k-num">7</button>
+      <button data-ins="8" class="k-num">8</button>
+      <button data-ins="9" class="k-num">9</button>
+      <button data-ins="/" class="k-op">÷</button>
+      <button data-ins="%" class="k-op">%</button>
+
+      <button data-ins="4" class="k-num">4</button>
+      <button data-ins="5" class="k-num">5</button>
+      <button data-ins="6" class="k-num">6</button>
+      <button data-ins="*" class="k-op">×</button>
+      <button data-ins="!" class="k-op">!</button>
+
+      <button data-ins="1" class="k-num">1</button>
+      <button data-ins="2" class="k-num">2</button>
+      <button data-ins="3" class="k-num">3</button>
+      <button data-ins="-" class="k-op">−</button>
+      <button data-ins="ans" class="k-fn">ans</button>
+
+      <button data-ins="0" class="k-num">0</button>
+      <button data-ins="." class="k-num">.</button>
+      <button data-act="clear" class="k-fn">C</button>
+      <button data-ins="+" class="k-op">+</button>
+      <button data-act="eq" class="k-eq">=</button>
+    </div>
+
     <div id="calc-vars" class="calc-vars" hidden></div>
     <div id="calc-history" class="calc-history" aria-live="polite"></div>
 
@@ -69,7 +113,15 @@ import "../../styles/site.css";
       background: none; border: none; cursor: pointer; text-align: left; padding: 0;
     }
     .calc-expr:hover { color: var(--fg); }
-    .calc-row .calc-out { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 600; white-space: nowrap; }
+    .calc-row .calc-out { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 600; white-space: nowrap; background: none; border: none; cursor: pointer; color: var(--fg); padding: 0; }
+    .calc-row .calc-out:hover { color: var(--accent-dark); }
+    .calc-pad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0.75rem 0 1rem; max-width: 440px; }
+    .calc-pad button { padding: 0.6rem 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--code-bg); color: var(--fg); font-family: var(--font-mono); font-size: 0.95rem; cursor: pointer; transition: background 0.12s var(--ease, ease), transform 0.05s; }
+    .calc-pad button:hover { background: color-mix(in srgb, var(--accent) 14%, var(--code-bg)); }
+    .calc-pad button:active { transform: translateY(1px); }
+    .calc-pad .k-num { font-weight: 700; }
+    .calc-pad .k-op { color: var(--accent-dark); }
+    .calc-pad .k-eq { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
     .calc-row.err .calc-out { color: var(--accent-dark); font-weight: 400; font-size: 0.85rem; }
     .calc-ref { margin-top: 1.5rem; font-size: 0.85rem; color: var(--muted); }
     .calc-ref summary { cursor: pointer; color: var(--fg); }

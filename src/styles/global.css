@@ -135,6 +135,31 @@ a, button, summary, .theme-toggle, input, select,
   .reveal { opacity: 1; transform: none; }
 }
 
+/* ── Standby overlay (global, injected by standby.js) ───────────────────────── */
+#ambient {
+  display: none; position: fixed; inset: 0; z-index: 9999; background: #0d0d0a;
+  flex-direction: column; align-items: center; justify-content: center; cursor: pointer;
+}
+#ambient.active { display: flex; }
+.amb-clock {
+  font-family: var(--font-mono); font-size: clamp(4rem, 12vw, 9rem);
+  color: #e8e2d4; font-weight: 300; letter-spacing: -0.02em; line-height: 1;
+  text-shadow: 0 0 40px rgba(232,226,212,0.15);
+}
+.amb-date { font-family: var(--font-mono); font-size: clamp(0.9rem, 2vw, 1.2rem); color: #5a5650; margin-top: 0.6rem; letter-spacing: 0.08em; }
+.amb-weather { margin-top: 2rem; font-family: var(--font-mono); font-size: clamp(0.75rem, 1.5vw, 0.95rem); color: #5a5650; display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; }
+.amb-np { margin-top: 1.5rem; display: flex; align-items: center; gap: 0.75rem; font-family: var(--font-mono); font-size: clamp(0.7rem, 1.4vw, 0.85rem); color: #5a5650; max-width: 500px; }
+.amb-np-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.amb-lfm { margin-top: 1.75rem; padding: 0.35rem 0.6rem; border: 1px solid #2a2824; background: #141310; color: #8a857c; font-family: var(--font-mono); font-size: 0.75rem; border-radius: 4px; width: 200px; text-align: center; }
+.eq { display: flex; align-items: flex-end; gap: 2px; height: 14px; }
+.eq-bar { width: 3px; background: #5a5650; border-radius: 1px; animation: eq-bounce 0.6s ease-in-out infinite alternate; }
+.eq-bar:nth-child(1) { animation-duration: 0.5s; }
+.eq-bar:nth-child(2) { animation-duration: 0.7s; animation-delay: 0.1s; }
+.eq-bar:nth-child(3) { animation-duration: 0.45s; animation-delay: 0.2s; }
+.eq.paused .eq-bar { animation-play-state: paused; height: 4px; }
+@keyframes eq-bounce { from { height: 3px; } to { height: 14px; } }
+#ambient .hint { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); font-family: var(--font-mono); font-size: 0.65rem; color: #3a3834; pointer-events: none; }
+
 p { margin: 1rem 0; }
 
 ul { list-style: disc; padding-left: 1.25rem; }

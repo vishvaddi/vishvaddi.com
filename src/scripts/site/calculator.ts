@@ -212,13 +212,33 @@ export function initCalculator() {
     e.type = "button";
     e.className = "calc-expr";
     e.textContent = expr;
-    e.title = "Click to edit again";
+    e.title = "Click to reuse this expression";
     e.addEventListener("click", () => { input.value = expr; input.focus(); });
-    const r = document.createElement("div");
+    const r = document.createElement("button");
+    r.type = "button";
     r.className = "calc-out";
     r.textContent = out;
+    if (ok) {
+      r.title = "Click to copy result";
+      r.addEventListener("click", () => {
+        const val = out.replace(/^.*=\s*/, "");
+        if (navigator.clipboard) navigator.clipboard.writeText(val).catch(() => {});
+        const prev = r.textContent;
+        r.textContent = "copied ✓";
+        setTimeout(() => { r.textContent = prev; }, 800);
+      });
+    }
     row.append(e, r);
     hist.prepend(row);
+  };
+
+  const insertAtCursor = (text: string) => {
+    const s = input.selectionStart ?? input.value.length;
+    const e = input.selectionEnd ?? input.value.length;
+    input.value = input.value.slice(0, s) + text + input.value.slice(e);
+    const pos = s + text.length;
+    input.focus();
+    input.setSelectionRange(pos, pos);
   };
 
   const run = () => {
@@ -262,6 +282,19 @@ export function initCalculator() {
     recallIdx = -1;
     renderVars();
     input.focus();
+  });
+
+  // Physical keypad.
+  const pad = document.getElementById("calc-pad");
+  pad?.addEventListener("click", (ev) => {
+    const t = ev.target as HTMLElement;
+    if (t.tagName !== "BUTTON") return;
+    const act = t.getAttribute("data-act");
+    const ins = t.getAttribute("data-ins");
+    if (act === "eq") { run(); return; }
+    if (act === "clear") { input.value = ""; input.focus(); return; }
+    if (act === "back") { input.value = input.value.slice(0, -1); input.focus(); return; }
+    if (ins !== null) insertAtCursor(ins);
   });
 
   input.focus();

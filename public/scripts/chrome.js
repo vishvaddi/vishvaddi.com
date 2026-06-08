@@ -57,12 +57,4 @@
       if (e.key === "Escape" && more.open) more.open = false;
     });
   }
-
-  // Alt+S → enter standby from any page
-  document.addEventListener("keydown", function (e) {
-    if (e.altKey && e.key === "s" && location.pathname !== "/ambient") {
-      e.preventDefault();
-      location.href = "/ambient?auto=1";
-    }
-  });
 })();

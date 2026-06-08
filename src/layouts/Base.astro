@@ -11,7 +11,7 @@ interface Props {
 
 const {
   title = "Vish Vaddi",
-  description = "Vish Vaddi — senior estimator, builder, writer.",
+  description = "Vish Vaddi — estimator, builder, writer.",
   ogImage = "/og/index.png",
   updatedDate,
   siteNav = false,
@@ -50,7 +50,6 @@ const navMore: [string, string][] = [
   ["/radio", "Radio"],
   ["/reader", "Reader"],
   ["/feeds", "Feeds"],
-  ["/ambient", "Standby"],
   ["/music", "Music"],
   ["/movies", "Movies"],
   ["/books", "Books"],
@@ -119,6 +118,13 @@ const updatedFmt = updatedDate
         <button
           type="button"
           class="theme-toggle"
+          id="standby-toggle"
+          aria-label="Standby mode"
+          title="Standby (Alt+S)"
+        >☾</button>
+        <button
+          type="button"
+          class="theme-toggle"
           id="theme-toggle"
           aria-label="Toggle dark mode"
         >◐</button>
@@ -157,5 +163,6 @@ const updatedFmt = updatedDate
     </footer>
     <script src="/scripts/chrome.js" defer></script>
     <script src="/scripts/reveal.js" defer></script>
+    <script src="/scripts/standby.js" defer></script>
   </body>
 </html>
