@@ -1,0 +1,122 @@
+---
+import Base from "../../layouts/Base.astro";
+
+// Affiliate-ready: when your Amazon Associates AU ID is approved, set this tag
+// and every link below carries it automatically. Empty = plain (non-affiliate) links.
+const AFFILIATE_TAG = "";
+const az = (q: string) =>
+  `https://www.amazon.com.au/s?k=${encodeURIComponent(q)}` +
+  (AFFILIATE_TAG ? `&tag=${AFFILIATE_TAG}` : "");
+
+type Item = { name: string; why: string; q: string };
+const groups: { c: string; title: string; items: Item[] }[] = [
+  {
+    c: "Cutting",
+    title: "Cutting tools",
+    items: [
+      { name: "Fixed-blade knife (full tang)", why: "The one tool you can't improvise. Full tang survives batoning.", q: "morakniv companion fixed blade knife" },
+      { name: "Folding saw", why: "Processes firewood and shelter poles far faster than a knife.", q: "silky folding saw bushcraft" },
+      { name: "Multi-tool", why: "Pliers, drivers, scissors — repairs and fiddly jobs.", q: "leatherman multi tool" },
+    ],
+  },
+  {
+    c: "Combustion",
+    title: "Fire",
+    items: [
+      { name: "Ferro rod", why: "Works wet, lasts thousands of strikes, no fuel to leak.", q: "ferro rod fire starter" },
+      { name: "Stormproof lighter / matches", why: "Redundancy — two ignition methods minimum.", q: "stormproof matches waterproof" },
+      { name: "Tinder (waxed jute / fire paste)", why: "Reliable ignition in damp Australian bush.", q: "waterproof tinder fire starter" },
+    ],
+  },
+  {
+    c: "Cover",
+    title: "Shelter & warmth",
+    items: [
+      { name: "Tarp (3×3 m)", why: "Lighter and more versatile than a tent for a BOB.", q: "3x3 ripstop tarp shelter" },
+      { name: "Emergency bivvy", why: "Reflects body heat; pocket-sized insurance against exposure.", q: "emergency bivvy sack" },
+      { name: "Wide-brim hat + merino layer", why: "AU sun and cold-night swing — cover both.", q: "merino base layer" },
+    ],
+  },
+  {
+    c: "Container",
+    title: "Water",
+    items: [
+      { name: "Single-wall steel bottle", why: "Carries water and lets you boil it to purify.", q: "single wall stainless steel water bottle" },
+      { name: "Squeeze / hollow-fibre filter", why: "Removes protozoa and bacteria from creek water.", q: "sawyer squeeze water filter" },
+      { name: "Purification tablets", why: "Backup for when the filter clogs or freezes.", q: "water purification tablets" },
+    ],
+  },
+  {
+    c: "Cargo",
+    title: "Pack & cordage",
+    items: [
+      { name: "35–45 L pack", why: "Big enough for 72 hrs, small enough to move fast.", q: "35l tactical backpack" },
+      { name: "Paracord (550, 30 m)", why: "Shelter, repairs, gear — endless uses.", q: "550 paracord 30m" },
+      { name: "Gorilla / gaffer tape", why: "Field repairs, blister cover, gear patching.", q: "gorilla tape" },
+    ],
+  },
+  {
+    c: "Care",
+    title: "First aid & light",
+    items: [
+      { name: "Compact first-aid kit + snake bandages", why: "AU essential — pressure-immobilisation for snake bite.", q: "snake bite bandage first aid kit australia" },
+      { name: "Headtorch (+ spare batteries)", why: "Hands-free light; the most-used item after dark.", q: "rechargeable headtorch" },
+      { name: "Personal meds + electrolytes", why: "Heat and exertion drain you fast.", q: "hydration electrolyte tablets" },
+    ],
+  },
+  {
+    c: "Comms",
+    title: "Navigation & comms",
+    items: [
+      { name: "Compass + paper map", why: "No battery, no signal dependency.", q: "baseplate compass" },
+      { name: "Power bank (10000 mAh)", why: "Keeps phone/headtorch alive for days.", q: "10000mah power bank" },
+      { name: "PLB (personal locator beacon)", why: "The one device that gets rescue to remote you.", q: "personal locator beacon plb" },
+    ],
+  },
+];
+---
+
+<Base
+  title="Bug-Out Bag Gear"
+  description="A curated 72-hour bug-out bag list, organised by the Cs of survivability — with the reasoning behind each pick. Australian context."
+>
+  <article>
+    <p class="eyebrow"><a href="/prepping">Prepping</a> / Gear</p>
+    <h1 class="lede">A bug-out bag, <em>chosen on purpose</em></h1>
+    <p>
+      A 72-hour kit organised by the survival "Cs". These are the categories that
+      matter and the reasoning behind each pick — buy once, buy right. Tuned for
+      Australian conditions (sun, heat swings, snakes, remote distances).
+    </p>
+
+    {groups.map((g) => (
+      <section class="reveal gear-group">
+        <h2>{g.title}</h2>
+        <ul class="gear-list">
+          {g.items.map((it) => (
+            <li>
+              <a href={az(it.q)} target="_blank" rel="sponsored nofollow noopener">{it.name} ↗</a>
+              <span class="gear-why">{it.why}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+
+    <p class="gear-disclosure">
+      Links go to Amazon AU search so you can compare current options.
+      {AFFILIATE_TAG
+        ? " As an Amazon Associate I may earn from qualifying purchases, at no cost to you."
+        : " These are plain recommendations — no affiliate tracking yet."}
+    </p>
+  </article>
+
+  <style>
+    .gear-group { margin-top: 2rem; }
+    .gear-list { list-style: none; padding: 0; margin: 0; }
+    .gear-list li { padding: 0.6rem 0; border-bottom: 1px solid var(--rule); }
+    .gear-list a { font-weight: 600; }
+    .gear-why { display: block; color: var(--muted); font-size: 0.92rem; margin-top: 0.15rem; }
+    .gear-disclosure { margin-top: 2.5rem; font-size: 0.82rem; color: var(--muted); font-style: italic; }
+  </style>
+</Base>

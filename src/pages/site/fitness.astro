@@ -1,0 +1,170 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+---
+
+<Base
+  title="Fitness & Nutrition Calculators"
+  description="Free fitness and nutrition calculators — BMI, BMR, TDEE, body fat, one-rep max, macros and water intake. Runs entirely in your browser, nothing stored."
+  siteNav
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Fitness</p>
+    <h1>Fitness &amp; Nutrition Calculators</h1>
+    <p>
+      Quick estimates — BMI, energy needs, body fat, strength and macros.
+      Everything updates as you type and stays in your browser. For sex,
+      enter <strong>1 = male, 0 = female</strong> (affects BMR and body-fat formulas).
+    </p>
+
+    <div id="calcs"></div>
+
+    <div class="btn-row no-print">
+      <button type="button" class="btn" id="print">Save as PDF</button>
+      <button type="button" class="btn btn-ghost" id="email">Email to myself</button>
+    </div>
+    <p class="note-foot">
+      Estimates only — not medical advice. Want to <em>track</em> training, food and
+      bodyweight over time? That lives in the app. <a href="/site">← all tools</a>
+    </p>
+  </div>
+
+  <script>
+    import { mountCalcs, wireActions, type CalcSpec } from "../../scripts/site/calc";
+
+    const f1 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 1 });
+    const f0 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 0 });
+    const log10 = (n: number) => Math.log(n) / Math.LN10;
+
+    const bmiCat = (b: number) =>
+      b < 18.5 ? "underweight" : b < 25 ? "healthy" : b < 30 ? "overweight" : "obese";
+
+    const specs: CalcSpec[] = [
+      {
+        id: "bmi",
+        title: "Body Mass Index (BMI)",
+        blurb: "Weight relative to height. A rough screen, not a body-composition measure.",
+        fields: [
+          { id: "h", label: "Height (cm)", def: "178", min: "1", step: "0.5" },
+          { id: "w", label: "Weight (kg)", def: "80", min: "1", step: "0.1" },
+        ],
+        compute: (v) => {
+          const m = v.h / 100;
+          if (m <= 0) return null;
+          const bmi = v.w / (m * m);
+          return { rows: [[f1(bmi), "BMI"], [bmiCat(bmi), "category"]] };
+        },
+      },
+      {
+        id: "tdee",
+        title: "BMR & daily energy (TDEE)",
+        blurb: "Mifflin–St Jeor. Activity: 1.2 sedentary, 1.375 light, 1.55 moderate, 1.725 hard, 1.9 athlete.",
+        fields: [
+          { id: "sex", label: "Sex (1=M, 0=F)", def: "1", min: "0", step: "1" },
+          { id: "age", label: "Age (years)", def: "33", min: "1", step: "1" },
+          { id: "h", label: "Height (cm)", def: "178", min: "1", step: "0.5" },
+          { id: "w", label: "Weight (kg)", def: "80", min: "1", step: "0.1" },
+          { id: "act", label: "Activity factor", def: "1.55", min: "1", step: "0.025" },
+        ],
+        compute: (v) => {
+          const bmr = 10 * v.w + 6.25 * v.h - 5 * v.age + (v.sex >= 0.5 ? 5 : -161);
+          if (bmr <= 0) return null;
+          const tdee = bmr * v.act;
+          return {
+            rows: [
+              [f0(bmr) + " kcal", "BMR (at rest)"],
+              [f0(tdee) + " kcal", "maintenance (TDEE)"],
+              [f0(tdee - 500) + " kcal", "~0.5 kg/wk loss"],
+              [f0(tdee + 300) + " kcal", "lean gain"],
+            ],
+          };
+        },
+      },
+      {
+        id: "bf",
+        title: "Body fat (US Navy)",
+        blurb: "Tape method. Enter hip only for female; ignored for male.",
+        fields: [
+          { id: "sex", label: "Sex (1=M, 0=F)", def: "1", min: "0", step: "1" },
+          { id: "h", label: "Height (cm)", def: "178", min: "1", step: "0.5" },
+          { id: "neck", label: "Neck (cm)", def: "38", min: "1", step: "0.1" },
+          { id: "waist", label: "Waist (cm)", def: "85", min: "1", step: "0.1" },
+          { id: "hip", label: "Hip (cm, female)", def: "95", min: "0", step: "0.1" },
+        ],
+        compute: (v) => {
+          let bf: number;
+          if (v.sex >= 0.5) {
+            if (v.waist - v.neck <= 0) return null;
+            bf = 495 / (1.0324 - 0.19077 * log10(v.waist - v.neck) + 0.15456 * log10(v.h)) - 450;
+          } else {
+            if (v.waist + v.hip - v.neck <= 0) return null;
+            bf = 495 / (1.29579 - 0.35004 * log10(v.waist + v.hip - v.neck) + 0.221 * log10(v.h)) - 450;
+          }
+          if (!Number.isFinite(bf) || bf <= 0) return null;
+          return { rows: [[f1(bf) + " %", "body fat (est.)"]], warn: "Tape method ±3–4%. Calipers/DEXA are more accurate." };
+        },
+      },
+      {
+        id: "orm",
+        title: "One-rep max (1RM)",
+        blurb: "Estimated max from a sub-maximal set. Two common formulas.",
+        fields: [
+          { id: "w", label: "Weight lifted (kg)", def: "100", min: "0", step: "0.5" },
+          { id: "reps", label: "Reps performed", def: "5", min: "1", step: "1" },
+        ],
+        compute: (v) => {
+          if (v.reps < 1) return null;
+          const epley = v.w * (1 + v.reps / 30);
+          const brzycki = v.reps < 37 ? (v.w * 36) / (37 - v.reps) : NaN;
+          return {
+            rows: [
+              [f1(epley) + " kg", "1RM (Epley)"],
+              [Number.isFinite(brzycki) ? f1(brzycki) + " kg" : "—", "1RM (Brzycki)"],
+              [f1(epley * 0.8) + " kg", "~80% (working set)"],
+            ],
+            warn: v.reps > 12 ? "Estimates lose accuracy above ~10–12 reps." : undefined,
+          };
+        },
+      },
+      {
+        id: "macros",
+        title: "Macro split",
+        blurb: "Split a calorie target into grams. Protein/carbs 4 kcal/g, fat 9 kcal/g.",
+        fields: [
+          { id: "cal", label: "Daily calories", def: "2400", min: "0", step: "10" },
+          { id: "p", label: "Protein %", def: "30", min: "0", step: "1" },
+          { id: "c", label: "Carbs %", def: "40", min: "0", step: "1" },
+          { id: "f", label: "Fat %", def: "30", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          const sum = v.p + v.c + v.f;
+          return {
+            rows: [
+              [f0((v.cal * v.p) / 100 / 4) + " g", "protein"],
+              [f0((v.cal * v.c) / 100 / 4) + " g", "carbs"],
+              [f0((v.cal * v.f) / 100 / 9) + " g", "fat"],
+            ],
+            warn: Math.abs(sum - 100) > 0.5 ? `Percentages add to ${f0(sum)}% — should be 100%.` : undefined,
+          };
+        },
+      },
+      {
+        id: "water",
+        title: "Daily water",
+        blurb: "Baseline hydration ≈ 35 mL per kg bodyweight. Add more for heat and training.",
+        fields: [
+          { id: "w", label: "Weight (kg)", def: "80", min: "1", step: "0.1" },
+          { id: "extra", label: "Training (extra mL)", def: "500", min: "0", step: "100" },
+        ],
+        compute: (v) => {
+          const ml = v.w * 35 + v.extra;
+          return { rows: [[f1(ml / 1000) + " L", "per day"], [f0(ml) + " mL", "total"]] };
+        },
+      },
+    ];
+
+    const root = document.getElementById("calcs")!;
+    mountCalcs(root, specs);
+    wireActions(root, "Fitness & nutrition calculators");
+  </script>
+</Base>
