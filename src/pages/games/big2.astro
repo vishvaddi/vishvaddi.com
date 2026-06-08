@@ -1,0 +1,79 @@
+---
+import Base from "../../layouts/Base.astro";
+---
+
+<Base title="Big 2" description="Play Big 2 (Big Two) against three AI opponents — the classic shedding card game. Runs entirely in your browser.">
+  <p class="eyebrow"><a href="/games">Games</a> / Big 2</p>
+  <h1 class="lede">Big 2</h1>
+  <p>
+    Shed your hand before the AI does. Singles, pairs, triples and five-card
+    poker hands. 3 ♦ leads the first trick; <strong>2</strong> is the highest card.
+    Click cards to select, then Play.
+  </p>
+
+  <div id="big2">
+    <div id="b2-opponents" class="b2-opponents"></div>
+
+    <div class="b2-table">
+      <div class="b2-pile-by" id="b2-pile-by"></div>
+      <div class="b2-pile" id="b2-pile"></div>
+    </div>
+
+    <p class="b2-msg" id="b2-msg"></p>
+
+    <div class="b2-hand" id="b2-hand"></div>
+
+    <div class="b2-controls">
+      <button class="btn" id="b2-play">Play</button>
+      <button class="btn btn-ghost" id="b2-pass">Pass</button>
+      <button class="btn btn-ghost" id="b2-sort">Sort</button>
+      <button class="btn btn-ghost" id="b2-new">New game</button>
+    </div>
+  </div>
+
+  <!-- Ad slot (games only). Drop your AdSense <ins> + loader here once your
+       publisher ID is approved; ask to add the scoped CSP for /games. -->
+  <aside class="b2-ad" aria-hidden="true">advertisement</aside>
+
+  <details class="b2-rules">
+    <summary>How to play</summary>
+    <ul>
+      <li>Card order low→high: 3 4 5 6 7 8 9 10 J Q K A <strong>2</strong>. Suits ♦ &lt; ♣ &lt; ♥ &lt; ♠.</li>
+      <li>Whoever holds 3♦ leads first and must include it.</li>
+      <li>Play the same number of cards as the pile, and beat it — or pass.</li>
+      <li>Five-card hands rank: straight &lt; flush &lt; full house &lt; four-of-a-kind+1 &lt; straight flush.</li>
+      <li>When everyone passes, the last player to play leads a fresh trick.</li>
+      <li>First to empty their hand wins.</li>
+    </ul>
+  </details>
+
+  <style is:global>
+    #big2 { margin: 1.25rem 0; }
+    .b2-opponents { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .b2-opp { flex: 1; min-width: 90px; border: 1px solid var(--rule); border-radius: 8px; padding: 0.5rem 0.75rem; text-align: center; transition: border-color .2s, background .2s; }
+    .b2-opp.turn { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+    .b2-opp-name { font-weight: 600; font-size: 0.9rem; }
+    .b2-opp-cards { font-size: 0.8rem; color: var(--muted); }
+    .b2-table { margin: 1.25rem 0; min-height: 96px; border: 1px dashed var(--rule); border-radius: 10px; padding: 0.75rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4rem; }
+    .b2-pile-by { font-size: 0.78rem; color: var(--muted); }
+    .b2-pile { display: flex; gap: 4px; min-height: 56px; }
+    .b2-msg { min-height: 1.4em; color: var(--accent-dark); font-size: 0.9rem; }
+    .b2-hand { display: flex; flex-wrap: wrap; gap: 5px; margin: 0.5rem 0 1rem; }
+    .b2-card {
+      width: 40px; height: 56px; border: 1px solid #bbb; border-radius: 6px; background: #fff; color: #1a1a1a;
+      display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+      padding: 4px 0; font-weight: 700; font-size: 0.95rem; cursor: pointer; user-select: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15); transition: transform .12s var(--ease, ease), box-shadow .12s;
+    }
+    .b2-card.sm { width: 34px; height: 48px; font-size: 0.85rem; cursor: default; box-shadow: none; }
+    .b2-card.red { color: #c0392b; }
+    .b2-hand .b2-card:hover { transform: translateY(-4px); }
+    .b2-card.sel { transform: translateY(-10px); border-color: var(--accent); box-shadow: 0 4px 10px rgba(0,0,0,0.25); }
+    .b2-controls { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .b2-ad { margin: 1.5rem 0; min-height: 90px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--rule); border-radius: 8px; color: var(--muted); font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; }
+    .b2-rules { margin-top: 1rem; font-size: 0.9rem; color: var(--muted); }
+    .b2-rules summary { cursor: pointer; color: var(--fg); }
+  </style>
+
+  <script src="/scripts/big2.js" defer></script>
+</Base>

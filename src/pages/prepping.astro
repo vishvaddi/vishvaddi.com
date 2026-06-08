@@ -23,11 +23,22 @@ const { Content } = await render(entry);
     <Content />
   </div>
 
+  <section id="prep-sky" style="margin-top:2.5rem">
+    <h2>Night sky — live</h2>
+    <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0.75rem">
+      The sky above you right now (allow location, or it defaults to Sydney).
+      Crux, the Centaurus pointers, Scorpius and Orion are drawn in — the stars
+      you actually navigate by. Pair it with the Southern Cross method above.
+    </p>
+    <div style="border-radius:10px;overflow:hidden;border:1px solid var(--rule);background:#040710">
+      <canvas id="sky-canvas" style="display:block;width:100%;height:420px"></canvas>
+    </div>
+  </section>
+
   <section id="prep-weather" style="margin-top:2.5rem">
     <h2>Live weather</h2>
     <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0.75rem">
       Surface wind and pressure — southern Australia. Powered by Windy / ECMWF.
-      Full screen: <a href="/tv">TV → Wind channel</a>.
     </p>
     <div style="border-radius:10px;overflow:hidden;border:1px solid var(--rule)">
       <iframe
@@ -42,4 +53,5 @@ const { Content } = await render(entry);
     import { buildPreppingNav } from "../scripts/site/prepping";
     buildPreppingNav();
   </script>
+  <script src="/scripts/prepping-stars.js" defer></script>
 </Base>

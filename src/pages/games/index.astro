@@ -1,0 +1,33 @@
+---
+import Base from "../../layouts/Base.astro";
+
+const games = [
+  { href: "/games/big2", icon: "🃏", title: "Big 2", desc: "The classic shedding card game against three AI opponents." },
+];
+---
+
+<Base title="Games" description="Browser games — play in your browser, nothing to install.">
+  <h1 class="lede">Games</h1>
+  <p>Quick games that run entirely in your browser. More to come.</p>
+
+  <ul class="game-grid">
+    {games.map((g) => (
+      <li class="reveal">
+        <a class="game-card" href={g.href}>
+          <span class="game-ico" aria-hidden="true">{g.icon}</span>
+          <span class="t">{g.title}</span>
+          <span class="d">{g.desc}</span>
+        </a>
+      </li>
+    ))}
+  </ul>
+
+  <style>
+    .game-grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
+    .game-card { display: flex; flex-direction: column; gap: 0.3rem; padding: 1.1rem; border: 1px solid var(--rule); border-radius: 10px; text-decoration: none; color: var(--fg); transition: border-color .2s var(--ease, ease), transform .2s var(--ease, ease); }
+    .game-card:hover { border-color: var(--accent); transform: translateY(-3px); }
+    .game-ico { font-size: 1.6rem; }
+    .game-card .t { font-weight: 600; }
+    .game-card .d { font-size: 0.88rem; color: var(--muted); }
+  </style>
+</Base>
