@@ -2,7 +2,7 @@
 title: Prepping
 description: Bushcraft, survival, first aid, and self-sufficiency notes — written from an Australian context.
 ogImage: /og/prepping.png
-updatedDate: 2026-06-04
+updatedDate: 2026-06-08
 ---
 
 # Prepping and survival
@@ -11,7 +11,54 @@ I'm into this primarily because I enjoy knowing how to survive as a human. We're
 
 Australia hands you the conditions for it too: bushfires, floods, long distances, supply chains that stretch when something goes wrong. The point isn't fear. It's not having to lean on systems that might fail at the worst time.
 
-Most of what's below is distilled from the source library I keep. The value is in the curation.
+Most of what's below is distilled from the source library I keep. The value is in the curation. It's ordered the way you'd actually need it: emergency response first, then the survival framework, then kit and skills, then living with less dependence.
+
+## First aid — DRSABCD
+
+The Australian sequence taught by St John and the Australian Resuscitation Council:
+
+- **D**anger — to yourself, bystanders, casualty, in that order.
+- **R**esponse — tap shoulders firmly, "Can you hear me?"
+- **S**end for help — call 000 (mobile 112). Speaker on, keep working.
+- **A**irway — head tilt, chin lift. Jaw thrust if spinal injury suspected.
+- **B**reathing — look, listen, feel for 10 seconds. Recovery position if breathing; CPR if not.
+- **C**PR — 30 compressions to 2 breaths, 100–120/min, 5–6cm deep. Compression-only if you can't or won't give breaths.
+- **D**efibrillate — AEDs are designed for untrained users. Turn it on, follow the prompts.
+
+Do the St John course. The difference between knowing this and being able to perform CPR under pressure is huge.
+
+## Emergency numbers — Australia
+
+Keep these somewhere you can reach without unlocking a screen — a card in the kit, on the fridge, in the wallet.
+
+- **000** — Police, Fire, Ambulance. From a mobile, **112** also connects and will try any available network when yours has no signal.
+- **132 500** — SES, for flood and storm damage that isn't immediately life-threatening.
+- **13 11 26** — Poisons Information Centre. Bites, stings, chemical exposure, accidental ingestion.
+- **1800 641 792** — Marine Rescue / Coast Guard.
+- **106** — text-based emergency line for the deaf, or hard-of-hearing and speech-impaired.
+
+## Beyond first aid — austere medicine
+
+For situations where help isn't coming soon. Drawn mostly from Werner's *Where There Is No Doctor*.
+
+- **ORS** — Oral Rehydration Solution: 1L clean water, 6–8 tsp sugar, 1 tsp salt. Optional half cup of orange juice for potassium. Has saved more lives than any surgical procedure ever has. Small, frequent sips.
+- **Wound care** — irrigate with clean water under pressure, remove debris, only close clean wounds less than 6–8 hours old. Dirty or older wounds heal from the inside out.
+- **Infection signs** — increasing pain after day 1–2, redness spreading from wound edges, pus, red streaks toward the heart, fever, foul smell. Any of these means antibiotics if you have them, evacuation if you don't.
+- **The 5 killers in the field** — massive haemorrhage, airway obstruction, tension pneumothorax, hypothermia, shock. Treat in that order.
+
+## Snake bite — Australian protocol
+
+Pressure immobilisation bandage for any Australian snake bite. Firm — as for a sprained ankle. Bandage over the bite site, then the entire limb toward the heart, then splint to prevent movement. Keep the person still and calm. Don't wash the bite (venom on the skin is used for identification). Don't cut, suck, or tourniquet. Call 000.
+
+## Other Australian bites and stings
+
+The treatment splits sharply by creature, and the wrong first aid makes several of these worse. Learn which is which before you're standing over someone.
+
+- **Funnel-web spider** — treat as life-threatening. Pressure immobilisation, exactly as for snake bite. Keep still, leave the bandage on, get to hospital. Antivenom exists.
+- **Redback spider** — do *not* use pressure immobilisation. Cold pack to the bite, seek medical help. Very painful but rarely life-threatening; antivenom available.
+- **Box jellyfish** — life-threatening, northern waters. Douse the tentacles with vinegar for at least 30 seconds before removing them, never rub, and be ready for CPR. Call 000.
+- **Blue-ringed octopus** — no antivenom. Pressure immobilisation and be ready for CPR; the venom paralyses while the person stays conscious, so keep talking to them and reassure them. Call 000.
+- **Bluebottle / Pacific man o' war** — hot water, *not* vinegar (vinegar makes a bluebottle sting worse). Pick the tentacles off without rubbing, then immerse the sting in 45°C water for 20 minutes.
 
 ## The Rule of Threes
 
@@ -37,6 +84,16 @@ The first thing taught in military survival schools (US Army FM 21-76):
 - **V**alue living. The will to live is the single greatest survival asset.
 - **A**ct like the natives. Observe how local people and animals survive there.
 - **L**ive by your wits. Knowledge weighs nothing.
+
+## The five priorities
+
+The order survival sources converge on, derived from the Rule of Threes:
+
+1. **Shelter** — core temperature kills first.
+2. **Fire** — warmth, water purification, signalling, morale.
+3. **Water** — purify everything you didn't see fall from the sky.
+4. **Signalling** — being found beats self-rescue.
+5. **Food** — last. You can wait weeks.
 
 ## The 5Cs
 
@@ -72,22 +129,6 @@ The Urban Prepper's modification of Canterbury's list for evacuation kits and ge
 - **Candling** — Petzl Tikkina or similar headlamp, AAA lithiums.
 - **Cargo tape** — gorilla tape, enough length to seal off a door if needed.
 - **Combination tool** — the urban substitution for the canvas needle. A 4-way sillcock key opens commercial water spigots; a SEARAT (firefighter-designed) opens commercial doors. Different threat model, different tools.
-
-## The five priorities
-
-The order survival sources converge on, derived from the Rule of Threes:
-
-1. **Shelter** — core temperature kills first.
-2. **Fire** — warmth, water purification, signalling, morale.
-3. **Water** — purify everything you didn't see fall from the sky.
-4. **Signalling** — being found beats self-rescue.
-5. **Food** — last. You can wait weeks.
-
-## Bradley's 14 survival needs
-
-A more granular audit than the five priorities — Ron Bradley's fourteen needs. Run a kit or a plan against the whole list and the gaps show up fast:
-
-Positive mental attitude, first aid, shelter, fire, signalling, personal protection (clothing), the will to survive, food, water, navigation, tools and knives, rope and cordage, cross-training, and luck. Attitude leads the list and luck closes it for a reason — the first does the most work, and you never plan to rely on the last but you account for it.
 
 ## Shelter
 
@@ -133,53 +174,6 @@ The last priority. Three weeks is the runway. The principle to keep in mind: cal
 - Trapping is more energy-efficient than hunting. Snares, deadfalls, fish traps.
 - Never eat wild plants without positive identification from multiple sources.
 
-## Emergency numbers — Australia
-
-Keep these somewhere you can reach without unlocking a screen — a card in the kit, on the fridge, in the wallet.
-
-- **000** — Police, Fire, Ambulance. From a mobile, **112** also connects and will try any available network when yours has no signal.
-- **132 500** — SES, for flood and storm damage that isn't immediately life-threatening.
-- **13 11 26** — Poisons Information Centre. Bites, stings, chemical exposure, accidental ingestion.
-- **1800 641 792** — Marine Rescue / Coast Guard.
-- **106** — text-based emergency line for the deaf, or hard-of-hearing and speech-impaired.
-
-## First aid — DRSABCD
-
-The Australian sequence taught by St John and the Australian Resuscitation Council:
-
-- **D**anger — to yourself, bystanders, casualty, in that order.
-- **R**esponse — tap shoulders firmly, "Can you hear me?"
-- **S**end for help — call 000 (mobile 112). Speaker on, keep working.
-- **A**irway — head tilt, chin lift. Jaw thrust if spinal injury suspected.
-- **B**reathing — look, listen, feel for 10 seconds. Recovery position if breathing; CPR if not.
-- **C**PR — 30 compressions to 2 breaths, 100–120/min, 5–6cm deep. Compression-only if you can't or won't give breaths.
-- **D**efibrillate — AEDs are designed for untrained users. Turn it on, follow the prompts.
-
-Do the St John course. The difference between knowing this and being able to perform CPR under pressure is huge.
-
-## Beyond first aid — austere medicine
-
-For situations where help isn't coming soon. Drawn mostly from Werner's *Where There Is No Doctor*.
-
-- **ORS** — Oral Rehydration Solution: 1L clean water, 6–8 tsp sugar, 1 tsp salt. Optional half cup of orange juice for potassium. Has saved more lives than any surgical procedure ever has. Small, frequent sips.
-- **Wound care** — irrigate with clean water under pressure, remove debris, only close clean wounds less than 6–8 hours old. Dirty or older wounds heal from the inside out.
-- **Infection signs** — increasing pain after day 1–2, redness spreading from wound edges, pus, red streaks toward the heart, fever, foul smell. Any of these means antibiotics if you have them, evacuation if you don't.
-- **The 5 killers in the field** — massive haemorrhage, airway obstruction, tension pneumothorax, hypothermia, shock. Treat in that order.
-
-## Snake bite — Australian protocol
-
-Pressure immobilisation bandage for any Australian snake bite. Firm — as for a sprained ankle. Bandage over the bite site, then the entire limb toward the heart, then splint to prevent movement. Keep the person still and calm. Don't wash the bite (venom on the skin is used for identification). Don't cut, suck, or tourniquet. Call 000.
-
-## Other Australian bites and stings
-
-The treatment splits sharply by creature, and the wrong first aid makes several of these worse. Learn which is which before you're standing over someone.
-
-- **Funnel-web spider** — treat as life-threatening. Pressure immobilisation, exactly as for snake bite. Keep still, leave the bandage on, get to hospital. Antivenom exists.
-- **Redback spider** — do *not* use pressure immobilisation. Cold pack to the bite, seek medical help. Very painful but rarely life-threatening; antivenom available.
-- **Box jellyfish** — life-threatening, northern waters. Douse the tentacles with vinegar for at least 30 seconds before removing them, never rub, and be ready for CPR. Call 000.
-- **Blue-ringed octopus** — no antivenom. Pressure immobilisation and be ready for CPR; the venom paralyses while the person stays conscious, so keep talking to them and reassure them. Call 000.
-- **Bluebottle / Pacific man o' war** — hot water, *not* vinegar (vinegar makes a bluebottle sting worse). Pick the tentacles off without rubbing, then immerse the sting in 45°C water for 20 minutes.
-
 ## Six knots that cover most situations
 
 1. **Bowline** — fixed loop, doesn't slip. The king of knots.
@@ -194,6 +188,13 @@ Best free reference: [animatedknots.com](https://www.animatedknots.com). Tie eac
 ## Sharp tools, briefly
 
 A dull knife is more dangerous than a sharp one — it needs more force, slips more often. The basic principle of whetstone work: consistency of angle matters more than the angle itself. Start with a 1000/6000 grit combination stone, learn to feel for the burr, finish with a leather strop. Hone before each cooking session. Never use a knife as a pry bar.
+
+## Natural navigation in the Southern Hemisphere
+
+- **Stick and shadow** — vertical stick in the ground, mark the shadow tip, wait 30 minutes, mark the new tip. The line between them runs east–west; the first mark is west.
+- **Watch method** — point 12 at the sun. True north bisects the angle between 12 and the hour hand.
+- **Southern Cross** — extend the long axis of the cross 4.5× its own length and drop straight to the horizon: that point is due south. Confirm it with the two bright Pointer stars (Alpha and Beta Centauri) nearby — the perpendicular bisector of the line between them meets the Cross's extended axis at the same south point.
+- **Orion's belt** (visible Nov–May) — the top star always rises due east and sets due west.
 
 ## Seasonal threat calendar — NSW
 
@@ -217,13 +218,6 @@ What the year actually throws at you, so the kit and the plan track the season r
 - **Native materials** — paperbark for tinder, water container, and insulation; banksia cones as ember carriers; lomandra for cordage; xanthorrhoea (grass tree) resin as natural adhesive when heated.
 
 Aboriginal Australians have 65,000+ years of bushcraft knowledge — the longest continuous culture on earth. Worth respecting and learning from where authorised cultural programs make that possible.
-
-## Natural navigation in the Southern Hemisphere
-
-- **Stick and shadow** — vertical stick in the ground, mark the shadow tip, wait 30 minutes, mark the new tip. The line between them runs east–west; the first mark is west.
-- **Watch method** — point 12 at the sun. True north bisects the angle between 12 and the hour hand.
-- **Southern Cross** — extend the long axis of the cross 4.5× its own length and drop straight to the horizon: that point is due south. Confirm it with the two bright Pointer stars (Alpha and Beta Centauri) nearby — the perpendicular bisector of the line between them meets the Cross's extended axis at the same south point.
-- **Orion's belt** (visible Nov–May) — the top star always rises due east and sets due west.
 
 ## Self-sufficiency at home — four pillars
 
