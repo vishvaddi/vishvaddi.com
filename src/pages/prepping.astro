@@ -15,9 +15,37 @@ const { Content } = await render(entry);
   updatedDate={entry.data.updatedDate}
 >
   <nav class="prep-modes" aria-label="Prepping sections">
-    <a href="/prepping" class="active">Knowledge</a>
-    <a href="/prepping/tools">Tools</a>
+    <a href="/prepping" class="active">Guide</a>
+    <a href="/prepping/gear">Gear</a>
+    <a href="/prepping/health">Health</a>
+    <a href="/prepping/tools">Field tools</a>
   </nav>
+
+  <section class="prep-start reveal" aria-labelledby="prep-start-title">
+    <p class="eyebrow">Prepping guide</p>
+    <h1 id="prep-start-title">Preparedness, arranged by what fails first.</h1>
+    <p>
+      Immediate action comes first, then survival priorities, field skills,
+      Australian hazards, home resilience and maintenance.
+    </p>
+    <div class="prep-urgent" aria-label="Emergency shortcuts">
+      <a href="#emergency-numbers--australia"><strong>Emergency numbers</strong><span>000, 112, SES, Poisons, Marine Rescue.</span></a>
+      <a href="#first-aid--drsabcd"><strong>First aid</strong><span>DRSABCD, CPR, AED and austere medicine basics.</span></a>
+      <a href="#snake-bite--australian-protocol"><strong>Snake bite</strong><span>Pressure immobilisation. Stillness. Call 000.</span></a>
+      <a href="#the-everyday-baseline"><strong>Everyday baseline</strong><span>Food, cash, documents, first aid and backup routines.</span></a>
+    </div>
+
+    <div class="prep-start-grid" aria-label="Prepping guide sections">
+      <a href="#g-emergency-first-aid"><strong>Emergency &amp; first aid</strong><span>Numbers, DRSABCD, bites, stings and austere care.</span></a>
+      <a href="#g-survival-priorities"><strong>Survival priorities</strong><span>Mindset, shelter, fire, water, signalling and food.</span></a>
+      <a href="#g-field-skills"><strong>Field skills</strong><span>Navigation, knots, sharp tools and practical craft.</span></a>
+      <a href="#g-gear-kits"><strong>Gear &amp; kits</strong><span>5Cs, 10Cs, urban adaptations and go bags.</span></a>
+      <a href="#g-australian-context"><strong>Australian context</strong><span>Seasonal hazards, fire restrictions, heat and wildlife.</span></a>
+      <a href="#g-home-resilience"><strong>Home resilience</strong><span>Power, water, food, gardening, skills and baseline supplies.</span></a>
+      <a href="#g-maintenance"><strong>Maintenance</strong><span>A practical yearly routine to keep plans and supplies current.</span></a>
+      <a href="/prepping/tools"><strong>Interactive tools</strong><span>Maps, checklists, calculators, weather and night-sky navigation.</span></a>
+    </div>
+  </section>
 
   <div id="prep-knowledge">
     <Content />

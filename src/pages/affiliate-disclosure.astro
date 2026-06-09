@@ -1,0 +1,33 @@
+---
+import Base from "../layouts/Base.astro";
+
+const affiliateEnabled = Boolean(import.meta.env.PUBLIC_AMAZON_ASSOCIATE_TAG);
+---
+
+<Base
+  title="Affiliate disclosure"
+  description="How affiliate links and product recommendations work on vishvaddi.com."
+>
+  <h1>Affiliate disclosure</h1>
+  <p>
+    Product lists are curated for usefulness and relevance. A product is not included
+    solely because it offers a commission.
+  </p>
+
+  {affiliateEnabled ? (
+    <p><strong>As an Amazon Associate I earn from qualifying purchases.</strong></p>
+  ) : (
+    <p>Amazon links currently use no affiliate tracking tag.</p>
+  )}
+
+  <p>
+    When affiliate tracking is active, a purchase made after following a marked link
+    may earn this site a commission at no additional cost to you. Affiliate links are
+    marked with <code>rel="sponsored"</code> and disclosed on the relevant page.
+  </p>
+
+  <p>
+    Prices and availability change. The site links to Amazon AU searches rather than
+    presenting prices as current facts.
+  </p>
+</Base>

@@ -9,8 +9,10 @@ import "../../styles/prepping.css";
   description="Interactive survival tools — food & water reserve calculators, a get-home estimate, a live nearby map, kit tracker, checklists and an SOS signaller. Runs entirely in your browser."
 >
   <nav class="prep-modes" aria-label="Prepping sections">
-    <a href="/prepping">Knowledge</a>
-    <a href="/prepping/tools" class="active">Tools</a>
+    <a href="/prepping">Guide</a>
+    <a href="/prepping/gear">Gear</a>
+    <a href="/prepping/health">Health</a>
+    <a href="/prepping/tools" class="active">Field tools</a>
   </nav>
 
   <h1>Field tools</h1>
@@ -21,15 +23,39 @@ import "../../styles/prepping.css";
     only the map's location lookup leaves your device.
   </p>
 
-  <div id="prep-app" class="blueprint tool"></div>
+  <section id="weather-forecast" class="weather-panel" data-prep-tool aria-live="polite">
+    <div class="weather-head">
+      <div>
+        <p class="eyebrow">Local conditions</p>
+        <h2 id="weather-forecast-heading">Weather & forecast</h2>
+      </div>
+      <button id="weather-location" class="btn btn-ghost" type="button">Use my location</button>
+    </div>
+    <p id="weather-status" class="weather-status">Loading Sydney forecast...</p>
+    <div id="weather-current" class="weather-current"></div>
+    <div id="weather-days" class="weather-days" aria-label="Seven-day forecast"></div>
 
-  <section id="prep-weather" style="margin-top:2.5rem">
-    <h2>Live weather</h2>
+    <div class="weather-warnings">
+      <div>
+        <h3>Warnings</h3>
+        <p>Use the official services before travel, fire weather or flood decisions.</p>
+      </div>
+      <div class="weather-warning-links">
+        <a href="https://www.bom.gov.au/weather-and-climate/warnings-and-alerts" target="_blank" rel="noopener">BOM warnings</a>
+        <a href="https://www.rfs.nsw.gov.au/fire-information/fires-near-me" target="_blank" rel="noopener">NSW fires</a>
+        <a href="https://www.ses.nsw.gov.au/" target="_blank" rel="noopener">NSW SES</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="prep-weather" data-prep-tool style="margin-top:2.5rem">
+    <h2 id="weather-map-heading">Weather map</h2>
     <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0.75rem">
-      Surface wind and pressure — southern Australia. Powered by Windy / ECMWF.
+      Surface wind and pressure. The map recentres when you use your location.
     </p>
     <div style="border-radius:10px;overflow:hidden;border:1px solid var(--rule)">
       <iframe
+        id="weather-windy"
         src="https://embed.windy.com/embed2.html?lat=-33.87&lon=151.21&zoom=4&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1"
         width="100%" height="420" frameborder="0" title="Windy live weather map"
         style="display:block"
@@ -37,8 +63,8 @@ import "../../styles/prepping.css";
     </div>
   </section>
 
-  <section id="prep-sky" style="margin-top:2.5rem">
-    <h2>Night sky — live</h2>
+  <section id="prep-sky" data-prep-tool style="margin-top:2.5rem">
+    <h2 id="night-sky-heading">Night sky — live</h2>
     <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0.75rem">
       The sky above you right now (allow location, or it defaults to Sydney).
       Crux, the Centaurus pointers, Scorpius and Orion are drawn in — the stars
@@ -49,11 +75,14 @@ import "../../styles/prepping.css";
     </div>
   </section>
 
+  <div id="prep-app" class="blueprint tool"></div>
+
   <script>
     import { initPrepping, buildPreppingNav } from "../../scripts/site/prepping";
     initPrepping();
     buildPreppingNav();
   </script>
+  <script src="/scripts/prepping-weather.js" defer></script>
   <script src="/scripts/prepping-stars.js" defer></script>
 </Base>
 

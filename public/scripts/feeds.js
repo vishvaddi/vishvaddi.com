@@ -1,10 +1,21 @@
 (function () {
   var DEFAULT_FEEDS = [
     { name: "ABC News", url: "https://www.abc.net.au/news/feed/51120/rss.xml" },
-    { name: "Hacker News", url: "https://hnrss.org/frontpage" },
-    { name: "Kottke", url: "https://feeds.kottke.org/main" },
-    { name: "The Prepared", url: "https://theprepared.com/feed/" },
+    { name: "BBC World", url: "https://feeds.bbci.co.uk/news/world/rss.xml" },
+    { name: "AP News", url: "https://news.google.com/rss/search?q=site%3Aapnews.com&hl=en-AU&gl=AU&ceid=AU%3Aen" },
+    { name: "Reuters", url: "https://news.google.com/rss/search?q=site%3Areuters.com&hl=en-AU&gl=AU&ceid=AU%3Aen" },
+    { name: "NPR World", url: "https://feeds.npr.org/1004/rss.xml" },
+    { name: "PBS NewsHour", url: "https://www.pbs.org/newshour/feeds/rss/headlines" },
+    { name: "The Conversation AU", url: "https://theconversation.com/au/articles.atom" },
+    { name: "ABC Business", url: "https://www.abc.net.au/news/feed/51892/rss.xml" },
+    { name: "Reuters Business", url: "https://news.google.com/rss/search?q=site%3Areuters.com%2Fbusiness&hl=en-AU&gl=AU&ceid=AU%3Aen" },
+    { name: "Financial Times", url: "https://www.ft.com/rss/home" },
+    { name: "ABC Australian Construction", url: "https://news.google.com/rss/search?q=site%3Aabc.net.au%2Fnews%20construction%20Australia&hl=en-AU&gl=AU&ceid=AU%3Aen" },
+    { name: "Australian Constructors Association", url: "https://www.constructors.com.au/feed/" },
+    { name: "Construction Dive", url: "https://www.constructiondive.com/feeds/news/" },
+    { name: "Construction News", url: "https://www.constructionnews.co.uk/feed/" },
   ];
+  var DEFAULT_FEED_VERSION = "2026-06-08-major-news-construction-finance-v2";
 
   var SOURCE_COLOURS = [
     "#2563eb", "#16a34a", "#9333ea", "#b45309",
@@ -16,6 +27,11 @@
 
   function loadFeeds() {
     try {
+      var seenVersion = localStorage.getItem("rss_feeds_version");
+      if (seenVersion !== DEFAULT_FEED_VERSION) {
+        localStorage.setItem("rss_feeds_version", DEFAULT_FEED_VERSION);
+        localStorage.setItem("rss_feeds", JSON.stringify(DEFAULT_FEEDS));
+      }
       var raw = localStorage.getItem("rss_feeds");
       if (raw) {
         var parsed = JSON.parse(raw);

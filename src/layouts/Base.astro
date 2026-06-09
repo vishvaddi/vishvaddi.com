@@ -17,6 +17,7 @@ const {
   siteNav = false,
 } = Astro.props;
 
+const adsenseClient = import.meta.env.PUBLIC_ADSENSE_CLIENT;
 const siteTools: [string, string][] = [
   ["/site", "All tools"],
   ["/site/calc", "Calculator"],
@@ -27,36 +28,38 @@ const siteTools: [string, string][] = [
   ["/site/triangle", "Triangle"],
   ["/site/periodic", "Periodic Table"],
   ["/site/convert", "Converter"],
-  ["/site/fitness", "Fitness"],
   ["/site/rate", "Rate Builder"],
   ["/site/sketch", "Sketchpad"],
   ["/site/voice", "Voice Notes"],
   ["/site/pdf", "PDF Editor"],
   ["/site/resources", "Resources"],
-  ["/prepping", "Prepping"],
+  ["/radio", "Radio"],
 ];
 const here = Astro.url.pathname.replace(/\/$/, "");
 
 const navPrimary: [string, string][] = [
   ["/work", "Work"],
+  ["/site", "Tools"],
   ["/notes", "Notes"],
-  ["/site", "Site Tools"],
-  ["/prepping", "Prepping"],
 ];
 const navMore: [string, string][] = [
+  ["/prepping", "Prepping"],
+  ["/radio", "Radio"],
+  ["/feeds", "Feeds"],
+  ["/reader", "Reader"],
   ["/studio", "Studio"],
   ["/games", "Games"],
-  ["/prepping/gear", "Gear"],
-  ["/radio", "Radio"],
-  ["/reader", "Reader"],
-  ["/feeds", "Feeds"],
   ["/music", "Music"],
   ["/movies", "Movies"],
   ["/books", "Books"],
-  ["/blog", "Blog"],
   ["/about", "About"],
 ];
-const isActive = (href: string) => here === href || here.startsWith(href + "/");
+const pathOnly = (href: string) => href.split("#")[0].split("?")[0].replace(/\/$/, "") || "/";
+const isActive = (href: string) => {
+  const path = pathOnly(href);
+  return here === path || here.startsWith(path + "/");
+};
+const moreActive = navMore.some(([href]) => isActive(href));
 const showRail = siteNav && here !== "/site";
 
 const fullTitle = title === "Vish Vaddi" ? title : `${title} · Vish Vaddi`;
@@ -96,6 +99,13 @@ const updatedFmt = updatedDate
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImageUrl} />
+    {adsenseClient && (
+      <script
+        async
+        crossorigin="anonymous"
+        src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClient}`}
+      ></script>
+    )}
     <title>{fullTitle}</title>
   </head>
   <body>
@@ -107,7 +117,7 @@ const updatedFmt = updatedDate
             <a href={href} class={isActive(href) ? "active" : ""}>{label}</a>
           ))}
           <details class="nav-more">
-            <summary>More</summary>
+            <summary class={moreActive ? "active" : ""}>More</summary>
             <div class="nav-more-menu">
               {navMore.map(([href, label]) => (
                 <a href={href} class={isActive(href) ? "active" : ""}>{label}</a>
@@ -121,7 +131,7 @@ const updatedFmt = updatedDate
           id="standby-toggle"
           aria-label="Standby mode"
           title="Standby (Alt+S)"
-        >☾</button>
+        >◷</button>
         <button
           type="button"
           class="theme-toggle"
@@ -148,6 +158,11 @@ const updatedFmt = updatedDate
         </>
       )}
       <slot />
+      <aside class="site-quote" aria-live="polite">
+        <span class="quote-mark" aria-hidden="true">“</span>
+        <span id="site-quote-text">Prevention beats repair.</span>
+        <span class="quote-mark quote-mark-close" aria-hidden="true">”</span>
+      </aside>
     </main>
     <footer>
       <hr />
@@ -158,11 +173,14 @@ const updatedFmt = updatedDate
       )}
       <p style="font-size: 0.875rem; color: var(--muted);">
         © {new Date().getFullYear()} Vish Vaddi · Sydney ·
-        <a href="mailto:vishvaddi@gmail.com">vishvaddi@gmail.com</a>
+        <a href="mailto:vishvaddi@gmail.com">vishvaddi@gmail.com</a> ·
+        <a href="/privacy">Privacy</a> ·
+        <a href="/affiliate-disclosure">Affiliate disclosure</a>
       </p>
     </footer>
     <script src="/scripts/chrome.js" defer></script>
     <script src="/scripts/reveal.js" defer></script>
     <script src="/scripts/standby.js" defer></script>
+    <script src="/scripts/quotes.js" defer></script>
   </body>
 </html>

@@ -38,6 +38,9 @@ var directoryStatus = document.getElementById("station-directory-status");
 var stationEmpty = document.getElementById("station-empty");
 var spTrigger = document.getElementById("sp-trigger");
 var spList = document.getElementById("sp-list");
+var trackIdTitle = document.getElementById("track-id-title");
+var trackIdBtn = document.getElementById("track-id-btn");
+var shazamBtn = document.getElementById("shazam-btn");
 
 var currentStation = null;
 var currentUrl = null;
@@ -45,6 +48,7 @@ var directoryStations = [];
 var activeFilter = "all";
 var eqRunning = false;
 var eqRaf = null;
+var trackTimer = null;
 
 audio.volume = parseFloat(volumeSlider.value);
 
@@ -129,9 +133,11 @@ function setPlayButton(isPlaying) {
 
 function showAudioError() {
   lcdStatus.textContent = "STREAM ERROR";
+  setTrackText("TRACK DATA UNAVAILABLE");
   setPlayButton(false);
   stopEq();
   stopSignalFlicker();
+  stopTrackPolling();
 }
 
 /* ── Scrolling display ── */
@@ -154,6 +160,45 @@ function startScroll(name) {
     scrollAnim = setTimeout(tick, 200);
   }
   tick();
+}
+
+function setTrackText(text) {
+  if (trackIdTitle) trackIdTitle.textContent = String(text || "NO TRACK DATA YET").toUpperCase();
+}
+
+async function identifyTrack(showLoading) {
+  if (!currentUrl || !trackIdTitle) {
+    setTrackText("Select a station first");
+    return;
+  }
+  if (showLoading) setTrackText("Listening for stream metadata...");
+  if (trackIdBtn) trackIdBtn.disabled = true;
+  try {
+    var response = await fetch("/api/radio-meta?url=" + encodeURIComponent(currentUrl));
+    if (!response.ok) throw new Error("metadata error");
+    var data = await response.json();
+    if (data && data.title) setTrackText(data.title);
+    else setTrackText("No track metadata from this station");
+  } catch (_) {
+    setTrackText("Track ID unavailable");
+  } finally {
+    if (trackIdBtn) trackIdBtn.disabled = false;
+  }
+}
+
+function startTrackPolling() {
+  stopTrackPolling();
+  identifyTrack(false);
+  trackTimer = setInterval(function() {
+    if (!audio.paused && currentUrl) identifyTrack(false);
+  }, 45000);
+}
+
+function stopTrackPolling() {
+  if (trackTimer) {
+    clearInterval(trackTimer);
+    trackTimer = null;
+  }
 }
 
 function stopScroll() {
@@ -318,6 +363,7 @@ function play(station) {
   currentStation = station;
   currentUrl = station.url;
   audio.src = station.url;
+  setTrackText("Listening for stream metadata...");
   audio.play().catch(showAudioError);
   startScroll(station.name);
   lcdStatus.textContent = "CONNECTING";
@@ -344,6 +390,7 @@ playPauseBtn.addEventListener("click", function() {
     setPlayButton(false);
     stopEq();
     stopSignalFlicker();
+    stopTrackPolling();
   }
 });
 
@@ -356,6 +403,7 @@ audio.addEventListener("playing", function() {
   setPlayButton(true);
   startEq();
   startSignalFlicker();
+  startTrackPolling();
 });
 
 audio.addEventListener("waiting", function() {
@@ -363,6 +411,16 @@ audio.addEventListener("waiting", function() {
 });
 
 audio.addEventListener("error", showAudioError);
+
+if (trackIdBtn) {
+  trackIdBtn.addEventListener("click", function() { identifyTrack(true); });
+}
+
+if (shazamBtn) {
+  shazamBtn.addEventListener("click", function() {
+    window.open("https://www.shazam.com/", "_blank", "noopener");
+  });
+}
 
 /* ── Preset buttons ── */
 function updatePresetHighlights() {

@@ -1,99 +1,103 @@
 ---
 import Base from "../../layouts/Base.astro";
+import "../../styles/prepping.css";
 
-// Affiliate-ready: when your Amazon Associates AU ID is approved, set this tag
-// and every link below carries it automatically. Empty = plain (non-affiliate) links.
-const AFFILIATE_TAG = "";
+const AFFILIATE_TAG = import.meta.env.PUBLIC_AMAZON_ASSOCIATE_TAG || "";
 const az = (q: string) =>
   `https://www.amazon.com.au/s?k=${encodeURIComponent(q)}` +
   (AFFILIATE_TAG ? `&tag=${AFFILIATE_TAG}` : "");
 
 type Item = { name: string; why: string; q: string };
-const groups: { c: string; title: string; items: Item[] }[] = [
+type Bag = { id: string; title: string; blurb: string; items: Item[] };
+
+const bags: Bag[] = [
   {
-    c: "Cutting",
-    title: "Cutting tools",
+    id: "ghb",
+    title: "Get Home Bag (GHB)",
+    blurb: "Small, light, lives in your car or at work. One job: get you home on foot if transport and phones go down. Think one day, urban.",
     items: [
-      { name: "Fixed-blade knife (full tang)", why: "The one tool you can't improvise. Full tang survives batoning.", q: "morakniv companion fixed blade knife" },
-      { name: "Folding saw", why: "Processes firewood and shelter poles far faster than a knife.", q: "silky folding saw bushcraft" },
-      { name: "Multi-tool", why: "Pliers, drivers, scissors — repairs and fiddly jobs.", q: "leatherman multi tool" },
+      { name: "Comfortable walking shoes + spare socks", why: "You can't walk 20 km home in dress shoes. The single most-skipped item.", q: "trail running shoes" },
+      { name: "1 L water + compact filter", why: "Refill from any tap or creek on the way.", q: "water bottle filter compact" },
+      { name: "Energy bars / nuts", why: "Keep moving without stopping to find food.", q: "energy bars" },
+      { name: "Power bank + charging cable", why: "Phone is your map and comms — keep it alive.", q: "10000mah power bank" },
+      { name: "Compact first-aid kit + personal meds", why: "Blisters and minor injuries on a long walk.", q: "compact first aid kit" },
+      { name: "Headtorch", why: "If the walk runs into the night.", q: "headtorch led" },
+      { name: "Multi-tool + small cash", why: "Fix problems; pay when EFTPOS is down.", q: "leatherman multi tool" },
+      { name: "N95 mask + light rain shell", why: "Smoke, dust, weather on the route.", q: "packable rain jacket" },
+      { name: "Paper map of your city / route home", why: "No battery, no signal needed.", q: "city street map" },
     ],
   },
   {
-    c: "Combustion",
-    title: "Fire",
+    id: "bob",
+    title: "Bug Out Bag (BOB)",
+    blurb: "72-hour evacuation kit — grab it and go when you have to leave home (fire, flood). Organised by the survival “Cs”. Tuned for Australian conditions.",
     items: [
-      { name: "Ferro rod", why: "Works wet, lasts thousands of strikes, no fuel to leak.", q: "ferro rod fire starter" },
-      { name: "Stormproof lighter / matches", why: "Redundancy — two ignition methods minimum.", q: "stormproof matches waterproof" },
-      { name: "Tinder (waxed jute / fire paste)", why: "Reliable ignition in damp Australian bush.", q: "waterproof tinder fire starter" },
+      { name: "Fixed-blade knife (full tang)", why: "The one tool you can't improvise. Cutting, batoning, food.", q: "morakniv companion fixed blade knife" },
+      { name: "Ferro rod + stormproof lighter", why: "Two ignition methods; ferro works wet.", q: "ferro rod fire starter" },
+      { name: "Tarp (3×3 m) + emergency bivvy", why: "Shelter and warmth, lighter than a tent.", q: "3x3 ripstop tarp" },
+      { name: "Steel water bottle + squeeze filter + tablets", why: "Carry, boil, filter, chemically treat — redundancy.", q: "single wall steel bottle sawyer filter" },
+      { name: "35–45 L pack", why: "72 hrs of kit, still light enough to move fast.", q: "40l hiking backpack" },
+      { name: "Paracord (550, 30 m) + gorilla tape", why: "Shelter, repairs, a hundred uses.", q: "550 paracord 30m" },
+      { name: "First-aid kit + snake bandages", why: "AU essential — pressure-immobilisation for snake bite.", q: "snake bite bandage first aid kit australia" },
+      { name: "Headtorch + spare batteries", why: "Hands-free light after dark.", q: "rechargeable headtorch" },
+      { name: "Compass + paper map", why: "Navigate without signal or battery.", q: "baseplate compass" },
+      { name: "3 days food + merino layer + rain shell", why: "Calories and core temperature.", q: "freeze dried meals" },
+      { name: "PLB (personal locator beacon)", why: "Gets rescue to you when you're remote.", q: "personal locator beacon plb" },
     ],
   },
   {
-    c: "Cover",
-    title: "Shelter & warmth",
+    id: "inch",
+    title: "INCH Bag (I'm Never Coming Home)",
+    blurb: "The worst-case load: you're not returning. Long-term, self-sufficient living out of one pack. Heavier and bigger — capability over weight.",
     items: [
-      { name: "Tarp (3×3 m)", why: "Lighter and more versatile than a tent for a BOB.", q: "3x3 ripstop tarp shelter" },
-      { name: "Emergency bivvy", why: "Reflects body heat; pocket-sized insurance against exposure.", q: "emergency bivvy sack" },
-      { name: "Wide-brim hat + merino layer", why: "AU sun and cold-night swing — cover both.", q: "merino base layer" },
-    ],
-  },
-  {
-    c: "Container",
-    title: "Water",
-    items: [
-      { name: "Single-wall steel bottle", why: "Carries water and lets you boil it to purify.", q: "single wall stainless steel water bottle" },
-      { name: "Squeeze / hollow-fibre filter", why: "Removes protozoa and bacteria from creek water.", q: "sawyer squeeze water filter" },
-      { name: "Purification tablets", why: "Backup for when the filter clogs or freezes.", q: "water purification tablets" },
-    ],
-  },
-  {
-    c: "Cargo",
-    title: "Pack & cordage",
-    items: [
-      { name: "35–45 L pack", why: "Big enough for 72 hrs, small enough to move fast.", q: "35l tactical backpack" },
-      { name: "Paracord (550, 30 m)", why: "Shelter, repairs, gear — endless uses.", q: "550 paracord 30m" },
-      { name: "Gorilla / gaffer tape", why: "Field repairs, blister cover, gear patching.", q: "gorilla tape" },
-    ],
-  },
-  {
-    c: "Care",
-    title: "First aid & light",
-    items: [
-      { name: "Compact first-aid kit + snake bandages", why: "AU essential — pressure-immobilisation for snake bite.", q: "snake bite bandage first aid kit australia" },
-      { name: "Headtorch (+ spare batteries)", why: "Hands-free light; the most-used item after dark.", q: "rechargeable headtorch" },
-      { name: "Personal meds + electrolytes", why: "Heat and exertion drain you fast.", q: "hydration electrolyte tablets" },
-    ],
-  },
-  {
-    c: "Comms",
-    title: "Navigation & comms",
-    items: [
-      { name: "Compass + paper map", why: "No battery, no signal dependency.", q: "baseplate compass" },
-      { name: "Power bank (10000 mAh)", why: "Keeps phone/headtorch alive for days.", q: "10000mah power bank" },
-      { name: "PLB (personal locator beacon)", why: "The one device that gets rescue to remote you.", q: "personal locator beacon plb" },
+      { name: "65 L+ pack with frame", why: "Carries weeks of kit and the means to make more.", q: "65l hiking backpack frame" },
+      { name: "Full bushcraft knife + hatchet + folding saw", why: "Process wood for shelter, fire and tools indefinitely.", q: "bushcraft axe hatchet" },
+      { name: "Tent or hammock + season-rated sleeping bag", why: "Durable shelter for the long haul, not just a night.", q: "lightweight tent 2 person" },
+      { name: "Stove + pot + extra fuel / cook kit", why: "Cook and purify daily without burning yourself out.", q: "camping stove cook set" },
+      { name: "High-capacity gravity filter + tablets", why: "Water for weeks, not days.", q: "gravity water filter" },
+      { name: "Fishing kit + snare wire + repair kit", why: "Procure food once your supplies run out.", q: "survival fishing kit" },
+      { name: "Heirloom seed pack + foraging guide", why: "Grow food where you settle — the long game.", q: "heirloom vegetable seeds" },
+      { name: "Extended first aid + antibiotics + sutures", why: "No hospital is coming. Austere medicine.", q: "tactical trauma first aid kit" },
+      { name: "Foldable solar panel + power bank + AA/AAA rechargeables", why: "Keep light, comms and navigation running off-grid.", q: "foldable solar panel usb" },
+      { name: "Radio (UHF/AM) + compass + maps + PLB", why: "Information and rescue without the grid.", q: "uhf handheld radio" },
+      { name: "Documents (encrypted USB + hard copies) + cash", why: "Identity, records and barter when systems are down.", q: "encrypted usb drive" },
+      { name: "Spare boots + clothing + sewing kit", why: "Clothing wears out; you have to maintain it.", q: "hiking boots" },
     ],
   },
 ];
 ---
 
 <Base
-  title="Bug-Out Bag Gear"
-  description="A curated 72-hour bug-out bag list, organised by the Cs of survivability — with the reasoning behind each pick. Australian context."
+  title="Go Bags"
+  description="Three tiers of survival bag — Get Home, Bug Out, and INCH — each with a curated kit list and the reasoning behind every pick. Australian context."
 >
+  <nav class="prep-modes" aria-label="Prepping sections">
+    <a href="/prepping">Guide</a>
+    <a href="/prepping/gear" class="active">Gear</a>
+    <a href="/prepping/health">Health</a>
+    <a href="/prepping/tools">Field tools</a>
+  </nav>
+
   <article>
-    <p class="eyebrow"><a href="/prepping">Prepping</a> / Gear</p>
-    <h1 class="lede">A bug-out bag, <em>chosen on purpose</em></h1>
+    <p class="eyebrow"><a href="/prepping">Prepping</a> / Go bags</p>
+    <h1>Go bags</h1>
     <p>
-      A 72-hour kit organised by the survival "Cs". These are the categories that
-      matter and the reasoning behind each pick — buy once, buy right. Tuned for
-      Australian conditions (sun, heat swings, snakes, remote distances).
+      Three bags for three situations, smallest to largest: a <strong>Get Home</strong>
+      bag for the daily what-if, a <strong>Bug Out</strong> bag for a 72-hour
+      evacuation, and an <strong>INCH</strong> bag for not coming back. Buy once,
+      buy right. Tuned for Australian conditions.
     </p>
 
-    {groups.map((g) => (
-      <section class="reveal gear-group">
-        <h2>{g.title}</h2>
+    <nav class="bag-jump">
+      {bags.map((b) => <a href={`#${b.id}`}>{b.title}</a>)}
+    </nav>
+
+    {bags.map((b) => (
+      <section class="reveal bag-group" id={b.id}>
+        <h2>{b.title}</h2>
+        <p class="bag-blurb">{b.blurb}</p>
         <ul class="gear-list">
-          {g.items.map((it) => (
+          {b.items.map((it) => (
             <li>
               <a href={az(it.q)} target="_blank" rel="sponsored nofollow noopener">{it.name} ↗</a>
               <span class="gear-why">{it.why}</span>
@@ -112,8 +116,12 @@ const groups: { c: string; title: string; items: Item[] }[] = [
   </article>
 
   <style>
-    .gear-group { margin-top: 2rem; }
-    .gear-list { list-style: none; padding: 0; margin: 0; }
+    .bag-jump { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1.25rem 0; }
+    .bag-jump a { font-size: 0.85rem; padding: 0.3rem 0.7rem; border: 1px solid var(--rule); border-radius: 999px; text-decoration: none; color: var(--fg); }
+    .bag-jump a:hover { border-color: var(--accent); }
+    .bag-group { margin-top: 2.25rem; scroll-margin-top: 1rem; }
+    .bag-blurb { color: var(--muted); font-size: 0.95rem; margin-top: 0.25rem; }
+    .gear-list { list-style: none; padding: 0; margin: 0.75rem 0 0; }
     .gear-list li { padding: 0.6rem 0; border-bottom: 1px solid var(--rule); }
     .gear-list a { font-weight: 600; }
     .gear-why { display: block; color: var(--muted); font-size: 0.92rem; margin-top: 0.15rem; }

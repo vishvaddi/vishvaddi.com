@@ -30,6 +30,7 @@ export function mountCalcs(root: HTMLElement, specs: CalcSpec[]) {
   for (const spec of specs) {
     const sec = document.createElement("section");
     sec.className = "calc";
+    sec.id = spec.id;
 
     const h = document.createElement("h2");
     h.textContent = spec.title;
@@ -103,6 +104,9 @@ export function mountCalcs(root: HTMLElement, specs: CalcSpec[]) {
     root.append(sec);
     run();
   }
+
+  const target = document.getElementById(location.hash.slice(1));
+  if (target) requestAnimationFrame(() => target.scrollIntoView());
 }
 
 // Shared helpers (importing these into a single-use tool module forces Astro to
@@ -133,6 +137,12 @@ const UNITS: Record<string, Record<string, number>> = {
   Volume: {
     mL: 0.001, L: 1, "m³": 1000,
     "ft³": 28.316846592, "gal US": 3.785411784, "gal UK": 4.54609,
+  },
+  Mass: {
+    g: 1, kg: 1000, oz: 28.349523125, lb: 453.59237, st: 6350.29318,
+  },
+  Energy: {
+    J: 1, kJ: 1000, cal: 4.184, kcal: 4184,
   },
 };
 
@@ -181,6 +191,8 @@ export function initConverter() {
     o.textContent = c;
     catEl.append(o);
   }
+  const requested = new URLSearchParams(location.search).get("type");
+  if (requested && requested in UNITS) catEl.value = requested;
   catEl.addEventListener("change", () => { fill(); convert(); });
   [valEl, fromEl, toEl].forEach((el) => el.addEventListener("input", convert));
   g<HTMLButtonElement>("swap").addEventListener("click", () => {

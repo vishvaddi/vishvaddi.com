@@ -3,6 +3,7 @@
 /* Section swap tabs at the top of both pages. */
 .prep-modes {
   display: flex;
+  flex-wrap: wrap;
   gap: 0;
   border-bottom: 1px solid var(--rule);
   margin: 0 0 1.75rem;
@@ -19,6 +20,227 @@
 }
 .prep-modes a:hover { color: var(--fg); }
 .prep-modes a.active { color: var(--fg); border-bottom-color: var(--fg); }
+
+.prep-start {
+  margin: 0 0 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+.prep-start h1 {
+  margin-bottom: 0.35rem;
+}
+.prep-urgent {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.5rem;
+  margin-top: 1.2rem;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, #b42318 45%, var(--rule));
+  border-radius: 9px;
+  background: color-mix(in srgb, #b42318 6%, transparent);
+}
+.prep-urgent a {
+  display: block;
+  padding: 0.65rem;
+  color: var(--fg);
+  text-decoration: none;
+}
+.prep-urgent a:hover {
+  background: color-mix(in srgb, #b42318 8%, transparent);
+}
+.prep-urgent strong,
+.prep-urgent span {
+  display: block;
+}
+.prep-urgent span {
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.prep-start-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.7rem;
+  margin-top: 1.2rem;
+}
+.prep-start-grid a {
+  display: block;
+  min-height: 6.5rem;
+  padding: 0.85rem;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--fg);
+}
+.prep-start-grid a:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.prep-start-grid strong {
+  display: block;
+  font-family: var(--font-sans);
+  margin-bottom: 0.28rem;
+}
+.prep-start-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.75rem;
+  margin: 1.5rem 0 2.5rem;
+}
+.health-card {
+  display: block;
+  min-height: 8.5rem;
+  padding: 1rem;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  color: var(--fg);
+  text-decoration: none;
+}
+.health-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.health-card strong {
+  display: block;
+  font-family: var(--font-sans);
+  margin-bottom: 0.35rem;
+}
+.health-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.weather-panel {
+  margin-top: 2.5rem;
+  padding: 1rem;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, #2c63d6 7%, transparent), transparent 52%),
+    color-mix(in srgb, var(--bg) 92%, transparent);
+}
+.weather-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.weather-head h2 {
+  margin: 0;
+}
+.weather-panel .eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #2c63d6;
+  margin: 0 0 0.35rem;
+}
+:root[data-theme="dark"] .weather-panel .eyebrow,
+:root:not([data-theme="light"]) .weather-panel .eyebrow {
+  color: #6ea0ff;
+}
+.weather-status {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.75rem 0 1rem;
+}
+.weather-current {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.55rem;
+}
+.weather-stat,
+.weather-day {
+  border: 1px solid color-mix(in srgb, var(--fg) 14%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+}
+.weather-stat {
+  padding: 0.65rem 0.75rem;
+}
+.weather-stat .n {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.weather-stat .l,
+.weather-day span,
+.weather-day time {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.weather-stat .l {
+  margin-top: 0.15rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.weather-days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+.weather-day {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  padding: 0.65rem 0.75rem;
+}
+.weather-day strong {
+  font-family: var(--font-sans);
+  line-height: 1.25;
+}
+.weather-warnings {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+}
+.weather-warnings h3 {
+  margin: 0;
+}
+.weather-warnings p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.weather-warning-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.weather-warning-links a {
+  padding: 0.4rem 0.65rem;
+  border: 1px solid color-mix(in srgb, #b42318 35%, var(--rule));
+  border-radius: 999px;
+  color: var(--fg);
+  text-decoration: none;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+}
+.weather-warning-links a:hover {
+  border-color: #b42318;
+}
+
+@media (max-width: 560px) {
+  .weather-head {
+    flex-direction: column;
+  }
+}
 
 /* Collapsible knowledge groups. */
 .np-group { border-top: 1px solid var(--rule); scroll-margin-top: 5rem; }

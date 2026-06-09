@@ -80,6 +80,17 @@ import Base from "../layouts/Base.astro";
       <button id="play-pause-btn" class="play-btn" aria-label="Play/pause">&#9654;</button>
     </div>
 
+    <div class="track-id-row" aria-live="polite">
+      <div class="track-id-copy">
+        <span class="track-id-label">TRACK ID</span>
+        <span class="track-id-title" id="track-id-title">NO TRACK DATA YET</span>
+      </div>
+      <div class="track-id-actions">
+        <button id="track-id-btn" class="track-id-btn" type="button">ID</button>
+        <button id="shazam-btn" class="track-id-btn shazam-btn" type="button">SHAZAM</button>
+      </div>
+    </div>
+
     <!-- Tune row -->
     <div class="tune-row">
       <span class="vol-label">TUNE</span>
@@ -229,6 +240,71 @@ import Base from "../layouts/Base.astro";
     display: flex;
     align-items: flex-end;
     gap: 10px;
+  }
+
+  .track-id-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 8px 0 10px;
+    padding: 7px 8px;
+    border: 1px solid #2c1a07;
+    border-radius: 6px;
+    background: rgba(3, 10, 3, 0.72);
+    box-shadow: inset 0 1px 5px rgba(0,0,0,0.55);
+  }
+
+  .track-id-copy {
+    min-width: 0;
+  }
+
+  .track-id-label {
+    display: block;
+    color: rgba(45,255,74,0.42);
+    font: 700 0.55rem/1 monospace;
+    letter-spacing: 0.16em;
+    margin-bottom: 3px;
+  }
+
+  .track-id-title {
+    display: block;
+    max-width: 330px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #2dff4a;
+    text-shadow: 0 0 8px rgba(45,255,74,0.35);
+    font: 700 0.72rem/1.2 monospace;
+    letter-spacing: 0.04em;
+  }
+
+  .track-id-actions {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+
+  .track-id-btn {
+    border: 1px solid #573004;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #2c1905, #130b02);
+    color: #e2a83a;
+    cursor: pointer;
+    font: 700 0.62rem/1 monospace;
+    letter-spacing: 0.09em;
+    padding: 0.45rem 0.5rem;
+    box-shadow: inset 0 1px 0 rgba(255,180,50,0.12);
+  }
+
+  .track-id-btn:hover {
+    border-color: #a85d0b;
+    color: #ffd17a;
+  }
+
+  .track-id-btn:disabled {
+    opacity: 0.5;
+    cursor: wait;
   }
 
   .lcd-status {

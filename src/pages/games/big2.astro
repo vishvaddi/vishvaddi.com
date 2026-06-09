@@ -1,5 +1,6 @@
 ---
 import Base from "../../layouts/Base.astro";
+import AdSlot from "../../components/AdSlot.astro";
 ---
 
 <Base title="Big 2" description="Play Big 2 (Big Two) against three AI opponents — the classic shedding card game. Runs entirely in your browser.">
@@ -12,6 +13,22 @@ import Base from "../../layouts/Base.astro";
   </p>
 
   <div id="big2">
+    <div class="b2-meta">
+      <span id="b2-round">Round 1</span>
+      <span id="b2-record">0 wins · 0 losses</span>
+    </div>
+
+    <div class="b2-turn-panel">
+      <div>
+        <span class="b2-kicker">Current turn</span>
+        <strong id="b2-turn">Dealing cards...</strong>
+      </div>
+      <div>
+        <span class="b2-kicker">Target</span>
+        <strong id="b2-target">Open lead</strong>
+      </div>
+    </div>
+
     <div id="b2-opponents" class="b2-opponents"></div>
 
     <div class="b2-table">
@@ -19,22 +36,32 @@ import Base from "../../layouts/Base.astro";
       <div class="b2-pile" id="b2-pile"></div>
     </div>
 
-    <p class="b2-msg" id="b2-msg"></p>
+    <p class="b2-msg" id="b2-msg" role="status" aria-live="polite"></p>
 
+    <div class="b2-hand-meta">
+      <strong>Your hand</strong>
+      <span class="b2-selection" id="b2-selection">Select cards to play</span>
+    </div>
     <div class="b2-hand" id="b2-hand"></div>
 
-    <div class="b2-controls">
-      <button class="btn" id="b2-play">Play</button>
-      <button class="btn btn-ghost" id="b2-pass">Pass</button>
-      <button class="btn btn-ghost" id="b2-hint">Hint</button>
-      <button class="btn btn-ghost" id="b2-sort">Sort</button>
-      <button class="btn btn-ghost" id="b2-new">New game</button>
+    <div class="b2-move-picker">
+      <span class="b2-kicker">Legal moves</span>
+      <div id="b2-quick" class="b2-quick"></div>
+    </div>
+
+    <div class="b2-controls b2-controls-primary">
+      <button class="btn b2-play-btn" id="b2-play">Play selected</button>
+      <button class="btn btn-ghost b2-pass-btn" id="b2-pass">Pass turn</button>
+    </div>
+    <div class="b2-controls b2-controls-secondary">
+      <button class="btn btn-ghost" id="b2-hint">Suggest move</button>
+      <button class="btn btn-ghost" id="b2-clear">Clear</button>
+      <button class="btn btn-ghost" id="b2-sort">Sort hand</button>
+      <button class="btn btn-ghost" id="b2-new">New deal</button>
     </div>
   </div>
 
-  <!-- Ad slot (games only). Drop your AdSense <ins> + loader here once your
-       publisher ID is approved; ask to add the scoped CSP for /games. -->
-  <aside class="b2-ad" aria-hidden="true">advertisement</aside>
+  <AdSlot label="Game advertisement" />
 
   <details class="b2-rules">
     <summary>How to play</summary>
@@ -49,37 +76,91 @@ import Base from "../../layouts/Base.astro";
   </details>
 
   <style is:global>
-    #big2 { margin: 1.25rem 0; }
-    .b2-opponents { display: flex; gap: 0.75rem; flex-wrap: wrap; }
-    .b2-opp { flex: 1; min-width: 90px; border: 1px solid var(--rule); border-radius: 10px; padding: 0.6rem 0.75rem; text-align: center; transition: border-color .2s var(--ease, ease), background .2s, box-shadow .2s; }
+    #big2 {
+      margin: 1.25rem 0;
+      padding: 1rem;
+      border: 1px solid var(--rule);
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--bg) 94%, var(--accent) 6%);
+      box-shadow: 0 18px 50px rgba(0,0,0,0.08);
+    }
+    .b2-meta, .b2-hand-meta { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; color: var(--muted); font-size: 0.82rem; }
+    .b2-hand-meta strong { color: var(--fg); font-size: 0.9rem; }
+    .b2-turn-panel {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin: 0.75rem 0;
+    }
+    .b2-turn-panel > div {
+      padding: 0.7rem 0.8rem; border: 1px solid var(--rule); border-radius: 10px;
+      background: color-mix(in srgb, var(--bg) 88%, transparent);
+    }
+    .b2-turn-panel strong { display: block; font-size: 0.95rem; }
+    .b2-kicker {
+      display: block; margin-bottom: 0.16rem; color: var(--muted); font: 0.64rem var(--font-mono);
+      letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .b2-opponents { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.65rem; }
+    .b2-opp { min-width: 0; border: 1px solid var(--rule); border-radius: 12px; padding: 0.7rem 0.75rem; text-align: center; transition: border-color .2s var(--ease, ease), background .2s, box-shadow .2s; }
     .b2-opp.turn { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
     .b2-opp-name { font-weight: 600; font-size: 0.9rem; }
     .b2-opp-cards { font-size: 0.8rem; color: var(--muted); }
+    .b2-card-backs { display: flex; justify-content: center; gap: 2px; height: 18px; margin-top: 0.35rem; overflow: hidden; }
+    .b2-card-back { width: 12px; height: 17px; border-radius: 2px; background: linear-gradient(135deg, #253d66, #476b9c); border: 1px solid #7d9bc0; }
     .b2-table {
-      margin: 1.25rem 0; min-height: 130px; border-radius: 16px; padding: 1rem;
+      margin: 0.75rem 0; min-height: 150px; border-radius: 18px; padding: 1rem;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem;
-      background: radial-gradient(ellipse at center, #2f7d52 0%, #1f5a3a 80%);
-      box-shadow: inset 0 2px 14px rgba(0,0,0,0.35); border: 1px solid #1a4730;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(255,255,255,0.08), transparent 30%),
+        radial-gradient(ellipse at center, #367f58 0%, #16432e 82%);
+      box-shadow: inset 0 2px 20px rgba(0,0,0,0.42), 0 8px 24px rgba(0,0,0,0.12); border: 1px solid #123a28;
     }
     .b2-pile-by { font-size: 0.78rem; color: rgba(255,255,255,0.65); letter-spacing: 0.03em; }
-    .b2-pile { display: flex; gap: 5px; min-height: 60px; align-items: center; }
-    .b2-msg { min-height: 1.4em; color: var(--accent-dark); font-size: 0.92rem; font-weight: 500; }
-    .b2-hand { display: flex; flex-wrap: wrap; gap: 6px; margin: 0.5rem 0 1rem; padding: 0.5rem; border-radius: 10px; transition: box-shadow .2s; }
+    .b2-pile { display: flex; gap: 7px; min-height: 72px; align-items: center; }
+    .b2-msg { min-height: 1.4em; margin: 0.65rem 0; padding: 0.55rem 0.7rem; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--fg); font-size: 0.9rem; font-weight: 600; }
+    .b2-selection { padding: 0.16rem 0.48rem; border-radius: 999px; background: var(--code-bg); }
+    .b2-selection.valid { color: #1b6c3b; background: color-mix(in srgb, #2b9b55 14%, transparent); }
+    .b2-selection.invalid { color: #a74825; background: color-mix(in srgb, #c5683f 13%, transparent); }
+    .b2-hand { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0.55rem 0 0.8rem; padding: 1rem 0.75rem; border: 1px solid var(--rule); border-radius: 12px; background: color-mix(in srgb, var(--bg) 82%, #fff 18%); transition: box-shadow .2s; }
     .b2-card {
-      width: 46px; height: 64px; border: 1px solid #c8c8c8; border-radius: 7px;
+      width: 54px; height: 76px; border: 1px solid #c8c8c8; border-radius: 9px;
       background: linear-gradient(160deg, #fff 0%, #f3f1ea 100%); color: #1a1a1a;
-      display: flex; flex-direction: column; align-items: center; justify-content: space-between;
-      padding: 5px 0; font-weight: 700; font-size: 1rem; cursor: pointer; user-select: none;
+      display: grid; grid-template-rows: auto 1fr; align-items: start; justify-items: start;
+      padding: 5px 6px; font: inherit; font-weight: 800; font-size: 1rem; cursor: pointer; user-select: none;
       box-shadow: 0 1px 4px rgba(0,0,0,0.2); transition: transform .12s var(--ease, ease), box-shadow .12s;
     }
-    .b2-card.sm { width: 38px; height: 52px; font-size: 0.85rem; cursor: default; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+    .b2-card-rank { line-height: 1; }
+    .b2-card-suit { place-self: center; font-size: 1.7rem; line-height: 1; }
+    .b2-card.sm { width: 45px; height: 62px; font-size: 0.9rem; cursor: default; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+    .b2-card.sm .b2-card-suit { font-size: 1.35rem; }
     .b2-card.red { color: #c0392b; }
     .b2-hand .b2-card:hover { transform: translateY(-6px); box-shadow: 0 6px 12px rgba(0,0,0,0.22); }
-    .b2-card.sel { transform: translateY(-12px); border-color: var(--accent); box-shadow: 0 6px 14px rgba(0,0,0,0.3); }
+    .b2-card.sel { transform: translateY(-12px); border: 2px solid var(--accent); box-shadow: 0 8px 18px rgba(0,0,0,0.3); }
+    .b2-card.playable { border-color: color-mix(in srgb, var(--accent) 50%, #c8c8c8); }
+    .b2-card:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+    .b2-move-picker { margin: 0.4rem 0 0.8rem; }
+    .b2-quick { display: flex; flex-wrap: wrap; gap: 0.4rem; min-height: 2rem; }
+    .b2-quick-btn {
+      border: 1px solid var(--rule); border-radius: 999px; padding: 0.38rem 0.62rem;
+      background: var(--bg); color: var(--fg); cursor: pointer; font: 0.78rem var(--font-sans);
+    }
+    .b2-quick-btn:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .b2-quick-empty { color: var(--muted); font-size: 0.82rem; }
     .b2-controls { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-    .b2-ad { margin: 1.5rem 0; min-height: 90px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--rule); border-radius: 8px; color: var(--muted); font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; }
+    .b2-controls-primary { display: grid; grid-template-columns: 2fr 1fr; }
+    .b2-controls-primary .btn { min-height: 46px; font-size: 1rem; }
+    .b2-controls-secondary { margin-top: 0.5rem; }
+    .b2-play-btn { box-shadow: 0 5px 14px color-mix(in srgb, var(--accent) 25%, transparent); }
     .b2-rules { margin-top: 1rem; font-size: 0.9rem; color: var(--muted); }
     .b2-rules summary { cursor: pointer; color: var(--fg); }
+    @media (max-width: 560px) {
+      #big2 { padding: 0.7rem; margin-left: -0.35rem; margin-right: -0.35rem; }
+      .b2-card { width: 48px; height: 68px; padding: 4px 5px; }
+      .b2-card-suit { font-size: 1.5rem; }
+      .b2-opponents { gap: 0.45rem; }
+      .b2-opp { padding: 0.5rem 0.3rem; }
+      .b2-opp-name { font-size: 0.8rem; }
+      .b2-card-backs { display: none; }
+      .b2-controls-secondary .btn { flex: 1 1 42%; }
+    }
   </style>
 
   <script src="/scripts/big2.js" defer></script>

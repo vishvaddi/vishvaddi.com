@@ -1,0 +1,50 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/prepping.css";
+---
+
+<Base
+  title="Health & Wellbeing"
+  description="Practical fitness, nutrition, hydration and unit-conversion tools for maintaining physical capacity."
+>
+  <nav class="prep-modes" aria-label="Prepping sections">
+    <a href="/prepping">Guide</a>
+    <a href="/prepping/gear">Gear</a>
+    <a href="/prepping/health" class="active">Health</a>
+    <a href="/prepping/tools">Field tools</a>
+  </nav>
+
+  <h1>Health &amp; wellbeing</h1>
+  <p>
+    Physical capacity is preventative infrastructure: strength, aerobic fitness,
+    nutrition, hydration and recovery reduce the chance that a small problem
+    becomes an emergency.
+  </p>
+
+  <div class="health-grid">
+    <a class="health-card" href="/site/fitness#bmi">
+      <strong>Body metrics</strong>
+      <span>BMI and tape-method body-fat estimates for rough trend tracking.</span>
+    </a>
+    <a class="health-card" href="/site/fitness#tdee">
+      <strong>Energy &amp; nutrition</strong>
+      <span>BMR, TDEE, calorie targets and macro splits.</span>
+    </a>
+    <a class="health-card" href="/site/fitness#orm">
+      <strong>Strength &amp; hydration</strong>
+      <span>One-rep max estimates and daily water requirements.</span>
+    </a>
+    <a class="health-card" href="/site/convert?type=Mass">
+      <strong>Bodyweight converter</strong>
+      <span>Convert between kilograms, pounds, ounces and stone.</span>
+    </a>
+    <a class="health-card" href="/site/convert?type=Energy">
+      <strong>Food energy converter</strong>
+      <span>Convert between kilojoules, kilocalories, calories and joules.</span>
+    </a>
+  </div>
+
+  <p class="note-foot">
+    These are estimates for planning and trend tracking, not diagnosis or medical advice.
+  </p>
+</Base>

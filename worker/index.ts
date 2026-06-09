@@ -10,6 +10,7 @@ interface Env {
 const TILE_RE = /^\/api\/poi\/tiles\/(\d+)\/(\d+)\/(\d+)$/;
 const UA = "vishvaddi.com field-survival tool (personal, low volume)";
 const MAX_FEED_BYTES = 2_000_000;
+const MAX_ICY_BYTES = 1_000_000;
 
 function isBlockedHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
@@ -63,6 +64,57 @@ async function fetchPublic(target: URL, init: RequestInit): Promise<Response> {
     current = next;
   }
   throw new Error("too many redirects");
+}
+
+function concatBytes(chunks: Uint8Array[], length: number): Uint8Array {
+  const out = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk.slice(0, Math.min(chunk.length, length - offset)), offset);
+    offset += chunk.length;
+    if (offset >= length) break;
+  }
+  return out;
+}
+
+async function readIcyTitle(upstream: Response): Promise<string | null> {
+  const metaInt = Number(upstream.headers.get("icy-metaint") || "0");
+  if (!Number.isFinite(metaInt) || metaInt <= 0 || metaInt > MAX_ICY_BYTES) return null;
+  const reader = upstream.body?.getReader();
+  if (!reader) return null;
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let needed = metaInt + 1;
+  try {
+    while (total < needed && total < MAX_ICY_BYTES) {
+      const { value, done } = await reader.read();
+      if (done || !value) break;
+      chunks.push(value);
+      total += value.length;
+    }
+    if (total < needed) return null;
+    let buffer = concatBytes(chunks, total);
+    const metaLength = buffer[metaInt] * 16;
+    if (!metaLength) return null;
+    needed = metaInt + 1 + metaLength;
+    while (total < needed && total < MAX_ICY_BYTES) {
+      const { value, done } = await reader.read();
+      if (done || !value) break;
+      chunks.push(value);
+      total += value.length;
+    }
+    if (total < needed) return null;
+    buffer = concatBytes(chunks, total);
+    const meta = new TextDecoder("utf-8")
+      .decode(buffer.slice(metaInt + 1, needed))
+      .replace(/\0/g, "")
+      .trim();
+    const match = meta.match(/StreamTitle='([^']*)'/i);
+    return match?.[1]?.trim() || null;
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
 }
 
 export default {
@@ -173,6 +225,31 @@ export default {
         });
       } catch {
         return new Response("fetch failed", { status: 504 });
+      }
+    }
+
+    // Radio ICY metadata proxy. Reads only enough bytes to parse StreamTitle,
+    // then closes the upstream stream. Same public-HTTPS restrictions as feeds.
+    if (path === "/api/radio-meta" && request.method === "GET") {
+      const target = publicHttpsUrl(url.searchParams.get("url") || "");
+      if (!target) return Response.json({ title: null }, { status: 400 });
+      try {
+        const upstream = await fetchPublic(target, {
+          headers: {
+            "User-Agent": UA,
+            "Accept": "*/*",
+            "Icy-MetaData": "1",
+          },
+          signal: AbortSignal.timeout(12000),
+          cf: { cacheTtl: 20, cacheEverything: true },
+        } as RequestInit);
+        if (!upstream.ok) return Response.json({ title: null }, { status: 502 });
+        return Response.json(
+          { title: await readIcyTitle(upstream) },
+          { headers: { "Cache-Control": "public, max-age=20" } }
+        );
+      } catch {
+        return Response.json({ title: null }, { status: 504 });
       }
     }
 

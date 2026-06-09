@@ -482,14 +482,13 @@ function slug(s: string): string {
 // The ~28 note sections, grouped into a handful of collapsible themes. Sections
 // are matched by heading slug, so order/insertions stay robust.
 const NOTE_GROUPS: { title: string; slugs: string[] }[] = [
-  { title: "Mindset & frameworks",   slugs: ["the-rule-of-threes", "survival-the-mindset-mnemonic", "the-five-priorities", "bradley-s-14-survival-needs"] },
-  { title: "Gear & kits",            slugs: ["the-5cs", "the-10cs", "the-urban-10cs"] },
-  { title: "Core survival skills",   slugs: ["shelter", "fire", "water", "signalling", "food"] },
-  { title: "First aid & hazards",    slugs: ["emergency-numbers-australia", "first-aid-drsabcd", "beyond-first-aid-austere-medicine", "snake-bite-australian-protocol", "other-australian-bites-and-stings"] },
-  { title: "Field craft",            slugs: ["six-knots-that-cover-most-situations", "sharp-tools-briefly", "natural-navigation-in-the-southern-hemisphere"] },
-  { title: "Australian context",     slugs: ["seasonal-threat-calendar-nsw", "australian-specific"] },
-  { title: "Home resilience",        slugs: ["the-everyday-baseline", "self-sufficiency-at-home-four-pillars", "gardening-principles", "diy-and-the-case-for-traditional-skills", "future-proofing-the-2026-angle"] },
-  { title: "Long-term maintenance",  slugs: ["the-52-week-prep-routine"] },
+  { title: "Emergency & first aid", slugs: ["emergency-numbers-australia", "first-aid-drsabcd", "beyond-first-aid-austere-medicine", "snake-bite-australian-protocol", "other-australian-bites-and-stings"] },
+  { title: "Survival priorities", slugs: ["the-rule-of-threes", "survival-the-mindset-mnemonic", "the-five-priorities", "shelter", "fire", "water", "signalling", "food", "bradley-s-14-survival-needs"] },
+  { title: "Field skills", slugs: ["six-knots-that-cover-most-situations", "sharp-tools-briefly", "natural-navigation-in-the-southern-hemisphere"] },
+  { title: "Gear & kits", slugs: ["the-5cs", "the-10cs", "the-urban-10cs"] },
+  { title: "Australian context", slugs: ["seasonal-threat-calendar-nsw", "australian-specific"] },
+  { title: "Home resilience", slugs: ["the-everyday-baseline", "self-sufficiency-at-home-four-pillars", "gardening-principles", "diy-and-the-case-for-traditional-skills", "future-proofing-the-2026-angle"] },
+  { title: "Maintenance", slugs: ["the-52-week-prep-routine"] },
 ];
 
 export function buildPreppingNav(): void {
@@ -546,9 +545,9 @@ export function buildPreppingNav(): void {
     addGroup("More", order.filter((k) => !assigned.has(k))); // any unexpected headings
   }
 
-  // ── Tool section links (the real tools live inside #prep-app) ──
+  // Include static weather/sky sections and generated tools in document order.
   const toolLinks: { id: string; label: string }[] = [];
-  document.querySelectorAll<HTMLElement>("#prep-app h2").forEach((h) => {
+  document.querySelectorAll<HTMLElement>("[data-prep-tool] h2, #prep-app h2").forEach((h) => {
     if (h.id) toolLinks.push({ id: h.id, label: (h.textContent || "").trim() });
   });
   if (!noteGroupLinks.length && !toolLinks.length) return;
@@ -624,6 +623,6 @@ export function buildPreppingNav(): void {
       { rootMargin: "-10% 0px -75% 0px" }
     );
     document.querySelectorAll<HTMLElement>(".np-group").forEach((g) => obs.observe(g));
-    document.querySelectorAll<HTMLElement>("#prep-app h2").forEach((h) => obs.observe(h));
+    document.querySelectorAll<HTMLElement>("[data-prep-tool] h2, #prep-app h2").forEach((h) => obs.observe(h));
   }
 }

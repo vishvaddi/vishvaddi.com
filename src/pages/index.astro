@@ -1,43 +1,51 @@
 ---
 import Base from "../layouts/Base.astro";
+
+const useful = [
+  { href: "/site", title: "Site tools", desc: "Construction calculators, cut lists, rate building, drawing and PDF utilities." },
+  { href: "/prepping/tools#weather-forecast", title: "Weather & sky", desc: "Location-based current weather, seven-day forecast, official warnings and night-sky view." },
+  { href: "/radio", title: "Radio", desc: "Australian and international live radio with stream metadata and track identification." },
+  { href: "/feeds", title: "Feeds", desc: "Major news, financial reporting, Australian and global construction, and The Conversation." },
+  { href: "/reader", title: "Reader", desc: "Free public-domain books with page turning, bookmarks and annotations." },
+  { href: "/studio", title: "Studio", desc: "A browser drum machine, synth, mixer and audio exporter." },
+  { href: "/games", title: "Games", desc: "Small browser games, including Big 2 against three computer players." },
+];
+
+const other = [
+  ["/prepping", "Prepping notes"],
+  ["/prepping/gear", "Gear lists"],
+  ["/prepping/health", "Health & wellbeing"],
+  ["/music", "Music"],
+  ["/movies", "Movies"],
+  ["/books", "Books"],
+  ["/blog", "Blog"],
+  ["/now", "Now"],
+  ["/about", "About"],
+];
 ---
 
 <Base ogImage="/og/index.png">
-  <p>
-    Estimator in Sydney — premium retail fit-out, beauty, fashion, commercial. Outside work: music production, bushcraft, film, and building side projects.
+  <p class="home-intro">
+    Estimator in Sydney working across premium retail and commercial fit-out. I build practical tools for estimating, scope generation and project work.
   </p>
 
-  <hr />
-
-  <section class="reveal">
-    <h2>Site Tools</h2>
-    <ul>
-      <li><a href="/work"><strong>Work</strong></a> — day job + QuoteTools, AI scope-gen for shopfitting estimators.</li>
-      <li><a href="/notes"><strong>Notes</strong></a> — ideas I keep coming back to.</li>
-      <li><a href="/site"><strong>Site Tools</strong></a> — calculator, triangle solver, periodic table, fitness calcs, cut lists, rate builder, sketchpad, PDF editor.</li>
-      <li><a href="/radio"><strong>Radio</strong></a> — live Australian radio. Triple j, ABC Classic, FBI and more.</li>
-      <li><a href="/feeds"><strong>Feeds</strong></a> — RSS aggregator.</li>
-    </ul>
+  <section class="home-section" aria-labelledby="useful-title">
+    <h2 id="useful-title">Useful now</h2>
+    <p>Working tools and media, directly accessible.</p>
+    <div class="home-grid">
+      {useful.map((item) => (
+        <a class="home-card reveal" href={item.href}>
+          <strong>{item.title}</strong>
+          <span>{item.desc}</span>
+        </a>
+      ))}
+    </div>
   </section>
 
-  <section class="reveal">
-    <h2>Prepping</h2>
-    <ul>
-      <li><a href="/prepping"><strong>Prepping</strong></a> — bushcraft, survival, AU hazard cards, Southern Cross nav.</li>
-      <li><a href="/prepping/gear"><strong>Gear</strong></a> — a curated bug-out bag, chosen on purpose.</li>
-      <li><a href="/prepping/tools"><strong>Prepping Tools</strong></a> — maintenance scheduler, vehicle recovery checklist.</li>
-      <li><a href="/reader"><strong>Reader</strong></a> — free e-books from Project Gutenberg with page flip and annotations.</li>
-      <li><a href="/books"><strong>Books</strong></a> — reading log.</li>
-    </ul>
-  </section>
-
-  <section class="reveal">
-    <h2>More</h2>
-    <ul>
-      <li><a href="/studio"><strong>Studio</strong></a> — VishAmp: drum machine, synth, mixer, WAV/MP3 export.</li>
-      <li><a href="/games"><strong>Games</strong></a> — Big 2 and more.</li>
-      <li><a href="/music"><strong>Music</strong></a> — listening and producing.</li>
-      <li><a href="/movies"><strong>Movies</strong></a> · <a href="/blog"><strong>Blog</strong></a> · <a href="/now"><strong>Now</strong></a> · <a href="/about"><strong>About</strong></a></li>
-    </ul>
+  <section class="home-section" aria-labelledby="more-title">
+    <h2 id="more-title">More</h2>
+    <nav class="home-links" aria-label="More sections">
+      {other.map(([href, label]) => <a href={href}>{label}</a>)}
+    </nav>
   </section>
 </Base>

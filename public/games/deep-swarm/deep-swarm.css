@@ -1,0 +1,24 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
+canvas { display: block; }
+
+.back-link {
+  position: fixed;
+  z-index: 20;
+  top: 0.75rem;
+  left: 0.75rem;
+  padding: 0.42rem 0.62rem;
+  border: 1px solid rgba(126, 197, 220, 0.38);
+  border-radius: 5px;
+  background: rgba(0, 8, 14, 0.72);
+  color: #a7d8e8;
+  font: 12px/1.2 "Courier New", monospace;
+  text-decoration: none;
+  opacity: 0.68;
+}
+.back-link:hover,
+.back-link:focus-visible {
+  opacity: 1;
+  border-color: #75d2e6;
+  outline: none;
+}
