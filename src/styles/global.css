@@ -271,6 +271,37 @@ header nav.topnav {
 }
 .nav-more-menu a:hover { color: var(--fg); background: var(--code-bg); }
 
+/* /notes index — themed accordion groups */
+.note-group {
+  border-top: 1px solid var(--rule);
+  padding: 0.8rem 0;
+}
+.note-group:last-of-type { border-bottom: 1px solid var(--rule); }
+.note-group > summary {
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  list-style: none;
+}
+.note-group > summary::-webkit-details-marker { display: none; }
+.note-group > summary::before {
+  content: "▸";
+  display: inline-block;
+  width: 1.1rem;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+.note-group[open] > summary::before { transform: rotate(90deg); }
+.note-group .count {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-left: 0.5rem;
+}
+.note-group .note-row { padding-left: 1.1rem; }
+.note-group .note-row:first-of-type { border-top: none; margin-top: 0.4rem; }
+.note-group .note-row:last-of-type { border-bottom: none; }
+
 .theme-toggle {
   background: none;
   border: none;

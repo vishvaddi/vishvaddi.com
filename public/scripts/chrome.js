@@ -57,4 +57,15 @@
       if (e.key === "Escape" && more.open) more.open = false;
     });
   }
+
+  // Offline support: register the build-generated service worker (workbox
+  // precache of the whole site — see scripts/generate-sw.mjs). Registered
+  // here rather than injected markup so the strict CSP stays inline-free.
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("/sw.js").catch(function () {
+        /* offline support is progressive enhancement — ignore */
+      });
+    });
+  }
 })();
