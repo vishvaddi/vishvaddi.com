@@ -10,8 +10,21 @@ var noteSelection = null;
 var noteColor = "yellow";
 
 var currentRawText = null;
+var DEFAULT_FONT = "'Source Serif 4',Georgia,serif";
 
 function $(id) { return document.getElementById(id); }
+
+function snapSpread(spread) {
+  spread = Math.max(0, Math.min(spread, pages.length - 1));
+  if (window.innerWidth > 640) spread -= spread % 2;
+  return spread;
+}
+
+function restorePosition(bookId) {
+  var frac = 0;
+  try { frac = parseFloat(localStorage.getItem("reader-pos-" + bookId)) || 0; } catch (_) {}
+  return snapSpread(Math.round(frac * pages.length));
+}
 
 /* ── Offline shelf (IndexedDB) — survives cache eviction, visible to the user ── */
 function openShelfDB() {
@@ -202,13 +215,28 @@ async function openBook(b) {
     $("left-panel").innerHTML = '<span class="loading">Laying out pages…</span>';
     pages = await paginateText(raw);
     if (!pages.length) throw new Error("Book contained no readable pages");
-    currentSpread = 0;
+    currentSpread = restorePosition(b.id);
     renderSpread(false);
   } catch (e) {
     $("left-panel").innerHTML = '<span class="error-msg">Failed to load text. Try another book.</span>';
   }
 }
 
+function isHeading(t) {
+  if (t.length > 80) return false;
+  if (/^(chapter|book|part|volume|canto|act|scene|stave|prologue|epilogue|preface|introduction|contents|appendix)\b/i.test(t)) return true;
+  var letters = t.replace(/[^a-z]/gi, "");
+  return letters.length > 1 && letters === letters.toUpperCase();
+}
+
+function paraHTML(p) {
+  if (!p.cont && isHeading(p.text)) return '<p class="bk-hd">' + p.text + "</p>";
+  return "<p" + (p.cont ? ' class="cont"' : "") + ">" + p.text + "</p>";
+}
+
+// Kindle-style pagination: fill each page to the bottom, splitting paragraphs
+// at word boundaries. Pages are stored as ready HTML strings. Measured with
+// the user's current font settings — repaginate() reruns this when they change.
 async function paginateText(raw) {
   var start = raw.search(/\*\*\* START OF (THE|THIS) PROJECT GUTENBERG/i);
   var end = raw.search(/\*\*\* END OF (THE|THIS) PROJECT GUTENBERG/i);
@@ -220,43 +248,79 @@ async function paginateText(raw) {
     .map(function (p) { return p.replace(/[ \t]+/g, " ").trim(); })
     .filter(Boolean);
 
+  var s = loadReaderSettings();
+  var pct = (s.size || 100) / 100;
+  var lh = (s.lh || 175) / 100;
+  var font = s.font || DEFAULT_FONT;
+
   // Measure the actual panel so pagination matches what fits on screen
   var panel = $("left-panel");
   var H = panel ? panel.clientHeight : 520;
   var W = panel ? panel.clientWidth : 380;
 
   var probe = document.createElement("div");
+  probe.className = "page-probe";
   probe.style.cssText = [
     "position:absolute", "top:-9999px", "left:0",
     "visibility:hidden", "pointer-events:none",
     "width:" + W + "px", "height:auto", "overflow:visible",
     "padding:2.5rem 2rem", "box-sizing:border-box",
-    "font-size:0.95rem", "line-height:1.75",
-    "font-family:Georgia,serif"
+    "font-size:" + (0.95 * pct).toFixed(3) + "rem",
+    "line-height:" + lh,
+    "font-family:" + font
   ].join(";");
   document.body.appendChild(probe);
 
   var limit = H - 32; // leave room for page number
-  var pages = [];
-  var batch = [];
+  function fits(html) {
+    probe.innerHTML = html;
+    return probe.offsetHeight <= limit;
+  }
 
-  for (var i = 0; i < paras.length; i++) {
-    batch.push(paras[i]);
-    probe.innerHTML = batch.map(function (p) {
-      return "<p style=\"margin:0 0 1em 0\">" + p + "</p>";
-    }).join("");
-    if (probe.offsetHeight > limit && batch.length > 1) {
-      pages.push(batch.slice(0, -1).join("\n\n"));
-      batch = [paras[i]];
+  var out = [];
+  var pageHtml = "";
+  var queue = paras.map(function (t) { return { text: t, cont: false }; });
+
+  for (var qi = 0; qi < queue.length; qi++) {
+    var item = queue[qi];
+    var html = paraHTML(item);
+    if (fits(pageHtml + html)) {
+      pageHtml += html;
+    } else if (isHeading(item.text) || item.text.indexOf(" ") === -1) {
+      if (pageHtml) out.push(pageHtml);
+      pageHtml = html;
+    } else {
+      // largest word count that still fits in the remaining space
+      var words = item.text.split(" ");
+      var lo = 0, hi = words.length - 1, best = 0;
+      while (lo <= hi) {
+        var mid = (lo + hi) >> 1;
+        var head = paraHTML({ text: words.slice(0, mid + 1).join(" "), cont: item.cont });
+        if (fits(pageHtml + head)) { best = mid + 1; lo = mid + 1; }
+        else hi = mid - 1;
+      }
+      if (best < 12 && pageHtml) {
+        // a stub of a few words looks worse than a slightly short page
+        out.push(pageHtml);
+        pageHtml = "";
+        qi--;
+      } else if (best === 0) {
+        out.push(paraHTML(item));
+        pageHtml = "";
+      } else {
+        out.push(pageHtml + paraHTML({ text: words.slice(0, best).join(" "), cont: item.cont }));
+        pageHtml = "";
+        queue.splice(qi + 1, 0, { text: words.slice(best).join(" "), cont: true });
+      }
     }
-    if (i > 0 && i % 150 === 0) {
-      await new Promise(function(resolve) { requestAnimationFrame(resolve); });
+    if (qi > 0 && qi % 60 === 0) {
+      await new Promise(function (resolve) { requestAnimationFrame(resolve); });
     }
   }
-  if (batch.length) pages.push(batch.join("\n\n"));
+  if (pageHtml) out.push(pageHtml);
 
   document.body.removeChild(probe);
-  return pages;
+  return out;
 }
 
 function applyAnnotations(html, pageIdx) {
@@ -272,9 +336,7 @@ function applyAnnotations(html, pageIdx) {
 
 function pageHTML(idx) {
   if (idx < 0 || idx >= pages.length) return "";
-  var text = pages[idx];
-  var html = text.split(/\n\n/).map(function (p) { return "<p>" + p + "</p>"; }).join("");
-  return applyAnnotations(html, idx);
+  return applyAnnotations(pages[idx], idx);
 }
 
 function renderSpread(animate, direction) {
@@ -307,9 +369,13 @@ function renderSpread(animate, direction) {
     ? currentSpread >= pages.length - 1
     : currentSpread + 2 >= pages.length;
 
-  var total = isMobile ? pages.length : Math.ceil(pages.length / 2);
-  var current = isMobile ? currentSpread + 1 : Math.floor(currentSpread / 2) + 1;
-  $("page-info").textContent = "Spread " + current + " / " + total;
+  var lastShown = isMobile ? currentSpread + 1 : Math.min(currentSpread + 2, pages.length);
+  var pct = Math.round((lastShown / pages.length) * 100);
+  $("page-info").textContent = "Page " + (currentSpread + 1) + " of " + pages.length + " · " + pct + "%";
+
+  if (currentBook && pages.length) {
+    try { localStorage.setItem("reader-pos-" + currentBook.id, String(currentSpread / pages.length)); } catch (_) {}
+  }
 }
 
 function doFlip(leftIdx, rightIdx, direction) {
@@ -529,7 +595,7 @@ function applyReaderSettings(s) {
   var panels  = document.querySelectorAll(".page-panel, .flipper-face, .flipper-back");
   var pct     = (s.size || 100) / 100;
   var lh      = (s.lh || 175) / 100;
-  var font    = s.font || "Georgia,serif";
+  var font    = s.font || DEFAULT_FONT;
   var theme   = (s.theme || "#faf7f0,#3a2e20").split(",");
   var bg      = theme[0], fg = theme[1];
   if (spread) spread.style.background = bg;
@@ -540,6 +606,27 @@ function applyReaderSettings(s) {
     p.style.background = bg;
     p.style.color      = fg;
   });
+}
+
+var lastMetricsKey = "";
+var repagTimer = null;
+
+function metricsKey(s) {
+  return (s.size || 100) + "|" + (s.lh || 175) + "|" + (s.font || DEFAULT_FONT);
+}
+
+// Layout-affecting settings (and window size) change what fits on a page,
+// so the book has to be re-laid-out; keep the same relative position.
+function repaginate() {
+  if (!currentRawText) return;
+  clearTimeout(repagTimer);
+  repagTimer = setTimeout(async function () {
+    var frac = pages.length ? currentSpread / pages.length : 0;
+    pages = await paginateText(currentRawText);
+    if (!pages.length) return;
+    currentSpread = snapSpread(Math.round(frac * pages.length));
+    renderSpread(false);
+  }, 250);
 }
 
 function saveReaderSettings() {
@@ -553,7 +640,13 @@ function saveReaderSettings() {
   sfxOn = s.sound !== "0";
   localStorage.setItem(RS_KEY, JSON.stringify(s));
   applyReaderSettings(s);
-  if (pages.length) renderSpread(false);
+  var key = metricsKey(s);
+  if (key !== lastMetricsKey) {
+    lastMetricsKey = key;
+    repaginate();
+  } else if (pages.length) {
+    renderSpread(false);
+  }
 }
 
 function loadReaderSettings() {
@@ -572,6 +665,7 @@ function initSettings() {
   if (s.theme) $("rs-theme").value  = s.theme;
   if (s.sound !== undefined) $("rs-sound").value = s.sound;
   sfxOn = (s.sound === undefined) ? true : (s.sound !== "0");
+  lastMetricsKey = metricsKey(s);
   applyReaderSettings(s);
 
   $("rs-size").addEventListener("input", function () {
@@ -590,6 +684,8 @@ function initSettings() {
 }
 
 initSettings();
+
+window.addEventListener("resize", repaginate);
 
 renderShelf();
 fetchBooks("/data/reader-classics.json");

@@ -457,3 +457,45 @@ header nav.topnav {
   .shelf-card:hover .bk-del,
   .bk-del:focus-visible { opacity: 1; }
 }
+
+/* /reader — book typography (shared by the page panels, flip faces and the
+   pagination probe so measurement always matches what renders) */
+.page-panel p,
+.page-probe p,
+.flipper-face p,
+.flipper-back p {
+  margin: 0;
+  text-indent: 1.6em;
+  text-align: justify;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  hyphenate-limit-chars: 6 3 3;
+  font-kerning: normal;
+  overflow-wrap: break-word;
+}
+
+.page-panel p.cont,
+.page-probe p.cont,
+.flipper-face p.cont,
+.flipper-back p.cont {
+  text-indent: 0;
+}
+
+.page-panel p.bk-hd,
+.page-probe p.bk-hd,
+.flipper-face p.bk-hd,
+.flipper-back p.bk-hd {
+  text-indent: 0;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.85em;
+  margin: 1.6em 0 1.2em;
+}
+
+.page-panel p.bk-hd:first-child,
+.page-probe p.bk-hd:first-child,
+.flipper-face p.bk-hd:first-child,
+.flipper-back p.bk-hd:first-child {
+  margin-top: 0;
+}

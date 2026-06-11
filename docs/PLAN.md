@@ -29,6 +29,11 @@ pick up by pointing Claude Code at this file ("continue docs/PLAN.md").
   open from IndexedDB (no network), so they survive browser cache eviction.
 - **Records + fitness linked**: `/site/records` and `/site/fitness` now on the
   /site hub and the sidebar rail.
+- **Kindle-style reader text**: pages fill to the bottom (paragraphs split at
+  word boundaries, continuations unindented), justified + hyphenated with
+  first-line indents, chapter headings centred, Source Serif "Book" default
+  font, repaginates on settings/resize, remembers reading position per book
+  (`reader-pos-<id>` in localStorage), "Page x of y · z%" progress.
 - **Notes unpublished "for now"** (Vish's call 2026-06-11): nav item, /notes
   routes, OG endpoint and rss.xml deleted; the 17 draft markdown files remain
   in `src/content/notes/` and the accordion CSS remains in global.css — restore
