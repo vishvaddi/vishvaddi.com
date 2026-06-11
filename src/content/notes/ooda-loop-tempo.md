@@ -2,7 +2,7 @@
 title: "OODA is about tempo, not decision quality"
 description: "Boyd's loop wasn't about better decisions. It was about cycling faster than the opponent — getting inside their loop until they're responding to a world that no longer exists."
 pubDate: 2026-04-18
-draft: false
+draft: true
 tags: ["decision-making", "strategy", "systems"]
 ---
 
