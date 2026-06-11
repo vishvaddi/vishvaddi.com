@@ -1,0 +1,61 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+
+const notes = (await getCollection("notes", ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+);
+
+// Themes derived from note tags — first matching theme (in this order)
+// claims the note; anything unmatched falls into "Misc".
+const themes: [name: string, tags: string[]][] = [
+  ["Resilience & self-reliance", ["resilience", "self-sufficiency", "maintenance"]],
+  ["Habits & energy", ["habits", "productivity", "performance", "health", "sleep"]],
+  ["Philosophy", ["philosophy", "stoicism", "taoism", "indian-philosophy"]],
+  ["Thinking & work", ["decision-making", "mental-models", "strategy", "systems", "ai", "estimating"]],
+];
+
+type Note = (typeof notes)[number];
+const groups: [string, Note[]][] = [...themes.map(([n]) => [n, []] as [string, Note[]]), ["Misc", []]];
+for (const note of notes) {
+  const i = themes.findIndex(([, tags]) => tags.some((t) => note.data.tags.includes(t)));
+  groups[i === -1 ? groups.length - 1 : i][1].push(note);
+}
+const visible = groups.filter(([, g]) => g.length > 0);
+
+const dateFmt = new Intl.DateTimeFormat("en-AU", { year: "numeric", month: "short" });
+---
+
+<Base
+  title="Notes"
+  description="Essays and evergreen notes by Vish Vaddi."
+  ogImage="/og/notes.png"
+>
+  <h1>Notes</h1>
+
+  {visible.length === 0 ? (
+    <p style="color: var(--muted);">Nothing published yet.</p>
+  ) : (
+    <div style="margin-top: 1.5rem;">
+      {visible.map(([name, group]) => (
+        <details class="note-group" open={visible.length === 1}>
+          <summary>
+            {name}
+            <span class="count">{group.length}</span>
+          </summary>
+          {group.map((note) => (
+            <a class="note-row" href={`/notes/${note.id}`}>
+              <div>
+                <div class="note-title">{note.data.title}</div>
+                {note.data.description && (
+                  <div class="note-desc">{note.data.description}</div>
+                )}
+              </div>
+              <span class="note-date">{dateFmt.format(note.data.pubDate)}</span>
+            </a>
+          ))}
+        </details>
+      ))}
+    </div>
+  )}
+</Base>

@@ -1,0 +1,40 @@
+---
+import { getCollection, render } from "astro:content";
+import Base from "../../layouts/Base.astro";
+
+export async function getStaticPaths() {
+  const notes = await getCollection("notes", ({ data }) => !data.draft);
+  return notes.map((note) => ({
+    params: { slug: note.id },
+    props: { note },
+  }));
+}
+
+const { note } = Astro.props;
+const { Content } = await render(note);
+
+const dateFmt = new Intl.DateTimeFormat("en-AU", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+});
+---
+
+<Base
+  title={note.data.title}
+  description={note.data.description}
+  ogImage={`/og/notes/${note.id}.png`}
+>
+  <article>
+    <h1>{note.data.title}</h1>
+    <p style="color: #888; font-size: 0.875rem;">
+      {dateFmt.format(note.data.pubDate)}
+      {note.data.updatedDate && ` · updated ${dateFmt.format(note.data.updatedDate)}`}
+    </p>
+    <Content />
+  </article>
+  <hr />
+  <p style="font-size: 0.875rem;">
+    <a href="/notes">← All notes</a>
+  </p>
+</Base>
