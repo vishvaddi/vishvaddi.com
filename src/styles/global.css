@@ -417,3 +417,43 @@ header nav.topnav {
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
+
+/* /reader — offline shelf */
+.shelf-heading {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 0.9rem;
+}
+
+#shelf-grid {
+  margin-bottom: 2.25rem;
+}
+
+.shelf-card {
+  position: relative;
+}
+
+.bk-del {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  z-index: 2;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+@media (hover: hover) {
+  .bk-del { opacity: 0; transition: opacity 0.15s; }
+  .shelf-card:hover .bk-del,
+  .bk-del:focus-visible { opacity: 1; }
+}

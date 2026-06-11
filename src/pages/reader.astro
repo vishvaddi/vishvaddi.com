@@ -178,6 +178,11 @@ import Base from "../layouts/Base.astro";
 
   <div class="reader-wrap">
     <div id="library-ui">
+      <div id="shelf-section" style="display:none">
+        <p class="shelf-heading">Downloaded — available offline</p>
+        <div id="shelf-grid" class="book-grid"></div>
+        <p class="shelf-heading">Library</p>
+      </div>
       <div class="search-bar">
         <input type="text" id="search-input" placeholder="Search this library…" />
         <button id="search-btn">Search</button>
@@ -190,6 +195,7 @@ import Base from "../layouts/Base.astro";
       <div class="reader-header">
         <button id="back-btn">← Library</button>
         <h2 id="book-title-label"></h2>
+        <button id="save-btn" title="Download for offline reading">↓ Save offline</button>
         <button id="settings-btn" title="Display settings">Aa</button>
       </div>
 

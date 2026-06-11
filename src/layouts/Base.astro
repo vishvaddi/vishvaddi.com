@@ -32,6 +32,8 @@ const siteTools: [string, string][] = [
   ["/site/sketch", "Sketchpad"],
   ["/site/voice", "Voice Notes"],
   ["/site/pdf", "PDF Editor"],
+  ["/site/records", "Site Records"],
+  ["/site/fitness", "Fitness"],
   ["/site/resources", "Resources"],
   ["/radio", "Radio"],
 ];
@@ -40,7 +42,6 @@ const here = Astro.url.pathname.replace(/\/$/, "");
 const navPrimary: [string, string][] = [
   ["/work", "Work"],
   ["/site", "Tools"],
-  ["/notes", "Notes"],
 ];
 const navMore: [string, string][] = [
   ["/prepping", "Prepping"],
@@ -87,10 +88,10 @@ const updatedFmt = updatedDate
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#161613" />
     <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="generator" content={Astro.generator} />
     <link rel="canonical" href={canonical} />
-    <link rel="alternate" type="application/rss+xml" title="Vish Vaddi — Notes" href="/rss.xml" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />

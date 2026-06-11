@@ -5,7 +5,6 @@ const pages = {
   work: { title: "Work", description: "Retail and commercial fit-out estimating. Sydney." },
   about: { title: "About", description: "Vish Vaddi — about." },
   now: { title: "Now", description: "What I'm focused on right now." },
-  notes: { title: "Notes", description: "Ideas I keep coming back to." },
   blog: { title: "Blog", description: "Longer writing." },
   music: { title: "Music", description: "What I'm listening to and producing." },
   movies: { title: "Movies", description: "Films I keep coming back to." },

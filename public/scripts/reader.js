@@ -9,7 +9,89 @@ var annotations = {};
 var noteSelection = null;
 var noteColor = "yellow";
 
+var currentRawText = null;
+
 function $(id) { return document.getElementById(id); }
+
+/* ── Offline shelf (IndexedDB) — survives cache eviction, visible to the user ── */
+function openShelfDB() {
+  return new Promise(function (resolve, reject) {
+    var req = indexedDB.open("reader-shelf", 1);
+    req.onupgradeneeded = function () { req.result.createObjectStore("books", { keyPath: "id" }); };
+    req.onsuccess = function () { resolve(req.result); };
+    req.onerror = function () { reject(req.error); };
+  });
+}
+function shelfOp(mode, fn) {
+  return openShelfDB().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction("books", mode);
+      var req = fn(tx.objectStore("books"));
+      tx.oncomplete = function () { resolve(req ? req.result : undefined); };
+      tx.onerror = function () { reject(tx.error); };
+    });
+  });
+}
+function shelfAll() { return shelfOp("readonly", function (s) { return s.getAll(); }); }
+function shelfGet(id) { return shelfOp("readonly", function (s) { return s.get(id); }); }
+function shelfPut(rec) { return shelfOp("readwrite", function (s) { return s.put(rec); }); }
+function shelfRemove(id) { return shelfOp("readwrite", function (s) { return s.delete(id); }); }
+
+function updateSaveBtn(saved, disabled) {
+  var btn = $("save-btn");
+  btn.textContent = saved ? "✓ Saved offline" : "↓ Save offline";
+  btn.disabled = !!disabled;
+}
+
+function renderShelf() {
+  shelfAll().then(function (recs) {
+    var section = $("shelf-section");
+    var grid = $("shelf-grid");
+    grid.innerHTML = "";
+    if (!recs || !recs.length) {
+      section.style.display = "none";
+      return;
+    }
+    section.style.display = "block";
+    recs.sort(function (a, b) { return b.savedAt - a.savedAt; });
+    recs.forEach(function (r) {
+      var card = document.createElement("div");
+      card.className = "book-card shelf-card";
+
+      var del = document.createElement("button");
+      del.className = "bk-del";
+      del.textContent = "✕";
+      del.title = "Remove download";
+      del.addEventListener("click", function (e) {
+        e.stopPropagation();
+        shelfRemove(r.id).then(renderShelf);
+      });
+
+      var img = document.createElement("img");
+      img.alt = "";
+      img.loading = "lazy";
+      if (r.cover) img.src = r.cover;
+      img.addEventListener("error", function () { img.style.visibility = "hidden"; });
+
+      var title = document.createElement("div");
+      title.className = "bk-title";
+      title.textContent = r.title;
+
+      var author = document.createElement("div");
+      author.className = "bk-author";
+      author.textContent = r.author;
+
+      card.appendChild(del);
+      card.appendChild(img);
+      card.appendChild(title);
+      card.appendChild(author);
+      card.addEventListener("click", function () {
+        openBook({ id: r.id, title: r.title, authors: [{ name: r.author }], formats: { "image/jpeg": r.cover } });
+      });
+      grid.appendChild(card);
+    });
+  }).catch(function () {});
+}
 
 function loadAnnotations(bookId) {
   var raw = localStorage.getItem("reader-ann-" + bookId);
@@ -88,25 +170,35 @@ async function fetchBookText(textUrl) {
 
 async function openBook(b) {
   currentBook = b;
+  currentRawText = null;
   loadAnnotations(String(b.id));
   $("book-title-label").textContent = b.title;
   $("library-ui").style.display = "none";
   $("reader-ui").style.display = "block";
   $("left-panel").innerHTML = '<span class="loading">Fetching text…</span>';
   $("right-panel").innerHTML = "";
+  updateSaveBtn(false, true);
 
-  var textUrl = b.formats["text/plain; charset=utf-8"]
-    || b.formats["text/plain; charset=us-ascii"]
-    || b.formats["text/plain"]
-    || "";
-
-  if (!textUrl) {
-    $("left-panel").innerHTML = '<span class="error-msg">No plain text available for this book.</span>';
-    return;
-  }
+  var saved = null;
+  try { saved = await shelfGet(b.id); } catch (_) {}
 
   try {
-    var raw = await fetchBookText(textUrl);
+    var raw;
+    if (saved) {
+      raw = saved.text;
+    } else {
+      var textUrl = b.formats["text/plain; charset=utf-8"]
+        || b.formats["text/plain; charset=us-ascii"]
+        || b.formats["text/plain"]
+        || "";
+      if (!textUrl) {
+        $("left-panel").innerHTML = '<span class="error-msg">No plain text available for this book.</span>';
+        return;
+      }
+      raw = await fetchBookText(textUrl);
+    }
+    currentRawText = raw;
+    updateSaveBtn(!!saved, false);
     $("left-panel").innerHTML = '<span class="loading">Laying out pages…</span>';
     pages = await paginateText(raw);
     if (!pages.length) throw new Error("Book contained no readable pages");
@@ -379,7 +471,34 @@ $("back-btn").addEventListener("click", function () {
   $("reader-ui").style.display = "none";
   $("library-ui").style.display = "block";
   currentBook = null;
+  currentRawText = null;
   pages = [];
+  renderShelf();
+});
+
+$("save-btn").addEventListener("click", async function () {
+  if (!currentBook || !currentRawText) return;
+  var id = currentBook.id;
+  updateSaveBtn(false, true);
+  try {
+    var saved = await shelfGet(id);
+    if (saved) {
+      await shelfRemove(id);
+      updateSaveBtn(false, false);
+    } else {
+      await shelfPut({
+        id: id,
+        title: currentBook.title,
+        author: currentBook.authors && currentBook.authors[0] ? currentBook.authors[0].name : "Unknown",
+        cover: (currentBook.formats && currentBook.formats["image/jpeg"]) || "",
+        text: currentRawText,
+        savedAt: Date.now(),
+      });
+      updateSaveBtn(true, false);
+    }
+  } catch (_) {
+    updateSaveBtn(false, false);
+  }
 });
 
 document.addEventListener("keydown", function (e) {
@@ -472,4 +591,5 @@ function initSettings() {
 
 initSettings();
 
+renderShelf();
 fetchBooks("/data/reader-classics.json");
