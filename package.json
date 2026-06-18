@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build && node scripts/compress-last-cast.mjs && node scripts/optimize-og.mjs && node scripts/generate-sw.mjs",
+    "build": "astro build && node scripts/optimize-og.mjs && node scripts/generate-sw.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },

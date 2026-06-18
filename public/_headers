@@ -22,9 +22,6 @@
 /scripts/*
   Cache-Control: public, max-age=0, must-revalidate
 
-/games/last-cast/*
-  Cache-Control: public, max-age=0, must-revalidate
-
 # Service worker must revalidate every load so new deploys propagate.
 /sw.js
   Cache-Control: no-cache

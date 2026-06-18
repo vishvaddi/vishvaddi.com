@@ -34,27 +34,30 @@ var SOURCE_META = {
   gutenberg: { label: "Project Gutenberg", placeholder: "Search Project Gutenberg…" },
   librivox: { label: "LibriVox audiobooks", placeholder: "Search LibriVox audiobooks…" },
   folktexts: { label: "Ashliman folktexts", placeholder: "Search folk and fairy tales…" },
-  openstax: { label: "OpenStax textbooks", placeholder: "Search free textbooks…" },
 };
 
 var FOLKTEXTS = [
+  // Classic fairy tales
   { id: "ashliman-grimm", title: "Grimm Brothers' Children's and Household Tales", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/grimm.html" },
-  { id: "ashliman-aesop", title: "Aesop's Fables", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/aesop.html" },
   { id: "ashliman-cinderella", title: "Cinderella Tales", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0510a.html" },
   { id: "ashliman-beauty", title: "Beauty and the Beast", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/beauty.html" },
   { id: "ashliman-snowwhite", title: "Snow White", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0709.html" },
   { id: "ashliman-sleeping", title: "Sleeping Beauty", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0410.html" },
+  { id: "ashliman-redridinghood", title: "Little Red Riding Hood", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0333.html" },
+  { id: "ashliman-hanselgretel", title: "Hansel and Gretel", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0327.html" },
+  { id: "ashliman-rapunzel", title: "Rapunzel", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0310.html" },
+  { id: "ashliman-bluebeard", title: "Bluebeard", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0312.html" },
+  { id: "ashliman-rumpelstiltskin", title: "Rumpelstiltskin", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0500.html" },
+  { id: "ashliman-frogking", title: "The Frog King", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/frogking.html" },
+  // Fables
+  { id: "ashliman-aesop", title: "Aesop's Fables", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/aesop.html" },
+  // Myth, legend and the supernatural
+  { id: "ashliman-creation", title: "Creation Myths", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/creation.html" },
+  { id: "ashliman-arthur", title: "King Arthur Legends", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/arthur.html" },
+  { id: "ashliman-stars", title: "Star Lore and Myths", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/stars.html" },
+  { id: "ashliman-werewolf", title: "Werewolf Legends", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/werewolf.html" },
+  { id: "ashliman-vampire", title: "Vampire Legends", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/vampire.html" },
   { id: "ashliman-legends", title: "Folktexts: Legends, Folklore, Mythology", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/folktexts.html" },
-];
-
-var OPENSTAX = [
-  { id: "openstax-physics", title: "College Physics 2e", author: "OpenStax", url: "https://openstax.org/details/books/college-physics-2e" },
-  { id: "openstax-chemistry", title: "Chemistry 2e", author: "OpenStax", url: "https://openstax.org/details/books/chemistry-2e" },
-  { id: "openstax-biology", title: "Biology 2e", author: "OpenStax", url: "https://openstax.org/details/books/biology-2e" },
-  { id: "openstax-algebra", title: "Algebra and Trigonometry 2e", author: "OpenStax", url: "https://openstax.org/details/books/algebra-and-trigonometry-2e" },
-  { id: "openstax-calculus", title: "Calculus Volume 1", author: "OpenStax", url: "https://openstax.org/details/books/calculus-volume-1" },
-  { id: "openstax-economics", title: "Principles of Economics 3e", author: "OpenStax", url: "https://openstax.org/details/books/principles-economics-3e" },
-  { id: "openstax-psychology", title: "Psychology 2e", author: "OpenStax", url: "https://openstax.org/details/books/psychology-2e" },
 ];
 
 function shuffleArray(list) {
@@ -206,23 +209,22 @@ function normaliseLibriVox(data) {
 }
 
 function localItems(source, q) {
-  var list = source === "openstax" ? OPENSTAX : FOLKTEXTS;
   var needle = (q || "").trim().toLowerCase();
-  return list
+  return FOLKTEXTS
     .filter(function (item) {
       return !needle || (item.title + " " + item.author).toLowerCase().indexOf(needle) !== -1;
     })
     .map(function (item) {
       return {
         source: source,
-        kind: source === "openstax" ? "link" : "text",
+        kind: "text",
         id: source + ":" + item.id,
         rawId: item.id,
         title: item.title,
         author: item.author,
         cover: COVER_PLACEHOLDER,
         url: item.url,
-        license: source === "openstax" ? "OpenStax free textbook" : "Source text from D. L. Ashliman's folktexts collection",
+        license: "Source text from D. L. Ashliman's folktexts collection",
       };
     });
 }

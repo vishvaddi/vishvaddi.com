@@ -66,18 +66,6 @@ const MAX_FEED_BYTES = 2_000_000;
 const MAX_ICY_BYTES = 1_000_000;
 const MAX_FOLKTEXT_BYTES = 1_500_000;
 const GUTENBERG_OPDS = "https://www.gutenberg.org/ebooks/search.opds/";
-const LAST_CAST_PREFIX = "/games/last-cast/";
-const LAST_CAST_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; media-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
-
-function lastCastResponse(response: Response, headers = new Headers(response.headers)): Response {
-  headers.set("Cache-Control", "public, max-age=0, must-revalidate");
-  headers.set("Content-Security-Policy", LAST_CAST_CSP);
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
-}
 
 function isBlockedHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
@@ -258,10 +246,6 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
-
-    if (path.startsWith(LAST_CAST_PREFIX) && (request.method === "GET" || request.method === "HEAD")) {
-      return lastCastResponse(await env.ASSETS.fetch(request));
-    }
 
     // Rate-limit the outbound proxy endpoints per IP so they can't be abused to
     // run up usage, proxy traffic, or get the worker banned upstream. Map tiles

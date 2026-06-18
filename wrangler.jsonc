@@ -5,8 +5,7 @@
   "compatibility_date": "2026-04-30",
   "assets": {
     "directory": "./dist",
-    "binding": "ASSETS",
-    "run_worker_first": ["/games/last-cast/*"]
+    "binding": "ASSETS"
   },
   "durable_objects": {
     "bindings": [{ "name": "RL_DO", "class_name": "RateLimiter" }]

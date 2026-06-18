@@ -243,126 +243,6 @@
         },
       },
     },
-    {
-      number: "09",
-      name: "NASA LIVE",
-      schedule: {
-        morning: {
-          title: "NASA Live",
-          year: "Official",
-          runtime: "Live",
-          provider: "youtube",
-          id: "21X5lGlDOfg",
-          label: "Official NASA TV stream",
-        },
-        afternoon: {
-          title: "NASA Live",
-          year: "Official",
-          runtime: "Live",
-          provider: "youtube",
-          id: "21X5lGlDOfg",
-          label: "Official NASA TV stream",
-        },
-        night: {
-          title: "NASA Live",
-          year: "Official",
-          runtime: "Live",
-          provider: "youtube",
-          id: "21X5lGlDOfg",
-          label: "Official NASA TV stream",
-        },
-      },
-    },
-    {
-      number: "10",
-      name: "ISS EARTH VIEW",
-      schedule: {
-        morning: {
-          title: "ISS Live Earth",
-          year: "NASA",
-          runtime: "Live",
-          provider: "youtube",
-          id: "O9mYwRlucZY",
-          label: "High-definition views from orbit",
-        },
-        afternoon: {
-          title: "ISS Live Earth",
-          year: "NASA",
-          runtime: "Live",
-          provider: "youtube",
-          id: "O9mYwRlucZY",
-          label: "High-definition views from orbit",
-        },
-        night: {
-          title: "ISS Live Earth",
-          year: "NASA",
-          runtime: "Live",
-          provider: "youtube",
-          id: "O9mYwRlucZY",
-          label: "High-definition views from orbit",
-        },
-      },
-    },
-    {
-      number: "11",
-      name: "WORLD NEWS",
-      schedule: {
-        morning: {
-          title: "Al Jazeera English",
-          year: "Live",
-          runtime: "Live",
-          provider: "youtube",
-          id: "gCNeDWCI0vo",
-          label: "Licensed live news stream",
-        },
-        afternoon: {
-          title: "Al Jazeera English",
-          year: "Live",
-          runtime: "Live",
-          provider: "youtube",
-          id: "gCNeDWCI0vo",
-          label: "Licensed live news stream",
-        },
-        night: {
-          title: "Al Jazeera English",
-          year: "Live",
-          runtime: "Live",
-          provider: "youtube",
-          id: "gCNeDWCI0vo",
-          label: "Licensed live news stream",
-        },
-      },
-    },
-    {
-      number: "12",
-      name: "SPACE TELESCOPE",
-      schedule: {
-        morning: {
-          title: "Space Telescope Live",
-          year: "STScI",
-          runtime: "Now",
-          provider: "info",
-          url: "https://spacetelescopelive.org/",
-          label: "What Hubble and Webb are observing",
-        },
-        afternoon: {
-          title: "Space Telescope Live",
-          year: "STScI",
-          runtime: "Now",
-          provider: "info",
-          url: "https://spacetelescopelive.org/",
-          label: "What Hubble and Webb are observing",
-        },
-        night: {
-          title: "Space Telescope Live",
-          year: "STScI",
-          runtime: "Now",
-          provider: "info",
-          url: "https://spacetelescopelive.org/",
-          label: "What Hubble and Webb are observing",
-        },
-      },
-    },
   ];
   var CHANNELS = BASE_CHANNELS.slice();
 
@@ -440,19 +320,7 @@
     if (program.provider === "youtube") {
       return "https://www.youtube-nocookie.com/embed/" + program.id + "?autoplay=1&rel=0&playsinline=1&modestbranding=1";
     }
-    if (program.provider === "info") return "";
     return "https://archive.org/embed/" + program.id;
-  }
-
-  function infoHtml(program) {
-    return "<!doctype html><html><head><meta charset=\"utf-8\"><style>" +
-      "html,body{height:100%;margin:0;background:#07100b;color:#d9ffd7;font-family:ui-monospace,Consolas,monospace}" +
-      "body{display:grid;place-items:center;text-align:center;padding:2rem;box-sizing:border-box}" +
-      "p{max-width:34rem;color:#a6c8a5;line-height:1.6}a{color:#ffd28a;font-weight:700;text-decoration:none}" +
-      ".tag{letter-spacing:.16em;color:#8cbf88;font-size:.72rem}.title{font-size:clamp(1.2rem,5vw,2.4rem);margin:.5rem 0}" +
-      "</style></head><body><main><div class=\"tag\">LIVE DATA CHANNEL</div><div class=\"title\">" +
-      program.title + "</div><p>" + program.label + ". This is a data channel, not a video stream.</p>" +
-      "<p><a href=\"" + program.url + "\" target=\"_blank\" rel=\"noopener\">Open live telescope view</a></p></main></body></html>";
   }
 
   function setGuideActive() {
@@ -495,7 +363,7 @@
 
       var play = document.createElement("span");
       play.className = "tv-guide-play";
-      play.textContent = program.provider === "info" ? "VIEW" : "WATCH";
+      play.textContent = "WATCH";
       button.appendChild(play);
 
       button.addEventListener("click", function () {
@@ -532,13 +400,8 @@
     metaReadout.textContent = program.year + " · " + program.runtime;
     player.title = program.title + " on CRT TV";
     if (loadVideo) {
-      if (program.provider === "info") {
-        player.removeAttribute("src");
-        player.srcdoc = infoHtml(program);
-      } else {
-        player.removeAttribute("srcdoc");
-        player.src = embedUrl(program);
-      }
+      player.removeAttribute("srcdoc");
+      player.src = embedUrl(program);
       player.hidden = false;
       offScreen.hidden = true;
     }
