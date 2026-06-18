@@ -34,6 +34,7 @@ var SOURCE_META = {
   gutenberg: { label: "Project Gutenberg", placeholder: "Search Project Gutenberg…" },
   librivox: { label: "LibriVox audiobooks", placeholder: "Search LibriVox audiobooks…" },
   folktexts: { label: "Ashliman folktexts", placeholder: "Search folk and fairy tales…" },
+  wikisource: { label: "Wikisource", placeholder: "Search Wikisource…" },
 };
 
 var FOLKTEXTS = [
@@ -291,6 +292,14 @@ async function searchSource(source, query, cursor, append) {
     libraryBooks = append ? libraryBooks.concat(lvIncoming) : lvIncoming;
     books = libraryBooks.slice();
     nextCursor = lvData.next || null;
+  } else if (source === "wikisource") {
+    var wsUrl = "/api/wikisource" + (query ? "?query=" + encodeURIComponent(query) : "");
+    var ws = await fetch(wsUrl);
+    if (!ws.ok) throw new Error(String(ws.status));
+    var wsData = await ws.json();
+    libraryBooks = normaliseWikisource(wsData);
+    books = libraryBooks.slice();
+    nextCursor = null;
   } else {
     libraryBooks = localItems(source, query);
     books = libraryBooks.slice();
@@ -368,6 +377,25 @@ async function fetchFolkText(url) {
   return tryFetch(endpoint, 25000);
 }
 
+async function fetchWikisource(title) {
+  return tryFetch("/api/wikisource?title=" + encodeURIComponent(title), 25000);
+}
+
+function normaliseWikisource(data) {
+  return (data.results || []).map(function (item) {
+    return {
+      source: "wikisource",
+      kind: "text",
+      id: "wikisource:" + item.title,
+      title: item.title,
+      author: "Wikisource",
+      cover: COVER_PLACEHOLDER,
+      url: "https://en.wikisource.org/wiki/" + encodeURIComponent(item.title.replace(/ /g, "_")),
+      license: "Public domain text from Wikisource",
+    };
+  });
+}
+
 async function openBook(b) {
   if (b.kind === "audio") {
     return openAudioBook(b);
@@ -403,6 +431,8 @@ async function openBook(b) {
       raw = saved.text;
     } else if (b.source === "folktexts") {
       raw = await fetchFolkText(b.url);
+    } else if (b.source === "wikisource") {
+      raw = await fetchWikisource(b.title);
     } else {
       var textUrl = b.formats["text/plain; charset=utf-8"]
         || b.formats["text/plain; charset=us-ascii"]
