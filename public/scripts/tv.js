@@ -213,36 +213,6 @@
         },
       },
     },
-    {
-      number: "08",
-      name: "CULT VAULT",
-      schedule: {
-        morning: {
-          title: "The Little Shop of Horrors",
-          year: "1960",
-          runtime: "1h 13m",
-          provider: "youtube",
-          id: "AIfT1tsCDJ8",
-          label: "Corman black comedy · ★6.2",
-        },
-        afternoon: {
-          title: "The Last Man on Earth",
-          year: "1964",
-          runtime: "1h 27m",
-          provider: "youtube",
-          id: "DoROxahm1PQ",
-          label: "Vincent Price apocalypse · ★6.8",
-        },
-        night: {
-          title: "The Stranger",
-          year: "1946",
-          runtime: "1h 31m",
-          provider: "youtube",
-          id: "Q-iglYhLl-8",
-          label: "Orson Welles thriller · ★7.3",
-        },
-      },
-    },
   ];
   var CHANNELS = BASE_CHANNELS.slice();
 
