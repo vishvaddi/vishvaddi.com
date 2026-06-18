@@ -213,6 +213,40 @@
         },
       },
     },
+    // CH 08: modern cult. Legit embeddable post-2000 films are scarce — most are
+    // re-uploads that get DMCA'd. These two are from The Asylum's OWN channel
+    // (their IP, ad-monetised, so stable); Sharknado is a licensed aggregator.
+    // If a slot goes dead, re-verify the id via the YouTube oEmbed endpoint.
+    {
+      number: "08",
+      name: "MODERN CULT",
+      schedule: {
+        morning: {
+          title: "Mega Shark vs Crocosaurus",
+          year: "2010",
+          runtime: "1h 30m",
+          provider: "youtube",
+          id: "YMvlLrwdgwM",
+          label: "The Asylum monster mash",
+        },
+        afternoon: {
+          title: "Zoombies",
+          year: "2016",
+          runtime: "1h 27m",
+          provider: "youtube",
+          id: "aiMjhN0FtRs",
+          label: "The Asylum zoo-apocalypse",
+        },
+        night: {
+          title: "Sharknado",
+          year: "2013",
+          runtime: "1h 26m",
+          provider: "youtube",
+          id: "X2mOjhbH-lM",
+          label: "The modern cult classic",
+        },
+      },
+    },
   ];
   var CHANNELS = BASE_CHANNELS.slice();
 
