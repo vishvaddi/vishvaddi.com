@@ -204,6 +204,44 @@
 .saved-row span { font-family: var(--font-mono); font-size: 0.9rem; }
 .disclosure { font-size: 0.8rem; color: var(--muted); border-left: 2px solid var(--site-accent); padding-left: 0.6rem; margin: 0.75rem 0; }
 
+/* calculation notepad */
+.notepad-help {
+  display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
+  margin: 1rem 0; color: var(--muted); font-size: 0.85rem;
+}
+.notepad-help code {
+  border: 1px solid var(--site-line); border-radius: 999px;
+  padding: 0.18rem 0.45rem; background: color-mix(in srgb, var(--bg) 86%, transparent);
+}
+.notepad-shell {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(12rem, 16rem);
+  gap: 0.75rem; align-items: stretch;
+}
+#calc-note {
+  min-height: 420px;
+  font-family: var(--font-mono);
+  line-height: 1.7;
+  white-space: pre;
+}
+.notepad-results {
+  min-height: 420px;
+  border: 1px solid var(--site-line-strong);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  padding: 0.5rem 0.6rem;
+  font-family: var(--font-mono);
+  overflow: auto;
+}
+.note-result {
+  display: flex; align-items: center; justify-content: flex-end;
+  min-height: 1.7em; color: var(--muted); border-bottom: 1px solid var(--site-line);
+  white-space: nowrap;
+}
+.note-result.ok { color: var(--fg); }
+.note-result.err { color: #b4540a; font-size: 0.8rem; }
+:root[data-theme="dark"] .note-result.err,
+:root:not([data-theme="light"]) .note-result.err { color: #f0a868; }
+
 /* sketchpad */
 .pad-wrap { border: 1px solid var(--site-line-strong); border-radius: 8px; overflow: hidden; background: #fff; touch-action: none; }
 #pad { display: block; width: 100%; height: 460px; cursor: crosshair; touch-action: none; }
@@ -236,3 +274,21 @@
   .calc:not([data-touched]) { display: none !important; }
   .calc-blurb { display: none; }
 }
+
+@media (max-width: 760px) {
+  .notepad-shell { grid-template-columns: 1fr; }
+  #calc-note, .notepad-results { min-height: 280px; }
+}
+
+/* Segmented toggle (e.g. Cut List 1D / 2D mode switch) */
+.blueprint .seg-toggle {
+  display: inline-flex; margin: 0.25rem 0 1rem;
+  border: 1px solid var(--rule); border-radius: 8px; overflow: hidden;
+}
+.blueprint .seg-toggle a {
+  padding: 0.45rem 1rem; font-size: 0.9rem; font-family: var(--font-sans);
+  color: var(--muted); text-decoration: none; background: var(--bg);
+}
+.blueprint .seg-toggle a + a { border-left: 1px solid var(--rule); }
+.blueprint .seg-toggle a:hover { color: var(--fg); }
+.blueprint .seg-toggle a.active { background: var(--fg); color: var(--bg); font-weight: 600; }

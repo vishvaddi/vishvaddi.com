@@ -1,0 +1,133 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+---
+
+<Base
+  title="Timber Span Lookup (indicative)"
+  description="Quick indicative timber spans for floor joists, ceiling joists and rafters (MGP10/MGP12) — for estimating joist and rafter counts. Indicative only; final sizing must come from AS1684 span tables or an engineer."
+  siteNav
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Span lookup</p>
+    <h1>Timber Span Lookup</h1>
+    <div class="span-warn" role="alert">
+      <strong>Indicative — not for construction.</strong> These are ballpark single-span
+      figures for <em>estimating</em> member counts only. Final sizing must come from the
+      current <strong>AS1684</strong> span table supplement or a structural engineer, for your
+      timber grade, load, wind and spacing.
+    </div>
+
+    <div class="span-grid">
+      <label class="span-f"><span>Member</span>
+        <select id="sp-member"></select>
+      </label>
+      <label class="span-f"><span>Grade</span>
+        <select id="sp-grade">
+          <option value="MGP10">MGP10</option>
+          <option value="MGP12">MGP12</option>
+          <option value="F7">F7</option>
+        </select>
+      </label>
+      <label class="span-f"><span>Size (mm)</span>
+        <select id="sp-size"></select>
+      </label>
+      <label class="span-f"><span>Spacing (mm)</span>
+        <select id="sp-spacing">
+          <option value="450">450</option>
+          <option value="600" selected>600</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="span-out" id="sp-out" aria-live="polite"></div>
+
+    <p class="note-foot">
+      Official free sources:
+      <a href="https://www.woodsolutions.com.au/" target="_blank" rel="noopener">WoodSolutions</a>,
+      and your timber supplier's AS1684 span table supplement. <a href="/site/materials">Material calculators →</a>
+    </p>
+  </div>
+
+  <script>
+    // Indicative single-span maxima (metres), MGP10 base, residential. Ballpark
+    // figures for estimating only — see the on-page warning.
+    type Sizes = Record<string, { 450: number; 600: number }>;
+    const DATA: Record<string, { note: string; sizes: Sizes }> = {
+      "Floor joist": {
+        note: "Residential floor load (1.5 kPa), single span.",
+        sizes: {
+          "90×45": { 450: 1.6, 600: 1.4 },
+          "120×45": { 450: 2.1, 600: 1.9 },
+          "140×45": { 450: 2.5, 600: 2.2 },
+          "190×45": { 450: 3.3, 600: 3.0 },
+          "240×45": { 450: 4.1, 600: 3.7 },
+          "290×45": { 450: 4.9, 600: 4.4 },
+        },
+      },
+      "Ceiling joist": {
+        note: "Light ceiling, no roof load / no access.",
+        sizes: {
+          "70×35": { 450: 1.8, 600: 1.6 },
+          "90×35": { 450: 2.3, 600: 2.0 },
+          "90×45": { 450: 2.6, 600: 2.3 },
+          "120×45": { 450: 3.3, 600: 2.9 },
+          "140×45": { 450: 3.8, 600: 3.4 },
+        },
+      },
+      "Rafter (sheet roof)": {
+        note: "Light sheet roof, single span. Tiled roofs span less.",
+        sizes: {
+          "90×45": { 450: 2.3, 600: 2.0 },
+          "120×45": { 450: 2.9, 600: 2.6 },
+          "140×45": { 450: 3.4, 600: 3.0 },
+          "190×45": { 450: 4.5, 600: 4.0 },
+          "240×45": { 450: 5.5, 600: 4.9 },
+        },
+      },
+    };
+    const GRADE: Record<string, number> = { MGP10: 1, MGP12: 1.12, F7: 1.05 };
+
+    const $ = (id: string) => document.getElementById(id) as HTMLSelectElement;
+    const memberSel = $("sp-member"), gradeSel = $("sp-grade"), sizeSel = $("sp-size"), spacingSel = $("sp-spacing");
+    const out = document.getElementById("sp-out")!;
+
+    for (const m of Object.keys(DATA)) {
+      const o = document.createElement("option"); o.value = m; o.textContent = m; memberSel.append(o);
+    }
+    function fillSizes() {
+      sizeSel.textContent = "";
+      for (const s of Object.keys(DATA[memberSel.value].sizes)) {
+        const o = document.createElement("option"); o.value = s; o.textContent = s; sizeSel.append(o);
+      }
+    }
+    function render() {
+      const member = DATA[memberSel.value];
+      const base = member.sizes[sizeSel.value];
+      if (!base) { out.textContent = "—"; return; }
+      const spacing = Number(spacingSel.value) as 450 | 600;
+      const span = base[spacing] * (GRADE[gradeSel.value] || 1);
+      out.textContent = "";
+      const big = document.createElement("div"); big.className = "span-big";
+      big.textContent = `≈ ${span.toFixed(1)} m`;
+      const lbl = document.createElement("div"); lbl.className = "span-lbl";
+      lbl.textContent = `indicative max single span · ${sizeSel.value} ${gradeSel.value} ${memberSel.value.toLowerCase()} @ ${spacingSel.value} mm`;
+      const note = document.createElement("div"); note.className = "span-note"; note.textContent = member.note;
+      out.append(big, lbl, note);
+    }
+    memberSel.addEventListener("change", () => { fillSizes(); render(); });
+    [gradeSel, sizeSel, spacingSel].forEach((el) => el.addEventListener("change", render));
+    fillSizes(); render();
+  </script>
+
+  <style is:global>
+    .span-warn { background: color-mix(in srgb, #b42318 10%, transparent); border: 1px solid color-mix(in srgb, #b42318 45%, var(--rule)); border-radius: 8px; padding: 0.75rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+    .span-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 0.75rem; margin: 1.25rem 0; }
+    .span-f { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--muted); }
+    .span-f select { padding: 0.5rem; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: 1rem; }
+    .span-out { padding: 1.25rem; border: 1px solid var(--rule); border-radius: 10px; background: var(--code-bg); text-align: center; }
+    .span-big { font-family: var(--font-mono); font-size: 2.6rem; font-weight: 800; color: var(--site-accent, #2c63d6); line-height: 1; }
+    .span-lbl { margin-top: 0.4rem; font-size: 0.9rem; }
+    .span-note { margin-top: 0.3rem; font-size: 0.8rem; color: var(--muted); }
+  </style>
+</Base>

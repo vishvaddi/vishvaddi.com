@@ -1,0 +1,110 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+import "../../styles/prepping.css";
+---
+
+<Base
+  title="Science — Periodic Table"
+  description="Interactive periodic table of the elements — tap any element for atomic number, mass, category, group, period and what it's used for. Filter by category, search by name."
+>
+  <nav class="prep-modes" aria-label="Prepping sections">
+    <a href="/prepping">Guide</a>
+    <a href="/prepping/gear">Gear</a>
+    <a href="/prepping/health">Health</a>
+    <a href="/prepping/tools">Field tools</a>
+    <a href="/prepping/pack">Pack list</a>
+    <a href="/prepping/science" class="active">Science</a>
+    <a href="/prepping/planting">Planting</a>
+    <a href="/prepping/howto">How-to</a>
+  </nav>
+
+  <div class="blueprint tool pt-tool">
+    <h1>Periodic Table</h1>
+    <p>Tap or hover an element for its details and what it's used for. Filter by category in the legend, or search.</p>
+
+    <div class="pt-controls">
+      <input type="text" id="pt-search" placeholder="Search element…" autocomplete="off" spellcheck="false" />
+    </div>
+
+    <div class="pt-layout">
+      <div class="pt-grid" id="pt-grid" role="grid" aria-label="Periodic table"></div>
+      <div class="pt-detail" id="pt-detail" aria-live="polite"></div>
+    </div>
+
+    <div class="pt-legend" id="pt-legend"></div>
+
+    <p class="note-foot">Standard atomic weights; mass numbers for unstable elements. Uses are general-knowledge summaries.</p>
+  </div>
+
+  <style is:global>
+    .pt-tool { max-width: 1180px; }
+    .pt-controls { margin: 1rem 0; }
+    #pt-search {
+      font-family: var(--font-sans); font-size: 0.95rem; padding: 0.45rem 0.7rem;
+      border: 1px solid var(--rule); border-radius: 6px; background: var(--bg);
+      color: var(--fg); width: 16rem; max-width: 100%;
+    }
+    .pt-layout { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+    .pt-grid {
+      display: grid;
+      grid-template-columns: repeat(18, minmax(0, 1fr));
+      grid-auto-rows: 1fr; gap: 3px; flex: 1; min-width: 0;
+      overflow-x: auto;
+    }
+    .pt-cell {
+      aspect-ratio: 1; min-width: 30px; border: none; border-radius: 3px;
+      padding: 2px; cursor: pointer; color: #1a1a1a;
+      display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start;
+      line-height: 1; overflow: hidden; transition: transform 0.1s, filter 0.1s, opacity 0.15s;
+    }
+    .pt-cell:hover, .pt-cell:focus { transform: scale(1.12); z-index: 2; outline: 1px solid var(--fg); }
+    .pt-cell.dim { opacity: 0.18; }
+    .pt-z { font-size: 0.5rem; opacity: 0.8; }
+    .pt-sym { font-size: 1rem; font-weight: 700; }
+    .pt-name { font-size: 0.4rem; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+    [data-cat="ak"]  { background: #f6c453; }
+    [data-cat="ae"]  { background: #f3d77f; }
+    [data-cat="tm"]  { background: #f2a3a3; }
+    [data-cat="ptm"] { background: #b6d7b0; }
+    [data-cat="ml"]  { background: #8fd0c7; }
+    [data-cat="nm"]  { background: #8ec5e8; }
+    [data-cat="ng"]  { background: #c3aee0; }
+    [data-cat="ln"]  { background: #e8a7c8; }
+    [data-cat="an"]  { background: #d99ab0; }
+    [data-cat="un"]  { background: #cfcfcf; }
+
+    .pt-detail {
+      width: 230px; flex: none; border-radius: 6px; padding: 1rem;
+      background: var(--code-bg); border: 1px solid var(--rule); color: #1a1a1a;
+    }
+    .pt-detail-sym { font-size: 3rem; font-weight: 800; line-height: 1; }
+    .pt-detail-name { font-size: 1.1rem; margin: 0.2rem 0 0.75rem; color: #333; }
+    .pt-detail-row { display: flex; justify-content: space-between; font-size: 0.85rem; padding: 0.2rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); }
+    .pt-dl { color: #555; }
+    .pt-dv { font-weight: 600; font-family: var(--font-mono); }
+    .pt-detail-uses { margin: 0.75rem 0 0; font-size: 0.85rem; line-height: 1.45; color: #333; }
+
+    .pt-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin-top: 1.25rem; }
+    .pt-legend-item {
+      display: flex; align-items: center; gap: 0.4rem; background: none; border: none;
+      cursor: pointer; font-size: 0.8rem; color: var(--fg); padding: 0.15rem 0.3rem; border-radius: 4px;
+    }
+    .pt-legend-item.on { outline: 1px solid var(--fg); }
+    .pt-sw { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+
+    @media (max-width: 720px) {
+      .pt-cell { min-width: 22px; padding: 1px; }
+      .pt-sym { font-size: 0.7rem; }
+      .pt-name { display: none; }
+      .pt-z { font-size: 0.42rem; }
+      .pt-detail { width: 100%; }
+    }
+  </style>
+
+  <script>
+    import { initPeriodic } from "../../scripts/site/periodic";
+    initPeriodic();
+  </script>
+</Base>

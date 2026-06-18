@@ -1,0 +1,145 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+---
+
+<Base
+  title="Materials Price Tracker"
+  description="Track construction commodity price trends — copper, aluminium, lumber, steel, diesel, gas and AUD/USD — with charts over 1 month to 2 years. Indicative, delayed market data."
+  siteNav
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Price tracker</p>
+    <h1>Materials Price Tracker</h1>
+    <p>
+      Commodity price trends behind your material costs. Useful for sensing which
+      way prices are moving before you lock a quote. <strong>Delayed market data
+      in USD</strong> (futures/ETF proxies) — indicative of direction, not a buy price.
+    </p>
+
+    <div class="pr-controls">
+      <label class="pr-f"><span>Commodity</span>
+        <select id="pr-symbol">
+          <option value="copper">Copper</option>
+          <option value="aluminium">Aluminium</option>
+          <option value="lumber">Timber (WOOD ETF)</option>
+          <option value="steel">Steel (SLX ETF)</option>
+          <option value="crude">Crude oil (diesel proxy)</option>
+          <option value="gas">Natural gas</option>
+          <option value="gold">Gold</option>
+          <option value="audusd">AUD / USD</option>
+        </select>
+      </label>
+      <label class="pr-f"><span>Range</span>
+        <select id="pr-range">
+          <option value="1mo">1 month</option>
+          <option value="3mo">3 months</option>
+          <option value="6mo" selected>6 months</option>
+          <option value="1y">1 year</option>
+          <option value="2y">2 years</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="pr-summary" id="pr-summary"></div>
+    <canvas id="pr-chart" class="pr-chart" width="900" height="340"></canvas>
+    <p class="pr-status" id="pr-status"></p>
+
+    <p class="note-foot">
+      Data via public delayed market feeds; AUD/USD shown so you can sense import-cost shifts.
+      <a href="/site/convert?type=Currency">Convert currencies →</a>
+    </p>
+  </div>
+
+  <script>
+    type Point = { t: number; c: number };
+    const symSel = document.getElementById("pr-symbol") as HTMLSelectElement;
+    const rangeSel = document.getElementById("pr-range") as HTMLSelectElement;
+    const summary = document.getElementById("pr-summary")!;
+    const status = document.getElementById("pr-status")!;
+    const canvas = document.getElementById("pr-chart") as HTMLCanvasElement;
+    const ctx = canvas.getContext("2d")!;
+
+    const css = (v: string) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+    const fmtDate = (t: number) => new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short" }).format(new Date(t * 1000));
+
+    function draw(points: Point[], currency: string) {
+      const W = canvas.width, H = canvas.height, pad = 44;
+      ctx.clearRect(0, 0, W, H);
+      if (points.length < 2) { status.textContent = "Not enough data."; return; }
+      const xs = points.map((p) => p.t), ys = points.map((p) => p.c);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      let minY = Math.min(...ys), maxY = Math.max(...ys);
+      const padY = (maxY - minY) * 0.08 || 1; minY -= padY; maxY += padY;
+      const X = (t: number) => pad + ((t - minX) / (maxX - minX)) * (W - pad * 1.5);
+      const Y = (c: number) => H - pad - ((c - minY) / (maxY - minY)) * (H - pad * 1.6);
+      const accent = css("--site-accent") || "#2c63d6";
+      const rule = css("--rule") || "#ccc";
+      const muted = css("--muted") || "#888";
+
+      // axes + gridlines
+      ctx.strokeStyle = rule; ctx.lineWidth = 1; ctx.fillStyle = muted; ctx.font = "11px system-ui";
+      for (let i = 0; i <= 4; i++) {
+        const v = minY + (i / 4) * (maxY - minY), y = Y(v);
+        ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad * 0.5, y); ctx.stroke(); ctx.globalAlpha = 1;
+        ctx.fillText(v.toFixed(2), 4, y + 3);
+      }
+      ctx.textAlign = "center";
+      ctx.fillText(fmtDate(minX), X(minX), H - pad + 16);
+      ctx.fillText(fmtDate(maxX), X(maxX), H - pad + 16);
+      ctx.textAlign = "left";
+
+      // area fill
+      ctx.beginPath(); ctx.moveTo(X(xs[0]), Y(ys[0]));
+      for (let i = 1; i < points.length; i++) ctx.lineTo(X(xs[i]), Y(ys[i]));
+      ctx.lineTo(X(xs[xs.length - 1]), H - pad); ctx.lineTo(X(xs[0]), H - pad); ctx.closePath();
+      ctx.fillStyle = accent; ctx.globalAlpha = 0.10; ctx.fill(); ctx.globalAlpha = 1;
+      // line
+      ctx.beginPath(); ctx.moveTo(X(xs[0]), Y(ys[0]));
+      for (let i = 1; i < points.length; i++) ctx.lineTo(X(xs[i]), Y(ys[i]));
+      ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.stroke();
+
+      const first = ys[0], last = ys[ys.length - 1], chg = ((last - first) / first) * 100;
+      const up = chg >= 0;
+      summary.textContent = "";
+      const price = document.createElement("div"); price.className = "pr-price";
+      price.textContent = `${last.toLocaleString("en-AU", { maximumFractionDigits: 4 })} ${currency}`;
+      const change = document.createElement("div"); change.className = "pr-change " + (up ? "up" : "down");
+      change.textContent = `${up ? "▲" : "▼"} ${Math.abs(chg).toFixed(1)}% over range`;
+      summary.append(price, change);
+    }
+
+    async function load() {
+      status.textContent = "Loading…";
+      summary.textContent = "";
+      try {
+        const res = await fetch(`/api/prices?symbol=${symSel.value}&range=${rangeSel.value}`);
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        if (!data.points || !data.points.length) throw new Error("no data");
+        status.textContent = "";
+        draw(data.points, data.currency || "USD");
+      } catch {
+        status.textContent = "Couldn't load price data — the feed may be busy. Try again shortly.";
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+
+    symSel.addEventListener("change", load);
+    rangeSel.addEventListener("change", load);
+    load();
+  </script>
+
+  <style is:global>
+    .pr-controls { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 1.25rem 0; }
+    .pr-f { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--muted); }
+    .pr-f select { padding: 0.5rem; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: 1rem; }
+    .pr-summary { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin: 0.5rem 0 0.75rem; min-height: 2rem; }
+    .pr-price { font-family: var(--font-mono); font-size: 1.8rem; font-weight: 800; }
+    .pr-change { font-weight: 600; }
+    .pr-change.up { color: #1f9d4d; }
+    .pr-change.down { color: #c0392b; }
+    .pr-chart { width: 100%; height: auto; aspect-ratio: 900 / 340; border: 1px solid var(--rule); border-radius: 10px; background: var(--code-bg); }
+    .pr-status { color: var(--muted); font-size: 0.9rem; min-height: 1.2em; margin-top: 0.5rem; }
+  </style>
+</Base>

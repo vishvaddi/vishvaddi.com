@@ -1,0 +1,87 @@
+---
+import Base from "../layouts/Base.astro";
+import "../styles/tv.css";
+---
+
+<Base
+  title="CRT TV"
+  description="A dark CRT television with schedule-driven movie channels."
+>
+  <div class="tv-page">
+    <header class="tv-intro">
+      <p class="tv-eyebrow">VISHVISION / BROADCAST LINEUP</p>
+      <h1>CRT TV</h1>
+      <p>
+        A schedule-driven channel selector with cult films and classics.
+      </p>
+    </header>
+
+    <section class="tv-set" id="tv-set" aria-label="CRT television">
+      <div class="tv-nameplate" aria-hidden="true">
+        <strong>VISHVISION</strong>
+        <span>CRT-29 · ANALOG STYLE RECEIVER</span>
+      </div>
+
+      <div class="tv-hardware">
+        <div class="tv-screen-shell">
+          <div class="tv-screen" id="tv-screen">
+            <div class="tv-off" id="tv-off">
+              <span class="tv-off-dot" aria-hidden="true"></span>
+              <strong>STANDBY</strong>
+              <span>PRESS POWER</span>
+            </div>
+            <iframe
+              id="tv-player"
+              title="CRT television player"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerpolicy="strict-origin-when-cross-origin"
+              allowfullscreen
+              hidden
+            ></iframe>
+            <div class="tv-glass" aria-hidden="true"></div>
+          </div>
+        </div>
+
+        <aside class="tv-console" aria-label="Television controls">
+          <div class="tv-readout" aria-live="polite">
+            <span id="tv-channel">CH 01</span>
+            <strong id="tv-title">CINEMA ONE</strong>
+            <small id="tv-meta">MORNING FEATURE</small>
+          </div>
+
+          <div class="tv-speaker" aria-hidden="true"></div>
+
+          <div class="tv-controls">
+            <button class="tv-power" id="tv-power" type="button" aria-pressed="false">
+              <span aria-hidden="true"></span>
+              POWER
+            </button>
+            <div class="tv-channel-controls" aria-label="Channel controls">
+              <button id="tv-channel-down" type="button" aria-label="Previous channel">CH −</button>
+              <button id="tv-channel-up" type="button" aria-label="Next channel">CH +</button>
+            </div>
+            <button class="tv-fullscreen" id="tv-fullscreen" type="button">
+              FULL SCREEN
+            </button>
+          </div>
+        </aside>
+      </div>
+
+      <div class="tv-vents" aria-hidden="true"></div>
+    </section>
+
+    <section class="tv-guide" aria-labelledby="tv-guide-title">
+      <div class="tv-guide-heading">
+        <div>
+          <p class="tv-guide-label">NOW ON AIR</p>
+          <h2 id="tv-guide-title">Channel guide</h2>
+        </div>
+        <span id="tv-segment-label">MORNING</span>
+      </div>
+
+      <div class="tv-guide-list" id="tv-guide-list"></div>
+    </section>
+  </div>
+
+  <script src="/scripts/tv.js" defer></script>
+</Base>

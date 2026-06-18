@@ -17,41 +17,41 @@ const {
   siteNav = false,
 } = Astro.props;
 
-const adsenseClient = import.meta.env.PUBLIC_ADSENSE_CLIENT;
 const siteTools: [string, string][] = [
   ["/site", "All tools"],
   ["/site/calc", "Calculator"],
   ["/site/cut-list", "Cut List"],
-  ["/site/sheet", "2D Sheet"],
   ["/site/materials", "Materials"],
   ["/site/geometry", "Geometry"],
-  ["/site/triangle", "Triangle"],
-  ["/site/periodic", "Periodic Table"],
+  ["/site/span", "Span Lookup"],
   ["/site/convert", "Converter"],
   ["/site/rate", "Rate Builder"],
+  ["/site/charge-rate", "Charge-Out Rate"],
+  ["/site/prices", "Price Tracker"],
+  ["/site/quickref", "Quick Reference"],
+  ["/site/gauges", "Phone Tools"],
   ["/site/sketch", "Sketchpad"],
   ["/site/voice", "Voice Notes"],
   ["/site/pdf", "PDF Editor"],
   ["/site/records", "Site Records"],
-  ["/site/fitness", "Fitness"],
   ["/site/resources", "Resources"],
   ["/radio", "Radio"],
 ];
 const here = Astro.url.pathname.replace(/\/$/, "");
 
 const navPrimary: [string, string][] = [
-  ["/work", "Work"],
   ["/site", "Tools"],
-  ["/notes", "Notes"],
+  ["/prepping", "Prepping"],
 ];
 const navMore: [string, string][] = [
-  ["/prepping", "Prepping"],
+  ["/notes", "Notes"],
   ["/radio", "Radio"],
   ["/feeds", "Feeds"],
   ["/reader", "Reader"],
   ["/studio", "Studio"],
   ["/games", "Games"],
   ["/music", "Music"],
+  ["/tv", "TV"],
   ["/movies", "Movies"],
   ["/books", "Books"],
   ["/about", "About"],
@@ -102,13 +102,6 @@ const updatedFmt = updatedDate
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImageUrl} />
-    {adsenseClient && (
-      <script
-        async
-        crossorigin="anonymous"
-        src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClient}`}
-      ></script>
-    )}
     <title>{fullTitle}</title>
   </head>
   <body>

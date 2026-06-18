@@ -41,8 +41,28 @@ export function initVoice() {
       }
       if (interim) interim.textContent = intr;
     };
-    rec.onend = () => { if (listening) { try { rec.start(); } catch { /* */ } } };
-    try { rec.start(); } catch { /* */ }
+    rec.onerror = (e: any) => {
+      const messages: Record<string, string> = {
+        "not-allowed": "Microphone blocked — allow mic access (padlock icon in the address bar), then press Record again.",
+        "service-not-allowed": "Speech service blocked by the browser.",
+        "no-speech": "No speech detected — keep talking.",
+        "audio-capture": "No microphone found.",
+        "network": "Speech service unreachable — live transcription needs an internet connection.",
+      };
+      if (status) status.textContent = messages[e.error] || ("Speech error: " + e.error);
+      // Fatal errors shouldn't silently restart in a loop.
+      if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "audio-capture") {
+        listening = false;
+        if (recBtn) recBtn.textContent = "Record";
+      }
+    };
+    rec.onstart = () => { if (status) status.textContent = "Listening…"; };
+    rec.onend = () => { if (listening) { try { rec.start(); } catch { /* restart race — ignore */ } } };
+    try {
+      rec.start();
+    } catch (err: any) {
+      if (status) status.textContent = "Couldn't start transcription: " + (err?.message || err);
+    }
   }
 
   async function start() {

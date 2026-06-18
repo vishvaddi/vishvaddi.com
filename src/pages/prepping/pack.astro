@@ -1,0 +1,149 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/prepping.css";
+---
+
+<Base
+  title="Pack list — gear weight"
+  description="A LighterPack-style gear-list and pack-weight calculator for get-home bags, bug-out kits and hikes. Categories, base/worn/consumable weights, a visual breakdown and shareable lists. Runs entirely in your browser."
+>
+  <nav class="prep-modes" aria-label="Prepping sections">
+    <a href="/prepping">Guide</a>
+    <a href="/prepping/gear">Gear</a>
+    <a href="/prepping/health">Health</a>
+    <a href="/prepping/tools">Field tools</a>
+    <a href="/prepping/pack" class="active">Pack list</a>
+    <a href="/prepping/science">Science</a>
+    <a href="/prepping/fitness">Fitness</a>
+    <a href="/prepping/planting">Planting</a>
+    <a href="/prepping/howto">How-to</a>
+  </nav>
+
+  <h1>Pack list</h1>
+  <p>
+    A gear-list and weight calculator for a <strong>get-home bag</strong>,
+    bug-out kit or hike — the same idea as
+    <a href="https://lighterpack.com/" target="_blank" rel="noopener">LighterPack</a>.
+    Group items into categories, flag what's <em>worn</em> or
+    <em>consumable</em>, and watch base, pack and total weight update live.
+    Everything stays in your browser; “Share link” encodes the whole list into a
+    URL so nothing is uploaded.
+  </p>
+
+  <div id="pack-app" class="pack"></div>
+
+  <p class="pack-note">
+    <strong>Base weight</strong> excludes worn items and consumables (food,
+    water, fuel) — the number that doesn't change as you eat and drink.
+    <strong>Pack weight</strong> is what's actually on your back (total minus
+    worn). Saved automatically on this device.
+  </p>
+
+  <script>
+    import { initPack } from "../../scripts/site/pack";
+    initPack();
+  </script>
+
+  <style is:global>
+    .pack { margin-top: 1.5rem; }
+    .pack-note { font-size: 0.85rem; color: var(--muted); margin-top: 1.5rem; }
+
+    .pack-toolbar {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
+      padding: 0.75rem; margin-bottom: 1rem;
+      border: 1px solid var(--rule); border-radius: 10px;
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+    }
+    .pack-lbl {
+      font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--muted); margin-left: 0.4rem;
+    }
+    .pack-select {
+      font-family: var(--font-sans); font-size: 0.9rem; padding: 0.35rem 0.5rem;
+      background: var(--bg); color: var(--fg);
+      border: 1px solid var(--rule); border-radius: 6px;
+    }
+    .pack-unit { min-width: 3.2rem; }
+    .pack-btn { font-size: 0.82rem; padding: 0.35rem 0.6rem; }
+    .pack-file { display: none; }
+
+    .pack-summary {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+      gap: 0.55rem; margin-bottom: 1rem;
+    }
+    .pack-sum-cell {
+      padding: 0.6rem 0.7rem; border: 1px solid color-mix(in srgb, var(--fg) 14%, transparent);
+      border-radius: 8px; background: color-mix(in srgb, var(--bg) 88%, transparent);
+    }
+    .pack-sum-cell.is-base { border-color: color-mix(in srgb, #2c63d6 45%, var(--rule)); }
+    .pack-sum-cell.is-total { border-color: color-mix(in srgb, #1f9d6b 45%, var(--rule)); }
+    .pack-sum-n { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; line-height: 1.2; }
+    .pack-sum-l {
+      margin-top: 0.15rem; font-size: 0.7rem; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--muted);
+    }
+
+    .pack-breakdown { margin-bottom: 1.5rem; }
+    .pack-bar {
+      display: flex; height: 1.1rem; width: 100%; overflow: hidden;
+      border-radius: 999px; background: color-mix(in srgb, var(--fg) 9%, transparent);
+    }
+    .pack-bar-seg { height: 100%; transition: width 0.2s ease; }
+    .pack-legend {
+      display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin-top: 0.6rem;
+      font-size: 0.78rem;
+    }
+    .pack-legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+    .pack-legend-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: 0 0 auto; }
+    .pack-legend-val { color: var(--muted); }
+
+    .pack-cat {
+      margin-bottom: 0.9rem; padding: 0.75rem;
+      border: 1px solid var(--rule); border-radius: 10px;
+      background: color-mix(in srgb, var(--bg) 94%, transparent);
+    }
+    .pack-cat-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .pack-cat-name {
+      flex: 1; min-width: 0; font-family: var(--font-sans); font-weight: 600; font-size: 1rem;
+      background: transparent; color: var(--fg); border: 1px solid transparent;
+      border-radius: 6px; padding: 0.25rem 0.4rem;
+    }
+    .pack-cat-name:hover { border-color: var(--rule); }
+    .pack-cat-name:focus { border-color: #2c63d6; outline: none; background: var(--bg); }
+    .pack-cat-subtotal { font-family: var(--font-mono); font-size: 0.9rem; color: var(--muted); white-space: nowrap; }
+
+    .pack-items { display: flex; flex-direction: column; gap: 0.3rem; }
+    .pack-row {
+      display: grid; align-items: center; gap: 0.4rem;
+      grid-template-columns: 1fr 3.2rem 6rem 2.6rem 2.6rem 1.6rem;
+    }
+    .pack-row-head { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .pack-row-head .pack-c { text-align: center; }
+    .pack-c { display: flex; justify-content: center; align-items: center; }
+    .pack-i-name, .pack-i-num {
+      font-family: var(--font-sans); font-size: 0.9rem; padding: 0.3rem 0.45rem;
+      background: var(--bg); color: var(--fg); border: 1px solid var(--rule); border-radius: 6px;
+      min-width: 0; width: 100%;
+    }
+    .pack-i-num { font-family: var(--font-mono); text-align: right; -moz-appearance: textfield; }
+    .pack-i-weight { display: flex; align-items: center; gap: 0.25rem; }
+    .pack-i-unit { font-size: 0.7rem; color: var(--muted); }
+    .pack-chk { width: 1.05rem; height: 1.05rem; accent-color: #2c63d6; cursor: pointer; }
+    .pack-x {
+      width: 1.6rem; height: 1.6rem; line-height: 1; font-size: 0.8rem; cursor: pointer;
+      color: var(--muted); background: transparent; border: 1px solid var(--rule); border-radius: 6px;
+    }
+    .pack-x:hover { color: #c0392b; border-color: #c0392b; }
+    .pack-add-item {
+      margin-top: 0.5rem; font-size: 0.82rem; color: var(--muted); cursor: pointer;
+      background: transparent; border: 1px dashed var(--rule); border-radius: 6px; padding: 0.35rem 0.6rem;
+    }
+    .pack-add-item:hover { color: var(--fg); border-color: #2c63d6; }
+    .pack-add-cat { margin-top: 0.25rem; }
+
+    @media (max-width: 560px) {
+      .pack-row { grid-template-columns: 1fr 2.6rem 5rem 2rem 2rem 1.5rem; gap: 0.25rem; }
+      .pack-i-name, .pack-i-num { font-size: 0.82rem; padding: 0.3rem; }
+    }
+  </style>
+</Base>

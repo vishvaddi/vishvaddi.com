@@ -60,6 +60,11 @@ html {
   font-family: var(--font-serif);
   color: var(--fg);
   background: var(--bg);
+  /* Stop off-canvas elements (e.g. the studio's slide-in drawer parked at
+     translateX(100%)) from creating horizontal page overflow, which made
+     full-bleed sections look shifted left with empty space on the right.
+     `clip` (not `hidden`) keeps position:sticky working. */
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }

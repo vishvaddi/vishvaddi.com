@@ -48,6 +48,54 @@
     return weatherCodes[code] || "Forecast";
   }
 
+  // Inline SVG keeps icons same-origin (CSP-safe) and theme-aware via currentColor.
+  function iconGroup(code) {
+    if (code === 0 || code === 1) return "sun";
+    if (code === 2) return "partly";
+    if (code === 45 || code === 48) return "fog";
+    if (code >= 71 && code <= 77) return "snow";
+    if (code === 85 || code === 86) return "snow";
+    if (code >= 95) return "thunder";
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return "rain";
+    if (code === 3) return "cloud";
+    return "cloud";
+  }
+
+  var ICONS = {
+    sun:
+      '<circle cx="12" cy="12" r="4.2"/>' +
+      '<path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5 5l1.6 1.6M17.4 17.4 19 19M19 5l-1.6 1.6M6.6 17.4 5 19"/>',
+    partly:
+      '<circle cx="8" cy="8" r="3.2"/>' +
+      '<path d="M8 1.8v1.6M1.8 8h1.6M3.8 3.8l1.1 1.1M12.2 3.8 11.1 4.9"/>' +
+      '<path d="M9 19h8.5a3 3 0 0 0 .3-6 4.3 4.3 0 0 0-8.2-1.2A3.4 3.4 0 0 0 9 19Z"/>',
+    cloud:
+      '<path d="M7 18h9.5a3.3 3.3 0 0 0 .3-6.6 4.7 4.7 0 0 0-9-1.3A3.7 3.7 0 0 0 7 18Z"/>',
+    fog:
+      '<path d="M7 14h9.5a3.3 3.3 0 0 0 .3-6.6 4.7 4.7 0 0 0-9-1.3A3.7 3.7 0 0 0 7 14Z"/>' +
+      '<path d="M4 18h16M6 21h12"/>',
+    rain:
+      '<path d="M7 14h9.5a3.3 3.3 0 0 0 .3-6.6 4.7 4.7 0 0 0-9-1.3A3.7 3.7 0 0 0 7 14Z"/>' +
+      '<path d="M8.5 17.5 7.5 20M12 17.5 11 20M15.5 17.5 14.5 20"/>',
+    snow:
+      '<path d="M7 13h9.5a3.3 3.3 0 0 0 .3-6.6 4.7 4.7 0 0 0-9-1.3A3.7 3.7 0 0 0 7 13Z"/>' +
+      '<path d="M8 17.5h.01M12 19h.01M16 17.5h.01M10 20h.01M14 20h.01"/>',
+    thunder:
+      '<path d="M7 13h9.5a3.3 3.3 0 0 0 .3-6.6 4.7 4.7 0 0 0-9-1.3A3.7 3.7 0 0 0 7 13Z"/>' +
+      '<path d="m12 14-2 3.5h2.4L10.8 21"/>',
+  };
+
+  function iconSvg(code, cls) {
+    var g = iconGroup(code);
+    return (
+      '<svg class="' + (cls || "wx-icon") + '" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
+      'stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+      (ICONS[g] || ICONS.cloud) +
+      "</svg>"
+    );
+  }
+
   function setStatus(value) {
     var el = $("weather-status");
     if (el) el.textContent = value;
@@ -144,14 +192,32 @@
     target.innerHTML = "";
 
     var current = data.current || {};
-    target.appendChild(stat("Place", label));
-    target.appendChild(stat("Now", round(current.temperature_2m) + " degC"));
-    target.appendChild(stat("Feels like", round(current.apparent_temperature) + " degC"));
-    target.appendChild(stat("Condition", codeLabel(current.weather_code)));
-    target.appendChild(stat("Humidity", round(current.relative_humidity_2m) + "%"));
-    target.appendChild(stat("Wind", round(current.wind_speed_10m) + " km/h"));
-    target.appendChild(stat("Gusts", round(current.wind_gusts_10m) + " km/h"));
-    target.appendChild(stat("Cloud", round(current.cloud_cover) + "%"));
+    var daily = data.daily || {};
+    var code = current.weather_code;
+
+    var hero = document.createElement("div");
+    hero.className = "weather-hero";
+    hero.innerHTML =
+      '<span class="weather-hero-icon">' + iconSvg(code, "wx-icon wx-icon-lg") + "</span>" +
+      '<div class="weather-hero-main">' +
+        '<div class="weather-hero-temp">' + round(current.temperature_2m) + "&deg;</div>" +
+        '<div class="weather-hero-cond">' + codeLabel(code) + "</div>" +
+        '<div class="weather-hero-sub">' + label + " &middot; feels " +
+          round(current.apparent_temperature) + "&deg;C</div>" +
+      "</div>";
+    target.appendChild(hero);
+
+    var row = document.createElement("div");
+    row.className = "weather-stat-row";
+    [
+      stat("Humidity", round(current.relative_humidity_2m) + "%"),
+      stat("Wind", round(current.wind_speed_10m) + " km/h"),
+      stat("Gusts", round(current.wind_gusts_10m) + " km/h"),
+      stat("Cloud", round(current.cloud_cover) + "%"),
+      stat("UV max", daily.uv_index_max ? round(daily.uv_index_max[0]) : "--"),
+      stat("Rain", daily.precipitation_probability_max ? round(daily.precipitation_probability_max[0]) + "%" : "--"),
+    ].forEach(function (el) { row.appendChild(el); });
+    target.appendChild(row);
   }
 
   function renderDays(data) {
@@ -164,30 +230,36 @@
       var card = document.createElement("article");
       card.className = "weather-day";
 
+      var code = data.daily.weather_code[i];
+
       var when = document.createElement("time");
+      when.className = "weather-day-when";
       when.dateTime = value;
-      when.textContent = dayFmt.format(date) + " " + dateFmt.format(date);
+      when.textContent = i === 0 ? "Today" : dayFmt.format(date);
       card.appendChild(when);
 
-      var condition = document.createElement("strong");
-      condition.textContent = codeLabel(data.daily.weather_code[i]);
-      card.appendChild(condition);
+      var icon = document.createElement("span");
+      icon.className = "weather-day-icon";
+      icon.innerHTML = iconSvg(code);
+      card.appendChild(icon);
 
       var temp = document.createElement("span");
-      temp.textContent = round(data.daily.temperature_2m_min[i]) + "-" + round(data.daily.temperature_2m_max[i]) + " degC";
+      temp.className = "weather-day-temp";
+      temp.innerHTML =
+        '<strong>' + round(data.daily.temperature_2m_max[i]) + "&deg;</strong> " +
+        round(data.daily.temperature_2m_min[i]) + "&deg;";
       card.appendChild(temp);
 
+      var condition = document.createElement("span");
+      condition.className = "weather-day-cond";
+      condition.textContent = codeLabel(code);
+      card.appendChild(condition);
+
       var rain = document.createElement("span");
-      rain.textContent = "Rain " + round(data.daily.precipitation_probability_max[i]) + "%";
+      rain.innerHTML = '<span class="wx-drop" aria-hidden="true"></span>' +
+        round(data.daily.precipitation_probability_max[i]) + "% &middot; gust " +
+        round(data.daily.wind_gusts_10m_max[i]);
       card.appendChild(rain);
-
-      var wind = document.createElement("span");
-      wind.textContent = "Gust " + round(data.daily.wind_gusts_10m_max[i]) + " km/h";
-      card.appendChild(wind);
-
-      var sun = document.createElement("span");
-      sun.textContent = "Sun " + timeFmt.format(new Date(data.daily.sunrise[i])) + " - " + timeFmt.format(new Date(data.daily.sunset[i]));
-      card.appendChild(sun);
 
       target.appendChild(card);
     });

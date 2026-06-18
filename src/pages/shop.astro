@@ -1,6 +1,5 @@
 ---
 import Base from "../layouts/Base.astro";
-import AdSlot from "../components/AdSlot.astro";
 import { shopCollections } from "../data/shop";
 
 const affiliateTag = import.meta.env.PUBLIC_AMAZON_ASSOCIATE_TAG || "";
@@ -26,8 +25,6 @@ const amazon = (query: string) => {
   <nav class="bag-jump" aria-label="Shop categories">
     {shopCollections.map((group) => <a href={`#${group.id}`}>{group.title}</a>)}
   </nav>
-
-  <AdSlot label="Shop advertisement" />
 
   {shopCollections.map((group) => (
     <section class="shop-group reveal" id={group.id}>

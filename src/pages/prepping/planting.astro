@@ -1,0 +1,106 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/prepping.css";
+import { ZONES, MONTHS } from "../../data/planting";
+
+const cards = ZONES.flatMap((z) => z.plants.map((p) => ({ ...p, zone: z.id })));
+const defaultZone = "au-temperate";
+---
+
+<Base
+  title="Planting calendar — what to sow this month"
+  description="Pick your Australian climate zone and a month to see what to sow: vegetables and herbs by sowing window, with botanical names, harvest times and practical growing tips. Runs in your browser."
+>
+  <nav class="prep-modes" aria-label="Prepping sections">
+    <a href="/prepping">Guide</a>
+    <a href="/prepping/gear">Gear</a>
+    <a href="/prepping/health">Health</a>
+    <a href="/prepping/tools">Field tools</a>
+    <a href="/prepping/pack">Pack list</a>
+    <a href="/prepping/science">Science</a>
+    <a href="/prepping/fitness">Fitness</a>
+    <a href="/prepping/planting" class="active">Planting</a>
+    <a href="/prepping/howto">How-to</a>
+  </nav>
+
+  <h1>Planting calendar</h1>
+  <p>
+    Choose your climate zone and a month to see what to sow now — with botanical
+    names, harvest times and a practical tip for each crop. A home-resilience
+    companion to the <a href="/prepping">prepping guide</a>; everything runs in
+    your browser.
+  </p>
+
+  <div class="planting-controls">
+    <label class="zone-pick">
+      <span>Climate zone</span>
+      <select id="zone-select">
+        {ZONES.map((z) => (
+          <option value={z.id} data-blurb={z.blurb} selected={z.id === defaultZone}>{z.name}</option>
+        ))}
+      </select>
+    </label>
+    <p class="zone-blurb">{ZONES.find((z) => z.id === defaultZone)?.blurb}</p>
+  </div>
+
+  <div class="month-tabs" role="tablist" aria-label="Month">
+    {MONTHS.map((m, i) => (
+      <button class="month-tab" type="button" data-month={i + 1} role="tab" aria-selected="false">{m.slice(0, 3)}</button>
+    ))}
+    <button class="month-tab month-all" type="button" data-month="0" role="tab" aria-selected="false">All year</button>
+  </div>
+
+  <h2 id="month-heading">Sow this month</h2>
+
+  <div class="plant-grid">
+    {cards.map((p) => (
+      <article class="plant-card" data-zone={p.zone} data-sow={p.sow.join(",")} data-cat={p.cat}>
+        <header>
+          <h3>{p.name}</h3>
+          <span class="cat" data-cat={p.cat}>{p.cat}</span>
+        </header>
+        <p class="sci">{p.sci}</p>
+        <p class="tip">{p.tip}</p>
+        <footer>Harvest in {p.harvest}</footer>
+      </article>
+    ))}
+  </div>
+
+  <p class="empty-note" hidden>Nothing's in its main sowing window this month for this zone — try the month either side, or "All year".</p>
+
+  <p class="planting-note">
+    Sowing windows are general guidance for each zone; your own microclimate,
+    aspect and the season's weather always have the final say. Botanical names
+    and broad sowing windows are factual; the growing notes are my own.
+  </p>
+
+  <script>
+    import { initPlantingCalendar } from "../../scripts/site/planting";
+    initPlantingCalendar();
+  </script>
+
+  <style>
+    .planting-controls { margin: 1.5rem 0 1rem; }
+    .zone-pick { display: flex; flex-direction: column; gap: 0.35rem; max-width: 28rem; }
+    .zone-pick span { font-weight: 600; font-size: 0.85rem; opacity: 0.8; }
+    #zone-select { padding: 0.5rem 0.6rem; border-radius: 0.5rem; border: 1px solid var(--border, #3a3a3a); background: var(--surface, #16181c); color: inherit; font-size: 1rem; }
+    .zone-blurb { font-size: 0.9rem; opacity: 0.8; margin-top: 0.5rem; max-width: 44rem; }
+
+    .month-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 1rem 0; }
+    .month-tab { padding: 0.4rem 0.7rem; border-radius: 0.5rem; border: 1px solid var(--border, #3a3a3a); background: transparent; color: inherit; cursor: pointer; font-size: 0.85rem; }
+    .month-tab:hover { border-color: var(--accent, #6aa9ff); }
+    .month-tab.active { background: var(--accent, #6aa9ff); color: #05060a; border-color: var(--accent, #6aa9ff); font-weight: 600; }
+    .month-all { margin-left: auto; }
+
+    .plant-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.9rem; margin-top: 1rem; }
+    .plant-card { border: 1px solid var(--border, #2c2e34); border-radius: 0.7rem; padding: 0.9rem 1rem; background: var(--surface, #14161a); }
+    .plant-card header { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+    .plant-card h3 { margin: 0; font-size: 1.05rem; }
+    .plant-card .sci { font-style: italic; opacity: 0.7; font-size: 0.82rem; margin: 0.15rem 0 0.5rem; }
+    .plant-card .tip { font-size: 0.9rem; margin: 0 0 0.6rem; line-height: 1.45; }
+    .plant-card footer { font-size: 0.8rem; opacity: 0.7; }
+    .cat { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.12rem 0.4rem; border-radius: 0.4rem; background: rgba(120,150,200,0.18); white-space: nowrap; }
+    .planting-note { font-size: 0.82rem; opacity: 0.65; margin-top: 1.5rem; max-width: 42rem; }
+    .empty-note { opacity: 0.8; }
+  </style>
+</Base>

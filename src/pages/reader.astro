@@ -9,15 +9,24 @@ import Base from "../layouts/Base.astro";
     .search-bar {
       display: flex; gap: 0.5rem; margin-bottom: 2rem;
     }
-    .search-bar input {
+    .search-bar input,
+    .search-bar select {
       flex: 1; padding: 0.5rem 0.75rem; border: 1px solid var(--rule);
       background: var(--bg); color: var(--fg); font-family: var(--font-sans);
       font-size: 0.95rem; border-radius: 4px;
+    }
+    .search-bar select {
+      flex: 0 0 13rem;
     }
     .search-bar button {
       padding: 0.5rem 1rem; background: var(--fg); color: var(--bg);
       border: none; border-radius: 4px; cursor: pointer; font-family: var(--font-sans);
       font-size: 0.95rem;
+    }
+    .search-bar .shuffle-btn {
+      background: var(--code-bg);
+      color: var(--fg);
+      border: 1px solid var(--rule);
     }
 
     .book-grid {
@@ -50,7 +59,37 @@ import Base from "../layouts/Base.astro";
       padding: 0.3rem 0.6rem; border-radius: 4px; cursor: pointer;
       font-family: var(--font-sans); font-size: 0.85rem;
     }
-    .reader-header h2 { flex: 1; font-size: 1rem; color: var(--muted); font-weight: 400; margin: 0; min-width: 0; }
+    .reader-header h2 {
+      flex: 1; font-size: 1rem; color: var(--muted); font-weight: 400; margin: 0;
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .reader-tools { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+    .reader-header .rh-icon {
+      font-family: var(--font-mono); font-weight: 700; min-width: 2.1rem;
+      padding: 0.3rem 0.5rem; text-align: center;
+    }
+    .reader-header .rh-font {
+      background: var(--bg); color: var(--fg); border: 1px solid var(--rule);
+      border-radius: 4px; padding: 0.3rem 0.4rem; font-size: 0.85rem;
+      font-family: var(--font-sans); cursor: pointer;
+    }
+
+    /* Full-screen / immersive reading — works on every device (CSS-driven, so
+       iOS Safari is covered even though it lacks element fullscreen). */
+    /* display:flex must beat the inline style.display="block" the reader sets
+       when a book opens — hence !important. Without it #reader-ui stayed block
+       and the spread collapsed to the top instead of filling the screen. */
+    body.reader-immersive #reader-ui {
+      position: fixed; inset: 0; z-index: 9999; margin: 0; max-width: none;
+      padding: 0.8rem clamp(0.75rem, 4vw, 2.5rem) 1rem;
+      background: var(--bg); overflow: hidden;
+      display: flex !important; flex-direction: column;
+    }
+    body.reader-immersive .reader-header { flex: 0 0 auto; }
+    body.reader-immersive .reader-settings.open { flex: 0 0 auto; }
+    body.reader-immersive .spread-wrap { flex: 1 1 auto; min-height: 0; width: 100%; max-width: 50rem; margin: 0 auto; }
+    body.reader-immersive .spread { height: 100%; max-width: none; margin: 0; }
+    body.reader-immersive .nav-row { flex: 0 0 auto; max-width: 50rem; width: 100%; margin: 0.6rem auto 0; }
 
     /* Settings panel */
     .reader-settings {
@@ -68,31 +107,28 @@ import Base from "../layouts/Base.astro";
       color: var(--fg); border: 1px solid var(--rule); border-radius: 3px; padding: 2px 4px;
     }
 
-    /* Spread */
+    /* Spread — single page (Kindle style): one panel, no spine, no flip. */
     .spread-wrap {
-      position: relative; perspective: 2000px; user-select: none;
+      position: relative; user-select: none;
+      max-width: 44rem; margin: 0 auto;
     }
     .spread {
-      display: grid; grid-template-columns: 1fr 1fr;
-      background: #faf7f0; border-radius: 3px;
+      display: block;
+      background: #faf7f0; border-radius: 6px;
       box-shadow: 0 2px 20px rgba(0,0,0,0.18);
-      height: clamp(500px, 72vh, 840px); position: relative;
+      height: clamp(500px, 74vh, 880px); position: relative;
     }
-    /* Spine shadow */
-    .spread::after {
-      content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
-      background: linear-gradient(to right, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.05) 6px, transparent 6px);
-      transform: translateX(-50%);
-      box-shadow: 2px 0 8px rgba(0,0,0,0.10), -2px 0 8px rgba(0,0,0,0.10);
-    }
+    .spread::after { display: none; }
+    .page-panel.right, .page-flipper { display: none; }
 
     .page-panel {
-      padding: 2.5rem 2rem; font-family: var(--font-serif); font-size: 0.95rem;
+      padding: 2.25rem 2.25rem; font-family: var(--font-serif); font-size: 0.95rem;
       line-height: 1.75; color: #3a2e20; overflow: hidden;
-      position: relative;
+      position: relative; height: 100%; box-sizing: border-box;
+      hyphens: auto; -webkit-hyphens: auto;
+      text-rendering: optimizeLegibility;
     }
-    .page-panel.left { border-radius: 3px 0 0 3px; }
-    .page-panel.right { border-radius: 0 3px 3px 0; }
+    .page-panel.left { border-radius: 6px; }
     .page-num {
       position: absolute; bottom: 1rem;
       font-size: 0.75rem; color: #9a8a72; font-family: var(--font-sans);
@@ -115,6 +151,7 @@ import Base from "../layouts/Base.astro";
       background: #faf7f0; backface-visibility: hidden;
       padding: 2.5rem 2rem; font-family: var(--font-serif); font-size: 0.95rem;
       line-height: 1.75; color: #3a2e20; overflow: hidden;
+      hyphens: auto; -webkit-hyphens: auto;
     }
     .flipper-back { transform: rotateY(180deg); }
 
@@ -172,8 +209,32 @@ import Base from "../layouts/Base.astro";
     mark.ann-green  { background: #b4f0a0; color: inherit; border-radius: 2px; }
     mark.ann-pink   { background: #fbb6ce; color: inherit; border-radius: 2px; }
 
+    .load-more-row { display: flex; justify-content: center; margin: 1.75rem 0 0.5rem; }
+    .load-more-row button {
+      padding: 0.55rem 1.4rem; background: var(--code-bg); color: var(--fg);
+      border: 1px solid var(--rule); border-radius: 4px; cursor: pointer;
+      font-family: var(--font-sans); font-size: 0.9rem;
+    }
+    .load-more-row button:disabled { opacity: 0.5; cursor: default; }
+
     .loading { color: var(--muted); font-size: 0.9rem; padding: 2rem 0; }
     .error-msg { color: #c0392b; font-size: 0.9rem; padding: 1rem 0; }
+
+    .audio-reader {
+      display: none; max-width: 52rem; margin: 1.5rem auto 0;
+      border: 1px solid var(--rule); border-radius: 10px; padding: 1rem;
+      background: var(--code-bg);
+    }
+    .audio-reader.open { display: block; }
+    .audio-reader audio { width: 100%; margin: 0.75rem 0; }
+    .audio-meta { color: var(--muted); font-size: 0.86rem; margin: 0; }
+    .chapter-list { display: grid; gap: 0.45rem; margin-top: 1rem; max-height: 52vh; overflow: auto; }
+    .chapter-btn {
+      text-align: left; border: 1px solid var(--rule); border-radius: 6px;
+      background: var(--bg); color: var(--fg); padding: 0.55rem 0.7rem;
+      cursor: pointer; font-family: var(--font-sans);
+    }
+    .chapter-btn.active { border-color: var(--accent); }
   </style>
 
   <div class="reader-wrap">
@@ -184,25 +245,46 @@ import Base from "../layouts/Base.astro";
         <p class="shelf-heading">Library</p>
       </div>
       <div class="search-bar">
-        <input type="text" id="search-input" placeholder="Search this library…" />
+        <select id="source-select" aria-label="Library source">
+          <option value="gutenberg">Project Gutenberg</option>
+          <option value="librivox">LibriVox audiobooks</option>
+          <option value="folktexts">Ashliman folktexts</option>
+          <option value="openstax">OpenStax textbooks</option>
+        </select>
+        <input type="text" id="search-input" placeholder="Search Project Gutenberg…" />
         <button id="search-btn">Search</button>
       </div>
       <div id="status" class="loading">Loading classics…</div>
       <div id="book-grid" class="book-grid"></div>
+      <div class="load-more-row">
+        <button id="load-more" style="display:none">Load more</button>
+      </div>
     </div>
 
     <div id="reader-ui">
       <div class="reader-header">
         <button id="back-btn">← Library</button>
         <h2 id="book-title-label"></h2>
-        <button id="save-btn" title="Download for offline reading">↓ Save offline</button>
-        <button id="settings-btn" title="Display settings">Aa</button>
+        <div class="reader-tools">
+          <select id="font-sel" class="rh-font" title="Font" aria-label="Reading font">
+            <option value="'Source Serif 4',Georgia,serif">Book</option>
+            <option value="Georgia,serif">Georgia</option>
+            <option value="'Palatino Linotype',serif">Palatino</option>
+            <option value="system-ui,sans-serif">Sans</option>
+          </select>
+          <button id="font-dec" class="rh-icon" title="Smaller text" aria-label="Smaller text">A−</button>
+          <button id="font-inc" class="rh-icon" title="Larger text" aria-label="Larger text">A+</button>
+          <button id="fs-btn" title="Full screen">⛶ Full screen</button>
+          <button id="save-btn" title="Keep available offline">↓ Save offline</button>
+          <button id="dl-btn" title="Download the book as a text file">⬇ Download</button>
+          <button id="settings-btn" title="Display settings">Aa</button>
+        </div>
       </div>
 
       <div class="reader-settings" id="reader-settings">
         <div class="rs-group">
           <label for="rs-size">Size</label>
-          <input type="range" id="rs-size" min="80" max="140" step="5" value="100">
+          <input type="range" id="rs-size" min="80" max="220" step="5" value="100">
           <span id="rs-size-val">100%</span>
         </div>
         <div class="rs-group">
@@ -255,6 +337,12 @@ import Base from "../layouts/Base.astro";
         <button id="prev-btn">← Prev</button>
         <span class="page-info" id="page-info"></span>
         <button id="next-btn">Next →</button>
+      </div>
+
+      <div class="audio-reader" id="audio-reader">
+        <p class="audio-meta" id="audio-meta"></p>
+        <audio id="audio-player" controls preload="metadata"></audio>
+        <div class="chapter-list" id="chapter-list"></div>
       </div>
     </div>
   </div>

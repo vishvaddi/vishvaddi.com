@@ -128,22 +128,39 @@ export function download(filename: string, href: string) {
 // external /_astro chunk — the strict CSP only allows 'self' scripts, never
 // inlined ones.
 
+// Factor = value of one unit in the category's base unit. Temperature and
+// Currency are special-cased in convert() (offsets / live rates).
 const UNITS: Record<string, Record<string, number>> = {
-  Length: { mm: 1, cm: 10, m: 1000, km: 1e6, in: 25.4, ft: 304.8, yd: 914.4 },
+  Length: { mm: 1, cm: 10, m: 1000, km: 1e6, "µm": 0.001, in: 25.4, ft: 304.8, yd: 914.4, mi: 1609344, nmi: 1852000 },
   Area: {
-    "mm²": 1e-6, "cm²": 1e-4, "m²": 1, ha: 1e4,
-    "ft²": 0.09290304, "yd²": 0.83612736, acre: 4046.8564224,
+    "mm²": 1e-6, "cm²": 1e-4, "m²": 1, ha: 1e4, "km²": 1e6,
+    "in²": 0.00064516, "ft²": 0.09290304, "yd²": 0.83612736, acre: 4046.8564224,
   },
   Volume: {
-    mL: 0.001, L: 1, "m³": 1000,
-    "ft³": 28.316846592, "gal US": 3.785411784, "gal UK": 4.54609,
+    mL: 0.001, cL: 0.01, L: 1, "m³": 1000, tsp: 0.00492892, tbsp: 0.0147868,
+    cup: 0.25, "fl oz": 0.0295735, "pt US": 0.473176, "qt US": 0.946353,
+    "gal US": 3.785411784, "gal UK": 4.54609, "ft³": 28.316846592,
   },
-  Mass: {
-    g: 1, kg: 1000, oz: 28.349523125, lb: 453.59237, st: 6350.29318,
-  },
-  Energy: {
-    J: 1, kJ: 1000, cal: 4.184, kcal: 4184,
-  },
+  Mass: { mg: 0.001, g: 1, kg: 1000, t: 1e6, oz: 28.349523125, lb: 453.59237, st: 6350.29318 },
+  Temperature: { "°C": 1, "°F": 1, K: 1 },
+  Speed: { "m/s": 1, "km/h": 0.2777778, mph: 0.44704, knot: 0.5144444, "ft/s": 0.3048 },
+  Pressure: { Pa: 1, kPa: 1000, bar: 1e5, psi: 6894.757, atm: 101325, mmHg: 133.322 },
+  Power: { W: 1, kW: 1000, MW: 1e6, hp: 745.7 },
+  Energy: { J: 1, kJ: 1000, Wh: 3600, kWh: 3.6e6, cal: 4.184, kcal: 4184, BTU: 1055.06 },
+  Data: { B: 1, KB: 1024, MB: 1048576, GB: 1073741824, TB: 1.099511628e12, bit: 0.125 },
+  Time: { ms: 0.001, s: 1, min: 60, h: 3600, day: 86400, week: 604800 },
+  Angle: { deg: 1, rad: 57.2957795, grad: 0.9, turn: 360 },
+  Frequency: { Hz: 1, kHz: 1000, MHz: 1e6, GHz: 1e9, rpm: 0.01666667 },
+  Force: { N: 1, kN: 1000, kgf: 9.80665, lbf: 4.4482216 },
+  Torque: { "N·m": 1, "kgf·m": 9.80665, "lbf·ft": 1.3558180 },
+  Currency: { AUD: 1, USD: 1, EUR: 1, GBP: 1, NZD: 1, JPY: 1, CNY: 1, INR: 1, CAD: 1, SGD: 1, CHF: 1, HKD: 1, THB: 1, IDR: 1 },
+};
+
+const TEMP_TO_C: Record<string, (x: number) => number> = {
+  "°C": (x) => x, "°F": (x) => ((x - 32) * 5) / 9, K: (x) => x - 273.15,
+};
+const TEMP_FROM_C: Record<string, (x: number) => number> = {
+  "°C": (x) => x, "°F": (x) => (x * 9) / 5 + 32, K: (x) => x + 273.15,
 };
 
 const cfmt = (n: number) =>
@@ -173,15 +190,37 @@ export function initConverter() {
     toEl.selectedIndex = Math.min(1, units.length - 1);
   };
 
+  let fxLoaded = false;
+  const loadFx = () => {
+    fetch("/api/fx")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("fx"))))
+      .then((d: { rates?: Record<string, number> }) => {
+        const rates = d.rates;
+        if (!rates) return;
+        for (const code of Object.keys(UNITS.Currency)) {
+          if (rates[code]) UNITS.Currency[code] = 1 / rates[code]; // base-USD value of one unit
+        }
+        UNITS.Currency.USD = 1;
+        fxLoaded = true;
+        if (catEl.value === "Currency") convert();
+      })
+      .catch(() => { if (catEl.value === "Currency" && !fxLoaded) outEl.textContent = "Exchange rates unavailable — try again later."; });
+  };
+
   const convert = () => {
-    const table = UNITS[catEl.value];
+    const cat = catEl.value;
     const v = parseFloat(valEl.value);
-    const from = table[fromEl.value];
-    const to = table[toEl.value];
-    if (!Number.isFinite(v) || !from || !to) {
-      outEl.textContent = "—";
+    if (!Number.isFinite(v)) { outEl.textContent = "—"; return; }
+    if (cat === "Temperature") {
+      const toC = TEMP_TO_C[fromEl.value], fromC = TEMP_FROM_C[toEl.value];
+      if (!toC || !fromC) { outEl.textContent = "—"; return; }
+      outEl.textContent = `${cfmt(v)} ${fromEl.value} = ${cfmt(fromC(toC(v)))} ${toEl.value}`;
       return;
     }
+    if (cat === "Currency" && !fxLoaded) { outEl.textContent = "Loading exchange rates…"; loadFx(); return; }
+    const table = UNITS[cat];
+    const from = table[fromEl.value], to = table[toEl.value];
+    if (!from || !to) { outEl.textContent = "—"; return; }
     outEl.textContent = `${cfmt(v)} ${fromEl.value} = ${cfmt((v * from) / to)} ${toEl.value}`;
   };
 
@@ -204,6 +243,7 @@ export function initConverter() {
 
   fill();
   convert();
+  loadFx(); // warm the cached rates so Currency is ready when selected
 }
 
 // Build a plain-text summary of every calculator's current result (for email).

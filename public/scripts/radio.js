@@ -40,7 +40,6 @@ var spTrigger = document.getElementById("sp-trigger");
 var spList = document.getElementById("sp-list");
 var trackIdTitle = document.getElementById("track-id-title");
 var trackIdBtn = document.getElementById("track-id-btn");
-var shazamBtn = document.getElementById("shazam-btn");
 
 var currentStation = null;
 var currentUrl = null;
@@ -414,12 +413,6 @@ audio.addEventListener("error", showAudioError);
 
 if (trackIdBtn) {
   trackIdBtn.addEventListener("click", function() { identifyTrack(true); });
-}
-
-if (shazamBtn) {
-  shazamBtn.addEventListener("click", function() {
-    window.open("https://www.shazam.com/", "_blank", "noopener");
-  });
 }
 
 /* ── Preset buttons ── */

@@ -13,6 +13,11 @@ import "../../styles/prepping.css";
     <a href="/prepping/gear">Gear</a>
     <a href="/prepping/health">Health</a>
     <a href="/prepping/tools" class="active">Field tools</a>
+    <a href="/prepping/pack">Pack list</a>
+    <a href="/prepping/science">Science</a>
+    <a href="/prepping/fitness">Fitness</a>
+    <a href="/prepping/planting">Planting</a>
+    <a href="/prepping/howto">How-to</a>
   </nav>
 
   <h1>Field tools</h1>
@@ -75,12 +80,36 @@ import "../../styles/prepping.css";
     </div>
   </section>
 
+  <section id="sunmoon" data-prep-tool style="margin-top:2.5rem">
+    <div class="sm-head">
+      <div>
+        <h2 id="sun-moon-heading">Sun &amp; Moon</h2>
+        <p style="font-size:0.9rem;color:var(--muted);margin:0.25rem 0 0">
+          Sunrise/sunset, golden hours, moon phase and moonrise — for planning
+          work light, travel and night navigation. Computed on your device.
+        </p>
+      </div>
+    </div>
+    <div class="sm-controls">
+      <label class="sm-field"><span>Date</span><input type="date" id="sm-date" /></label>
+      <button id="sm-loc" class="btn btn-ghost" type="button">Use my location</button>
+      <span id="sm-status" class="sm-status"></span>
+    </div>
+    <h3 class="sm-sub">Sun</h3>
+    <div id="sm-sun" class="sm-grid"></div>
+    <h3 class="sm-sub">Moon</h3>
+    <div id="sm-moon" class="sm-grid"></div>
+    <p style="font-size:0.8rem;color:var(--muted);margin-top:0.75rem">Times are local; golden hour is approximate (sun within ~6° of the horizon).</p>
+  </section>
+
   <div id="prep-app" class="blueprint tool"></div>
 
   <script>
     import { initPrepping, buildPreppingNav } from "../../scripts/site/prepping";
+    import { initSunMoon } from "../../scripts/site/sunmoon";
     initPrepping();
     buildPreppingNav();
+    initSunMoon();
   </script>
   <script src="/scripts/prepping-weather.js" defer></script>
   <script src="/scripts/prepping-stars.js" defer></script>
@@ -89,4 +118,13 @@ import "../../styles/prepping.css";
 <style is:global>
   /* The tools page borrows the blueprint tool styling but not its fixed backdrop. */
   #prep-app.blueprint::before { display: none; }
+  .sm-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem; margin: 1rem 0; }
+  .sm-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
+  .sm-field input { padding: 0.4rem 0.5rem; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--fg); font-family: var(--font-sans); }
+  .sm-status { color: var(--muted); font-size: 0.9rem; }
+  .sm-sub { margin: 1.25rem 0 0.5rem; font-size: 1rem; }
+  .sm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.55rem; }
+  .sm-cell { padding: 0.6rem 0.7rem; border: 1px solid color-mix(in srgb, var(--fg) 14%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--bg) 88%, transparent); }
+  .sm-n { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; line-height: 1.2; }
+  .sm-l { margin-top: 0.15rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 </style>

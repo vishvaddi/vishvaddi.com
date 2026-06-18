@@ -1,0 +1,99 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+---
+
+<Base
+  title="Charge-Out Rate Calculator"
+  description="Work out what to charge per hour as an Australian sole trader or subbie — covers your wage, super, overheads, billable hours and margin to give a break-even and charge-out rate. Runs entirely in your browser."
+  siteNav
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Charge-out rate</p>
+    <h1>Charge-Out Rate Calculator</h1>
+    <p>
+      The hourly rate you need so the wage you want is left after super, overheads
+      and unbilled time — then your margin on top. Charging your "wage" as your
+      rate is the classic way to go broke. Everything stays in your browser.
+    </p>
+
+    <div id="calcs"></div>
+
+    <div class="btn-row no-print">
+      <button type="button" class="btn" id="print">Save as PDF</button>
+      <button type="button" class="btn btn-ghost" id="email">Email to myself</button>
+    </div>
+    <p class="note-foot">
+      Estimates only — set your own overheads and check tax/super with your
+      accountant. <a href="/site/rate">Build a unit rate →</a>
+    </p>
+  </div>
+
+  <script>
+    import { mountCalcs, wireActions, type CalcSpec } from "../../scripts/site/calc";
+
+    const f2 = (n: number) => n.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
+    const f0 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 0 });
+
+    const specs: CalcSpec[] = [
+      {
+        id: "charge",
+        title: "Charge-out rate",
+        blurb: "Your target wage, grossed up for super and overheads, divided by the hours you can actually bill — plus margin.",
+        fields: [
+          { id: "wage", label: "Wage you want ($/yr, take-home target)", def: "90000", min: "0", step: "1000" },
+          { id: "super", label: "Super on top (%)", def: "11.5", min: "0", step: "0.5" },
+          { id: "oh", label: "Annual overheads ($) — insurance, vehicle, tools, phone, software", def: "20000", min: "0", step: "500" },
+          { id: "weeks", label: "Weeks worked / year", def: "46", min: "1", step: "1" },
+          { id: "days", label: "Days / week", def: "5", min: "1", step: "0.5" },
+          { id: "billable", label: "Billable hours / day (the rest is quoting, travel, admin)", def: "6", min: "0.5", step: "0.5" },
+          { id: "margin", label: "Profit margin (%)", def: "15", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          const billableHrs = v.weeks * v.days * v.billable;
+          if (billableHrs <= 0) return null;
+          const costBase = v.wage * (1 + v.super / 100) + v.oh;
+          const breakeven = costBase / billableHrs;
+          const charge = breakeven * (1 + v.margin / 100);
+          return {
+            rows: [
+              [f2(charge) + " /hr", "charge-out rate (ex GST)"],
+              [f2(charge * 1.1) + " /hr", "with 10% GST"],
+              [f2(charge * v.billable) + " /day", "day rate (ex GST)"],
+              [f2(breakeven) + " /hr", "break-even (no profit)"],
+              [f0(billableHrs) + " hrs", "billable hours / year"],
+              [f2(costBase), "total cost to cover / year"],
+            ],
+            warn: v.billable > 7
+              ? "Billing 7+ hours every day is optimistic — quoting, travel and admin usually eat 25–35%."
+              : undefined,
+          };
+        },
+      },
+      {
+        id: "markup",
+        title: "Markup ↔ margin",
+        blurb: "These are not the same. Markup is on cost; margin is on price. Mixing them up quietly erodes profit.",
+        fields: [
+          { id: "cost", label: "Cost ($)", def: "1000", min: "0", step: "10" },
+          { id: "markup", label: "Markup (%)", def: "20", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          const price = v.cost * (1 + v.markup / 100);
+          const margin = price > 0 ? ((price - v.cost) / price) * 100 : 0;
+          return {
+            rows: [
+              [f2(price), "sell price"],
+              [margin.toFixed(1) + " %", "actual margin (on price)"],
+              [f2(price - v.cost), "gross profit"],
+            ],
+          };
+        },
+      },
+    ];
+
+    const root = document.getElementById("calcs")!;
+    mountCalcs(root, specs);
+    wireActions(root, "Charge-out rate");
+  </script>
+</Base>

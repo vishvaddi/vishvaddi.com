@@ -15,6 +15,30 @@ import "../../styles/site.css";
 
     <div id="calcs"></div>
 
+    <h2 class="geo-section">Triangle solver</h2>
+    <p>Enter any 3 values (at least one side). Sides <code>a, b, c</code> sit opposite angles <code>A, B, C</code>. Angles in degrees.</p>
+    <div class="tri-grid">
+      <div class="field"><label for="tri-a">side a</label><input type="number" id="tri-a" inputmode="decimal" step="any" /></div>
+      <div class="field"><label for="tri-A">angle A°</label><input type="number" id="tri-A" inputmode="decimal" step="any" /></div>
+      <div class="field"><label for="tri-b">side b</label><input type="number" id="tri-b" inputmode="decimal" step="any" /></div>
+      <div class="field"><label for="tri-B">angle B°</label><input type="number" id="tri-B" inputmode="decimal" step="any" /></div>
+      <div class="field"><label for="tri-c">side c</label><input type="number" id="tri-c" inputmode="decimal" step="any" /></div>
+      <div class="field"><label for="tri-C">angle C°</label><input type="number" id="tri-C" inputmode="decimal" step="any" /></div>
+    </div>
+    <div class="btn-row no-print">
+      <button type="button" id="tri-solve" class="btn">Solve</button>
+      <button type="button" id="tri-clear" class="btn btn-ghost">Clear</button>
+    </div>
+    <div id="tri-out" class="result" aria-live="polite"></div>
+
+    <h2 class="geo-section">Trig calculator</h2>
+    <p>Quick sine, cosine, tangent and reciprocals for any angle.</p>
+    <div class="trig-bar">
+      <div class="field"><label for="trig-angle">angle</label><input type="number" id="trig-angle" value="30" inputmode="decimal" step="any" /></div>
+      <button type="button" id="trig-mode" class="btn btn-ghost" title="Toggle degrees / radians">DEG</button>
+    </div>
+    <div id="trig-out" class="result" aria-live="polite"></div>
+
     <div class="btn-row no-print">
       <button type="button" class="btn" id="print">Save as PDF</button>
       <button type="button" class="btn btn-ghost" id="email">Email to myself</button>
@@ -24,6 +48,7 @@ import "../../styles/site.css";
 
   <script>
     import { mountCalcs, wireActions, type CalcSpec } from "../../scripts/site/calc";
+    import { initTriangle } from "../../scripts/site/triangle";
 
     const f2 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 2 });
     const f0 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 0 });
@@ -132,5 +157,14 @@ import "../../styles/site.css";
     const root = document.getElementById("calcs")!;
     mountCalcs(root, specs);
     wireActions(root, "Geometry & setout");
+
+    initTriangle();
   </script>
+
+  <style>
+    .geo-section { margin-top: 2rem; }
+    .tri-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem 1rem; margin: 1rem 0; }
+    .trig-bar { display: flex; gap: 0.75rem; align-items: flex-end; margin: 0.75rem 0; }
+    .trig-bar .field { flex: 1; max-width: 12rem; }
+  </style>
 </Base>

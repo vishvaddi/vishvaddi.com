@@ -1,7 +1,6 @@
 // Global standby overlay — available on every page via the nav button (next to
 // dark mode) or Alt+S. Injects a full-screen clock + weather + Last.fm now-playing.
 (function () {
-  var LFM_KEY = "b25b959554ed76058ac220b7b2e0a026";
   var WX_CODES = {
     0: "Clear", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
     45: "Foggy", 48: "Icy fog", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
@@ -83,7 +82,7 @@
   async function fetchNowPlaying() {
     if (!lfmUser) return;
     try {
-      var url = "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=" + encodeURIComponent(lfmUser) + "&api_key=" + LFM_KEY + "&format=json&limit=1";
+      var url = "/api/lastfm?user=" + encodeURIComponent(lfmUser);
       var data = await (await fetch(url)).json();
       var tracks = data.recenttracks && data.recenttracks.track;
       if (!tracks || !tracks.length) { hideNp(); return; }

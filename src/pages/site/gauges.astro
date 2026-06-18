@@ -1,0 +1,94 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+---
+
+<Base
+  title="Phone Tools — Level, Angle & Sound"
+  description="Turn your phone into a site toolkit: a spirit level and angle finder using the tilt sensor, and a sound-level meter using the microphone. Runs entirely in your browser; nothing is recorded or uploaded."
+  siteNav
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Phone tools</p>
+    <h1>Phone Tools</h1>
+    <p>
+      Your phone's sensors as site gauges — a spirit level, an angle finder and a
+      sound meter. Best on a phone. Nothing is recorded or uploaded; sensors only
+      run after you tap to enable them.
+    </p>
+
+    <div class="g-tabs no-print" id="g-tabs"></div>
+
+    <section class="g-panel" data-tab="Level">
+      <button type="button" class="btn" id="g-orient-enable">Enable tilt sensor</button>
+      <p class="g-status" id="g-orient-status"></p>
+      <div class="g-bull" id="g-bull" aria-hidden="true"><div class="g-bull-ring"></div><div class="g-bubble" id="g-bubble"></div><div class="g-cross-h"></div><div class="g-cross-v"></div></div>
+      <div class="g-readout">
+        <div><span id="g-x">0.0°</span><small>left–right</small></div>
+        <div><span id="g-y">0.0°</span><small>front–back</small></div>
+      </div>
+      <button type="button" class="btn btn-ghost" id="g-zero">Zero / calibrate</button>
+      <button type="button" class="btn btn-ghost" id="g-zero-reset">Reset zero</button>
+      <p class="note-foot">Lay the phone on the surface. "Zero" sets the current tilt as flat — handy for checking <em>relative</em> level on an out-of-level bench.</p>
+    </section>
+
+    <section class="g-panel" data-tab="Angle" hidden>
+      <button type="button" class="btn" id="g-angle-enable">Enable tilt sensor</button>
+      <p class="g-status" id="g-angle-status"></p>
+      <div class="g-angle-big" id="g-angle">0.0°</div>
+      <p class="g-angle-sub" id="g-angle-sub">from horizontal</p>
+      <p class="note-foot">Hold the phone flat against the surface, long edge along it. Reads tilt from horizontal (0°) up to vertical/plumb (90°).</p>
+    </section>
+
+    <section class="g-panel" data-tab="Sound" hidden>
+      <button type="button" class="btn" id="g-sound-enable">Enable microphone</button>
+      <p class="g-status" id="g-sound-status"></p>
+      <div class="g-sound-num"><span id="g-db">––</span> <small>dB (relative)</small></div>
+      <div class="g-bar"><div class="g-bar-fill" id="g-bar"></div></div>
+      <div class="g-sound-peak">Peak: <span id="g-peak">––</span> dB</div>
+      <button type="button" class="btn btn-ghost" id="g-peak-reset">Reset peak</button>
+      <p class="note-foot"><strong>Relative, not calibrated SPL.</strong> Phone mics roll off and clip — use it to compare loudness, not for compliance or hearing-protection decisions.</p>
+    </section>
+  </div>
+
+  <script>
+    import { initGauges } from "../../scripts/site/gauges";
+    initGauges();
+  </script>
+
+  <style is:global>
+    .g-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.75rem 0 1.25rem; }
+    .g-tab {
+      padding: 0.45rem 1.1rem; font-size: 0.9rem; font-family: var(--font-sans); cursor: pointer;
+      color: var(--muted); background: var(--bg); border: 1px solid var(--rule); border-radius: 999px;
+    }
+    .g-tab:hover { color: var(--fg); }
+    .g-tab.active { background: var(--fg); color: var(--bg); font-weight: 600; border-color: var(--fg); }
+    .g-panel[hidden] { display: none; }
+    .g-status { color: var(--muted); font-size: 0.9rem; min-height: 1.2em; margin: 0.6rem 0; }
+
+    .g-bull {
+      position: relative; width: min(280px, 80vw); aspect-ratio: 1; margin: 1rem auto;
+      border-radius: 50%; background: var(--code-bg); border: 2px solid var(--rule); overflow: hidden;
+    }
+    .g-bull-ring { position: absolute; inset: 50% auto auto 50%; width: 44px; height: 44px; transform: translate(-50%,-50%); border: 2px solid var(--site-accent, #2c63d6); border-radius: 50%; opacity: 0.5; }
+    .g-cross-h { position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: var(--rule); }
+    .g-cross-v { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--rule); }
+    .g-bubble { position: absolute; top: 50%; left: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: var(--site-accent, #2c63d6); opacity: 0.85; transition: transform 0.06s linear; }
+    .g-bull.level .g-bubble { background: #1f9d4d; }
+
+    .g-readout { display: flex; gap: 2rem; justify-content: center; margin: 0.5rem 0 1rem; }
+    .g-readout span { font-family: var(--font-mono); font-size: 1.6rem; font-weight: 700; display: block; }
+    .g-readout small { color: var(--muted); font-size: 0.75rem; }
+
+    .g-angle-big { font-family: var(--font-mono); font-size: 4rem; font-weight: 800; text-align: center; margin: 1.5rem 0 0; line-height: 1; }
+    .g-angle-sub { text-align: center; color: var(--muted); margin: 0.25rem 0 1rem; }
+
+    .g-sound-num { font-family: var(--font-mono); font-size: 2.6rem; font-weight: 800; margin: 1rem 0 0.5rem; }
+    .g-sound-num small { font-size: 0.9rem; color: var(--muted); }
+    .g-bar { height: 1.4rem; background: var(--code-bg); border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; }
+    .g-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #1f9d4d, #d6892c 70%, #c0392b); transition: width 0.08s linear; }
+    .g-sound-peak { margin: 0.6rem 0; color: var(--muted); }
+    .g-sound-peak span { font-family: var(--font-mono); color: var(--fg); }
+  </style>
+</Base>

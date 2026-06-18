@@ -3,12 +3,13 @@ import Base from "../layouts/Base.astro";
 
 const useful = [
   { href: "/site", title: "Site tools", desc: "Construction calculators, cut lists, rate building, drawing and PDF utilities." },
+  { href: "/prepping/tools", title: "Prepping tools", desc: "Field calculators, get-home estimate, pack-weight lists, live map, weather and night-sky." },
   { href: "/prepping/tools#weather-forecast", title: "Weather & sky", desc: "Location-based current weather, seven-day forecast, official warnings and night-sky view." },
   { href: "/radio", title: "Radio", desc: "Australian and international live radio with stream metadata and track identification." },
   { href: "/feeds", title: "Feeds", desc: "Major news, financial reporting, Australian and global construction, and The Conversation." },
   { href: "/reader", title: "Reader", desc: "Free public-domain books with page turning, bookmarks and annotations." },
   { href: "/studio", title: "Studio", desc: "A browser drum machine, synth, mixer and audio exporter." },
-  { href: "/games", title: "Games", desc: "Small browser games, including Big 2 against three computer players." },
+  { href: "/games", title: "Games", desc: "Browser games including Last Cast, an alien fishing and survival game." },
 ];
 
 const other = [
@@ -27,6 +28,10 @@ const other = [
 <Base ogImage="/og/index.png">
   <p class="home-intro">
     Estimator in Sydney working across premium retail and commercial fit-out. I build practical tools for estimating, scope generation and project work.
+  </p>
+
+  <p class="home-wip" role="note">
+    Everything on this site is still a work in progress. Tools, games and pages may change or break while I keep building them.
   </p>
 
   <section class="home-section" aria-labelledby="useful-title">
@@ -48,4 +53,14 @@ const other = [
       {other.map(([href, label]) => <a href={href}>{label}</a>)}
     </nav>
   </section>
+
+  <style>
+    .home-wip {
+      margin: 1rem 0 2rem;
+      padding: 0.75rem 1rem;
+      border-left: 3px solid var(--accent);
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+  </style>
 </Base>

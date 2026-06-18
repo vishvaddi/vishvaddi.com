@@ -29,122 +29,289 @@ import "../../styles/site.css";
     const f0 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 0 });
     const up = (n: number) => Math.max(0, Math.ceil(n));
 
-    const specs: CalcSpec[] = [
+    const pct = (waste: number) => 1 + (waste || 0) / 100;
+    const groups: { trade: string; specs: CalcSpec[] }[] = [
       {
-        id: "paint",
-        title: "Paint",
-        blurb: "Litres for one surface. Typical coverage is ~11 m²/L per coat.",
-        fields: [
-          { id: "area", label: "Surface area (m²)", def: "12", min: "0", step: "0.1" },
-          { id: "openings", label: "Subtract openings (m²)", def: "2", min: "0", step: "0.1" },
-          { id: "coats", label: "Coats", def: "2", min: "1", step: "1" },
-          { id: "cov", label: "Coverage (m²/L)", def: "11", min: "0.1", step: "0.5" },
-        ],
-        compute: (v) => {
-          const net = Math.max(0, v.area - v.openings);
-          if (v.cov <= 0) return null;
-          const litres = (net * v.coats) / v.cov;
-          return {
-            rows: [
-              [f2(litres) + " L", "paint needed"],
-              [f0(net) + " m²", "net area × " + (v.coats || 0) + " coats"],
+        trade: "Painting & coatings",
+        specs: [
+          {
+            id: "paint", title: "Paint",
+            blurb: "Litres for one surface. Typical coverage is ~11 m²/L per coat.",
+            fields: [
+              { id: "area", label: "Surface area (m²)", def: "12", min: "0", step: "0.1" },
+              { id: "openings", label: "Subtract openings (m²)", def: "2", min: "0", step: "0.1" },
+              { id: "coats", label: "Coats", def: "2", min: "1", step: "1" },
+              { id: "cov", label: "Coverage (m²/L)", def: "11", min: "0.1", step: "0.5" },
             ],
-          };
-        },
+            compute: (v) => {
+              const net = Math.max(0, v.area - v.openings);
+              if (v.cov <= 0) return null;
+              return { rows: [[f2((net * v.coats) / v.cov) + " L", "paint needed"], [f0(net) + " m²", "net area × " + (v.coats || 0) + " coats"]] };
+            },
+          },
+          {
+            id: "wallpaper", title: "Wallpaper",
+            blurb: "Standard roll ≈ 5 m² usable after pattern match.",
+            fields: [
+              { id: "area", label: "Wall area (m²)", def: "20", min: "0", step: "0.1" },
+              { id: "roll", label: "Usable per roll (m²)", def: "5", min: "0.1", step: "0.1" },
+              { id: "waste", label: "Wastage (%)", def: "15", min: "0", step: "1" },
+            ],
+            compute: (v) => (v.roll <= 0 || v.area <= 0 ? null : { rows: [[f0(up((v.area * pct(v.waste)) / v.roll)), "rolls"]] }),
+          },
+        ],
       },
       {
-        id: "tiles",
-        title: "Tiles / flooring",
-        blurb: "Number of tiles or planks, including wastage for cuts.",
-        fields: [
-          { id: "area", label: "Floor/wall area (m²)", def: "10", min: "0", step: "0.1" },
-          { id: "w", label: "Tile width (mm)", def: "300", min: "1", step: "1" },
-          { id: "h", label: "Tile length (mm)", def: "600", min: "1", step: "1" },
-          { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
-        ],
-        compute: (v) => {
-          const tileArea = (v.w / 1000) * (v.h / 1000);
-          if (tileArea <= 0 || v.area <= 0) return null;
-          const perM2 = 1 / tileArea;
-          const tiles = up(v.area * (1 + v.waste / 100) * perM2);
-          return {
-            rows: [
-              [f0(tiles), "tiles (incl. wastage)"],
-              [f2(perM2), "tiles / m²"],
+        trade: "Tiling",
+        specs: [
+          {
+            id: "tiles", title: "Tile / plank count",
+            blurb: "Tiles or planks for a floor or wall, including cut wastage.",
+            fields: [
+              { id: "area", label: "Area (m²)", def: "10", min: "0", step: "0.1" },
+              { id: "w", label: "Tile width (mm)", def: "300", min: "1", step: "1" },
+              { id: "h", label: "Tile length (mm)", def: "600", min: "1", step: "1" },
+              { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
             ],
-          };
-        },
+            compute: (v) => {
+              const tileArea = (v.w / 1000) * (v.h / 1000);
+              if (tileArea <= 0 || v.area <= 0) return null;
+              return { rows: [[f0(up((v.area * pct(v.waste)) / tileArea)), "tiles (incl. wastage)"], [f2(1 / tileArea), "tiles / m²"]] };
+            },
+          },
+          {
+            id: "adhesive", title: "Adhesive & grout",
+            blurb: "Bagged tile adhesive and grout. Rates vary with tile size and notch.",
+            fields: [
+              { id: "area", label: "Area (m²)", def: "10", min: "0", step: "0.1" },
+              { id: "akg", label: "Adhesive (kg/m²)", def: "4", min: "0.1", step: "0.1" },
+              { id: "bag", label: "Adhesive bag (kg)", def: "20", min: "1", step: "1" },
+              { id: "gkg", label: "Grout (kg/m²)", def: "0.5", min: "0", step: "0.1" },
+            ],
+            compute: (v) => {
+              if (v.area <= 0 || v.bag <= 0) return null;
+              return { rows: [[f0(up((v.area * v.akg) / v.bag)), "× adhesive bags"], [f2(v.area * v.gkg) + " kg", "grout"]] };
+            },
+          },
+        ],
       },
       {
-        id: "sheet",
-        title: "Plasterboard / sheets",
-        blurb: "Standard sheet is 1200 × 2400 mm (2.88 m²).",
-        fields: [
-          { id: "area", label: "Area to line (m²)", def: "30", min: "0", step: "0.1" },
-          { id: "w", label: "Sheet width (mm)", def: "1200", min: "1", step: "1" },
-          { id: "h", label: "Sheet length (mm)", def: "2400", min: "1", step: "1" },
-          { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
-        ],
-        compute: (v) => {
-          const sheetArea = (v.w / 1000) * (v.h / 1000);
-          if (sheetArea <= 0 || v.area <= 0) return null;
-          const sheets = up((v.area * (1 + v.waste / 100)) / sheetArea);
-          return {
-            rows: [
-              [f0(sheets), "sheets"],
-              [f2(sheetArea) + " m²", "per sheet"],
+        trade: "Plastering & linings",
+        specs: [
+          {
+            id: "sheet", title: "Plasterboard sheets",
+            blurb: "Standard sheet 1200 × 2400 mm (2.88 m²).",
+            fields: [
+              { id: "area", label: "Area to line (m²)", def: "30", min: "0", step: "0.1" },
+              { id: "w", label: "Sheet width (mm)", def: "1200", min: "1", step: "1" },
+              { id: "h", label: "Sheet length (mm)", def: "2400", min: "1", step: "1" },
+              { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
             ],
-          };
-        },
+            compute: (v) => {
+              const sheetArea = (v.w / 1000) * (v.h / 1000);
+              if (sheetArea <= 0 || v.area <= 0) return null;
+              return { rows: [[f0(up((v.area * pct(v.waste)) / sheetArea)), "sheets"], [f2(sheetArea) + " m²", "per sheet"]] };
+            },
+          },
+          {
+            id: "cornice", title: "Cornice / linear trim",
+            blurb: "Lengths to buy for cornice, skirting or architrave.",
+            fields: [
+              { id: "perim", label: "Run / perimeter (m)", def: "20", min: "0", step: "0.1" },
+              { id: "open", label: "Subtract openings (m)", def: "0.9", min: "0", step: "0.1" },
+              { id: "stock", label: "Stock length (m)", def: "5.4", min: "0.1", step: "0.1" },
+              { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
+            ],
+            compute: (v) => {
+              const net = Math.max(0, v.perim - v.open) * pct(v.waste);
+              if (v.stock <= 0 || net <= 0) return null;
+              return { rows: [[f2(net) + " m", "total length"], [f0(up(net / v.stock)), "lengths to buy"]] };
+            },
+          },
+          {
+            id: "compound", title: "Jointing compound",
+            blurb: "Rough set/finish compound for board joints (~1 × 20 kg bag per 40 m²).",
+            fields: [
+              { id: "area", label: "Board area (m²)", def: "60", min: "0", step: "1" },
+              { id: "rate", label: "m² per 20 kg bag", def: "40", min: "1", step: "1" },
+            ],
+            compute: (v) => (v.area <= 0 || v.rate <= 0 ? null : { rows: [[f0(up(v.area / v.rate)), "× 20 kg bags"]] }),
+          },
+        ],
       },
       {
-        id: "concrete",
-        title: "Concrete",
-        blurb: "Volume and 20 kg bags (≈ 0.0108 m³ yield per bag).",
-        fields: [
-          { id: "l", label: "Length (m)", def: "3", min: "0", step: "0.1" },
-          { id: "w", label: "Width (m)", def: "3", min: "0", step: "0.1" },
-          { id: "d", label: "Depth (mm)", def: "100", min: "0", step: "1" },
-          { id: "waste", label: "Wastage (%)", def: "5", min: "0", step: "1" },
-        ],
-        compute: (v) => {
-          const vol = v.l * v.w * (v.d / 1000) * (1 + v.waste / 100);
-          if (vol <= 0) return null;
-          const bags = up(vol / 0.0108);
-          return {
-            rows: [
-              [f2(vol) + " m³", "concrete"],
-              [f0(bags), "× 20 kg bags"],
+        trade: "Concrete & formwork",
+        specs: [
+          {
+            id: "concrete", title: "Concrete volume",
+            blurb: "Volume and 20 kg bags (≈ 0.0108 m³ yield per bag).",
+            fields: [
+              { id: "l", label: "Length (m)", def: "3", min: "0", step: "0.1" },
+              { id: "w", label: "Width (m)", def: "3", min: "0", step: "0.1" },
+              { id: "d", label: "Depth (mm)", def: "100", min: "0", step: "1" },
+              { id: "waste", label: "Wastage (%)", def: "5", min: "0", step: "1" },
             ],
-            warn: vol > 1.5 ? "Over ~1.5 m³ — pre-mixed delivery is usually cheaper than bags." : undefined,
-          };
-        },
+            compute: (v) => {
+              const vol = v.l * v.w * (v.d / 1000) * pct(v.waste);
+              if (vol <= 0) return null;
+              return {
+                rows: [[f2(vol) + " m³", "concrete"], [f0(up(vol / 0.0108)), "× 20 kg bags"]],
+                warn: vol > 1.5 ? "Over ~1.5 m³ — pre-mixed delivery is usually cheaper than bags." : undefined,
+              };
+            },
+          },
+          {
+            id: "mesh", title: "Reo mesh",
+            blurb: "SL-grade sheets are 6.0 × 2.4 m (14.4 m²); allow ~200 mm laps.",
+            fields: [
+              { id: "area", label: "Slab area (m²)", def: "20", min: "0", step: "0.1" },
+              { id: "lap", label: "Lap allowance (%)", def: "15", min: "0", step: "1" },
+            ],
+            compute: (v) => (v.area <= 0 ? null : { rows: [[f0(up((v.area * pct(v.lap)) / 14.4)), "× SL sheets (6.0 × 2.4)"]] }),
+          },
+          {
+            id: "formply", title: "Form ply",
+            blurb: "Form face sheets at 1800 × 1200 mm (2.16 m²).",
+            fields: [
+              { id: "area", label: "Form face area (m²)", def: "12", min: "0", step: "0.1" },
+              { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
+            ],
+            compute: (v) => (v.area <= 0 ? null : { rows: [[f0(up((v.area * pct(v.waste)) / 2.16)), "× form ply sheets"]] }),
+          },
+        ],
       },
       {
-        id: "skirt",
-        title: "Skirting / linear",
-        blurb: "Lengths to buy for skirting, trim or top-hat.",
-        fields: [
-          { id: "perim", label: "Run / perimeter (m)", def: "20", min: "0", step: "0.1" },
-          { id: "open", label: "Subtract openings (m)", def: "0.9", min: "0", step: "0.1" },
-          { id: "stock", label: "Stock length (m)", def: "5.4", min: "0.1", step: "0.1" },
-          { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
-        ],
-        compute: (v) => {
-          const net = Math.max(0, v.perim - v.open) * (1 + v.waste / 100);
-          if (v.stock <= 0 || net <= 0) return null;
-          return {
-            rows: [
-              [f2(net) + " m", "total length"],
-              [f0(up(net / v.stock)), "lengths to buy"],
+        trade: "Carpentry & framing",
+        specs: [
+          {
+            id: "studs", title: "Stud wall",
+            blurb: "Studs at spacing, plus top/bottom plates. Add noggin rows separately.",
+            fields: [
+              { id: "len", label: "Wall length (m)", def: "6", min: "0", step: "0.1" },
+              { id: "spc", label: "Stud spacing (mm)", def: "450", min: "100", step: "50" },
+              { id: "ht", label: "Wall height (m)", def: "2.4", min: "0.1", step: "0.1" },
             ],
-          };
-        },
+            compute: (v) => {
+              if (v.len <= 0 || v.spc <= 0) return null;
+              const studs = up((v.len * 1000) / v.spc) + 1;
+              return { rows: [[f0(studs), "studs @ " + f0(v.spc) + " mm"], [f2(v.len * 2) + " m", "top + bottom plate"], [f2(studs * v.ht) + " m", "stud lineal metres"]] };
+            },
+          },
+          {
+            id: "decking", title: "Decking boards",
+            blurb: "Lineal metres of board for a deck area, incl. board gap.",
+            fields: [
+              { id: "area", label: "Deck area (m²)", def: "15", min: "0", step: "0.1" },
+              { id: "bw", label: "Board cover width (mm)", def: "90", min: "10", step: "1" },
+              { id: "gap", label: "Gap (mm)", def: "3", min: "0", step: "1" },
+              { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
+            ],
+            compute: (v) => {
+              const cover = (v.bw + v.gap) / 1000;
+              if (cover <= 0 || v.area <= 0) return null;
+              return { rows: [[f2((v.area / cover) * pct(v.waste)) + " m", "board lineal metres"]] };
+            },
+          },
+        ],
+      },
+      {
+        trade: "Flooring",
+        specs: [
+          {
+            id: "floating", title: "Floating floor",
+            blurb: "Packs of laminate/hybrid for an area, including cut wastage.",
+            fields: [
+              { id: "area", label: "Floor area (m²)", def: "20", min: "0", step: "0.1" },
+              { id: "pack", label: "Pack coverage (m²)", def: "2.1", min: "0.1", step: "0.1" },
+              { id: "waste", label: "Wastage (%)", def: "8", min: "0", step: "1" },
+            ],
+            compute: (v) => (v.pack <= 0 || v.area <= 0 ? null : { rows: [[f0(up((v.area * pct(v.waste)) / v.pack)), "packs"]] }),
+          },
+          {
+            id: "underlay", title: "Underlay",
+            blurb: "Rolls of acoustic/foam underlay (roll ≈ 10–15 m²).",
+            fields: [
+              { id: "area", label: "Floor area (m²)", def: "20", min: "0", step: "0.1" },
+              { id: "roll", label: "Roll coverage (m²)", def: "10", min: "0.1", step: "0.5" },
+            ],
+            compute: (v) => (v.roll <= 0 || v.area <= 0 ? null : { rows: [[f0(up(v.area / v.roll)), "rolls"]] }),
+          },
+        ],
+      },
+      {
+        trade: "Bricks & blocks",
+        specs: [
+          {
+            id: "bricks", title: "Bricks",
+            blurb: "Standard face brick ≈ 50 / m² of single-skin wall.",
+            fields: [
+              { id: "area", label: "Wall area (m²)", def: "15", min: "0", step: "0.1" },
+              { id: "per", label: "Bricks / m²", def: "50", min: "1", step: "1" },
+              { id: "waste", label: "Wastage (%)", def: "5", min: "0", step: "1" },
+            ],
+            compute: (v) => (v.area <= 0 ? null : { rows: [[f0(up(v.area * v.per * pct(v.waste))), "bricks"]] }),
+          },
+          {
+            id: "blocks", title: "Besser blocks",
+            blurb: "200-series block ≈ 12.5 / m² of wall.",
+            fields: [
+              { id: "area", label: "Wall area (m²)", def: "15", min: "0", step: "0.1" },
+              { id: "per", label: "Blocks / m²", def: "12.5", min: "0.1", step: "0.1" },
+              { id: "waste", label: "Wastage (%)", def: "5", min: "0", step: "1" },
+            ],
+            compute: (v) => (v.area <= 0 ? null : { rows: [[f0(up(v.area * v.per * pct(v.waste))), "blocks"]] }),
+          },
+          {
+            id: "mortar", title: "Mortar (premix)",
+            blurb: "Rough guide ≈ 0.6 × 20 kg bags per m² of brickwork.",
+            fields: [
+              { id: "area", label: "Brickwork area (m²)", def: "15", min: "0", step: "0.1" },
+              { id: "rate", label: "Bags / m²", def: "0.6", min: "0.05", step: "0.05" },
+            ],
+            compute: (v) => (v.area <= 0 ? null : { rows: [[f0(up(v.area * v.rate)), "× 20 kg bags"]] }),
+          },
+        ],
+      },
+      {
+        trade: "Insulation",
+        specs: [
+          {
+            id: "batts", title: "Wall / ceiling batts",
+            blurb: "Packs of batts for an area (pack coverage varies by R-value).",
+            fields: [
+              { id: "area", label: "Area (m²)", def: "30", min: "0", step: "0.1" },
+              { id: "pack", label: "Pack coverage (m²)", def: "5.4", min: "0.1", step: "0.1" },
+              { id: "waste", label: "Wastage (%)", def: "5", min: "0", step: "1" },
+            ],
+            compute: (v) => (v.pack <= 0 || v.area <= 0 ? null : { rows: [[f0(up((v.area * pct(v.waste)) / v.pack)), "packs"]] }),
+          },
+        ],
       },
     ];
 
     const root = document.getElementById("calcs")!;
-    mountCalcs(root, specs);
+    for (const g of groups) {
+      const h = document.createElement("h2");
+      h.className = "trade-section";
+      h.textContent = g.trade;
+      root.append(h);
+      const box = document.createElement("div");
+      root.append(box);
+      mountCalcs(box, g.specs);
+    }
     wireActions(root, "Material calculators");
   </script>
+
+  <style>
+    .trade-section {
+      margin: 2.25rem 0 0.5rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 2px solid var(--site-accent, #2c63d6);
+      font-size: 0.78rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--site-accent, #2c63d6);
+    }
+    .trade-section:first-child { margin-top: 0.5rem; }
+  </style>
 </Base>

@@ -1,7 +1,7 @@
 // Interactive periodic table renderer. Builds an 18-column CSS grid, colours
 // cells by category, and shows a detail panel on hover/click. textContent only.
 
-import { ELEMENTS, CAT_LABELS, type Cat } from "./periodic-data";
+import { ELEMENTS, CAT_LABELS, ELEMENT_USES, type Cat } from "./periodic-data";
 
 export function initPeriodic() {
   const grid = document.getElementById("pt-grid");
@@ -42,6 +42,13 @@ export function initPeriodic() {
     }
     const nm = document.createElement("div"); nm.className = "pt-detail-name"; nm.textContent = name;
     detail.append(nm, meta);
+    const uses = ELEMENT_USES[z];
+    if (uses) {
+      const u = document.createElement("p");
+      u.className = "pt-detail-uses";
+      u.textContent = uses;
+      detail.append(u);
+    }
   };
 
   for (const el of ELEMENTS) {

@@ -27,6 +27,19 @@ import Base from "../layouts/Base.astro";
     </div>
   </details>
 
+  <section class="daily-summary" aria-labelledby="daily-summary-title">
+    <div class="daily-summary-head">
+      <div>
+        <p class="daily-summary-kicker">WORLD BULLETIN</p>
+        <h2 id="daily-summary-title">Daily news summary</h2>
+      </div>
+      <span id="daily-summary-segment">MORNING</span>
+    </div>
+    <p id="daily-summary-lead" class="daily-summary-lead">Loading summary...</p>
+    <ul id="daily-summary-list" class="daily-summary-list"></ul>
+    <p id="daily-summary-updated" class="daily-summary-updated"></p>
+  </section>
+
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
     <span id="feed-status" style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted);">Loading...</span>
     <button
@@ -82,6 +95,56 @@ import Base from "../layouts/Base.astro";
     line-height: 1;
   }
   .feed-remove-btn:hover { color: var(--fg); }
+  .daily-summary {
+    margin-bottom: 1.25rem;
+    padding: 1rem;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--code-bg) 72%, transparent);
+  }
+  .daily-summary-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: baseline;
+    margin-bottom: 0.75rem;
+  }
+  .daily-summary-kicker,
+  .daily-summary-updated {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .daily-summary-head h2 {
+    margin: 0;
+    font-size: 1rem;
+  }
+  .daily-summary-segment,
+  #daily-summary-segment {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .daily-summary-lead {
+    margin: 0 0 0.75rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+  .daily-summary-list {
+    margin: 0 0 0.75rem;
+    padding-left: 1.15rem;
+    display: grid;
+    gap: 0.45rem;
+  }
+  .daily-summary-list li {
+    line-height: 1.45;
+  }
 </style>
 
 <script src="/scripts/feeds.js" defer></script>

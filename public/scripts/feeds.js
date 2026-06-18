@@ -7,15 +7,15 @@
     { name: "NPR World", url: "https://feeds.npr.org/1004/rss.xml" },
     { name: "PBS NewsHour", url: "https://www.pbs.org/newshour/feeds/rss/headlines" },
     { name: "The Conversation AU", url: "https://theconversation.com/au/articles.atom" },
+    { name: "DW World", url: "https://rss.dw.com/rdf/rss-en-world" },
+    { name: "Al Jazeera", url: "https://www.aljazeera.com/xml/rss/all.xml" },
     { name: "ABC Business", url: "https://www.abc.net.au/news/feed/51892/rss.xml" },
     { name: "Reuters Business", url: "https://news.google.com/rss/search?q=site%3Areuters.com%2Fbusiness&hl=en-AU&gl=AU&ceid=AU%3Aen" },
-    { name: "Financial Times", url: "https://www.ft.com/rss/home" },
     { name: "ABC Australian Construction", url: "https://news.google.com/rss/search?q=site%3Aabc.net.au%2Fnews%20construction%20Australia&hl=en-AU&gl=AU&ceid=AU%3Aen" },
     { name: "Australian Constructors Association", url: "https://www.constructors.com.au/feed/" },
     { name: "Construction Dive", url: "https://www.constructiondive.com/feeds/news/" },
-    { name: "Construction News", url: "https://www.constructionnews.co.uk/feed/" },
   ];
-  var DEFAULT_FEED_VERSION = "2026-06-08-major-news-construction-finance-v2";
+  var DEFAULT_FEED_VERSION = "2026-06-13-free-world-news-v3";
 
   var SOURCE_COLOURS = [
     "#2563eb", "#16a34a", "#9333ea", "#b45309",
@@ -75,6 +75,19 @@
   function parseDate(value) {
     var d = value ? new Date(value) : new Date(0);
     return Number.isFinite(d.valueOf()) ? d : new Date(0);
+  }
+
+  function getSegment(date) {
+    var hour = (date || new Date()).getHours();
+    if (hour >= 5 && hour < 12) return "morning";
+    if (hour >= 12 && hour < 18) return "afternoon";
+    return "night";
+  }
+
+  function segmentLabel(segment) {
+    if (segment === "morning") return "MORNING";
+    if (segment === "afternoon") return "AFTERNOON";
+    return "NIGHT";
   }
 
   function parseFeed(xml, feedName) {
@@ -155,6 +168,62 @@
     });
   }
 
+  function renderDailySummary(items) {
+    var segment = getSegment();
+    var label = $("daily-summary-segment");
+    var lead = $("daily-summary-lead");
+    var list = $("daily-summary-list");
+    var updated = $("daily-summary-updated");
+
+    if (!label || !lead || !list || !updated) return;
+
+    label.textContent = segmentLabel(segment);
+    list.textContent = "";
+
+    var seen = {};
+    var recent = [];
+    items.forEach(function (item) {
+      var key = (item.title || "").trim().toLowerCase();
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      recent.push(item);
+    });
+
+    var top = recent.slice(0, 4);
+    if (!top.length) {
+      lead.textContent = "No summary available right now.";
+      var empty = document.createElement("li");
+      empty.textContent = "No recent items were returned by the free feeds.";
+      list.appendChild(empty);
+      updated.textContent = "";
+      return;
+    }
+
+    lead.textContent = top[0].title;
+    if (top[0].source) {
+      lead.textContent = top[0].source + " leads with " + top[0].title;
+    }
+
+    top.slice(1).forEach(function (item) {
+      var li = document.createElement("li");
+      li.textContent = item.source + ": " + item.title;
+      list.appendChild(li);
+    });
+
+    if (top.length === 1) {
+      var single = document.createElement("li");
+      single.textContent = top[0].source + ": " + top[0].title;
+      list.appendChild(single);
+    }
+
+    updated.textContent =
+      "Updated " +
+      new Date().toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }) +
+      " · " +
+      segmentLabel(segment).toLowerCase() +
+      " cycle";
+  }
+
   function renderFeedList(feeds) {
     var list = $("feed-list");
     list.textContent = "";
@@ -208,6 +277,7 @@
     });
 
     all.sort(function (a, b) { return b.date - a.date; });
+    renderDailySummary(all);
     renderItems(all);
 
     var now = new Date().toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
