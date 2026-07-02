@@ -1,580 +1,33 @@
-import "../../styles/studio.css";
+import "../../../styles/studio.css";
 
 // VishAmp Studio — Winamp-styled mini-DAW. Pure Web Audio, CSP-clean.
+// Session workflow: each track (drums / pads / synth) plays its own clip from
+// the 8 scenes, Ableton-style; launches apply on the next pattern boundary.
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-interface DrumP {
-  pitch: number;      // tone start Hz
-  pitchEnd: number;   // tone end Hz
-  decay: number;      // seconds
-  filter: number;     // noise HPF/BPF Hz
-  toneLevel: number;  // 0–1 tone layer mix (snare, rim)
-  spread: number;     // clap stagger ms
-}
-interface ParamSpec {
-  key: keyof DrumP; label: string; min: number; max: number; step: number; unit?: string;
-}
-interface SamplerP {
-  name: string;
-  tune: number;
-  start: number;
-  end: number;
-  reverse: boolean;
-  filter: number;
-  attack: number;
-  decay: number;
-  choke: number;
-  loop: boolean;
-  warp: boolean;
-  sourceBpm: number;
-}
-interface PadEvent {
-  pad: number;
-  step: number;
-  velocity: number;
-  offset: number;
-  probability: number;
-  ratchets: number;
-}
-interface MpcState {
-  bank: number;
-  selectedPad: number;
-  fullLevel: boolean;
-  sixteenLevels: boolean;
-  levelMode: "velocity" | "pitch" | "filter" | "start";
-  noteRepeat: boolean;
-  repeatDivision: number;
-  quantize: number;
-  quantizeStrength: number;
-  recording: boolean;
-  overdub: boolean;
-  padMute: boolean[];
-  padSolo: boolean[];
-}
-interface RackState {
-  grooveTiming: number;
-  grooveVelocity: number;
-  grooveRandom: number;
-  noteEcho: number;
-  echoDecay: number;
-  macros: number[];
-  devices: Record<string, boolean>;
-}
-interface HistoryState {
-  pats: boolean[][][];
-  vels: number[][][];
-  synthPats: boolean[][][];
-  padEvents: PadEvent[][];
-  sampleParams: SamplerP[];
-  sampleData: Array<string | null>;
-  songChain: number[];
-  fx: FxState;
-  rackState: RackState;
-}
-interface FxState {
-  low: number;
-  mid: number;
-  high: number;
-  compThreshold: number;
-  compRatio: number;
-  limiter: number;
-  reverb: number;
-  delayTime: number;
-  delayFeedback: number;
-  delayMix: number;
-}
+import {
+  STEPS, SCENES, SCENE_LABELS, SONG_SLOTS, DRUMS, PAD_BANK_SIZE, PIANO_NOTES,
+  TRACKS, TRACK_LABELS, clip, transport, stepDur, audible,
+  allPats, allVels, synthPats, padEvents, songChain,
+  sampleParams, sampleBuffers, sampleData, dp, DP_DEF, DP_SPECS, mpc, rackState, fx, synth, lfo, mute, solo,
+} from "./state";
+import type { HistoryState, MpcState, PadEvent, SamplerP, TrackId } from "./state";
+import {
+  ac, ensureNodes, trackGain,
+  initReverb, initDelay, applyFxState, metroClick,
+  playDrum, playPad, playSynthStep, noteOn, noteOff, startLFO,
+  reversedBuffer, hydrateSample, crushBuffer,
+} from "./engine";
+import * as engine from "./engine";
+import {
+  saveAll, historyState, restoreHistory, projectState, loadAll, applyProject, pendingProjectStore,
+} from "./persistence";
+import {
+  el, btn, help, sliderRow, download,
+  dataUrlToBytes, readAsDataUrl, blobAsDataUrl,
+  equalSlices, transientSlices, snapZero, euclideanPattern, drawWaveform,
+  encodeWav, encodeMp3,
+} from "./helpers";
 
-// ─── Drum defaults & param specs ─────────────────────────────────────────────
-const DP_DEF: DrumP[] = [
-  { pitch: 150, pitchEnd: 50,  decay: 0.50, filter: 0,    toneLevel: 0,   spread: 0  }, // Kick
-  { pitch: 180, pitchEnd: 180, decay: 0.18, filter: 500,  toneLevel: 0.3, spread: 0  }, // Snare
-  { pitch: 0,   pitchEnd: 0,   decay: 0.08, filter: 8000, toneLevel: 0,   spread: 0  }, // HH Cl
-  { pitch: 0,   pitchEnd: 0,   decay: 0.30, filter: 5000, toneLevel: 0,   spread: 0  }, // HH Op
-  { pitch: 0,   pitchEnd: 0,   decay: 0.06, filter: 1200, toneLevel: 0,   spread: 25 }, // Clap
-  { pitch: 120, pitchEnd: 60,  decay: 0.40, filter: 0,    toneLevel: 0,   spread: 0  }, // Tom
-  { pitch: 400, pitchEnd: 400, decay: 0.06, filter: 5000, toneLevel: 0.4, spread: 0  }, // Rim
-  { pitch: 0,   pitchEnd: 0,   decay: 1.20, filter: 3000, toneLevel: 0,   spread: 0  }, // Crash
-];
-const dp: DrumP[] = DP_DEF.map((d) => ({ ...d }));
-
-const DP_SPECS: ParamSpec[][] = [
-  [{ key:"pitch",    label:"Punch",  min:40,   max:400,   step:5,    unit:"Hz" },
-   { key:"pitchEnd", label:"Body",   min:20,   max:150,   step:5,    unit:"Hz" },
-   { key:"decay",    label:"Decay",  min:0.1,  max:2.0,   step:0.05, unit:"s"  }],
-  [{ key:"filter",    label:"Snap",   min:200,  max:5000,  step:50,   unit:"Hz" },
-   { key:"decay",     label:"Decay",  min:0.05, max:0.5,   step:0.01, unit:"s"  },
-   { key:"toneLevel", label:"Body",   min:0,    max:1,     step:0.05            }],
-  [{ key:"filter", label:"Bite",  min:4000, max:18000, step:200,  unit:"Hz" },
-   { key:"decay",  label:"Decay", min:0.01, max:0.25,  step:0.005,unit:"s"  }],
-  [{ key:"filter", label:"Bite",  min:2000, max:12000, step:200,  unit:"Hz" },
-   { key:"decay",  label:"Decay", min:0.1,  max:1.2,   step:0.02, unit:"s"  }],
-  [{ key:"filter", label:"Crack",  min:500,  max:5000,  step:100,  unit:"Hz" },
-   { key:"decay",  label:"Decay",  min:0.02, max:0.2,   step:0.005,unit:"s"  },
-   { key:"spread", label:"Spread", min:0,    max:40,    step:2,    unit:"ms" }],
-  [{ key:"pitch",    label:"High",  min:60,  max:400, step:5,    unit:"Hz" },
-   { key:"pitchEnd", label:"Low",   min:30,  max:200, step:5,    unit:"Hz" },
-   { key:"decay",    label:"Decay", min:0.1, max:1.5, step:0.05, unit:"s"  }],
-  [{ key:"pitch",     label:"Tone",  min:200, max:800,  step:20,   unit:"Hz" },
-   { key:"toneLevel", label:"Body",  min:0,   max:1,    step:0.05            },
-   { key:"decay",     label:"Decay", min:0.02,max:0.15, step:0.005,unit:"s"  }],
-  [{ key:"filter", label:"Tone",  min:1000, max:8000, step:100, unit:"Hz" },
-   { key:"decay",  label:"Decay", min:0.3,  max:4.0,  step:0.1, unit:"s"  }],
-];
-
-// ─── Audio graph ─────────────────────────────────────────────────────────────
-let AC: AudioContext | null = null;
-let master: GainNode | null = null;
-let eqLow: BiquadFilterNode | null = null;
-let eqMid: BiquadFilterNode | null = null;
-let eqHigh: BiquadFilterNode | null = null;
-let compressor: DynamicsCompressorNode | null = null;
-let limiter: DynamicsCompressorNode | null = null;
-const trackGain: GainNode[] = [];
-let synthGain: GainNode | null = null;
-let synthFilter: BiquadFilterNode | null = null;
-let reverbConv: ConvolverNode | null = null;
-let reverbWetGain: GainNode | null = null;
-let delayNode: DelayNode | null = null;
-let delayFeedbackGain: GainNode | null = null;
-let delayWetGain: GainNode | null = null;
-const fx: FxState = {
-  low: 0, mid: 0, high: 0,
-  compThreshold: -18, compRatio: 3, limiter: -1,
-  reverb: 0, delayTime: 0.25, delayFeedback: 0.25, delayMix: 0,
-};
-
-function ac(): AudioContext {
-  if (!AC) {
-    AC = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    master = AC.createGain();
-    master.gain.value = 0.8;
-    eqLow = AC.createBiquadFilter(); eqLow.type = "lowshelf"; eqLow.frequency.value = 180;
-    eqMid = AC.createBiquadFilter(); eqMid.type = "peaking"; eqMid.frequency.value = 1200; eqMid.Q.value = 0.8;
-    eqHigh = AC.createBiquadFilter(); eqHigh.type = "highshelf"; eqHigh.frequency.value = 6500;
-    compressor = AC.createDynamicsCompressor();
-    limiter = AC.createDynamicsCompressor();
-    applyFxState();
-    master.connect(eqLow); eqLow.connect(eqMid); eqMid.connect(eqHigh); eqHigh.connect(compressor); compressor.connect(limiter); limiter.connect(AC.destination);
-  }
-  if (AC.state === "suspended") AC.resume();
-  return AC;
-}
-function ensureNodes(): void {
-  const a = ac();
-  if (trackGain.length) return;
-  for (let i = 0; i < 8; i++) {
-    const g = a.createGain(); g.gain.value = 0.8; g.connect(master!); trackGain.push(g);
-  }
-  synthFilter = a.createBiquadFilter();
-  synthFilter.type = "lowpass"; synthFilter.frequency.value = synth.cutoff; synthFilter.Q.value = synth.q;
-  synthGain = a.createGain(); synthGain.gain.value = 0.7;
-  synthGain.connect(synthFilter); synthFilter.connect(master!);
-}
-function initReverb(wet: number): void {
-  const a = ac();
-  if (!reverbConv) {
-    const sr = a.sampleRate, len = Math.floor(sr * 2.2);
-    const ir = a.createBuffer(2, len, sr);
-    for (let c = 0; c < 2; c++) {
-      const d = ir.getChannelData(c);
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 4.0);
-    }
-    reverbConv = a.createConvolver(); reverbConv.buffer = ir;
-    reverbWetGain = a.createGain(); reverbWetGain.gain.value = wet;
-    master!.connect(reverbConv); reverbConv.connect(reverbWetGain); reverbWetGain.connect(eqLow!);
-  } else {
-    reverbWetGain!.gain.value = wet;
-  }
-}
-function initDelay(): void {
-  if (delayNode) return;
-  const a = ac();
-  delayNode = a.createDelay(2); delayFeedbackGain = a.createGain(); delayWetGain = a.createGain();
-  master!.connect(delayNode); delayNode.connect(delayFeedbackGain); delayFeedbackGain.connect(delayNode);
-  delayNode.connect(delayWetGain); delayWetGain.connect(eqLow!);
-  applyFxState();
-}
-function applyFxState(): void {
-  if (eqLow) eqLow.gain.value = rackState.devices.eq ? fx.low : 0;
-  if (eqMid) eqMid.gain.value = rackState.devices.eq ? fx.mid : 0;
-  if (eqHigh) eqHigh.gain.value = rackState.devices.eq ? fx.high : 0;
-  if (compressor) {
-    compressor.threshold.value = rackState.devices.compressor ? fx.compThreshold : 0;
-    compressor.ratio.value = rackState.devices.compressor ? fx.compRatio : 1;
-    compressor.attack.value = 0.01; compressor.release.value = 0.2; compressor.knee.value = 12;
-  }
-  if (limiter) {
-    limiter.threshold.value = rackState.devices.limiter ? fx.limiter : 0;
-    limiter.ratio.value = rackState.devices.limiter ? 20 : 1;
-    limiter.attack.value = 0.001; limiter.release.value = 0.08; limiter.knee.value = 0;
-  }
-  if (reverbWetGain) reverbWetGain.gain.value = rackState.devices.reverb ? fx.reverb : 0;
-  if (delayNode) delayNode.delayTime.value = fx.delayTime;
-  if (delayFeedbackGain) delayFeedbackGain.gain.value = fx.delayFeedback;
-  if (delayWetGain) delayWetGain.gain.value = rackState.devices.delay ? fx.delayMix : 0;
-}
-
-// ─── Drum synthesis ───────────────────────────────────────────────────────────
-function noiseSrc(a: BaseAudioContext, dur: number): AudioBufferSourceNode {
-  const buf = a.createBuffer(1, Math.max(1, Math.floor(a.sampleRate * dur)), a.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-  const src = a.createBufferSource(); src.buffer = buf; return src;
-}
-function dNoise(a: BaseAudioContext, out: AudioNode, vol: number, hp: number, dur: number, when: number, type: BiquadFilterType = "highpass", q = 0): void {
-  const src = noiseSrc(a, dur);
-  const f = a.createBiquadFilter(); f.type = type; f.frequency.value = hp; if (q) f.Q.value = q;
-  const g = a.createGain(); g.gain.setValueAtTime(vol, when); g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
-  src.connect(f); f.connect(g); g.connect(out); src.start(when); src.stop(when + dur);
-}
-function dTone(a: BaseAudioContext, out: AudioNode, vol: number, f0: number, f1: number, dur: number, when: number, type: OscillatorType = "sine"): void {
-  const o = a.createOscillator(); const g = a.createGain();
-  o.type = type; o.frequency.setValueAtTime(f0, when);
-  if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), when + dur);
-  g.gain.setValueAtTime(vol, when); g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
-  o.connect(g); g.connect(out); o.start(when); o.stop(when + dur);
-}
-function metroClick(a: BaseAudioContext, out: AudioNode, when: number, accent: boolean): void {
-  const o = a.createOscillator(); const g = a.createGain();
-  o.frequency.value = accent ? 1600 : 1000;
-  g.gain.setValueAtTime(0.0001, when); g.gain.exponentialRampToValueAtTime(accent ? 0.5 : 0.3, when + 0.001); g.gain.exponentialRampToValueAtTime(0.0001, when + 0.04);
-  o.connect(g); g.connect(out); o.start(when); o.stop(when + 0.05);
-}
-
-const DRUMS = ["Kick", "Snare", "HH Cl", "HH Op", "Clap", "Tom", "Rim", "Crash"];
-const PAD_COUNT = 64;
-const PAD_BANK_SIZE = 16;
-const sampleParams: SamplerP[] = Array.from({ length: PAD_COUNT }, (_, i) => ({
-  name: i < DRUMS.length ? DRUMS[i] : "",
-  tune: 0, start: 0, end: 1, reverse: false, filter: 18000,
-  attack: 0, decay: 1, choke: i === 2 || i === 3 ? 1 : 0, loop: false, warp: false, sourceBpm: 170,
-}));
-const sampleBuffers: Array<AudioBuffer | null> = Array.from({ length: PAD_COUNT }, () => null);
-const sampleData: Array<string | null> = Array.from({ length: PAD_COUNT }, () => null);
-const chokeSources = new Map<number, AudioBufferSourceNode[]>();
-
-function playSample(
-  a: BaseAudioContext,
-  out: AudioNode,
-  r: number,
-  vol: number,
-  when: number,
-  overrides: Partial<Pick<SamplerP, "tune" | "start" | "filter">> = {},
-): boolean {
-  const buffer = sampleBuffers[r]; if (!buffer) return false;
-  const p = sampleParams[r], src = a.createBufferSource(), g = a.createGain(), filter = a.createBiquadFilter();
-  const playable = p.reverse ? reversedBuffer(a, buffer) : buffer;
-  src.buffer = playable;
-  src.playbackRate.value = Math.pow(2, (overrides.tune ?? p.tune) / 12);
-  src.loop = p.loop;
-  filter.type = "lowpass"; filter.frequency.value = overrides.filter ?? p.filter;
-  const attack = Math.min(0.5, p.attack), playDur = Math.max(0.01, (p.end - (overrides.start ?? p.start)) * buffer.duration);
-  g.gain.setValueAtTime(attack > 0 ? 0.0001 : vol, when);
-  if (attack > 0) g.gain.linearRampToValueAtTime(vol, when + attack);
-  g.gain.setValueAtTime(vol, Math.max(when + attack, when + playDur - Math.min(playDur, p.decay)));
-  g.gain.exponentialRampToValueAtTime(0.0001, when + playDur);
-  src.connect(filter); filter.connect(g); g.connect(out);
-  const offset = Math.min(buffer.duration, (overrides.start ?? p.start) * buffer.duration);
-  if (p.warp) {
-    const sourceDuration = playDur, targetDuration = sourceDuration * (p.sourceBpm / bpm);
-    const grainSize = 0.06, hop = 0.03, grains = Math.max(1, Math.ceil(targetDuration / hop));
-    for (let i = 0; i < grains; i++) {
-      const grain = a.createBufferSource(), envelope = a.createGain(), grainFilter = a.createBiquadFilter();
-      grain.buffer = playable; grain.playbackRate.value = 1;
-      grainFilter.type = "lowpass"; grainFilter.frequency.value = overrides.filter ?? p.filter;
-      const grainWhen = when + i * hop, sourceOffset = offset + (i / grains) * sourceDuration;
-      envelope.gain.setValueAtTime(0.0001, grainWhen);
-      envelope.gain.linearRampToValueAtTime(vol, grainWhen + grainSize * 0.25);
-      envelope.gain.exponentialRampToValueAtTime(0.0001, grainWhen + grainSize);
-      grain.connect(grainFilter); grainFilter.connect(envelope); envelope.connect(out);
-      grain.start(grainWhen, Math.min(playable.duration - 0.01, sourceOffset), Math.min(grainSize, playable.duration - sourceOffset));
-    }
-    return true;
-  }
-  if (a === AC && p.choke > 0) {
-    chokeSources.get(p.choke)?.forEach((node) => { try { node.stop(when); } catch { /* already stopped */ } });
-    chokeSources.set(p.choke, [src]);
-  }
-  src.start(when, offset, playDur);
-  return true;
-}
-function reversedBuffer(a: BaseAudioContext, source: AudioBuffer): AudioBuffer {
-  const out = a.createBuffer(source.numberOfChannels, source.length, source.sampleRate);
-  for (let c = 0; c < source.numberOfChannels; c++) {
-    const input = source.getChannelData(c), target = out.getChannelData(c);
-    for (let i = 0; i < source.length; i++) target[i] = input[source.length - 1 - i];
-  }
-  return out;
-}
-function playDrum(a: BaseAudioContext, out: AudioNode, r: number, vol: number, when: number): void {
-  if (playSample(a, out, r, vol, when)) return;
-  if (r >= DRUMS.length) return;
-  const p = dp[r];
-  switch (r) {
-    case 0: // Kick: tone sweep + transient click
-      dTone(a, out, vol, p.pitch, p.pitchEnd, p.decay, when);
-      dTone(a, out, vol * 0.25, p.pitch * 3, p.pitch * 3, 0.004, when, "square");
-      break;
-    case 1: // Snare: noise + optional tone body
-      dNoise(a, out, vol, p.filter, p.decay, when);
-      if (p.toneLevel > 0) dTone(a, out, vol * p.toneLevel, p.pitch, p.pitch * 0.5, p.decay * 0.7, when);
-      break;
-    case 2: dNoise(a, out, vol, p.filter, p.decay, when); break;           // HH Cl
-    case 3: dNoise(a, out, vol, p.filter, p.decay, when); break;           // HH Op
-    case 4: // Clap: staggered noise bursts
-      for (let i = 0; i < 3; i++) dNoise(a, out, vol * 0.9, p.filter, p.decay, when + i * (p.spread / 1000), "bandpass", 0.5);
-      break;
-    case 5: dTone(a, out, vol, p.pitch, p.pitchEnd, p.decay, when); break; // Tom
-    case 6: // Rim: triangle tone + noise
-      dTone(a, out, vol * p.toneLevel, p.pitch, p.pitch, 0.06, when, "triangle");
-      dNoise(a, out, vol * (1 - p.toneLevel) * 0.6, p.filter, 0.06, when);
-      break;
-    case 7: dNoise(a, out, vol * 0.6, p.filter, p.decay, when); break;    // Crash
-  }
-}
-
-// ─── Synth ────────────────────────────────────────────────────────────────────
-const synth = { osc: "sawtooth" as OscillatorType, cutoff: 2200, q: 4, attack: 0.01, release: 0.3 };
-const lfo = { rate: 3, depth: 0, target: "filter" as "filter" | "pitch", phase: 0, timer: 0 };
-const activeN = new Map<string, { osc: OscillatorNode; gain: GainNode }>();
-const SEMI = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-
-function freq(note: string): number {
-  const m = /^([A-G]#?)(\d)$/.exec(note); if (!m) return 440;
-  const n = SEMI.indexOf(m[1]) + (parseInt(m[2], 10) + 1) * 12;
-  return 440 * Math.pow(2, (n - 69) / 12);
-}
-function noteOn(note: string): void {
-  ensureNodes(); if (activeN.has(note)) return;
-  const a = ac(), osc = a.createOscillator(), g = a.createGain();
-  osc.type = synth.osc; osc.frequency.value = freq(note);
-  g.gain.setValueAtTime(0, a.currentTime);
-  g.gain.linearRampToValueAtTime(0.4, a.currentTime + synth.attack);
-  osc.connect(g); g.connect(synthGain!); osc.start();
-  activeN.set(note, { osc, gain: g });
-}
-
-function playPad(
-  a: BaseAudioContext,
-  pad: number,
-  velocity: number,
-  when: number,
-  variation = 0,
-  output?: AudioNode,
-): void {
-  const anySolo = mpc.padSolo.some(Boolean);
-  if (mpc.padMute[pad] || (anySolo && !mpc.padSolo[pad])) return;
-  const out = output ?? trackGain[pad % trackGain.length] ?? master!;
-  const mode = mpc.sixteenLevels ? mpc.levelMode : null;
-  const scaled = Math.max(0, Math.min(1, velocity / 127));
-  const tune = mode === "pitch" ? variation * 2 : sampleParams[pad].tune;
-  const filter = mode === "filter" ? 300 + (variation + 1) * 550 : sampleParams[pad].filter;
-  const start = mode === "start" ? Math.max(0, Math.min(0.95, variation / 15)) : sampleParams[pad].start;
-  if (!playSample(a, out, pad, scaled, when, { tune, filter, start })) playDrum(a, out, pad % DRUMS.length, scaled, when);
-}
-function noteOff(note: string): void {
-  const n = activeN.get(note); if (!n) return;
-  const a = ac();
-  n.gain.gain.cancelScheduledValues(a.currentTime);
-  n.gain.gain.setValueAtTime(n.gain.gain.value, a.currentTime);
-  n.gain.gain.linearRampToValueAtTime(0.0001, a.currentTime + synth.release);
-  n.osc.stop(a.currentTime + synth.release + 0.05); activeN.delete(note);
-}
-function startLFO(): void {
-  if (lfo.timer) return;
-  lfo.timer = window.setInterval(() => {
-    if (!AC || lfo.depth === 0) return;
-    lfo.phase += (lfo.rate / 60) * Math.PI * 2;
-    const mod = Math.sin(lfo.phase);
-    if (lfo.target === "filter" && synthFilter) {
-      synthFilter.frequency.value = synth.cutoff * (1 + mod * lfo.depth * 0.9);
-    } else if (lfo.target === "pitch") {
-      activeN.forEach(({ osc }) => { osc.detune.value = mod * lfo.depth * 100; });
-    }
-  }, 1000 / 60);
-}
-
-// ─── State ────────────────────────────────────────────────────────────────────
-const STEPS = 16;
-const NUM_PATS = 4;
-const PAT_LABELS = ["A", "B", "C", "D"];
-const SONG_SLOTS = 8;
-const PIANO_NOTES = ["B4", "A#4", "A4", "G#4", "G4", "F#4", "F4", "E4", "D#4", "D4", "C#4", "C4"];
-let bpm = 120, swing = 0, metro = false, curPat = 0, songMode = false;
-const allPats: boolean[][][] = Array.from({ length: NUM_PATS }, () => DRUMS.map(() => new Array(STEPS).fill(false)));
-const allVels: number[][][] = Array.from({ length: NUM_PATS }, () => DRUMS.map(() => new Array(STEPS).fill(100)));
-const synthPats: boolean[][][] = Array.from({ length: NUM_PATS }, () => PIANO_NOTES.map(() => new Array(STEPS).fill(false)));
-const songChain = Array.from({ length: SONG_SLOTS }, (_, i) => i % NUM_PATS);
-const padEvents: PadEvent[][] = Array.from({ length: NUM_PATS }, () => []);
-const mpc: MpcState = {
-  bank: 0, selectedPad: 0, fullLevel: false, sixteenLevels: false, levelMode: "velocity",
-  noteRepeat: false, repeatDivision: 4, quantize: 4, quantizeStrength: 100,
-  recording: false, overdub: true,
-  padMute: Array.from({ length: PAD_COUNT }, () => false),
-  padSolo: Array.from({ length: PAD_COUNT }, () => false),
-};
-const rackState: RackState = {
-  grooveTiming: 0, grooveVelocity: 0, grooveRandom: 0,
-  noteEcho: 0, echoDecay: 0.65, macros: [0, 0, 0, 0],
-  devices: { player: true, sampler: true, character: true, eq: true, compressor: true, delay: true, reverb: true, limiter: true },
-};
-const mute = new Array(8).fill(false);
-const solo = new Array(8).fill(false);
-function pat(): boolean[][] { return allPats[curPat]; }
-function audible(r: number): boolean { const s = solo.some(Boolean); return !mute[r] && (!s || solo[r]); }
-const stepDur = (): number => 60 / bpm / 4;
-
-// ─── Persistence ─────────────────────────────────────────────────────────────
-function saveAll(): void {
-  try {
-    localStorage.setItem("vv_studio_v2", JSON.stringify(projectState(false)));
-    window.dispatchEvent(new CustomEvent("vv-studio-saved"));
-  } catch { /* ignore */ }
-}
-function historyState(): HistoryState {
-  return {
-    pats: allPats.map((pattern) => pattern.map((row) => [...row])),
-    vels: allVels.map((pattern) => pattern.map((row) => [...row])),
-    synthPats: synthPats.map((pattern) => pattern.map((row) => [...row])),
-    padEvents: padEvents.map((events) => events.map((event) => ({ ...event }))),
-    sampleParams: sampleParams.map((params) => ({ ...params })),
-    sampleData: [...sampleData],
-    songChain: [...songChain],
-    fx: { ...fx },
-    rackState: { ...rackState, macros: [...rackState.macros], devices: { ...rackState.devices } },
-  };
-}
-function restoreHistory(state: HistoryState): void {
-  state.pats.forEach((pattern, pi) => pattern.forEach((row, ri) => row.forEach((value, step) => { allPats[pi][ri][step] = value; })));
-  state.vels.forEach((pattern, pi) => pattern.forEach((row, ri) => row.forEach((value, step) => { allVels[pi][ri][step] = value; })));
-  state.synthPats.forEach((pattern, pi) => pattern.forEach((row, ri) => row.forEach((value, step) => { synthPats[pi][ri][step] = value; })));
-  state.padEvents.forEach((events, i) => { padEvents[i] = events.map((event) => ({ ...event })); });
-  state.sampleParams.forEach((params, i) => Object.assign(sampleParams[i], params));
-  state.sampleData.forEach((data, i) => { sampleData[i] = data; sampleBuffers[i] = null; if (data) void hydrateSample(i); });
-  state.songChain.forEach((pattern, i) => { songChain[i] = pattern; });
-  Object.assign(fx, state.fx);
-  Object.assign(rackState, state.rackState);
-  rackState.macros = [...state.rackState.macros]; rackState.devices = { ...state.rackState.devices };
-  applyFxState(); saveAll();
-}
-function projectState(includeSamples = true): object {
-  const samplePool: string[] = [];
-  const sampleRefs = sampleData.map((data) => {
-    if (!includeSamples || !data) return -1;
-    let index = samplePool.indexOf(data);
-    if (index < 0) { samplePool.push(data); index = samplePool.length - 1; }
-    return index;
-  });
-  return {
-    version: 4,
-    pats: allPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
-    vels: allVels,
-    dp,
-    bpm,
-    curPat,
-    synthPats: synthPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
-    synth,
-    songChain,
-    songMode,
-    sampleParams,
-    samplePool,
-    sampleRefs,
-    fx,
-    padEvents,
-    mpc,
-    rackState,
-  };
-}
-function playSynthStep(a: BaseAudioContext, out: AudioNode, note: string, when: number, duration: number, vol: number): void {
-  const osc = a.createOscillator(), g = a.createGain(), filter = a.createBiquadFilter();
-  osc.type = synth.osc; osc.frequency.value = freq(note);
-  filter.type = "lowpass"; filter.frequency.value = synth.cutoff; filter.Q.value = synth.q;
-  const attackEnd = when + Math.min(synth.attack, duration * 0.45);
-  const releaseStart = Math.max(attackEnd, when + duration - synth.release);
-  g.gain.setValueAtTime(0.0001, when);
-  g.gain.linearRampToValueAtTime(vol, attackEnd);
-  g.gain.setValueAtTime(vol, releaseStart);
-  g.gain.exponentialRampToValueAtTime(0.0001, when + duration);
-  osc.connect(filter); filter.connect(g); g.connect(out); osc.start(when); osc.stop(when + duration + 0.02);
-}
-function loadAll(): void {
-  try {
-    const raw = localStorage.getItem("vv_studio_v2") || localStorage.getItem("vv_studio_pattern");
-    if (!raw) return;
-    applyProject(JSON.parse(raw));
-  } catch { /* ignore */ }
-}
-function applyProject(saved: Record<string, unknown>): void {
-  try {
-    if (saved.pats) {
-      (saved.pats as number[][][]).forEach((pp, pi) => {
-        if (pi >= NUM_PATS) return;
-        pp.forEach((row, ri) => { if (ri < 8) row.forEach((v, ci) => { if (ci < STEPS) allPats[pi][ri][ci] = !!v; }); });
-      });
-      if (saved.vels) (saved.vels as number[][][]).forEach((pp, pi) => {
-        if (pi >= NUM_PATS) return;
-        pp.forEach((row, ri) => { if (ri < 8) row.forEach((v, ci) => { if (ci < STEPS) allVels[pi][ri][ci] = v; }); });
-      });
-      if (saved.dp) (saved.dp as Partial<DrumP>[]).forEach((d, i) => { if (i < 8) Object.assign(dp[i], d); });
-      if (saved.bpm) bpm = saved.bpm;
-      if (typeof saved.curPat === "number") curPat = saved.curPat;
-      if (saved.synthPats) (saved.synthPats as number[][][]).forEach((pp, pi) => {
-        if (pi >= NUM_PATS) return;
-        pp.forEach((row, ri) => { if (ri < PIANO_NOTES.length) row.forEach((v, ci) => { if (ci < STEPS) synthPats[pi][ri][ci] = !!v; }); });
-      });
-      if (saved.synth) Object.assign(synth, saved.synth as object);
-      if (saved.songChain) (saved.songChain as number[]).forEach((v, i) => {
-        if (i < SONG_SLOTS) songChain[i] = Math.max(0, Math.min(NUM_PATS - 1, Number(v) || 0));
-      });
-      if (typeof saved.songMode === "boolean") songMode = saved.songMode;
-      if (saved.sampleParams) (saved.sampleParams as Partial<SamplerP>[]).forEach((p, i) => { if (i < PAD_COUNT) Object.assign(sampleParams[i], p); });
-      if (saved.samplePool && saved.sampleRefs) {
-        const pool = saved.samplePool as string[], refs = saved.sampleRefs as number[];
-        refs.forEach((ref, i) => { if (i < PAD_COUNT) sampleData[i] = ref >= 0 ? pool[ref] ?? null : null; });
-      } else if (saved.sampleData) {
-        (saved.sampleData as Array<string | null>).forEach((v, i) => { if (i < PAD_COUNT) sampleData[i] = v; });
-      }
-      if (saved.fx) Object.assign(fx, saved.fx as object);
-      if (saved.padEvents) (saved.padEvents as PadEvent[][]).forEach((events, i) => {
-        if (i < NUM_PATS) padEvents[i] = events.map((event) => ({ ...event }));
-      });
-      if (saved.mpc) Object.assign(mpc, saved.mpc as object);
-      if (saved.rackState) {
-        const incoming = saved.rackState as Partial<RackState>;
-        Object.assign(rackState, incoming);
-        rackState.devices = { ...rackState.devices, ...(incoming.devices ?? {}) };
-      }
-    } else if (Array.isArray(saved) && saved.length === 8) {
-      for (let r = 0; r < 8; r++) for (let c = 0; c < STEPS; c++) allPats[0][r][c] = !!saved[r][c];
-    }
-  } catch { /* ignore */ }
-}
-
-// ─── DOM helpers ─────────────────────────────────────────────────────────────
-const el = (tag: string, cls?: string, text?: string): HTMLElement => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
-function btn(label: string, extra = ""): HTMLButtonElement {
-  const b = document.createElement("button"); b.type = "button";
-  b.className = ("wa-btn " + extra).trim(); b.textContent = label; return b;
-}
-function help(target: HTMLElement, text: string): HTMLElement {
-  target.dataset.help = text;
-  target.setAttribute("aria-description", text);
-  return target;
-}
-function sliderRow(label: string, min: number, max: number, val: number, step: number, on: (v: number) => void): HTMLElement {
-  const row = el("div", "wa-slider-row");
-  row.append(el("span", "wa-lbl", label));
-  const inp = document.createElement("input");
-  inp.type = "range"; inp.min = String(min); inp.max = String(max); inp.step = String(step); inp.value = String(val); inp.className = "wa-slider";
-  const out = el("span", "wa-val", String(val));
-  inp.addEventListener("input", () => { const v = Number(inp.value); out.textContent = String(v); on(v); });
-  row.append(inp, out); return row;
-}
 function mixChannel(name: string, val: number, on: (v: number) => void, idx: number): HTMLElement {
   const ch = el("div", "wa-ch");
   const inp = document.createElement("input");
@@ -589,129 +42,6 @@ function mixChannel(name: string, val: number, on: (v: number) => void, idx: num
     ms.append(m, s); ch.append(ms);
   }
   ch.append(el("span", "wa-ch-name", name)); return ch;
-}
-function download(name: string, blob: Blob): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href = url; a.download = name; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-async function hydrateSample(r: number): Promise<void> {
-  const data = sampleData[r]; if (!data) { sampleBuffers[r] = null; return; }
-  sampleBuffers[r] = await ac().decodeAudioData(dataUrlToBytes(data));
-}
-function pendingProjectStore(mode: "get" | "put", value?: Record<string, unknown>): Promise<Record<string, unknown> | null> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open("vishamp", 1);
-    request.onupgradeneeded = () => request.result.createObjectStore("projects");
-    request.onblocked = () => reject(new Error("Project storage is blocked"));
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => {
-      const db = request.result, tx = db.transaction("projects", "readwrite"), store = tx.objectStore("projects");
-      if (mode === "put") store.put(value, "pending");
-      else {
-        const get = store.get("pending");
-        get.onsuccess = () => {
-          const result = (get.result as Record<string, unknown> | undefined) ?? null;
-          if (result) store.delete("pending");
-          resolve(result);
-        };
-        get.onerror = () => reject(get.error);
-      }
-      tx.oncomplete = () => { db.close(); if (mode === "put") resolve(null); };
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error);
-    };
-  });
-}
-// Decode a data: URL straight to bytes. We must NOT fetch() data: URLs — the
-// site CSP is `connect-src 'self'` (no data:), so fetch("data:…") is blocked and
-// throws "could not decode audio". atob avoids the network entirely.
-function dataUrlToBytes(dataUrl: string): ArrayBuffer {
-  const comma = dataUrl.indexOf(",");
-  const meta = dataUrl.slice(0, comma), body = dataUrl.slice(comma + 1);
-  const binary = /;base64/i.test(meta) ? atob(body) : decodeURIComponent(body);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes.buffer;
-}
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-function blobAsDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
-}
-function equalSlices(count: number): Array<[number, number]> {
-  return Array.from({ length: count }, (_, i) => [i / count, (i + 1) / count]);
-}
-function transientSlices(buffer: AudioBuffer, count = 16): Array<[number, number]> {
-  const data = buffer.getChannelData(0), windowSize = Math.max(128, Math.floor(data.length / 512));
-  const peaks: Array<{ pos: number; energy: number }> = [];
-  let previous = 0;
-  for (let i = 0; i < data.length; i += windowSize) {
-    let energy = 0;
-    for (let j = i; j < Math.min(data.length, i + windowSize); j++) energy += Math.abs(data[j]);
-    energy /= windowSize;
-    const rise = energy - previous; previous = energy;
-    if (rise > 0.015) peaks.push({ pos: i / data.length, energy: rise });
-  }
-  const starts = [0, ...peaks.sort((a, b) => b.energy - a.energy).slice(0, count - 1).map((p) => p.pos)]
-    .sort((a, b) => a - b);
-  if (starts.length < 2) return equalSlices(count);
-  return starts.slice(0, count).map((start, i) => [start, starts[i + 1] ?? 1]);
-}
-function snapZero(buffer: AudioBuffer, position: number): number {
-  const data = buffer.getChannelData(0), centre = Math.floor(position * data.length), radius = Math.min(1024, Math.floor(data.length / 100));
-  let best = centre, bestValue = Math.abs(data[centre] ?? 0);
-  for (let i = Math.max(1, centre - radius); i < Math.min(data.length - 1, centre + radius); i++) {
-    const value = Math.abs(data[i]);
-    if (value < bestValue || (data[i - 1] <= 0 && data[i] >= 0)) { best = i; bestValue = value; if (bestValue < 0.0001) break; }
-  }
-  return best / data.length;
-}
-function euclideanPattern(steps: number, pulses: number, rotation: number): boolean[] {
-  const pattern = Array.from({ length: steps }, (_, step) => ((step * pulses) % steps) < pulses);
-  return pattern.map((_, i) => pattern[(i - rotation + steps) % steps]);
-}
-function drawWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer, slices: Array<[number, number]>): void {
-  const scale = window.devicePixelRatio || 1, width = canvas.clientWidth || 900, height = canvas.clientHeight || 220;
-  canvas.width = Math.floor(width * scale); canvas.height = Math.floor(height * scale);
-  const ctx = canvas.getContext("2d"); if (!ctx) return;
-  ctx.scale(scale, scale); ctx.fillStyle = "#0c0c12"; ctx.fillRect(0, 0, width, height);
-  const data = buffer.getChannelData(0), stride = Math.max(1, Math.floor(data.length / width));
-  ctx.strokeStyle = "#22ee55"; ctx.beginPath();
-  for (let x = 0; x < width; x++) {
-    let peak = 0;
-    for (let i = x * stride; i < Math.min(data.length, (x + 1) * stride); i++) peak = Math.max(peak, Math.abs(data[i]));
-    const y = peak * height * 0.45;
-    ctx.moveTo(x, height / 2 - y); ctx.lineTo(x, height / 2 + y);
-  }
-  ctx.stroke();
-  ctx.strokeStyle = "#ffe24d"; ctx.fillStyle = "#ffe24d"; ctx.font = "10px monospace";
-  slices.forEach(([start], i) => {
-    const x = start * width; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); ctx.fillText(String(i + 1), x + 3, 12);
-  });
-}
-function crushBuffer(source: AudioBuffer, bits: number, downsample: number): AudioBuffer {
-  const out = ac().createBuffer(source.numberOfChannels, source.length, source.sampleRate), levels = Math.pow(2, bits - 1);
-  for (let c = 0; c < source.numberOfChannels; c++) {
-    const input = source.getChannelData(c), target = out.getChannelData(c);
-    let held = 0;
-    for (let i = 0; i < input.length; i++) {
-      if (i % downsample === 0) held = Math.round(input[i] * levels) / levels;
-      target[i] = held;
-    }
-  }
-  return out;
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
@@ -734,7 +64,7 @@ export async function initStudio(): Promise<void> {
   projectName.addEventListener("change", () => { localStorage.setItem("vv_studio_name", projectName.value.trim() || "Untitled beat"); });
   titleBar.append(el("span", "wa-title-text", "VISHAMP — STUDIO"), projectName, el("span", "wa-title-dots"));
   const lcd = el("div", "wa-lcd");
-  const lcdBpm = el("span", "wa-lcd-seg", `${bpm} BPM`);
+  const lcdBpm = el("span", "wa-lcd-seg", `${transport.bpm} BPM`);
   const lcdState = el("span", "wa-lcd-seg", "■ STOP");
   const saveState = el("span", "wa-save-state", "SAVED");
   window.addEventListener("vv-studio-saved", () => {
@@ -744,25 +74,25 @@ export async function initStudio(): Promise<void> {
   lcd.append(lcdBpm, lcdState, saveState);
 
   // ── Transport ──
-  const transport = el("div", "wa-transport");
+  const transportBar = el("div", "wa-transport");
   const playBtn = btn("▶"), stopBtn = btn("■");
   const bpmDown = btn("–", "wa-btn-sm"), bpmUp = btn("+", "wa-btn-sm");
-  const bpmLabel = el("span", "wa-bpm", String(bpm));
+  const bpmLabel = el("span", "wa-bpm", String(transport.bpm));
   const swingIn = document.createElement("input");
   swingIn.type = "range"; swingIn.min = "0"; swingIn.max = "0.6"; swingIn.step = "0.02"; swingIn.value = "0"; swingIn.className = "wa-swing-in";
   const swingWrap = el("span", "wa-swing"); swingWrap.append(el("span", "wa-lbl", "Swing"), swingIn);
-  const metroBtn = btn("Metro", "wa-toggle"), songBtn = btn(songMode ? "Song" : "Pattern", "wa-toggle"), rotBtn = btn("⤢ Flip", "wa-btn-sm");
+  const metroBtn = btn("Metro", "wa-toggle"), songBtn = btn(transport.songMode ? "Song" : "Session", "wa-toggle"), rotBtn = btn("⤢ Flip", "wa-btn-sm");
   const undoBtn = btn("Undo", "wa-btn-sm"), redoBtn = btn("Redo", "wa-btn-sm");
   const tutorialBtn = btn("? Tutorial", "wa-btn-sm");
-  help(playBtn, "Start playback from the beginning of the current pattern or song.");
+  help(playBtn, "Start playback from the beginning of the current clips or song.");
   help(stopBtn, "Stop playback and clear the playhead.");
   help(metroBtn, "Toggle the metronome. It is also included in audio export while enabled.");
-  help(songBtn, "Switch between looping the active pattern and playing the arranged song chain.");
+  help(songBtn, "Switch between looping the launched session clips and playing the arranged song chain.");
   help(undoBtn, "Restore the previous destructive edit, including chops, fills and dropped samples.");
   help(redoBtn, "Reapply the last undone edit.");
   help(rotBtn, "Expand Studio to the viewport. On portrait phones this rotates the workstation.");
-  songBtn.classList.toggle("active", songMode);
-  transport.append(playBtn, stopBtn, el("span", "wa-sep"), el("span", "wa-lbl", "BPM"), bpmDown, bpmLabel, bpmUp, el("span", "wa-sep"), swingWrap, metroBtn, songBtn, el("span", "wa-sep"), undoBtn, redoBtn, tutorialBtn, rotBtn);
+  songBtn.classList.toggle("active", transport.songMode);
+  transportBar.append(playBtn, stopBtn, el("span", "wa-sep"), el("span", "wa-lbl", "BPM"), bpmDown, bpmLabel, bpmUp, el("span", "wa-sep"), swingWrap, metroBtn, songBtn, el("span", "wa-sep"), undoBtn, redoBtn, tutorialBtn, rotBtn);
   const undoStack: HistoryState[] = [], redoStack: HistoryState[] = [];
   function checkpoint(): void {
     undoStack.push(historyState());
@@ -777,13 +107,12 @@ export async function initStudio(): Promise<void> {
   const tabNames = ["Create", "Sequence", "Arrange", "Mix"];
   const tabBtns: HTMLElement[] = [], panelEls: HTMLElement[] = [];
   let activeTab = Math.max(0, Math.min(3, Number(localStorage.getItem("vv_studio_workspace")) || 0));
-  let queuedPat: number | null = null;
   tabNames.forEach((t, i) => {
     const b = btn(t, "wa-tab"); b.classList.remove("wa-btn");
     const descriptions = [
       "Load or record samples, chop breaks and perform on the pads.",
       "Program drums and synth notes with step and piano-roll editors.",
-      "Launch patterns live or order them into a complete song.",
+      "Launch clips and scenes live, or order scenes into a complete song.",
       "Shape the sound, balance tracks and save or export the project.",
     ];
     help(b, descriptions[i]);
@@ -806,13 +135,13 @@ export async function initStudio(): Promise<void> {
   let velTarget: { r: number; c: number; cell: HTMLElement } | null = null;
   velSlider.addEventListener("input", () => {
     const v = Number(velSlider.value); velLabel.textContent = String(v);
-    if (velTarget) { allVels[curPat][velTarget.r][velTarget.c] = v; setCellOpacity(velTarget.cell, v); saveAll(); }
+    if (velTarget) { allVels[clip.sel][velTarget.r][velTarget.c] = v; setCellOpacity(velTarget.cell, v); saveAll(); }
   });
   document.addEventListener("click", (e) => { if (!velPopup.contains(e.target as Node)) velPopup.style.display = "none"; });
   function setCellOpacity(cell: HTMLElement, v: number): void { cell.style.opacity = String(0.45 + 0.55 * (v / 127)); }
   function showVelPopup(r: number, c: number, cell: HTMLElement, x: number, y: number): void {
     velTarget = { r, c, cell };
-    const v = allVels[curPat][r][c]; velSlider.value = String(v); velLabel.textContent = String(v);
+    const v = allVels[clip.sel][r][c]; velSlider.value = String(v); velLabel.textContent = String(v);
     velPopup.style.left = `${Math.min(x, window.innerWidth - 190)}px`;
     velPopup.style.top = `${Math.max(y - 54, 4)}px`;
     velPopup.style.display = "flex";
@@ -821,32 +150,27 @@ export async function initStudio(): Promise<void> {
   // ── Beat ──
   const beat = el("div", "wa-panel");
 
-  // Pattern selector row
+  // Scene selector row — chooses which scene every editor edits.
   const patRow = el("div", "wa-pat-row");
-  patRow.append(el("span", "wa-lbl", "Pattern"));
-  const patBtns: HTMLButtonElement[] = [];
-  PAT_LABELS.forEach((label, pi) => {
-    const pb = btn(label, "wa-pat-btn" + (pi === curPat ? " active" : "")); pb.classList.remove("wa-btn");
-    pb.addEventListener("click", () => {
-      curPat = pi; patBtns.forEach((b, i) => b.classList.toggle("active", i === pi));
-      cells.forEach((row, r) => row.forEach((cell, c) => {
-        const on = allPats[curPat][r][c]; cell.classList.toggle("on", on);
-        if (on) setCellOpacity(cell, allVels[curPat][r][c]); else cell.style.opacity = "";
-      }));
-      synthCells.forEach((row, r) => row.forEach((cell, c) => cell.classList.toggle("on", synthPats[curPat][r][c])));
-      saveAll();
-    });
-    patBtns.push(pb); patRow.append(pb);
+  patRow.append(el("span", "wa-lbl", "Scene"));
+  const sceneBtns: HTMLButtonElement[] = [];
+  SCENE_LABELS.forEach((label, pi) => {
+    const pb = btn(label, "wa-pat-btn" + (pi === clip.sel ? " active" : "")); pb.classList.remove("wa-btn");
+    pb.addEventListener("click", () => { selectScene(pi); saveAll(); });
+    sceneBtns.push(pb); patRow.append(pb);
   });
   const copyBtn = btn("Copy →next", "wa-btn-sm");
-  copyBtn.title = "Copy this pattern to the next slot";
+  copyBtn.title = "Copy this scene (drums, pads and synth) to the next slot";
   copyBtn.addEventListener("click", () => {
     checkpoint();
-    const next = (curPat + 1) % NUM_PATS;
+    const next = (clip.sel + 1) % SCENES;
     for (let r = 0; r < 8; r++) for (let c = 0; c < STEPS; c++) {
-      allPats[next][r][c] = allPats[curPat][r][c];
-      allVels[next][r][c] = allVels[curPat][r][c];
+      allPats[next][r][c] = allPats[clip.sel][r][c];
+      allVels[next][r][c] = allVels[clip.sel][r][c];
     }
+    for (let r = 0; r < PIANO_NOTES.length; r++) for (let c = 0; c < STEPS; c++) synthPats[next][r][c] = synthPats[clip.sel][r][c];
+    padEvents[next] = padEvents[clip.sel].map((event) => ({ ...event }));
+    paintSession();
     saveAll(); const orig = copyBtn.textContent; copyBtn.textContent = "Copied ✓";
     setTimeout(() => { copyBtn.textContent = orig; }, 1200);
   });
@@ -874,25 +198,26 @@ export async function initStudio(): Promise<void> {
     for (let c = 0; c < STEPS; c++) {
       const cell = el("button", "wa-cell" + (c % 4 === 0 ? " wa-beat" : "")) as HTMLButtonElement;
       cell.type = "button";
-      if (allPats[curPat][r][c]) { cell.classList.add("on"); setCellOpacity(cell, allVels[curPat][r][c]); }
+      if (allPats[clip.sel][r][c]) { cell.classList.add("on"); setCellOpacity(cell, allVels[clip.sel][r][c]); }
       cell.addEventListener("click", () => {
-        allPats[curPat][r][c] = !allPats[curPat][r][c];
-        cell.classList.toggle("on", allPats[curPat][r][c]);
-        if (allPats[curPat][r][c]) {
-          setCellOpacity(cell, allVels[curPat][r][c]);
-          ensureNodes(); playDrum(ac(), trackGain[r], r, allVels[curPat][r][c] / 127, ac().currentTime);
+        allPats[clip.sel][r][c] = !allPats[clip.sel][r][c];
+        cell.classList.toggle("on", allPats[clip.sel][r][c]);
+        if (allPats[clip.sel][r][c]) {
+          setCellOpacity(cell, allVels[clip.sel][r][c]);
+          ensureNodes(); playDrum(ac(), trackGain[r], r, allVels[clip.sel][r][c] / 127, ac().currentTime);
         } else { cell.style.opacity = ""; }
+        paintSession();
         saveAll();
       });
       cell.addEventListener("contextmenu", (e) => {
-        e.preventDefault(); if (!allPats[curPat][r][c]) return;
+        e.preventDefault(); if (!allPats[clip.sel][r][c]) return;
         showVelPopup(r, c, cell, (e as MouseEvent).clientX, (e as MouseEvent).clientY);
       });
       // Long-press for velocity on mobile
       let lpTimer: number | null = null;
       cell.addEventListener("touchstart", (e: TouchEvent) => {
         const t = e.touches[0]; const x = t.clientX, y = t.clientY;
-        lpTimer = window.setTimeout(() => { if (allPats[curPat][r][c]) showVelPopup(r, c, cell, x, y); lpTimer = null; }, 500);
+        lpTimer = window.setTimeout(() => { if (allPats[clip.sel][r][c]) showVelPopup(r, c, cell, x, y); lpTimer = null; }, 500);
       }, { passive: true });
       cell.addEventListener("touchend", () => { if (lpTimer !== null) { clearTimeout(lpTimer); lpTimer = null; } });
       rowCells.push(cell); rowEl.append(cell);
@@ -903,7 +228,7 @@ export async function initStudio(): Promise<void> {
     const sdPanel = el("div", "wa-sd-panel"); sdPanel.style.display = "none";
     const sdRow = el("div", "wa-sd-row");
     const specs = DP_SPECS[r];
-    specs.forEach((spec, si) => {
+    specs.forEach((spec) => {
       const item = el("div", "wa-sd-item");
       const inp = document.createElement("input");
       inp.type = "range"; inp.min = String(spec.min); inp.max = String(spec.max); inp.step = String(spec.step); inp.value = String(dp[r][spec.key]);
@@ -913,7 +238,6 @@ export async function initStudio(): Promise<void> {
       });
       item.append(el("span", "wa-sd-lbl", spec.label), inp, vout);
       sdRow.append(item);
-      void si;
     });
     const testBtn = btn("▶ Test", "wa-btn-sm");
     testBtn.addEventListener("click", () => { ensureNodes(); playDrum(ac(), trackGain[r], r, 1, ac().currentTime); });
@@ -937,8 +261,9 @@ export async function initStudio(): Promise<void> {
   clearBtn.addEventListener("click", () => {
     checkpoint();
     for (let r = 0; r < 8; r++) for (let c = 0; c < STEPS; c++) {
-      allPats[curPat][r][c] = false; cells[r][c].classList.remove("on"); cells[r][c].style.opacity = "";
+      allPats[clip.sel][r][c] = false; cells[r][c].classList.remove("on"); cells[r][c].style.opacity = "";
     }
+    paintSession();
     saveAll();
   });
   const rowTools = el("div", "wa-row-tools"); rowTools.append(clearBtn);
@@ -965,7 +290,7 @@ export async function initStudio(): Promise<void> {
   help(fullLevelBtn, "Force every pad hit to maximum velocity.");
   help(levelsBtn, "Map the 16 pads across velocity, pitch, filter cutoff or sample start.");
   help(repeatBtn, "Retrigger a held pad at the division selected beside it.");
-  help(recordBtn, "Capture pad hits into the active pattern while playback runs.");
+  help(recordBtn, "Capture pad hits into the playing pads clip while playback runs.");
   help(overdubBtn, "Keep existing events while recording. Disable it to replace events at recorded steps.");
   help(undoPassBtn, "Remove the most recent pad-recording pass.");
   help(rotateBtn, "Move every pad event one step later.");
@@ -974,7 +299,7 @@ export async function initStudio(): Promise<void> {
   help(ghostBtn, "Add low-velocity, probabilistic ghost notes for the selected pad.");
   help(extractGrooveBtn, "Create groove timing and velocity settings from the current pad performance.");
   help(midiBtn, "Connect Web MIDI inputs. Notes starting at MIDI note 36 map across the 16 pads.");
-  help(resampleBtn, "Render the active pattern through the mixer and effects onto the selected pad.");
+  help(resampleBtn, "Render the playing clips through the mixer and effects onto the selected pad.");
   const resampleQuality = document.createElement("select");
   [["clean", "Clean"], ["12bit", "12-bit"], ["8bit", "8-bit"], ["jungle", "Jungle grit"]].forEach(([value, label]) => {
     const option = document.createElement("option"); option.value = value; option.textContent = label; resampleQuality.append(option);
@@ -1078,17 +403,21 @@ export async function initStudio(): Promise<void> {
     if (mpc.levelMode === "pitch") return localPad - 8;
     return localPad;
   }
+  // Recording writes into the pads clip you can hear (the playing one), falling
+  // back to the edit scene when the pads track is stopped.
+  function recordTarget(): number { return playing ? (clip.play.pads ?? clip.sel) : clip.sel; }
   function recordPadEvent(pad: number, velocity: number): void {
     if (!mpc.recording || !playing) return;
+    const target = recordTarget();
     const rawStep = lastHi >= 0 ? lastHi : schStep;
     const grid = mpc.quantize || STEPS;
     const snapped = Math.round(rawStep / (STEPS / grid)) * (STEPS / grid);
     const strength = mpc.quantizeStrength / 100;
     const step = Math.round(rawStep + (snapped - rawStep) * strength) % STEPS;
-    if (!mpc.overdub) padEvents[curPat] = padEvents[curPat].filter((event) => event.step !== step);
-    else padEvents[curPat] = padEvents[curPat].filter((event) => !(event.step === step && event.pad === pad));
+    if (!mpc.overdub) padEvents[target] = padEvents[target].filter((event) => event.step !== step);
+    else padEvents[target] = padEvents[target].filter((event) => !(event.step === step && event.pad === pad));
     const playedOffset = lastStepStartedMs > 0 ? Math.max(-60, Math.min(60, performance.now() - lastStepStartedMs)) : 0;
-    padEvents[curPat].push({ pad, step, velocity, offset: playedOffset, probability: 100, ratchets: 1 });
+    padEvents[target].push({ pad, step, velocity, offset: playedOffset, probability: 100, ratchets: 1 });
     paintEventLane(); saveAll();
   }
   function triggerPerformancePad(localPad: number, velocity: number): void {
@@ -1167,24 +496,24 @@ export async function initStudio(): Promise<void> {
   recordBtn.classList.toggle("active", mpc.recording);
   recordBtn.addEventListener("click", () => {
     mpc.recording = !mpc.recording;
-    if (mpc.recording) { checkpoint(); recordSnapshot = padEvents[curPat].map((event) => ({ ...event })); }
+    if (mpc.recording) { checkpoint(); recordSnapshot = padEvents[recordTarget()].map((event) => ({ ...event })); }
     recordBtn.classList.toggle("active", mpc.recording); performanceStatus.textContent = mpc.recording ? "Recording pad events" : "Ready"; saveAll();
   });
   overdubBtn.addEventListener("click", () => { mpc.overdub = !mpc.overdub; overdubBtn.classList.toggle("active", mpc.overdub); saveAll(); });
   undoPassBtn.addEventListener("click", () => {
     if (!recordSnapshot) return;
-    padEvents[curPat] = recordSnapshot.map((event) => ({ ...event })); recordSnapshot = null; paintEventLane(); saveAll(); performanceStatus.textContent = "Last recording pass undone";
+    padEvents[recordTarget()] = recordSnapshot.map((event) => ({ ...event })); recordSnapshot = null; paintEventLane(); saveAll(); performanceStatus.textContent = "Last recording pass undone";
   });
   repeatSel.addEventListener("change", () => { mpc.repeatDivision = Number(repeatSel.value); saveAll(); });
   quantSel.addEventListener("change", () => { mpc.quantize = Number(quantSel.value); saveAll(); });
   levelModeSel.addEventListener("change", () => { mpc.levelMode = levelModeSel.value as MpcState["levelMode"]; saveAll(); });
   rotateBtn.addEventListener("click", () => {
     checkpoint();
-    padEvents[curPat].forEach((event) => { event.step = (event.step + 1) % STEPS; }); paintEventLane(); saveAll();
+    padEvents[clip.sel].forEach((event) => { event.step = (event.step + 1) % STEPS; }); paintEventLane(); saveAll();
   });
   mutateBtn.addEventListener("click", () => {
     checkpoint();
-    padEvents[curPat].forEach((event) => {
+    padEvents[clip.sel].forEach((event) => {
       if (Math.random() < 0.35) event.step = (event.step + (Math.random() < 0.5 ? -1 : 1) + STEPS) % STEPS;
       event.velocity = Math.max(20, Math.min(127, event.velocity + Math.round((Math.random() * 2 - 1) * 18)));
       if (Math.random() < 0.2) event.ratchets = 1 + Math.floor(Math.random() * 4);
@@ -1195,8 +524,8 @@ export async function initStudio(): Promise<void> {
     checkpoint();
     const pad = mpc.selectedPad;
     for (let step = 12; step < 16; step++) {
-      padEvents[curPat] = padEvents[curPat].filter((event) => !(event.pad === pad && event.step === step));
-      padEvents[curPat].push({ pad, step, velocity: 72 + (step - 12) * 14, offset: 0, probability: 100, ratchets: step === 15 ? 4 : 1 });
+      padEvents[clip.sel] = padEvents[clip.sel].filter((event) => !(event.pad === pad && event.step === step));
+      padEvents[clip.sel].push({ pad, step, velocity: 72 + (step - 12) * 14, offset: 0, probability: 100, ratchets: step === 15 ? 4 : 1 });
     }
     paintEventLane(); saveAll();
   });
@@ -1204,14 +533,14 @@ export async function initStudio(): Promise<void> {
     checkpoint();
     const pad = mpc.selectedPad;
     [3, 7, 11, 15].forEach((step, i) => {
-      if (!padEvents[curPat].some((event) => event.pad === pad && event.step === step)) {
-        padEvents[curPat].push({ pad, step, velocity: 34 + i * 5, offset: i % 2 ? 12 : -8, probability: 72, ratchets: 1 });
+      if (!padEvents[clip.sel].some((event) => event.pad === pad && event.step === step)) {
+        padEvents[clip.sel].push({ pad, step, velocity: 34 + i * 5, offset: i % 2 ? 12 : -8, probability: 72, ratchets: 1 });
       }
     });
     paintEventLane(); saveAll();
   });
   extractGrooveBtn.addEventListener("click", () => {
-    const events = padEvents[curPat]; if (!events.length) return;
+    const events = padEvents[clip.sel]; if (!events.length) return;
     const odd = events.filter((event) => event.step % 2 === 1);
     rackState.grooveTiming = Math.max(0, Math.min(0.75, odd.reduce((sum, event) => sum + Math.max(0, event.offset), 0) / Math.max(1, odd.length) / 80));
     const velocities = events.map((event) => event.velocity), mean = velocities.reduce((sum, value) => sum + value, 0) / velocities.length;
@@ -1227,7 +556,7 @@ export async function initStudio(): Promise<void> {
         : resampleQuality.value === "jungle" ? crushBuffer(rendered, 10, 3) : rendered;
       const data = await blobAsDataUrl(encodeWav(buffer)), pad = mpc.selectedPad;
       sampleData[pad] = data; sampleBuffers[pad] = buffer;
-      Object.assign(sampleParams[pad], { name: `Resample ${PAT_LABELS[curPat]}`, start: 0, end: 1, tune: 0, reverse: false });
+      Object.assign(sampleParams[pad], { name: `Resample ${SCENE_LABELS[clip.sel]}`, start: 0, end: 1, tune: 0, reverse: false });
       paintMpcPads(); saveAll(); performanceStatus.textContent = `Pattern resampled to pad ${pad + 1}`;
     } catch { performanceStatus.textContent = "Resampling failed"; }
   });
@@ -1236,7 +565,7 @@ export async function initStudio(): Promise<void> {
   let paintingEvents = false, paintEventsOn = true;
   function paintEventLane(): void {
     eventCells.forEach((cell, step) => {
-      const event = padEvents[curPat].find((item) => item.pad === mpc.selectedPad && item.step === step);
+      const event = padEvents[clip.sel].find((item) => item.pad === mpc.selectedPad && item.step === step);
       cell.classList.toggle("on", !!event);
       cell.title = event ? `Velocity ${event.velocity}, chance ${event.probability}%, ratchets ${event.ratchets}, offset ${event.offset}ms` : `Step ${step + 1}`;
     });
@@ -1244,14 +573,14 @@ export async function initStudio(): Promise<void> {
   for (let step = 0; step < STEPS; step++) {
     const cell = el("button", "wa-cell wa-event-cell" + (step % 4 === 0 ? " wa-beat" : "")) as HTMLButtonElement; cell.type = "button";
     const paint = () => {
-      const existing = padEvents[curPat].findIndex((event) => event.pad === mpc.selectedPad && event.step === step);
-      if (paintEventsOn && existing < 0) padEvents[curPat].push({ pad: mpc.selectedPad, step, velocity: 100, offset: 0, probability: 100, ratchets: 1 });
-      if (!paintEventsOn && existing >= 0) padEvents[curPat].splice(existing, 1);
-      paintEventLane(); saveAll();
+      const existing = padEvents[clip.sel].findIndex((event) => event.pad === mpc.selectedPad && event.step === step);
+      if (paintEventsOn && existing < 0) padEvents[clip.sel].push({ pad: mpc.selectedPad, step, velocity: 100, offset: 0, probability: 100, ratchets: 1 });
+      if (!paintEventsOn && existing >= 0) padEvents[clip.sel].splice(existing, 1);
+      paintEventLane(); paintSession(); saveAll();
     };
     cell.addEventListener("pointerdown", (event) => {
       event.preventDefault(); checkpoint(); paintingEvents = true;
-      paintEventsOn = !padEvents[curPat].some((item) => item.pad === mpc.selectedPad && item.step === step); paint();
+      paintEventsOn = !padEvents[clip.sel].some((item) => item.pad === mpc.selectedPad && item.step === step); paint();
     });
     cell.addEventListener("pointerenter", () => { if (paintingEvents) paint(); });
     eventCells.push(cell); eventLane.append(cell);
@@ -1259,10 +588,10 @@ export async function initStudio(): Promise<void> {
   window.addEventListener("pointerup", () => { paintingEvents = false; });
   const eventEditor = el("div", "wa-event-editor");
   eventEditor.append(
-    sliderRow("Velocity", 1, 127, 100, 1, (v) => { padEvents[curPat].filter((e) => e.pad === mpc.selectedPad).forEach((e) => { e.velocity = v; }); paintEventLane(); saveAll(); }),
-    sliderRow("Chance", 1, 100, 100, 1, (v) => { padEvents[curPat].filter((e) => e.pad === mpc.selectedPad).forEach((e) => { e.probability = v; }); paintEventLane(); saveAll(); }),
-    sliderRow("Micro", -60, 60, 0, 1, (v) => { padEvents[curPat].filter((e) => e.pad === mpc.selectedPad).forEach((e) => { e.offset = v; }); paintEventLane(); saveAll(); }),
-    sliderRow("Ratchet", 1, 8, 1, 1, (v) => { padEvents[curPat].filter((e) => e.pad === mpc.selectedPad).forEach((e) => { e.ratchets = v; }); paintEventLane(); saveAll(); }),
+    sliderRow("Velocity", 1, 127, 100, 1, (v) => { padEvents[clip.sel].filter((e) => e.pad === mpc.selectedPad).forEach((e) => { e.velocity = v; }); paintEventLane(); saveAll(); }),
+    sliderRow("Chance", 1, 100, 100, 1, (v) => { padEvents[clip.sel].filter((e) => e.pad === mpc.selectedPad).forEach((e) => { e.probability = v; }); paintEventLane(); saveAll(); }),
+    sliderRow("Micro", -60, 60, 0, 1, (v) => { padEvents[clip.sel].filter((e) => e.pad === mpc.selectedPad).forEach((e) => { e.offset = v; }); paintEventLane(); saveAll(); }),
+    sliderRow("Ratchet", 1, 8, 1, 1, (v) => { padEvents[clip.sel].filter((e) => e.pad === mpc.selectedPad).forEach((e) => { e.ratchets = v; }); paintEventLane(); saveAll(); }),
   );
   // MPC/Maschine-style deck: the 4×4 pads dominate; the action controls (full
   // level, levels, repeat, record, quantise, resample…) live in a side column.
@@ -1383,7 +712,7 @@ export async function initStudio(): Promise<void> {
       sampleData[pad] = chopData; sampleBuffers[pad] = chopBuffer;
       Object.assign(sampleParams[pad], {
         name: `${chopName} ${i + 1}`, start: snappedStart, end: Math.min(1, snappedEnd),
-        reverse: false, loop: false, sourceBpm: bpm,
+        reverse: false, loop: false, sourceBpm: transport.bpm,
       });
     });
     paintMpcPads(); saveAll(); chopStatus.textContent = `${Math.min(16, slices.length)} slices assigned to Bank ${"ABCD"[mpc.bank]}`;
@@ -1431,7 +760,7 @@ export async function initStudio(): Promise<void> {
   chords.forEach(([label, notes]) => {
     const button = btn(label, "wa-btn-sm");
     button.addEventListener("click", () => {
-      ensureNodes(); notes.forEach((note) => playSynthStep(ac(), synthGain!, note, ac().currentTime, stepDur() * 3.5, 0.32));
+      ensureNodes(); notes.forEach((note) => playSynthStep(ac(), engine.synthGain!, note, ac().currentTime, stepDur() * 3.5, 0.32));
     });
     chordRow.append(button);
   });
@@ -1444,14 +773,15 @@ export async function initStudio(): Promise<void> {
       const cell = el("button", "wa-cell wa-piano-cell" + (c % 4 === 0 ? " wa-beat" : "")) as HTMLButtonElement;
       cell.type = "button";
       cell.title = `${note}, step ${c + 1}`;
-      cell.classList.toggle("on", synthPats[curPat][r][c]);
+      cell.classList.toggle("on", synthPats[clip.sel][r][c]);
       cell.addEventListener("click", () => {
-        synthPats[curPat][r][c] = !synthPats[curPat][r][c];
-        cell.classList.toggle("on", synthPats[curPat][r][c]);
-        if (synthPats[curPat][r][c]) {
+        synthPats[clip.sel][r][c] = !synthPats[clip.sel][r][c];
+        cell.classList.toggle("on", synthPats[clip.sel][r][c]);
+        if (synthPats[clip.sel][r][c]) {
           ensureNodes();
-          playSynthStep(ac(), synthGain!, note, ac().currentTime, stepDur() * 0.9, 0.55);
+          playSynthStep(ac(), engine.synthGain!, note, ac().currentTime, stepDur() * 0.9, 0.55);
         }
+        paintSession();
         saveAll();
       });
       rowCells.push(cell);
@@ -1462,8 +792,8 @@ export async function initStudio(): Promise<void> {
   });
   synthPanel.append(
     el("div", "wa-lbl", "OSC"), oscRow,
-    sliderRow("CUTOFF",  200,  6000, synth.cutoff,  1,    (v) => { synth.cutoff  = v; if (synthFilter) synthFilter.frequency.value = v; }),
-    sliderRow("RESO",    0,    20,   synth.q,        0.5,  (v) => { synth.q      = v; if (synthFilter) synthFilter.Q.value = v; }),
+    sliderRow("CUTOFF",  200,  6000, synth.cutoff,  1,    (v) => { synth.cutoff  = v; if (engine.synthFilter) engine.synthFilter.frequency.value = v; }),
+    sliderRow("RESO",    0,    20,   synth.q,        0.5,  (v) => { synth.q      = v; if (engine.synthFilter) engine.synthFilter.Q.value = v; }),
     sliderRow("ATTACK",  0,    1,    synth.attack,   0.01, (v) => { synth.attack  = v; }),
     sliderRow("RELEASE", 0.05, 2,    synth.release,  0.05, (v) => { synth.release = v; }),
     el("div", "wa-sep-h"),
@@ -1474,50 +804,108 @@ export async function initStudio(): Promise<void> {
     el("div", "wa-sep-h"),
     el("div", "wa-lbl", "CHORD PLAYER"), chordRow,
     el("div", "wa-sep-h"),
-    el("div", "wa-lbl", "PIANO ROLL — active pattern"), pianoRoll,
+    el("div", "wa-lbl", "PIANO ROLL — edit scene"), pianoRoll,
     el("div", "wa-sep-h"),
     el("div", "wa-lbl", "KEYS — click or use A–K"), synthKeys,
   );
 
-  // ── Song ──
+  // ── Session view ──
   const song = el("div", "wa-panel");
-  const launcher = el("div", "wa-launcher");
-  const launchStatus = el("span", "wa-status", "Launches change on the next bar");
-  PAT_LABELS.forEach((label, pi) => {
-    const launch = btn(`▶ ${label}`, "wa-scene-launch");
-    launch.addEventListener("click", () => {
-      if (playing) {
-        queuedPat = pi; launchStatus.textContent = `Pattern ${label} queued`;
-      } else {
-        patBtns[pi].click(); songMode = false; songBtn.textContent = "Pattern"; songBtn.classList.remove("active");
-        renderSel.value = "pattern"; launchStatus.textContent = `Pattern ${label} selected`;
-      }
+  const launchStatus = el("span", "wa-status", "Clips launch on the next bar");
+  const sessionGrid = el("div", "wa-session");
+  const sessionCells: HTMLButtonElement[][] = [];   // [scene][track]
+  const sceneLaunchBtns: HTMLButtonElement[] = [];
+  function clipHasContent(track: TrackId, scene: number): boolean {
+    if (track === "drums") return allPats[scene].some((row) => row.some(Boolean));
+    if (track === "pads") return padEvents[scene].length > 0;
+    return synthPats[scene].some((row) => row.some(Boolean));
+  }
+  function paintSession(): void {
+    sessionCells.forEach((row, scene) => row.forEach((cell, ti) => {
+      const track = TRACKS[ti];
+      cell.classList.toggle("has", clipHasContent(track, scene));
+      cell.classList.toggle("playing", playing && clip.play[track] === scene);
+      cell.classList.toggle("armed", !playing && clip.play[track] === scene);
+      cell.classList.toggle("queued", clip.queued[track] === scene);
+      cell.classList.toggle("sel", clip.sel === scene);
+    }));
+    sceneLaunchBtns.forEach((b, scene) => b.classList.toggle("active", clip.sel === scene));
+  }
+  function launchClip(track: TrackId, scene: number | null): void {
+    if (playing) {
+      // Clicking an already-queued clip cancels the queue.
+      clip.queued[track] = clip.queued[track] === scene ? undefined : scene;
+      launchStatus.textContent = scene === null
+        ? `${TRACK_LABELS[track]} stopping at the bar`
+        : `${TRACK_LABELS[track]} ${SCENE_LABELS[scene]} queued`;
+    } else {
+      clip.play[track] = scene;
+      launchStatus.textContent = scene === null ? `${TRACK_LABELS[track]} stopped` : `${TRACK_LABELS[track]} ${SCENE_LABELS[scene]} armed`;
+    }
+    if (scene !== null && clip.sel !== scene) selectScene(scene);
+    paintSession(); saveAll();
+  }
+  function launchScene(scene: number): void {
+    TRACKS.forEach((track) => {
+      if (playing) clip.queued[track] = scene;
+      else clip.play[track] = scene;
     });
-    launcher.append(launch);
+    transport.songMode = false; songBtn.textContent = "Session"; songBtn.classList.remove("active"); renderSel.value = "pattern";
+    launchStatus.textContent = playing ? `Scene ${SCENE_LABELS[scene]} queued` : `Scene ${SCENE_LABELS[scene]} armed`;
+    if (clip.sel !== scene) selectScene(scene);
+    paintSession(); saveAll();
+  }
+  // Header: track names double as stop buttons.
+  const headRow = el("div", "wa-session-row wa-session-head");
+  headRow.append(el("span", "wa-session-scene", "Scene"));
+  TRACKS.forEach((track) => {
+    const stop = btn(`${TRACK_LABELS[track]} ■`, "wa-clip-stop");
+    stop.classList.remove("wa-btn");
+    help(stop, `Stop the ${TRACK_LABELS[track].toLowerCase()} track at the next bar.`);
+    stop.addEventListener("click", () => launchClip(track, null));
+    headRow.append(stop);
   });
-  launcher.append(launchStatus);
+  sessionGrid.append(headRow);
+  SCENE_LABELS.forEach((label, scene) => {
+    const row = el("div", "wa-session-row");
+    const launch = btn(`▶ ${label}`, "wa-scene-launch");
+    help(launch, `Launch every track's clip ${label} together (a scene).`);
+    launch.addEventListener("click", () => launchScene(scene));
+    sceneLaunchBtns.push(launch);
+    row.append(launch);
+    const rowCells: HTMLButtonElement[] = [];
+    TRACKS.forEach((track) => {
+      const cell = btn("", "wa-clip");
+      cell.classList.remove("wa-btn");
+      help(cell, `Launch ${TRACK_LABELS[track].toLowerCase()} clip ${label}. Tracks can play clips from different scenes.`);
+      cell.addEventListener("click", () => launchClip(track, scene));
+      rowCells.push(cell); row.append(cell);
+    });
+    sessionCells.push(rowCells);
+    sessionGrid.append(row);
+  });
   const chain = el("div", "wa-song-chain");
   const chainSelects: HTMLSelectElement[] = [];
   songChain.forEach((pattern, i) => {
     const slot = el("label", "wa-song-slot");
     slot.append(el("span", "wa-lbl", String(i + 1)));
     const select = document.createElement("select");
-    PAT_LABELS.forEach((label, pi) => {
-      const option = document.createElement("option"); option.value = String(pi); option.textContent = `Pattern ${label}`; select.append(option);
+    SCENE_LABELS.forEach((label, pi) => {
+      const option = document.createElement("option"); option.value = String(pi); option.textContent = `Scene ${label}`; select.append(option);
     });
     select.value = String(pattern);
     select.addEventListener("change", () => { songChain[i] = Number(select.value); saveAll(); });
     chainSelects.push(select); slot.append(select); chain.append(slot);
   });
-  const songHelp = el("p", "wa-help", "Launch patterns like clips for improvising, or switch to Song mode to play the arrangement left to right.");
-  song.append(songHelp, launcher, chain);
+  const songHelp = el("p", "wa-help", "Each column is a track, each row a scene. Launch single clips or whole scenes — changes land on the next bar. Song mode plays the scene chain left to right.");
+  song.append(songHelp, launchStatus, sessionGrid, el("div", "wa-sep-h"), el("div", "wa-lbl", "SONG CHAIN"), chain);
 
   // ── Mixer ──
   const mixer = el("div", "wa-panel");
   const mixGrid = el("div", "wa-mixer");
   DRUMS.forEach((name, i) => mixGrid.append(mixChannel(name, 0.8, (v) => { ensureNodes(); trackGain[i].gain.value = v; }, i)));
-  mixGrid.append(mixChannel("Synth",  0.7, (v) => { ensureNodes(); synthGain!.gain.value = v; }, -1));
-  mixGrid.append(mixChannel("MASTER", 0.8, (v) => { ac(); master!.gain.value = v; }, -1));
+  mixGrid.append(mixChannel("Synth",  0.7, (v) => { ensureNodes(); engine.synthGain!.gain.value = v; }, -1));
+  mixGrid.append(mixChannel("MASTER", 0.8, (v) => { ac(); engine.master!.gain.value = v; }, -1));
   const effects = el("div", "wa-effects");
   const fxSlider = (label: string, min: number, max: number, value: number, step: number, apply: (v: number) => void) =>
     sliderRow(label, min, max, value, step, (v) => { ensureNodes(); apply(v); applyFxState(); saveAll(); });
@@ -1583,8 +971,8 @@ export async function initStudio(): Promise<void> {
   help(euclidBtn, "Distribute a chosen number of hits evenly across the 16-step pattern.");
   euclidBtn.addEventListener("click", () => {
     const pattern = euclideanPattern(STEPS, Number(euclidPulses.value), Number(euclidRotate.value)), pad = mpc.selectedPad;
-    padEvents[curPat] = padEvents[curPat].filter((event) => event.pad !== pad);
-    pattern.forEach((on, step) => { if (on) padEvents[curPat].push({ pad, step, velocity: step % 4 === 0 ? 115 : 86, offset: 0, probability: 100, ratchets: 1 }); });
+    padEvents[clip.sel] = padEvents[clip.sel].filter((event) => event.pad !== pad);
+    pattern.forEach((on, step) => { if (on) padEvents[clip.sel].push({ pad, step, velocity: step % 4 === 0 ? 115 : 86, offset: 0, probability: 100, ratchets: 1 }); });
     paintEventLane(); saveAll();
   });
   euclidControls.append(el("span", "wa-lbl", "Pulses"), euclidPulses, el("span", "wa-lbl", "Rotate"), euclidRotate, euclidBtn);
@@ -1627,13 +1015,13 @@ export async function initStudio(): Promise<void> {
   const exp = el("div", "wa-panel");
   const expRow = el("div", "wa-export");
   const renderSel = document.createElement("select");
-  [["pattern","Active pattern"],["song","Full song"]].forEach(([v, l]) => {
+  [["pattern","Launched clips"],["song","Full song"]].forEach(([v, l]) => {
     const o = document.createElement("option"); o.value = v; o.textContent = l; renderSel.append(o);
   });
-  renderSel.value = songMode ? "song" : "pattern";
+  renderSel.value = transport.songMode ? "song" : "pattern";
   const wavBtn = btn("Export WAV"), mp3Btn = btn("Export MP3"), expStatus = el("span", "wa-status");
-  help(wavBtn, "Render the selected pattern or full song as lossless WAV.");
-  help(mp3Btn, "Render and encode the selected pattern or full song as 192 kbps MP3.");
+  help(wavBtn, "Render the launched clips or full song as lossless WAV.");
+  help(mp3Btn, "Render and encode the launched clips or full song as 192 kbps MP3.");
   expRow.append(el("span", "wa-lbl", "Render"), renderSel, wavBtn, mp3Btn, expStatus);
   const projectRow = el("div", "wa-export");
   const saveProjectBtn = btn("Save project"), loadProjectBtn = btn("Open project");
@@ -1664,7 +1052,7 @@ export async function initStudio(): Promise<void> {
       "Sample Rack": "Quick controls for the original drum voices and loaded samples.",
       "Drum Sequence": "Program the legacy eight-lane drum grid and adjust generated drum sounds.",
       "Synth + Piano Roll": "Design and sequence the built-in subtractive synth.",
-      "Patterns + Song": "Switch patterns live and order them into a linear song.",
+      "Session + Song": "Launch clips and scenes live, or order scenes into a linear song.",
       Devices: "Apply groove, macros and the modular master processing chain.",
       Mixer: "Set drum, synth and master levels, mute or solo channels, and adjust effects.",
       "Project + Export": "Save editable project data or render finished audio.",
@@ -1718,7 +1106,7 @@ export async function initStudio(): Promise<void> {
     const src = a.createBufferSource();
     src.buffer = b; src.loop = true; src.loopStart = 0; src.loopEnd = dur;
     src.playbackRate.value = Math.max(0.05, Math.min(8, Math.abs(rate)));
-    if (!scGain) { scGain = a.createGain(); scGain.gain.value = 0.9; scGain.connect(master!); }
+    if (!scGain) { scGain = a.createGain(); scGain.gain.value = 0.9; scGain.connect(engine.master!); }
     src.connect(scGain);
     const offset = dir > 0 ? scPos : dur - scPos;
     src.start(0, Math.max(0, Math.min(dur - 0.001, offset)));
@@ -1768,8 +1156,8 @@ export async function initStudio(): Promise<void> {
     section("Drum Sequence", beat), section("Synth + Piano Roll", synthPanel),
   );
   arrangeWorkspace.append(
-    hint("Turn loops into a track.", "Launch patterns for live testing, then set the eight song slots and enable Song mode."),
-    section("Patterns + Song", song),
+    hint("Turn loops into a track.", "Launch clips per track or whole scenes, then chain scenes and enable Song mode."),
+    section("Session + Song", song),
   );
   mixWorkspace.append(
     hint("Finish and preserve it.", "Shape the device chain, set levels, save an editable project, then export the audio."),
@@ -1781,7 +1169,7 @@ export async function initStudio(): Promise<void> {
   const inspector = el("aside", "wa-inspector");
   inspector.append(el("div", "wa-inspector-title", "SELECTED PAD"), selectedPadLabel, selectedSampleEditor);
   const workarea = el("div", "wa-workarea"); workarea.append(panels, inspector);
-  win.append(titleBar, lcd, tabbar, transport, workarea, rackOverlay, rackDrawer);
+  win.append(titleBar, lcd, tabbar, transportBar, workarea, rackOverlay, rackDrawer);
   root.append(win);
   paintTabs();
 
@@ -1802,11 +1190,11 @@ export async function initStudio(): Promise<void> {
     { workspace: 0, target: waveform, title: "Chop a break", text: "Load or record audio, choose equal, transient or manual slicing, then assign the slices to the active pad bank." },
     { workspace: 1, target: eventLane, title: "Sequence pad events", text: "Drag across the lane to paint or erase hits. Use velocity, chance, microtiming and ratchets to make the pattern move." },
     { workspace: 1, target: pianoRoll, title: "Add musical parts", text: "Program synth notes in the piano roll or play them from the on-screen and computer keyboards." },
-    { workspace: 2, target: launcher, title: "Test pattern changes", text: "Launch patterns while playback runs. Changes wait until the next bar so transitions remain in time." },
-    { workspace: 2, target: chain, title: "Arrange the song", text: "Choose a pattern for each song slot, then enable Song mode in the transport to play the full chain." },
+    { workspace: 2, target: sessionGrid, title: "Launch clips and scenes", text: "Each column is a track and each row a scene. Launch single clips or a whole row — changes wait for the next bar so transitions stay in time." },
+    { workspace: 2, target: chain, title: "Arrange the song", text: "Choose a scene for each song slot, then enable Song mode in the transport to play the full chain." },
     { workspace: 3, target: devicePanel, title: "Process the sound", text: "Use macros, groove controls and device bypass switches to shape the complete signal chain." },
     { workspace: 3, target: exp, title: "Save and export", text: "Save an editable project before exporting. WAV preserves full quality; MP3 is smaller for sharing." },
-    { workspace: 3, target: transport, title: "Transport stays available", text: "Playback, BPM, pattern/song mode, undo and tutorial controls remain visible in every workspace." },
+    { workspace: 3, target: transportBar, title: "Transport stays available", text: "Playback, BPM, session/song mode, undo and tutorial controls remain visible in every workspace." },
   ];
   let tutorialIndex = 0, tutorialTarget: HTMLElement | null = null;
   function closeTutorial(): void {
@@ -1833,13 +1221,20 @@ export async function initStudio(): Promise<void> {
   tutorialShade.addEventListener("click", closeTutorial);
   tutorialBtn.addEventListener("click", () => showTutorialStep(0));
 
-  // ── Transport logic ──
-  function refreshVisibleState(): void {
-    cells.forEach((row, r) => row.forEach((cell, step) => {
-      const on = allPats[curPat][r][step]; cell.classList.toggle("on", on);
-      if (on) setCellOpacity(cell, allVels[curPat][r][step]); else cell.style.opacity = "";
+  // ── Scene selection + repaint ──
+  function selectScene(scene: number): void {
+    clip.sel = Math.max(0, Math.min(SCENES - 1, scene));
+    sceneBtns.forEach((b, i) => b.classList.toggle("active", i === clip.sel));
+    cells.forEach((row, r) => row.forEach((cell, c) => {
+      const on = allPats[clip.sel][r][c]; cell.classList.toggle("on", on);
+      if (on) setCellOpacity(cell, allVels[clip.sel][r][c]); else cell.style.opacity = "";
     }));
-    synthCells.forEach((row, r) => row.forEach((cell, step) => cell.classList.toggle("on", synthPats[curPat][r][step])));
+    synthCells.forEach((row, r) => row.forEach((cell, c) => cell.classList.toggle("on", synthPats[clip.sel][r][c])));
+    paintEventLane();
+    paintSession();
+  }
+  function refreshVisibleState(): void {
+    selectScene(clip.sel);
     chainSelects.forEach((select, i) => { select.value = String(songChain[i]); });
     paintMpcPads(); paintEventLane(); applyFxState();
   }
@@ -1854,16 +1249,16 @@ export async function initStudio(): Promise<void> {
     undoBtn.disabled = false; redoBtn.disabled = redoStack.length === 0;
   });
   function setBpm(v: number): void {
-    bpm = Math.max(40, Math.min(240, v));
-    bpmLabel.textContent = String(bpm); lcdBpm.textContent = `${bpm} BPM`;
+    transport.bpm = Math.max(40, Math.min(240, v));
+    bpmLabel.textContent = String(transport.bpm); lcdBpm.textContent = `${transport.bpm} BPM`;
   }
-  bpmDown.addEventListener("click", () => setBpm(bpm - 1));
-  bpmUp.addEventListener("click", () => setBpm(bpm + 1));
-  swingIn.addEventListener("input", () => { swing = Number(swingIn.value); });
-  metroBtn.addEventListener("click", () => { metro = !metro; metroBtn.classList.toggle("active", metro); });
+  bpmDown.addEventListener("click", () => setBpm(transport.bpm - 1));
+  bpmUp.addEventListener("click", () => setBpm(transport.bpm + 1));
+  swingIn.addEventListener("input", () => { transport.swing = Number(swingIn.value); });
+  metroBtn.addEventListener("click", () => { transport.metro = !transport.metro; metroBtn.classList.toggle("active", transport.metro); });
   songBtn.addEventListener("click", () => {
-    songMode = !songMode; songBtn.textContent = songMode ? "Song" : "Pattern"; songBtn.classList.toggle("active", songMode);
-    renderSel.value = songMode ? "song" : "pattern"; saveAll();
+    transport.songMode = !transport.songMode; songBtn.textContent = transport.songMode ? "Song" : "Session"; songBtn.classList.toggle("active", transport.songMode);
+    renderSel.value = transport.songMode ? "song" : "pattern"; saveAll();
   });
   const flipBackdrop = el("div", "wa-flip-backdrop");
   const flipExit = el("div", "wa-flip-exit"); flipExit.textContent = "✕ Exit";
@@ -1876,78 +1271,111 @@ export async function initStudio(): Promise<void> {
   rotBtn.addEventListener("click", () => setFlip(!win.classList.contains("wa-rotated")));
   flipExit.addEventListener("click", () => setFlip(false));
 
+  // ── Transport / scheduler ──
   let playing = false, schedTimer = 0, nextTime = 0, schStep = 0, songPos = 0, lastHi = -1, lastStepStartedMs = 0;
-  function highlight(s: number, playingPat: number): void {
+  function highlight(s: number): void {
     if (lastHi >= 0) for (let r = 0; r < 8; r++) cells[r][lastHi].classList.remove("play");
     if (lastHi >= 0) synthCells.forEach((row) => row[lastHi].classList.remove("play"));
-    if (playingPat === curPat) {
-      for (let r = 0; r < 8; r++) cells[r][s].classList.add("play");
-      synthCells.forEach((row) => row[s].classList.add("play"));
-    }
+    if (clip.play.drums === clip.sel) for (let r = 0; r < 8; r++) cells[r][s].classList.add("play");
+    if (clip.play.synth === clip.sel) synthCells.forEach((row) => row[s].classList.add("play"));
     lastStepStartedMs = performance.now();
     lastHi = s; lcdState.textContent = `▶ ${String(s + 1).padStart(2, "0")}`;
   }
-  function scheduleStep(s: number, baseWhen: number, playingPat: number): void {
+  function scheduleStep(s: number, baseWhen: number): void {
     const a = ac();
     const groove = s % 2 === 1 ? rackState.grooveTiming * stepDur() * 0.5 : 0;
     const random = (Math.random() * 2 - 1) * rackState.grooveRandom / 1000;
-    const when = baseWhen + (s % 2 === 1 ? swing * stepDur() : 0) + groove + random;
-    for (let r = 0; r < 8; r++) {
-      if (allPats[playingPat][r][s] && audible(r)) playDrum(a, trackGain[r], r, allVels[playingPat][r][s] / 127, when);
+    const when = baseWhen + (s % 2 === 1 ? transport.swing * stepDur() : 0) + groove + random;
+    const drumClip = clip.play.drums, padClip = clip.play.pads, synthClip = clip.play.synth;
+    if (drumClip !== null) {
+      for (let r = 0; r < 8; r++) {
+        if (allPats[drumClip][r][s] && audible(r)) playDrum(a, trackGain[r], r, allVels[drumClip][r][s] / 127, when);
+      }
     }
-    padEvents[playingPat].filter((event) => event.step === s).forEach((event) => {
-      if (Math.random() * 100 > event.probability) return;
-      const velocity = Math.max(1, Math.min(127, event.velocity * (1 + (Math.random() * 2 - 1) * rackState.grooveVelocity)));
-      const ratchets = Math.max(1, event.ratchets), spacing = stepDur() / ratchets;
-      for (let i = 0; i < ratchets; i++) {
-        const eventWhen = Math.max(baseWhen, when + event.offset / 1000 + i * spacing);
-        playPad(a, event.pad, velocity, eventWhen, event.pad % PAD_BANK_SIZE);
-        if (rackState.noteEcho > 0) for (let echo = 1; echo <= rackState.noteEcho; echo++) {
-          playPad(a, event.pad, velocity * Math.pow(rackState.echoDecay, echo), eventWhen + echo * stepDur(), event.pad % PAD_BANK_SIZE);
+    if (padClip !== null) {
+      padEvents[padClip].filter((event) => event.step === s).forEach((event) => {
+        if (Math.random() * 100 > event.probability) return;
+        const velocity = Math.max(1, Math.min(127, event.velocity * (1 + (Math.random() * 2 - 1) * rackState.grooveVelocity)));
+        const ratchets = Math.max(1, event.ratchets), spacing = stepDur() / ratchets;
+        for (let i = 0; i < ratchets; i++) {
+          const eventWhen = Math.max(baseWhen, when + event.offset / 1000 + i * spacing);
+          playPad(a, event.pad, velocity, eventWhen, event.pad % PAD_BANK_SIZE);
+          if (rackState.noteEcho > 0) for (let echo = 1; echo <= rackState.noteEcho; echo++) {
+            playPad(a, event.pad, velocity * Math.pow(rackState.echoDecay, echo), eventWhen + echo * stepDur(), event.pad % PAD_BANK_SIZE);
+          }
         }
+      });
+    }
+    if (synthClip !== null) {
+      PIANO_NOTES.forEach((note, r) => {
+        if (synthPats[synthClip][r][s]) playSynthStep(a, engine.synthGain!, note, when, stepDur() * 0.9, 0.55);
+      });
+    }
+    if (transport.metro && s % 4 === 0) metroClick(a, engine.master!, baseWhen, s === 0);
+    window.setTimeout(() => { if (playing) highlight(s); }, Math.max(0, (baseWhen - a.currentTime) * 1000));
+  }
+  function applyQueued(): boolean {
+    let changed = false;
+    TRACKS.forEach((track) => {
+      if (clip.queued[track] !== undefined) {
+        clip.play[track] = clip.queued[track] as number | null;
+        clip.queued[track] = undefined;
+        changed = true;
       }
     });
-    PIANO_NOTES.forEach((note, r) => {
-      if (synthPats[playingPat][r][s]) playSynthStep(a, synthGain!, note, when, stepDur() * 0.9, 0.55);
-    });
-    if (metro && s % 4 === 0) metroClick(a, master!, baseWhen, s === 0);
-    window.setTimeout(() => { if (playing) highlight(s, playingPat); }, Math.max(0, (baseWhen - a.currentTime) * 1000));
+    return changed;
   }
   function scheduler(): void {
     const a = ac();
     while (nextTime < a.currentTime + 0.1) {
-      scheduleStep(schStep, nextTime, songMode ? songChain[songPos] : curPat);
+      scheduleStep(schStep, nextTime);
       nextTime += stepDur();
       schStep++;
       if (schStep >= STEPS) {
         schStep = 0;
-        if (queuedPat !== null) {
-          curPat = queuedPat; patBtns[curPat].click(); songMode = false;
-          songBtn.textContent = "Pattern"; songBtn.classList.remove("active"); renderSel.value = "pattern";
-          launchStatus.textContent = `Pattern ${PAT_LABELS[curPat]} playing`; queuedPat = null;
-        } else if (songMode) songPos = (songPos + 1) % SONG_SLOTS;
+        const launched = applyQueued();
+        if (launched) {
+          transport.songMode = false;
+          songBtn.textContent = "Session"; songBtn.classList.remove("active"); renderSel.value = "pattern";
+          launchStatus.textContent = "Launched";
+        } else if (transport.songMode) {
+          songPos = (songPos + 1) % SONG_SLOTS;
+          const scene = songChain[songPos];
+          TRACKS.forEach((track) => { clip.play[track] = scene; });
+        }
+        paintSession();
       }
     }
   }
   playBtn.addEventListener("click", () => {
     if (playing) return;
-    ensureNodes(); playing = true; schStep = 0; songPos = 0; nextTime = ac().currentTime + 0.06;
+    ensureNodes(); playing = true; schStep = 0; songPos = 0;
+    applyQueued();
+    if (transport.songMode) { const scene = songChain[0]; TRACKS.forEach((track) => { clip.play[track] = scene; }); }
+    paintSession();
+    nextTime = ac().currentTime + 0.06;
     schedTimer = window.setInterval(scheduler, 25);
   });
   stopBtn.addEventListener("click", () => {
     playing = false; if (schedTimer) { clearInterval(schedTimer); schedTimer = 0; }
     if (lastHi >= 0) for (let r = 0; r < 8; r++) cells[r][lastHi].classList.remove("play");
     synthCells.forEach((row) => row.forEach((cell) => cell.classList.remove("play")));
+    TRACKS.forEach((track) => { clip.queued[track] = undefined; });
+    paintSession();
     lastHi = -1; lcdState.textContent = "■ STOP";
   });
 
   // ── Export logic ──
   async function renderBuffer(mode: "pattern" | "song"): Promise<AudioBuffer> {
     ensureNodes();
-    const patterns = mode === "song" ? [...songChain] : [curPat];
-    const sr = 44100, sd = 60 / bpm / 4, dur = patterns.length * STEPS * sd + 2.2;
+    const sr = 44100, sd = 60 / transport.bpm / 4;
+    // Song mode renders whole scenes; clip mode renders the launched per-track clips once.
+    const scenes = mode === "song" ? [...songChain] : [0];
+    const clipFor = (track: TrackId, sceneIndex: number): number | null =>
+      mode === "song" ? scenes[sceneIndex] : clip.play[track];
+    const dur = scenes.length * STEPS * sd + 2.2;
     const off = new OfflineAudioContext(2, Math.ceil(dur * sr), sr);
-    const om = off.createGain(); om.gain.value = master!.gain.value;
+    const om = off.createGain(); om.gain.value = engine.master!.gain.value;
     const ol = off.createBiquadFilter(); ol.type = "lowshelf"; ol.frequency.value = 180; ol.gain.value = rackState.devices.eq ? fx.low : 0;
     const omi = off.createBiquadFilter(); omi.type = "peaking"; omi.frequency.value = 1200; omi.Q.value = 0.8; omi.gain.value = rackState.devices.eq ? fx.mid : 0;
     const oh = off.createBiquadFilter(); oh.type = "highshelf"; oh.frequency.value = 6500; oh.gain.value = rackState.devices.eq ? fx.high : 0;
@@ -1971,25 +1399,26 @@ export async function initStudio(): Promise<void> {
     const ot: GainNode[] = [];
     for (let i = 0; i < 8; i++) { const g = off.createGain(); g.gain.value = trackGain[i].gain.value; g.connect(om); ot.push(g); }
     const osf = off.createBiquadFilter(); osf.type = "lowpass"; osf.frequency.value = synth.cutoff; osf.Q.value = synth.q;
-    const osg = off.createGain(); osg.gain.value = synthGain!.gain.value; osg.connect(osf); osf.connect(om);
-    patterns.forEach((pattern, patternIndex) => { for (let s = 0; s < STEPS; s++) {
-      const base = (patternIndex * STEPS + s) * sd;
+    const osg = off.createGain(); osg.gain.value = engine.synthGain!.gain.value; osg.connect(osf); osf.connect(om);
+    scenes.forEach((_, sceneIndex) => { for (let s = 0; s < STEPS; s++) {
+      const base = (sceneIndex * STEPS + s) * sd;
       const groove = s % 2 === 1 ? rackState.grooveTiming * sd * 0.5 : 0;
-      const when = base + (s % 2 === 1 ? swing * sd : 0) + groove;
-      for (let r = 0; r < 8; r++) {
-        if (allPats[pattern][r][s] && audible(r)) playDrum(off, ot[r], r, allVels[pattern][r][s] / 127, when);
+      const when = base + (s % 2 === 1 ? transport.swing * sd : 0) + groove;
+      const drumClip = clipFor("drums", sceneIndex), padClip = clipFor("pads", sceneIndex), synthClip = clipFor("synth", sceneIndex);
+      if (drumClip !== null) for (let r = 0; r < 8; r++) {
+        if (allPats[drumClip][r][s] && audible(r)) playDrum(off, ot[r], r, allVels[drumClip][r][s] / 127, when);
       }
-      padEvents[pattern].filter((event) => event.step === s).forEach((event) => {
+      if (padClip !== null) padEvents[padClip].filter((event) => event.step === s).forEach((event) => {
         if (Math.random() * 100 > event.probability) return;
         const ratchets = Math.max(1, event.ratchets), spacing = sd / ratchets;
         for (let i = 0; i < ratchets; i++) {
           playPad(off, event.pad, event.velocity, Math.max(base, when + event.offset / 1000 + i * spacing), event.pad % PAD_BANK_SIZE, ot[event.pad % ot.length]);
         }
       });
-      PIANO_NOTES.forEach((note, r) => {
-        if (synthPats[pattern][r][s]) playSynthStep(off, osg, note, when, sd * 0.9, 0.55);
+      if (synthClip !== null) PIANO_NOTES.forEach((note, r) => {
+        if (synthPats[synthClip][r][s]) playSynthStep(off, osg, note, when, sd * 0.9, 0.55);
       });
-      if (metro && s % 4 === 0) metroClick(off, om, base, s === 0);
+      if (transport.metro && s % 4 === 0) metroClick(off, om, base, s === 0);
     } });
     return off.startRendering();
   }
@@ -1997,8 +1426,8 @@ export async function initStudio(): Promise<void> {
     wavBtn.setAttribute("disabled", "1"); mp3Btn.setAttribute("disabled", "1"); expStatus.textContent = "Rendering…";
     try {
       const buf = await renderBuffer(renderSel.value as "pattern" | "song");
-      if (fmt === "wav") { download(`vishamp-${bpm}bpm.wav`, encodeWav(buf)); }
-      else { expStatus.textContent = "Encoding MP3…"; download(`vishamp-${bpm}bpm.mp3`, await encodeMp3(buf)); }
+      if (fmt === "wav") { download(`vishamp-${transport.bpm}bpm.wav`, encodeWav(buf)); }
+      else { expStatus.textContent = "Encoding MP3…"; download(`vishamp-${transport.bpm}bpm.mp3`, await encodeMp3(buf)); }
       expStatus.textContent = "Saved ✓";
     } catch { expStatus.textContent = fmt === "mp3" ? "MP3 failed — try WAV." : "Export failed."; }
     finally {
@@ -2009,7 +1438,7 @@ export async function initStudio(): Promise<void> {
   wavBtn.addEventListener("click", () => doExport("wav"));
   mp3Btn.addEventListener("click", () => doExport("mp3"));
   saveProjectBtn.addEventListener("click", () => {
-    download(`vishamp-project-${bpm}bpm.json`, new Blob([JSON.stringify(projectState())], { type: "application/json" }));
+    download(`vishamp-project-${transport.bpm}bpm.json`, new Blob([JSON.stringify(projectState())], { type: "application/json" }));
   });
   loadProjectBtn.addEventListener("click", () => projectInput.click());
   projectInput.addEventListener("change", async () => {
@@ -2054,6 +1483,9 @@ export async function initStudio(): Promise<void> {
     const n = keyMap[ev.key.toLowerCase()]; if (!n) return;
     downSet.delete(n); noteOff(n); highlightKey(synthKeys, n, false);
   });
+
+  // Initial paint reflects loaded project state (scene selection, session grid).
+  selectScene(clip.sel);
 }
 
 // ─── Key builders ─────────────────────────────────────────────────────────────
@@ -2081,41 +1513,4 @@ function bindKey(key: HTMLElement, note: string): void {
 function highlightKey(host: HTMLElement, note: string, on: boolean): void {
   const k = host.querySelector<HTMLElement>(`[data-note="${CSS.escape(note)}"]`);
   if (k) k.classList.toggle("down", on);
-}
-
-// ─── Encoders ─────────────────────────────────────────────────────────────────
-function encodeWav(buf: AudioBuffer): Blob {
-  const ch = buf.numberOfChannels, len = buf.length, sr = buf.sampleRate;
-  const out = new ArrayBuffer(44 + len * ch * 2); const dv = new DataView(out); let p = 0;
-  const str = (s: string) => { for (let i = 0; i < s.length; i++) dv.setUint8(p++, s.charCodeAt(i)); };
-  const u16 = (v: number) => { dv.setUint16(p, v, true); p += 2; };
-  const u32 = (v: number) => { dv.setUint32(p, v, true); p += 4; };
-  str("RIFF"); u32(36 + len * ch * 2); str("WAVE"); str("fmt "); u32(16); u16(1); u16(ch); u32(sr); u32(sr * ch * 2); u16(ch * 2); u16(16); str("data"); u32(len * ch * 2);
-  const chans: Float32Array[] = []; for (let c = 0; c < ch; c++) chans.push(buf.getChannelData(c));
-  for (let i = 0; i < len; i++) for (let c = 0; c < ch; c++) {
-    const s = Math.max(-1, Math.min(1, chans[c][i])); dv.setInt16(p, s < 0 ? s * 0x8000 : s * 0x7FFF, true); p += 2;
-  }
-  return new Blob([out], { type: "audio/wav" });
-}
-function floatTo16(f: Float32Array): Int16Array {
-  const out = new Int16Array(f.length);
-  for (let i = 0; i < f.length; i++) { const s = Math.max(-1, Math.min(1, f[i])); out[i] = s < 0 ? s * 0x8000 : s * 0x7FFF; }
-  return out;
-}
-async function encodeMp3(buf: AudioBuffer): Promise<Blob> {
-  const mod = (await import("lamejs")) as unknown as { Mp3Encoder?: unknown; default?: unknown };
-  const Enc = (mod.Mp3Encoder ?? (mod.default as { Mp3Encoder?: unknown })?.Mp3Encoder ?? mod.default) as new (...a: unknown[]) => {
-    encodeBuffer(l: Int16Array, r: Int16Array): Uint8Array;
-    flush(): Uint8Array;
-  };
-  const enc = new Enc(2, buf.sampleRate, 192);
-  const l = floatTo16(buf.getChannelData(0));
-  const r = floatTo16(buf.numberOfChannels > 1 ? buf.getChannelData(1) : buf.getChannelData(0));
-  const block = 1152, data: Uint8Array[] = [];
-  for (let i = 0; i < l.length; i += block) {
-    const mp3 = enc.encodeBuffer(l.subarray(i, i + block), r.subarray(i, i + block));
-    if (mp3.length) data.push(new Uint8Array(mp3));
-  }
-  const end = enc.flush(); if (end.length) data.push(new Uint8Array(end));
-  return new Blob(data as BlobPart[], { type: "audio/mpeg" });
 }

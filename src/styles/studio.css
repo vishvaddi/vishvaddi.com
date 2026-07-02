@@ -766,3 +766,52 @@
   .wa-mixer { gap: 16px; padding: 5px 0; }
   .wa-waveform { height: 110px; }
 }
+
+/* == Session view (tracks x scenes clip grid) == */
+.wa-session {
+  display: grid; gap: 6px; margin: 12px 0; padding: 11px;
+  background: var(--wa-surface);
+  border: 1px solid var(--wa-border);
+  border-radius: var(--wa-radius-sm);
+}
+.wa-session-row {
+  display: grid; grid-template-columns: 86px repeat(3, minmax(72px, 1fr)); gap: 6px; align-items: stretch;
+}
+.wa-session-head { margin-bottom: 2px; }
+.wa-session-scene {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.1em; color: var(--wa-muted);
+  align-self: center; padding-left: 2px;
+}
+.wa-clip-stop {
+  font-family: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; cursor: pointer;
+  color: var(--wa-muted); background: var(--wa-surface-2);
+  border: 1px solid var(--wa-border-2); border-radius: var(--wa-radius-sm);
+  padding: 7px 8px;
+  transition: background 110ms ease, color 110ms ease, border-color 110ms ease;
+}
+.wa-clip-stop:hover { background: var(--wa-surface-3); color: var(--wa-text); }
+.wa-session .wa-scene-launch { min-width: 0; padding: 7px 8px; }
+.wa-session .wa-scene-launch.active { outline: 2px solid var(--wa-accent-dim); outline-offset: 1px; }
+.wa-clip {
+  position: relative; min-height: 34px; cursor: pointer;
+  background: var(--wa-surface-2);
+  border: 1px solid var(--wa-border-2); border-radius: var(--wa-radius-sm);
+  transition: background 110ms ease, border-color 110ms ease;
+}
+.wa-clip:hover { background: var(--wa-surface-3); }
+.wa-clip::before {
+  content: ""; position: absolute; inset: 0; margin: auto;
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 1px solid var(--wa-border-2); opacity: 0.6;
+}
+.wa-clip.has::before { background: var(--wa-muted); border-color: var(--wa-muted); opacity: 0.9; }
+.wa-clip.sel { border-color: var(--wa-accent-dim); }
+.wa-clip.armed.has::before { background: var(--wa-amber); border-color: var(--wa-amber); }
+.wa-clip.playing { border-color: var(--wa-accent); background: rgba(47, 227, 166, 0.12); }
+.wa-clip.playing.has::before { background: var(--wa-accent); border-color: var(--wa-accent); }
+.wa-clip.queued { border-color: var(--wa-amber); animation: wa-clip-blink 0.7s linear infinite alternate; }
+.wa-clip.queued::before { background: var(--wa-amber); border-color: var(--wa-amber); }
+@keyframes wa-clip-blink { from { background: var(--wa-surface-2); } to { background: rgba(255, 196, 66, 0.18); } }
+@media (max-width: 760px) {
+  .wa-session-row { grid-template-columns: 64px repeat(3, minmax(0, 1fr)); }
+}
