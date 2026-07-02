@@ -64,7 +64,6 @@ const TILE_RE = /^\/api\/poi\/tiles\/(\d+)\/(\d+)\/(\d+)$/;
 const UA = "vishvaddi.com field-survival tool (personal, low volume)";
 const MAX_FEED_BYTES = 2_000_000;
 const MAX_ICY_BYTES = 1_000_000;
-const MAX_FOLKTEXT_BYTES = 1_500_000;
 const GUTENBERG_OPDS = "https://www.gutenberg.org/ebooks/search.opds/";
 
 function isBlockedHost(hostname: string): boolean {
@@ -408,87 +407,6 @@ export default {
           { results, next: results.length === limit ? String(offset + limit) : null },
           { headers: { "Cache-Control": "public, max-age=900" } },
         );
-      } catch {
-        return Response.json({ results: [] }, { status: 504 });
-      }
-    }
-
-    if (path === "/api/folktext" && request.method === "GET") {
-      const target = publicHttpsUrl(url.searchParams.get("url") || "");
-      if (!target || target.hostname !== "sites.pitt.edu" || !target.pathname.startsWith("/~dash/")) {
-        return new Response("bad url", { status: 400 });
-      }
-      try {
-        const upstream = await fetchPublic(target, {
-          headers: { "User-Agent": UA, "Accept": "text/html, text/plain;q=0.8" },
-          signal: AbortSignal.timeout(15000),
-          cf: { cacheTtl: 86400, cacheEverything: true },
-        } as RequestInit);
-        if (!upstream.ok) return new Response("upstream error", { status: 502 });
-        const len = Number(upstream.headers.get("Content-Length") || "0");
-        if (len > MAX_FOLKTEXT_BYTES) return new Response("folktext too large", { status: 413 });
-        const html = await upstream.text();
-        if (html.length > MAX_FOLKTEXT_BYTES) return new Response("folktext too large", { status: 413 });
-        return new Response(htmlToReadableText(html), {
-          status: 200,
-          headers: {
-            "Content-Type": "text/plain; charset=utf-8",
-            "Cache-Control": "public, max-age=86400",
-          },
-        });
-      } catch {
-        return new Response("fetch failed", { status: 504 });
-      }
-    }
-
-    // Wikisource proxy — search via the MediaWiki API, and fetch a page's plain
-    // text. Wikimedia exposes an open API (no bot challenge), so this is the
-    // reliable searchable public-domain source. Sacred-Texts, by contrast, sits
-    // behind a Cloudflare bot challenge and can't be proxied at all.
-    if (path === "/api/wikisource" && request.method === "GET") {
-      const api = "https://en.wikisource.org/w/api.php";
-      const title = url.searchParams.get("title");
-      try {
-        if (title) {
-          const u = new URL(api);
-          u.searchParams.set("action", "query");
-          u.searchParams.set("prop", "extracts");
-          u.searchParams.set("explaintext", "1");
-          u.searchParams.set("redirects", "1");
-          u.searchParams.set("titles", title);
-          u.searchParams.set("format", "json");
-          const r = await fetch(u, {
-            headers: { "User-Agent": UA },
-            signal: AbortSignal.timeout(15000),
-            cf: { cacheTtl: 86400, cacheEverything: true },
-          } as RequestInit);
-          if (!r.ok) return new Response("upstream error", { status: 502 });
-          const j = (await r.json()) as { query?: { pages?: Record<string, { extract?: string }> } };
-          const first = Object.values(j.query?.pages || {})[0] || {};
-          const text = (first.extract || "").trim();
-          if (!text) return new Response("no readable text", { status: 404 });
-          return new Response(text, {
-            status: 200,
-            headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" },
-          });
-        }
-        const query = (url.searchParams.get("query") || "").trim() || "fairy tale";
-        const u = new URL(api);
-        u.searchParams.set("action", "query");
-        u.searchParams.set("list", "search");
-        u.searchParams.set("srsearch", query);
-        u.searchParams.set("srnamespace", "0");
-        u.searchParams.set("srlimit", "40");
-        u.searchParams.set("format", "json");
-        const r = await fetch(u, {
-          headers: { "User-Agent": UA },
-          signal: AbortSignal.timeout(15000),
-          cf: { cacheTtl: 600, cacheEverything: true },
-        } as RequestInit);
-        if (!r.ok) return Response.json({ results: [] }, { status: 502 });
-        const j = (await r.json()) as { query?: { search?: Array<{ title: string }> } };
-        const results = (j.query?.search || []).map((x) => ({ title: x.title }));
-        return Response.json({ results }, { headers: { "Cache-Control": "public, max-age=600" } });
       } catch {
         return Response.json({ results: [] }, { status: 504 });
       }

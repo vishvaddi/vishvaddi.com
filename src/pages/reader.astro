@@ -239,17 +239,10 @@ import Base from "../layouts/Base.astro";
 
   <div class="reader-wrap">
     <div id="library-ui">
-      <div id="shelf-section" style="display:none">
-        <p class="shelf-heading">Downloaded — available offline</p>
-        <div id="shelf-grid" class="book-grid"></div>
-        <p class="shelf-heading">Library</p>
-      </div>
       <div class="search-bar">
         <select id="source-select" aria-label="Library source">
           <option value="gutenberg">Project Gutenberg</option>
           <option value="librivox">LibriVox audiobooks</option>
-          <option value="folktexts">Ashliman folktexts</option>
-          <option value="wikisource">Wikisource</option>
         </select>
         <input type="text" id="search-input" placeholder="Search Project Gutenberg…" />
         <button id="search-btn">Search</button>
@@ -275,7 +268,6 @@ import Base from "../layouts/Base.astro";
           <button id="font-dec" class="rh-icon" title="Smaller text" aria-label="Smaller text">A−</button>
           <button id="font-inc" class="rh-icon" title="Larger text" aria-label="Larger text">A+</button>
           <button id="fs-btn" title="Full screen">⛶ Full screen</button>
-          <button id="save-btn" title="Keep available offline">↓ Save offline</button>
           <button id="dl-btn" title="Download the book as a text file">⬇ Download</button>
           <button id="settings-btn" title="Display settings">Aa</button>
         </div>
@@ -307,13 +299,6 @@ import Base from "../layouts/Base.astro";
             <option value="#faf7f0,#3a2e20">Parchment</option>
             <option value="#fff,#1a1a1a">White</option>
             <option value="#1c1c14,#d4c9a8">Dark</option>
-          </select>
-        </div>
-        <div class="rs-group">
-          <label for="rs-sound">Sound</label>
-          <select id="rs-sound">
-            <option value="1">On</option>
-            <option value="0">Off</option>
           </select>
         </div>
       </div>

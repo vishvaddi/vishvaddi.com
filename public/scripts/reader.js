@@ -33,33 +33,7 @@ function $(id) { return document.getElementById(id); }
 var SOURCE_META = {
   gutenberg: { label: "Project Gutenberg", placeholder: "Search Project Gutenberg…" },
   librivox: { label: "LibriVox audiobooks", placeholder: "Search LibriVox audiobooks…" },
-  folktexts: { label: "Ashliman folktexts", placeholder: "Search folk and fairy tales…" },
-  wikisource: { label: "Wikisource", placeholder: "Search Wikisource…" },
 };
-
-var FOLKTEXTS = [
-  // Classic fairy tales
-  { id: "ashliman-grimm", title: "Grimm Brothers' Children's and Household Tales", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/grimm.html" },
-  { id: "ashliman-cinderella", title: "Cinderella Tales", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0510a.html" },
-  { id: "ashliman-beauty", title: "Beauty and the Beast", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/beauty.html" },
-  { id: "ashliman-snowwhite", title: "Snow White", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0709.html" },
-  { id: "ashliman-sleeping", title: "Sleeping Beauty", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0410.html" },
-  { id: "ashliman-redridinghood", title: "Little Red Riding Hood", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0333.html" },
-  { id: "ashliman-hanselgretel", title: "Hansel and Gretel", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0327.html" },
-  { id: "ashliman-rapunzel", title: "Rapunzel", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0310.html" },
-  { id: "ashliman-bluebeard", title: "Bluebeard", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0312.html" },
-  { id: "ashliman-rumpelstiltskin", title: "Rumpelstiltskin", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/type0500.html" },
-  { id: "ashliman-frogking", title: "The Frog King", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/frogking.html" },
-  // Fables
-  { id: "ashliman-aesop", title: "Aesop's Fables", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/aesop.html" },
-  // Myth, legend and the supernatural
-  { id: "ashliman-creation", title: "Creation Myths", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/creation.html" },
-  { id: "ashliman-arthur", title: "King Arthur Legends", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/arthur.html" },
-  { id: "ashliman-stars", title: "Star Lore and Myths", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/stars.html" },
-  { id: "ashliman-werewolf", title: "Werewolf Legends", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/werewolf.html" },
-  { id: "ashliman-vampire", title: "Vampire Legends", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/vampire.html" },
-  { id: "ashliman-legends", title: "Folktexts: Legends, Folklore, Mythology", author: "D. L. Ashliman", url: "https://sites.pitt.edu/~dash/folktexts.html" },
-];
 
 function shuffleArray(list) {
   var out = list.slice();
@@ -81,86 +55,6 @@ function restorePosition(bookId) {
   var frac = 0;
   try { frac = parseFloat(localStorage.getItem("reader-pos-" + bookId)) || 0; } catch (_) {}
   return snapSpread(Math.round(frac * pages.length));
-}
-
-/* ── Offline shelf (IndexedDB) — survives cache eviction, visible to the user ── */
-function openShelfDB() {
-  return new Promise(function (resolve, reject) {
-    var req = indexedDB.open("reader-shelf", 1);
-    req.onupgradeneeded = function () { req.result.createObjectStore("books", { keyPath: "id" }); };
-    req.onsuccess = function () { resolve(req.result); };
-    req.onerror = function () { reject(req.error); };
-  });
-}
-function shelfOp(mode, fn) {
-  return openShelfDB().then(function (db) {
-    return new Promise(function (resolve, reject) {
-      var tx = db.transaction("books", mode);
-      var req = fn(tx.objectStore("books"));
-      tx.oncomplete = function () { resolve(req ? req.result : undefined); };
-      tx.onerror = function () { reject(tx.error); };
-    });
-  });
-}
-function shelfAll() { return shelfOp("readonly", function (s) { return s.getAll(); }); }
-function shelfGet(id) { return shelfOp("readonly", function (s) { return s.get(id); }); }
-function shelfPut(rec) { return shelfOp("readwrite", function (s) { return s.put(rec); }); }
-function shelfRemove(id) { return shelfOp("readwrite", function (s) { return s.delete(id); }); }
-
-function updateSaveBtn(saved, disabled) {
-  var btn = $("save-btn");
-  btn.textContent = saved ? "✓ Saved offline" : "↓ Save offline";
-  btn.disabled = !!disabled;
-}
-
-function renderShelf() {
-  shelfAll().then(function (recs) {
-    var section = $("shelf-section");
-    var grid = $("shelf-grid");
-    grid.innerHTML = "";
-    if (!recs || !recs.length) {
-      section.style.display = "none";
-      return;
-    }
-    section.style.display = "block";
-    recs.sort(function (a, b) { return b.savedAt - a.savedAt; });
-    recs.forEach(function (r) {
-      var card = document.createElement("div");
-      card.className = "book-card shelf-card";
-
-      var del = document.createElement("button");
-      del.className = "bk-del";
-      del.textContent = "✕";
-      del.title = "Remove download";
-      del.addEventListener("click", function (e) {
-        e.stopPropagation();
-        shelfRemove(r.id).then(renderShelf);
-      });
-
-      var img = document.createElement("img");
-      img.alt = "";
-      img.loading = "lazy";
-      img.src = r.cover || COVER_PLACEHOLDER;
-      img.addEventListener("error", function () { img.src = COVER_PLACEHOLDER; });
-
-      var title = document.createElement("div");
-      title.className = "bk-title";
-      title.textContent = r.title;
-
-      var author = document.createElement("div");
-      author.className = "bk-author";
-      author.textContent = r.author;
-
-      card.appendChild(del);
-      card.appendChild(img);
-      card.appendChild(title);
-      card.appendChild(author);
-      card.addEventListener("click", function () {
-        openBook({ id: r.id, title: r.title, authors: [{ name: r.author }], formats: { "image/jpeg": r.cover } });
-      });
-      grid.appendChild(card);
-    });
-  }).catch(function () {});
 }
 
 function normaliseBooks(data) {
@@ -207,27 +101,6 @@ function normaliseLibriVox(data) {
       }).filter(function (s) { return !!s.url; }) : [],
     };
   }).filter(function (book) { return book.chapters.length; });
-}
-
-function localItems(source, q) {
-  var needle = (q || "").trim().toLowerCase();
-  return FOLKTEXTS
-    .filter(function (item) {
-      return !needle || (item.title + " " + item.author).toLowerCase().indexOf(needle) !== -1;
-    })
-    .map(function (item) {
-      return {
-        source: source,
-        kind: "text",
-        id: source + ":" + item.id,
-        rawId: item.id,
-        title: item.title,
-        author: item.author,
-        cover: COVER_PLACEHOLDER,
-        url: item.url,
-        license: "Source text from D. L. Ashliman's folktexts collection",
-      };
-    });
 }
 
 function loadAnnotations(bookId) {
@@ -292,18 +165,6 @@ async function searchSource(source, query, cursor, append) {
     libraryBooks = append ? libraryBooks.concat(lvIncoming) : lvIncoming;
     books = libraryBooks.slice();
     nextCursor = lvData.next || null;
-  } else if (source === "wikisource") {
-    var wsUrl = "/api/wikisource" + (query ? "?query=" + encodeURIComponent(query) : "");
-    var ws = await fetch(wsUrl);
-    if (!ws.ok) throw new Error(String(ws.status));
-    var wsData = await ws.json();
-    libraryBooks = normaliseWikisource(wsData);
-    books = libraryBooks.slice();
-    nextCursor = null;
-  } else {
-    libraryBooks = localItems(source, query);
-    books = libraryBooks.slice();
-    nextCursor = null;
   }
   updateLoadMore();
   renderGrid();
@@ -372,30 +233,6 @@ async function fetchBookText(textUrl) {
   }
 }
 
-async function fetchFolkText(url) {
-  var endpoint = "/api/folktext?url=" + encodeURIComponent(url);
-  return tryFetch(endpoint, 25000);
-}
-
-async function fetchWikisource(title) {
-  return tryFetch("/api/wikisource?title=" + encodeURIComponent(title), 25000);
-}
-
-function normaliseWikisource(data) {
-  return (data.results || []).map(function (item) {
-    return {
-      source: "wikisource",
-      kind: "text",
-      id: "wikisource:" + item.title,
-      title: item.title,
-      author: "Wikisource",
-      cover: COVER_PLACEHOLDER,
-      url: "https://en.wikisource.org/wiki/" + encodeURIComponent(item.title.replace(/ /g, "_")),
-      license: "Public domain text from Wikisource",
-    };
-  });
-}
-
 async function openBook(b) {
   if (b.kind === "audio") {
     return openAudioBook(b);
@@ -411,7 +248,6 @@ async function openBook(b) {
     return openLinkBook(b);
   }
   currentBook = b;
-  loadPageSound();
   currentRawText = null;
   loadAnnotations(String(b.id));
   $("book-title-label").textContent = b.title;
@@ -420,32 +256,18 @@ async function openBook(b) {
   setTextMode(true);
   $("left-panel").innerHTML = '<span class="loading">Fetching text…</span>';
   $("right-panel").innerHTML = "";
-  updateSaveBtn(false, true);
-
-  var saved = null;
-  try { saved = await shelfGet(b.id); } catch (_) {}
 
   try {
-    var raw;
-    if (saved) {
-      raw = saved.text;
-    } else if (b.source === "folktexts") {
-      raw = await fetchFolkText(b.url);
-    } else if (b.source === "wikisource") {
-      raw = await fetchWikisource(b.title);
-    } else {
-      var textUrl = b.formats["text/plain; charset=utf-8"]
-        || b.formats["text/plain; charset=us-ascii"]
-        || b.formats["text/plain"]
-        || "";
-      if (!textUrl) {
-        $("left-panel").innerHTML = '<span class="error-msg">No plain text available for this book.</span>';
-        return;
-      }
-      raw = await fetchBookText(textUrl);
+    var textUrl = b.formats["text/plain; charset=utf-8"]
+      || b.formats["text/plain; charset=us-ascii"]
+      || b.formats["text/plain"]
+      || "";
+    if (!textUrl) {
+      $("left-panel").innerHTML = '<span class="error-msg">No plain text available for this book.</span>';
+      return;
     }
+    var raw = await fetchBookText(textUrl);
     currentRawText = raw;
-    updateSaveBtn(!!saved, false);
     $("left-panel").innerHTML = '<span class="loading">Laying out pages…</span>';
     pages = await paginateText(raw);
     if (!pages.length) throw new Error("Book contained no readable pages");
@@ -464,7 +286,6 @@ function setTextMode(on) {
   if ($("reader-settings")) $("reader-settings").classList.remove("open");
   if (spread) spread.style.display = on ? "" : "none";
   if (nav) nav.style.display = on ? "" : "none";
-  if ($("save-btn")) $("save-btn").style.display = on ? "" : "none";
   if ($("dl-btn")) $("dl-btn").style.display = on ? "" : "none";
   if ($("settings-btn")) $("settings-btn").style.display = on ? "" : "none";
   if ($("font-sel")) $("font-sel").style.display = on ? "" : "none";
@@ -480,7 +301,6 @@ function openLinkBook(b) {
   $("library-ui").style.display = "none";
   $("reader-ui").style.display = "block";
   setTextMode(true);
-  updateSaveBtn(false, true);
   $("left-panel").innerHTML =
     '<p class="bk-hd">' + escapeHtml(b.title) + '</p>' +
     '<p>' + escapeHtml(b.license || "Free textbook") + '</p>' +
@@ -761,79 +581,11 @@ function doFlip(leftIdx, rightIdx, direction) {
   }, 520);
 }
 
-/* ── Page-turn sound — a real recorded paper turn (same-origin), with a
-   procedural rustle as fallback if the sample can't load. ── */
-var sfxOn = true;
-var _actx = null;
-var pageBuf = null;
-var pageBufTried = false;
-
-function ensureCtx() {
-  var AC = window.AudioContext || window.webkitAudioContext;
-  if (!AC) return null;
-  if (!_actx) _actx = new AC();
-  if (_actx.state === "suspended") _actx.resume();
-  return _actx;
-}
-
-function loadPageSound() {
-  if (pageBuf || pageBufTried) return;
-  var ctx = ensureCtx();
-  if (!ctx) return;
-  pageBufTried = true;
-  fetch("/sounds/page-turn.wav")
-    .then(function (r) { return r.arrayBuffer(); })
-    .then(function (b) { return ctx.decodeAudioData(b); })
-    .then(function (decoded) { pageBuf = decoded; })
-    .catch(function () { /* keep the procedural fallback */ });
-}
-
-function synthRustle(ctx) {
-  var dur = 0.26;
-  var frames = Math.floor(ctx.sampleRate * dur);
-  var buf = ctx.createBuffer(1, frames, ctx.sampleRate);
-  var data = buf.getChannelData(0);
-  for (var i = 0; i < frames; i++) {
-    var t = i / frames;
-    var env = Math.pow(1 - t, 2.3) * (0.55 + 0.45 * Math.sin(t * 34));
-    data[i] = (Math.random() * 2 - 1) * env;
-  }
-  var src = ctx.createBufferSource();
-  src.buffer = buf;
-  var bp = ctx.createBiquadFilter();
-  bp.type = "bandpass"; bp.frequency.value = 2700; bp.Q.value = 0.6;
-  var g = ctx.createGain(); g.gain.value = 0.16;
-  src.connect(bp); bp.connect(g); g.connect(ctx.destination);
-  src.start();
-}
-
-function playPageTurn() {
-  if (!sfxOn) return;
-  try {
-    var ctx = ensureCtx();
-    if (!ctx) return;
-    if (pageBuf) {
-      var src = ctx.createBufferSource();
-      src.buffer = pageBuf;
-      // small random pitch/level so repeated turns don't sound mechanical
-      src.playbackRate.value = 0.95 + Math.random() * 0.1;
-      var g = ctx.createGain();
-      g.gain.value = 0.55 + Math.random() * 0.1;
-      src.connect(g); g.connect(ctx.destination);
-      src.start();
-    } else {
-      synthRustle(ctx);
-      loadPageSound();
-    }
-  } catch (_) {}
-}
-
 function goNext() {
   var isMobile = true; // single-page Kindle mode (one page at a time)
   var step = isMobile ? 1 : 2;
   if (currentSpread + step < pages.length) {
     currentSpread += step;
-    playPageTurn();
     renderSpread(true, "next");
   }
 }
@@ -843,7 +595,6 @@ function goPrev() {
   var step = isMobile ? 1 : 2;
   if (currentSpread - step >= 0) {
     currentSpread -= step;
-    playPageTurn();
     renderSpread(true, "prev");
   }
 }
@@ -913,32 +664,6 @@ $("back-btn").addEventListener("click", function () {
   currentAudioBook = null;
   currentRawText = null;
   pages = [];
-  renderShelf();
-});
-
-$("save-btn").addEventListener("click", async function () {
-  if (!currentBook || !currentRawText) return;
-  var id = currentBook.id;
-  updateSaveBtn(false, true);
-  try {
-    var saved = await shelfGet(id);
-    if (saved) {
-      await shelfRemove(id);
-      updateSaveBtn(false, false);
-    } else {
-      await shelfPut({
-        id: id,
-        title: currentBook.title,
-        author: currentBook.author || (currentBook.authors && currentBook.authors[0] ? currentBook.authors[0].name : "Unknown"),
-        cover: currentBook.cover || (currentBook.formats && currentBook.formats["image/jpeg"]) || "",
-        text: currentRawText,
-        savedAt: Date.now(),
-      });
-      updateSaveBtn(true, false);
-    }
-  } catch (_) {
-    updateSaveBtn(false, false);
-  }
 });
 
 document.addEventListener("keydown", function (e) {
@@ -1032,9 +757,7 @@ function saveReaderSettings() {
     lh:    parseInt($("rs-lh").value),
     font:  $("rs-font").value,
     theme: $("rs-theme").value,
-    sound: $("rs-sound") ? $("rs-sound").value : "1",
   };
-  sfxOn = s.sound !== "0";
   localStorage.setItem(RS_KEY, JSON.stringify(s));
   applyReaderSettings(s);
   var key = metricsKey(s);
@@ -1060,8 +783,6 @@ function initSettings() {
   if (s.lh)    { $("rs-lh").value   = s.lh;     $("rs-lh-val").textContent  = (s.lh / 100).toFixed(2); }
   if (s.font)  $("rs-font").value   = s.font;
   if (s.theme) $("rs-theme").value  = s.theme;
-  if (s.sound !== undefined) $("rs-sound").value = s.sound;
-  sfxOn = (s.sound === undefined) ? true : (s.sound !== "0");
   lastMetricsKey = metricsKey(s);
   applyReaderSettings(s);
 
@@ -1073,7 +794,6 @@ function initSettings() {
   });
   $("rs-font").addEventListener("change",  saveReaderSettings);
   $("rs-theme").addEventListener("change", saveReaderSettings);
-  $("rs-sound").addEventListener("change", saveReaderSettings);
 
   $("settings-btn").addEventListener("click", function () {
     $("reader-settings").classList.toggle("open");
@@ -1162,7 +882,6 @@ function downloadBook() {
 }
 if ($("dl-btn")) $("dl-btn").addEventListener("click", downloadBook);
 
-renderShelf();
 searchSource("gutenberg", "", null, false).catch(function () {
   $("status").textContent = "Failed to load Project Gutenberg.";
   $("status").className = "error-msg";

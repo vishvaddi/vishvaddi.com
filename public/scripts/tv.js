@@ -43,20 +43,20 @@
           label: "Old dark house shocker",
         },
         afternoon: {
-          title: "The Naked Witch",
-          year: "1964",
-          runtime: "1h 11m",
+          title: "Carnival of Souls",
+          year: "1962",
+          runtime: "1h 24m",
           provider: "archive",
-          id: "TheNakedWitch1964",
-          label: "Drive-in oddity",
+          id: "carnival-of-souls-1962_202108",
+          label: "Acclaimed indie horror · ★7.0",
         },
         night: {
-          title: "Invasion of the Bee Girls",
-          year: "1973",
-          runtime: "1h 29m",
+          title: "The Last Man on Earth",
+          year: "1964",
+          runtime: "1h 26m",
           provider: "archive",
-          id: "InvasionOfTheBeeGirlsWidescreenQualityUpgrade",
-          label: "Cult sci-fi late show",
+          id: "the-last-man-on-earth-1964_202312",
+          label: "Vincent Price apocalypse · ★6.8",
         },
       },
     },
@@ -111,12 +111,12 @@
           label: "German expressionist double bill",
         },
         night: {
-          title: "Dressed to Kill",
-          year: "1946",
-          runtime: "1h 18m",
+          title: "Detour",
+          year: "1945",
+          runtime: "1h 7m",
           provider: "archive",
-          id: "dressed-to-kill_202107",
-          label: "B-movie crime noir",
+          id: "detour_202110",
+          label: "Edgar Ulmer noir classic · ★7.2",
         },
       },
     },
@@ -125,12 +125,12 @@
       name: "LATE FEATURES",
       schedule: {
         morning: {
-          title: "Reefer Madness",
-          year: "1936",
-          runtime: "1h 8m",
+          title: "Charade",
+          year: "1963",
+          runtime: "1h 53m",
           provider: "archive",
-          id: "reefer-madness-4-k",
-          label: "Infamous cautionary tale",
+          id: "charade_202604",
+          label: "Grant & Hepburn romp · ★7.9",
         },
         afternoon: {
           title: "McLintock!",
@@ -150,7 +150,7 @@
         },
       },
     },
-    // CH 06-08: full films verified live on YouTube as embeddable
+    // CH 06-07: full films verified live on YouTube as embeddable
     // (playableInEmbed:true) and rating > 6. Recent licensed films won't embed,
     // so the modern end caps at 80s cult (Night of the Comet, 1984).
     {
@@ -210,40 +210,6 @@
           provider: "youtube",
           id: "glsKgwu5YHM",
           label: "Fritz Lang noir · ★7.8",
-        },
-      },
-    },
-    // CH 08: modern cult. Legit embeddable post-2000 films are scarce — most are
-    // re-uploads that get DMCA'd. These two are from The Asylum's OWN channel
-    // (their IP, ad-monetised, so stable); Sharknado is a licensed aggregator.
-    // If a slot goes dead, re-verify the id via the YouTube oEmbed endpoint.
-    {
-      number: "08",
-      name: "MODERN CULT",
-      schedule: {
-        morning: {
-          title: "Mega Shark vs Crocosaurus",
-          year: "2010",
-          runtime: "1h 30m",
-          provider: "youtube",
-          id: "YMvlLrwdgwM",
-          label: "The Asylum monster mash",
-        },
-        afternoon: {
-          title: "Zoombies",
-          year: "2016",
-          runtime: "1h 27m",
-          provider: "youtube",
-          id: "aiMjhN0FtRs",
-          label: "The Asylum zoo-apocalypse",
-        },
-        night: {
-          title: "Sharknado",
-          year: "2013",
-          runtime: "1h 26m",
-          provider: "youtube",
-          id: "X2mOjhbH-lM",
-          label: "The modern cult classic",
         },
       },
     },
