@@ -380,6 +380,31 @@
 .wa-piano-note { width: 34px; flex: 0 0 34px; color: var(--wa-muted); font-size: 10px; }
 .wa-piano-cell { height: 20px; }
 
+/* ── VV-1 synth ── */
+.wa-vpatch { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 10px; margin-top: 12px; }
+.wa-vblock {
+  min-width: 0; padding: 11px 13px;
+  background: var(--wa-surface-2);
+  border: 1px solid var(--wa-border-2);
+  border-radius: var(--wa-radius-sm);
+}
+.wa-vblock .wa-slider-row {
+  display: grid; grid-template-columns: minmax(48px, auto) minmax(50px, 1fr) minmax(34px, auto);
+  gap: 7px; margin: 7px 0;
+}
+.wa-vblock .wa-slider { width: 100%; min-width: 0; }
+.wa-vblock select { flex: 1 1 auto; min-width: 0; }
+.wa-vmatrix { grid-column: 1 / -1; }
+.wa-vmatrix-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) minmax(150px, 1.4fr);
+  gap: 8px; align-items: center; margin: 6px 0;
+}
+.wa-vmatrix-row .wa-slider-row { margin: 0; }
+.wa-vroll .wa-piano-row { margin-bottom: 2px; }
+.wa-vroll .wa-piano-cell { height: 15px; }
+.wa-vroll .wa-roll-oct { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--wa-border-2); }
+.wa-piano-cell.tail { background: var(--wa-accent-dim); border-color: var(--wa-accent-dim); opacity: 0.7; }
+
 /* ── Mixer ── */
 .wa-mixer { display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; padding: 12px 0; }
 .wa-ch { display: flex; flex-direction: column; align-items: center; gap: 8px; }
@@ -496,6 +521,10 @@
   padding: 12px 0 0; border-top: 1px solid var(--wa-border); margin-top: 12px;
 }
 
+/* ── Disabled sample-only controls on synth rows ── */
+.wa-off { opacity: 0.4; }
+.wa-off input, button.wa-off { cursor: default; }
+
 /* ── Horizontal divider ── */
 .wa-sep-h { height: 1px; background: var(--wa-border); margin: 14px 0; }
 
@@ -505,6 +534,7 @@
 .wa-chop-toolbar select,
 .wa-song-slot select,
 .wa-export select,
+.wa-vblock select,
 .wa-device input[type="number"] {
   min-height: 38px; min-width: 0;
   font-family: inherit; font-size: 13px; color: var(--wa-text);
@@ -535,6 +565,7 @@
   .wa-btn-sm { height: 38px; min-width: 40px; }
   .wa-tab { padding: 14px 18px; }
   .wa-cell, .wa-drum { height: 38px; }
+  .wa-vroll .wa-piano-cell { height: 24px; }
   .wa-mpc-pad { min-height: 112px; }
   .wa-ms button { width: 34px; height: 32px; }
   .wa-win select,

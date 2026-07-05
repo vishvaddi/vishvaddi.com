@@ -1,12 +1,14 @@
-// Project persistence: localStorage autosave, project file schema (v5 adds
-// 8 scenes + per-track session clips; v4 and older still load), undo history.
+// Project persistence: localStorage autosave, project file schema (v6 adds
+// note-based synth clips + the VV-1 patch; v5 session clips and v4 single-
+// pattern projects still load), undo history.
 
 import {
   SCENES, STEPS, SONG_SLOTS, PAD_COUNT, PIANO_NOTES, TRACKS, clip, transport,
-  allPats, allVels, synthPats, padEvents, songChain, sampleParams, sampleData, sampleBuffers,
-  dp, mpc, rackState, fx, synth,
+  allPats, allVels, synthNotes, padEvents, songChain, sampleParams, sampleData, sampleBuffers,
+  dp, mpc, rackState, fx, vsynthPatch,
 } from "./state";
-import type { HistoryState, PadEvent, SamplerP, DrumP, RackState, TrackId } from "./state";
+import type { HistoryState, PadEvent, SamplerP, DrumP, RackState, TrackId, VNote } from "./state";
+import type { VPatch } from "./vsynth";
 import { applyFxState, hydrateSample } from "./engine";
 
 export function saveAll(): void {
@@ -19,7 +21,7 @@ export function historyState(): HistoryState {
   return {
     pats: allPats.map((pattern) => pattern.map((row) => [...row])),
     vels: allVels.map((pattern) => pattern.map((row) => [...row])),
-    synthPats: synthPats.map((pattern) => pattern.map((row) => [...row])),
+    synthNotes: synthNotes.map((notes) => notes.map((note) => ({ ...note }))),
     padEvents: padEvents.map((events) => events.map((event) => ({ ...event }))),
     sampleParams: sampleParams.map((params) => ({ ...params })),
     sampleData: [...sampleData],
@@ -31,7 +33,7 @@ export function historyState(): HistoryState {
 export function restoreHistory(state: HistoryState): void {
   state.pats.forEach((pattern, pi) => pattern.forEach((row, ri) => row.forEach((value, step) => { allPats[pi][ri][step] = value; })));
   state.vels.forEach((pattern, pi) => pattern.forEach((row, ri) => row.forEach((value, step) => { allVels[pi][ri][step] = value; })));
-  state.synthPats.forEach((pattern, pi) => pattern.forEach((row, ri) => row.forEach((value, step) => { synthPats[pi][ri][step] = value; })));
+  state.synthNotes.forEach((notes, i) => { synthNotes[i] = notes.map((note) => ({ ...note })); });
   state.padEvents.forEach((events, i) => { padEvents[i] = events.map((event) => ({ ...event })); });
   state.sampleParams.forEach((params, i) => Object.assign(sampleParams[i], params));
   state.sampleData.forEach((data, i) => { sampleData[i] = data; sampleBuffers[i] = null; if (data) void hydrateSample(i); });
@@ -50,15 +52,15 @@ export function projectState(includeSamples = true): object {
     return index;
   });
   return {
-    version: 5,
+    version: 6,
     pats: allPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
     vels: allVels,
     dp,
     bpm: transport.bpm,
     clipSel: clip.sel,
     clipPlay: clip.play,
-    synthPats: synthPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
-    synth,
+    synthNotes,
+    vsynth: vsynthPatch,
     songChain,
     songMode: transport.songMode,
     sampleParams,
@@ -104,11 +106,35 @@ export function applyProject(saved: Record<string, unknown>): void {
           else if (typeof v === "number") clip.play[t] = Math.max(0, Math.min(SCENES - 1, v));
         });
       }
-      if (saved.synthPats) (saved.synthPats as number[][][]).forEach((pp, pi) => {
-        if (pi >= SCENES) return;
-        pp.forEach((row, ri) => { if (ri < PIANO_NOTES.length) row.forEach((v, ci) => { if (ci < STEPS) synthPats[pi][ri][ci] = !!v; }); });
-      });
-      if (saved.synth) Object.assign(synth, saved.synth as object);
+      if (saved.synthNotes) {
+        (saved.synthNotes as VNote[][]).forEach((notes, i) => {
+          if (i >= SCENES || !Array.isArray(notes)) return;
+          synthNotes[i] = notes
+            .filter((n) => n && typeof n.note === "string" && typeof n.step === "number")
+            .map((n) => ({ note: n.note, step: n.step % STEPS, len: Math.max(1, Math.min(STEPS, n.len || 1)), vel: Math.max(1, Math.min(127, n.vel || 100)) }));
+        });
+      } else if (saved.synthPats) {
+        // v5 and older stored a 12-row on/off grid — convert to 1-step notes.
+        (saved.synthPats as number[][][]).forEach((pp, pi) => {
+          if (pi >= SCENES) return;
+          const notes: VNote[] = [];
+          pp.forEach((row, ri) => {
+            if (ri >= PIANO_NOTES.length) return;
+            row.forEach((v, ci) => { if (v && ci < STEPS) notes.push({ note: PIANO_NOTES[ri], step: ci, len: 1, vel: 100 }); });
+          });
+          synthNotes[pi] = notes;
+        });
+      }
+      if (saved.vsynth && typeof saved.vsynth === "object") {
+        const incoming = saved.vsynth as Partial<VPatch>;
+        (Object.keys(incoming) as Array<keyof VPatch>).forEach((key) => {
+          const value = incoming[key];
+          if (value === undefined) return;
+          if (Array.isArray(value)) (vsynthPatch[key] as unknown[]) = JSON.parse(JSON.stringify(value));
+          else if (typeof value === "object" && value !== null) Object.assign(vsynthPatch[key] as object, value);
+          else (vsynthPatch[key] as unknown) = value;
+        });
+      }
       if (saved.songChain) (saved.songChain as number[]).forEach((v, i) => {
         if (i < SONG_SLOTS) songChain[i] = Math.max(0, Math.min(SCENES - 1, Number(v) || 0));
       });

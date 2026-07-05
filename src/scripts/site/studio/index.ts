@@ -5,19 +5,21 @@ import "../../../styles/studio.css";
 // the 8 scenes, Ableton-style; launches apply on the next pattern boundary.
 
 import {
-  STEPS, SCENES, SCENE_LABELS, SONG_SLOTS, DRUMS, PAD_BANK_SIZE, PIANO_NOTES,
+  STEPS, SCENES, SCENE_LABELS, SONG_SLOTS, DRUMS, PAD_BANK_SIZE, ROLL_NOTES,
   TRACKS, TRACK_LABELS, clip, transport, stepDur, audible,
-  allPats, allVels, synthPats, padEvents, songChain,
-  sampleParams, sampleBuffers, sampleData, dp, DP_DEF, DP_SPECS, mpc, rackState, fx, synth, lfo, mute, solo,
+  allPats, allVels, synthNotes, padEvents, songChain,
+  sampleParams, sampleBuffers, sampleData, dp, DP_DEF, DP_SPECS, mpc, rackState, fx, vsynthPatch, mute, solo,
 } from "./state";
-import type { HistoryState, MpcState, PadEvent, SamplerP, TrackId } from "./state";
+import type { HistoryState, MpcState, PadEvent, SamplerP, TrackId, VNote } from "./state";
 import {
   ac, ensureNodes, trackGain,
   initReverb, initDelay, applyFxState, metroClick,
-  playDrum, playPad, playSynthStep, noteOn, noteOff, startLFO,
+  playDrum, playPad,
   reversedBuffer, hydrateSample, crushBuffer,
 } from "./engine";
 import * as engine from "./engine";
+import { playNote, LiveVoices, PRESETS, TABLE_NAMES, MOD_SRCS, MOD_DESTS } from "./vsynth";
+import type { ModSlot, VPatch } from "./vsynth";
 import {
   saveAll, historyState, restoreHistory, projectState, loadAll, applyProject, pendingProjectStore,
 } from "./persistence";
@@ -132,19 +134,24 @@ export async function initStudio(): Promise<void> {
   const velLabel = el("span", "wa-vel-num", "100");
   velPopup.append(el("span", "wa-lbl", "VEL"), velSlider, velLabel);
   document.body.append(velPopup);
-  let velTarget: { r: number; c: number; cell: HTMLElement } | null = null;
+  let velApply: ((v: number) => void) | null = null;
   velSlider.addEventListener("input", () => {
     const v = Number(velSlider.value); velLabel.textContent = String(v);
-    if (velTarget) { allVels[clip.sel][velTarget.r][velTarget.c] = v; setCellOpacity(velTarget.cell, v); saveAll(); }
+    velApply?.(v); saveAll();
   });
   document.addEventListener("click", (e) => { if (!velPopup.contains(e.target as Node)) velPopup.style.display = "none"; });
   function setCellOpacity(cell: HTMLElement, v: number): void { cell.style.opacity = String(0.45 + 0.55 * (v / 127)); }
-  function showVelPopup(r: number, c: number, cell: HTMLElement, x: number, y: number): void {
-    velTarget = { r, c, cell };
-    const v = allVels[clip.sel][r][c]; velSlider.value = String(v); velLabel.textContent = String(v);
+  function showVelocityPopup(value: number, x: number, y: number, apply: (v: number) => void): void {
+    velApply = apply;
+    velSlider.value = String(value); velLabel.textContent = String(value);
     velPopup.style.left = `${Math.min(x, window.innerWidth - 190)}px`;
     velPopup.style.top = `${Math.max(y - 54, 4)}px`;
     velPopup.style.display = "flex";
+  }
+  function showVelPopup(r: number, c: number, cell: HTMLElement, x: number, y: number): void {
+    showVelocityPopup(allVels[clip.sel][r][c], x, y, (v) => {
+      allVels[clip.sel][r][c] = v; setCellOpacity(cell, v);
+    });
   }
 
   // ── Beat ──
@@ -168,7 +175,7 @@ export async function initStudio(): Promise<void> {
       allPats[next][r][c] = allPats[clip.sel][r][c];
       allVels[next][r][c] = allVels[clip.sel][r][c];
     }
-    for (let r = 0; r < PIANO_NOTES.length; r++) for (let c = 0; c < STEPS; c++) synthPats[next][r][c] = synthPats[clip.sel][r][c];
+    synthNotes[next] = synthNotes[clip.sel].map((note) => ({ ...note }));
     padEvents[next] = padEvents[clip.sel].map((event) => ({ ...event }));
     paintSession();
     saveAll(); const orig = copyBtn.textContent; copyBtn.textContent = "Copied ✓";
@@ -611,6 +618,31 @@ export async function initStudio(): Promise<void> {
     const fileName = el("span", "wa-sample-name", sampleParams[r].name || "Synth drum");
     const fileInput = document.createElement("input"); fileInput.type = "file"; fileInput.accept = "audio/*"; fileInput.hidden = true;
     const load = btn("Load sample", "wa-btn-sm"), remove = btn("Use synth", "wa-btn-sm");
+    // Hear edits as you make them — Reaper-style param audition, debounced so
+    // dragging a slider doesn't machine-gun the row.
+    let auditionTimer = 0;
+    const auditionRow = (): void => {
+      window.clearTimeout(auditionTimer);
+      auditionTimer = window.setTimeout(() => { ensureNodes(); playDrum(ac(), trackGain[r], r, 0.9, ac().currentTime); }, 140);
+    };
+    const startRow = sliderRow("Start", 0, 0.95, sampleParams[r].start, 0.01, (v) => {
+      sampleParams[r].start = Math.min(v, sampleParams[r].end - 0.01); saveAll(); auditionRow();
+    });
+    const endRow = sliderRow("End", 0.05, 1, sampleParams[r].end, 0.01, (v) => {
+      sampleParams[r].end = Math.max(v, sampleParams[r].start + 0.01); saveAll(); auditionRow();
+    });
+    const reverse = btn("Reverse", "wa-toggle wa-btn-sm");
+    // Start/End/Reverse only exist for samples; grey them out on synth rows so
+    // dead sliders don't masquerade as broken ones.
+    const syncSampleState = (): void => {
+      const hasSample = !!sampleData[r];
+      [startRow, endRow].forEach((row) => {
+        row.classList.toggle("wa-off", !hasSample);
+        row.querySelectorAll("input").forEach((input) => { input.disabled = !hasSample; });
+      });
+      reverse.classList.toggle("wa-off", !hasSample);
+      reverse.disabled = !hasSample;
+    };
     load.addEventListener("click", () => fileInput.click());
     fileInput.addEventListener("change", async () => {
       const file = fileInput.files?.[0]; if (!file) return;
@@ -620,56 +652,93 @@ export async function initStudio(): Promise<void> {
         sampleParams[r].name = file.name;
         await hydrateSample(r);
         fileName.textContent = file.name;
-        saveAll();
+        syncSampleState(); saveAll(); auditionRow();
       } catch { fileName.textContent = "Could not load sample"; }
     });
     remove.addEventListener("click", () => {
       checkpoint();
       sampleData[r] = null; sampleBuffers[r] = null; sampleParams[r].name = "";
-      fileName.textContent = "Synth drum"; fileInput.value = ""; saveAll();
+      fileName.textContent = "Synth drum"; fileInput.value = ""; syncSampleState(); saveAll();
     });
     const controls = el("div", "wa-pad-controls");
     controls.append(
-      sliderRow("Tune", -24, 24, sampleParams[r].tune, 1, (v) => { sampleParams[r].tune = v; saveAll(); }),
-      sliderRow("Start", 0, 0.95, sampleParams[r].start, 0.01, (v) => {
-        sampleParams[r].start = Math.min(v, sampleParams[r].end - 0.01); saveAll();
-      }),
-      sliderRow("End", 0.05, 1, sampleParams[r].end, 0.01, (v) => {
-        sampleParams[r].end = Math.max(v, sampleParams[r].start + 0.01); saveAll();
-      }),
+      sliderRow("Tune", -24, 24, sampleParams[r].tune, 1, (v) => { sampleParams[r].tune = v; saveAll(); auditionRow(); }),
+      startRow, endRow,
     );
-    const reverse = btn("Reverse", "wa-toggle wa-btn-sm");
     reverse.classList.toggle("active", sampleParams[r].reverse);
     reverse.addEventListener("click", () => {
-      sampleParams[r].reverse = !sampleParams[r].reverse; reverse.classList.toggle("active", sampleParams[r].reverse); saveAll();
+      sampleParams[r].reverse = !sampleParams[r].reverse; reverse.classList.toggle("active", sampleParams[r].reverse); saveAll(); auditionRow();
     });
     const actions = el("div", "wa-pad-actions"); actions.append(load, remove, reverse, fileInput);
+    syncSampleState();
     pad.append(trigger, fileName, controls, actions); rackGrid.append(pad);
   });
-  rack.append(el("p", "wa-help", "Each pad uses its generated drum until you load a local audio file. Samples stay in this session and are embedded when you save a project."), rackGrid);
+  rack.append(el("p", "wa-help", "Each pad uses its generated drum until you load a local audio file. Tune works on both — it repitches samples and synth drums alike. Samples stay in this session and are embedded when you save a project."), rackGrid);
 
   // ── Chop / sample capture ──
   const chop = el("div", "wa-panel");
   const chopToolbar = el("div", "wa-chop-toolbar");
   const chopInput = document.createElement("input"); chopInput.type = "file"; chopInput.accept = "audio/*"; chopInput.hidden = true;
-  const loadBreakBtn = btn("Load break"), micBtn = btn("Record mic"), equalBtn = btn("16 equal"), transientBtn = btn("Transient"), clearSlicesBtn = btn("Manual");
-  const assignSlicesBtn = btn("Assign to bank"), normaliseBtn = btn("Normalise");
+  const loadBreakBtn = btn("Load break"), micBtn = btn("Record mic"), equalBtn = btn("Equal"), transientBtn = btn("Transient"), clearSlicesBtn = btn("Manual");
+  const assignSlicesBtn = btn("Assign to bank"), patternBtn = btn("Assign + pattern"), normaliseBtn = btn("Normalise"), syncBpmBtn = btn("Sync BPM");
+  const sliceCountSel = document.createElement("select");
+  [4, 8, 12, 16].forEach((n) => { const o = document.createElement("option"); o.value = String(n); o.textContent = `${n} slices`; sliceCountSel.append(o); });
+  sliceCountSel.value = "16";
   help(loadBreakBtn, "Load an audio file into the chop editor.");
   help(micBtn, "Record from the microphone, then chop the recording like any other sample.");
-  help(equalBtn, "Split the audio into 16 equal-length slices.");
+  help(sliceCountSel, "How many slices Equal and Transient aim for.");
+  help(equalBtn, "Split the audio into equal-length slices.");
   help(transientBtn, "Detect strong attacks and use them as slice boundaries.");
   help(clearSlicesBtn, "Start with one region, then click the waveform to add slice markers.");
   help(normaliseBtn, "Raise the break to peak level without changing its relative dynamics.");
+  help(syncBpmBtn, "Set the project tempo to the detected tempo of the loaded break.");
   help(assignSlicesBtn, "Map the current slices across all 16 pads in the selected bank.");
+  help(patternBtn, "Assign the slices AND write them in order into this scene's pad sequence — instant break replay, ready to rearrange.");
   const chopStatus = el("span", "wa-status", "Select a pad or load a break");
   const waveform = document.createElement("canvas"); waveform.className = "wa-waveform";
-  help(waveform, "Waveform chop editor. In Manual mode, click to add slice markers.");
+  help(waveform, "Waveform chop editor. Click a slice to audition it; in Manual mode clicking also adds a marker.");
   let chopBuffer: AudioBuffer | null = null, chopData: string | null = null, chopName = "", slices: Array<[number, number]> = equalSlices(16);
-  function refreshWaveform(): void { if (chopBuffer) drawWaveform(waveform, chopBuffer, slices); }
-  async function setChopSource(data: string, name: string): Promise<void> {
-    chopBuffer = await ac().decodeAudioData(dataUrlToBytes(data)); chopData = data; chopName = name; slices = equalSlices(16);
-    chopStatus.textContent = `${name} · ${chopBuffer.duration.toFixed(2)}s`; refreshWaveform();
+  let chopBpm: number | null = null, chopManual = false, selectedSlice = -1;
+  let slicePreview: AudioBufferSourceNode | null = null;
+  const sliceCount = (): number => Number(sliceCountSel.value);
+  function refreshWaveform(): void { if (chopBuffer) drawWaveform(waveform, chopBuffer, slices, selectedSlice); }
+  // Assume a 4/4 break of 1–8 bars; among the plausible bar counts pick the
+  // tempo nearest the current project BPM (jungle at 170 finds the 2-bar amen,
+  // boom bap at 90 finds the 1-bar loop).
+  function guessBreakBpm(duration: number): number | null {
+    let best: number | null = null;
+    for (const bars of [1, 2, 4, 8]) {
+      const bpm = (bars * 4 * 60) / duration;
+      if (bpm < 50 || bpm > 220) continue;
+      if (best === null || Math.abs(bpm - transport.bpm) < Math.abs(best - transport.bpm)) best = bpm;
+    }
+    return best;
   }
+  function playSlice(index: number): void {
+    if (!chopBuffer || !slices[index]) return;
+    ensureNodes();
+    const [start, end] = slices[index];
+    try { slicePreview?.stop(); } catch { /* not playing */ }
+    const a = ac(), src = a.createBufferSource(), g = a.createGain();
+    src.buffer = chopBuffer; g.gain.value = 0.9;
+    src.connect(g); g.connect(engine.master!);
+    src.start(a.currentTime, start * chopBuffer.duration, Math.max(0.02, (end - start) * chopBuffer.duration));
+    slicePreview = src;
+    selectedSlice = index; refreshWaveform();
+  }
+  async function setChopSource(data: string, name: string): Promise<void> {
+    chopBuffer = await ac().decodeAudioData(dataUrlToBytes(data)); chopData = data; chopName = name; slices = equalSlices(sliceCount());
+    chopBpm = guessBreakBpm(chopBuffer.duration); syncBpmBtn.disabled = chopBpm === null;
+    chopManual = false; selectedSlice = -1;
+    chopStatus.textContent = `${name} · ${chopBuffer.duration.toFixed(2)}s${chopBpm ? ` · ≈${Math.round(chopBpm)} BPM` : ""}`;
+    refreshWaveform();
+  }
+  syncBpmBtn.disabled = true;
+  syncBpmBtn.addEventListener("click", () => {
+    if (chopBpm === null) return;
+    setBpm(Math.round(chopBpm)); saveAll();
+    chopStatus.textContent = `Project tempo set to ${Math.round(chopBpm)} BPM`;
+  });
   loadBreakBtn.addEventListener("click", () => chopInput.click());
   chopInput.addEventListener("change", async () => {
     const file = chopInput.files?.[0]; if (!file) return;
@@ -693,17 +762,20 @@ export async function initStudio(): Promise<void> {
       micBtn.addEventListener("click", stop);
     } catch { chopStatus.textContent = "Microphone permission was not granted"; }
   });
-  equalBtn.addEventListener("click", () => { slices = equalSlices(16); refreshWaveform(); });
-  transientBtn.addEventListener("click", () => { if (chopBuffer) { slices = transientSlices(chopBuffer, 16); refreshWaveform(); } });
-  clearSlicesBtn.addEventListener("click", () => { slices = [[0, 1]]; refreshWaveform(); chopStatus.textContent = "Click the waveform to add slice markers"; });
+  equalBtn.addEventListener("click", () => { chopManual = false; selectedSlice = -1; slices = equalSlices(sliceCount()); refreshWaveform(); });
+  transientBtn.addEventListener("click", () => { if (chopBuffer) { chopManual = false; selectedSlice = -1; slices = transientSlices(chopBuffer, sliceCount()); refreshWaveform(); } });
+  clearSlicesBtn.addEventListener("click", () => { chopManual = true; selectedSlice = -1; slices = [[0, 1]]; refreshWaveform(); chopStatus.textContent = "Click the waveform to add slice markers"; });
   waveform.addEventListener("click", (event) => {
     if (!chopBuffer) return;
-    const rect = waveform.getBoundingClientRect(), marker = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-    const starts = [...slices.map(([start]) => start), marker].filter((value, i, all) => all.indexOf(value) === i).sort((a, b) => a - b).slice(0, 16);
-    slices = starts.map((start, i) => [start, starts[i + 1] ?? 1]); refreshWaveform();
+    const rect = waveform.getBoundingClientRect(), position = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    if (chopManual) {
+      const starts = [...slices.map(([start]) => start), position].filter((value, i, all) => all.indexOf(value) === i).sort((a, b) => a - b).slice(0, 16);
+      slices = starts.map((start, i) => [start, starts[i + 1] ?? 1]);
+    }
+    playSlice(slices.findIndex(([start, end]) => position >= start && position < end));
   });
-  assignSlicesBtn.addEventListener("click", async () => {
-    if (!chopData || !chopBuffer) { chopStatus.textContent = "Load a break first"; return; }
+  function assignSlices(): boolean {
+    if (!chopData || !chopBuffer) { chopStatus.textContent = "Load a break first"; return false; }
     checkpoint();
     const bankStart = mpc.bank * PAD_BANK_SIZE;
     slices.slice(0, PAD_BANK_SIZE).forEach(([start, end], i) => {
@@ -712,10 +784,26 @@ export async function initStudio(): Promise<void> {
       sampleData[pad] = chopData; sampleBuffers[pad] = chopBuffer;
       Object.assign(sampleParams[pad], {
         name: `${chopName} ${i + 1}`, start: snappedStart, end: Math.min(1, snappedEnd),
-        reverse: false, loop: false, sourceBpm: transport.bpm,
+        reverse: false, loop: false, sourceBpm: chopBpm ? Math.round(chopBpm) : transport.bpm,
       });
     });
     paintMpcPads(); saveAll(); chopStatus.textContent = `${Math.min(16, slices.length)} slices assigned to Bank ${"ABCD"[mpc.bank]}`;
+    return true;
+  }
+  assignSlicesBtn.addEventListener("click", () => { assignSlices(); });
+  patternBtn.addEventListener("click", () => {
+    if (!assignSlices()) return;
+    // Replay the break in slice order across the scene, ReCycle-style: each
+    // slice lands on its grid position and rings until the next one.
+    const bankStart = mpc.bank * PAD_BANK_SIZE;
+    const count = Math.min(PAD_BANK_SIZE, slices.length);
+    padEvents[clip.sel] = Array.from({ length: count }, (_, i) => ({
+      pad: bankStart + i, step: Math.round((i * STEPS) / count) % STEPS,
+      velocity: 110, offset: 0, probability: 100, ratchets: 1,
+    }));
+    if (clip.play.pads === null) clip.play.pads = clip.sel;
+    paintEventLane(); paintSession(); saveAll();
+    chopStatus.textContent = `Break assigned to Bank ${"ABCD"[mpc.bank]} and written to scene ${SCENE_LABELS[clip.sel]}`;
   });
   normaliseBtn.addEventListener("click", async () => {
     if (!chopBuffer) return;
@@ -732,26 +820,129 @@ export async function initStudio(): Promise<void> {
     }
     chopBuffer = normalised; chopData = await blobAsDataUrl(encodeWav(normalised)); refreshWaveform(); chopStatus.textContent = "Normalised";
   });
-  chopToolbar.append(loadBreakBtn, micBtn, equalBtn, transientBtn, clearSlicesBtn, normaliseBtn, assignSlicesBtn, chopInput, chopStatus);
-  chop.append(chopToolbar, waveform, el("p", "wa-help", "Equal, transient or manual chopping is non-destructive. Assigning maps the current slices across the selected 16-pad bank."));
+  chopToolbar.append(loadBreakBtn, micBtn, sliceCountSel, equalBtn, transientBtn, clearSlicesBtn, normaliseBtn, syncBpmBtn, assignSlicesBtn, patternBtn, chopInput, chopStatus);
+  chop.append(chopToolbar, waveform, el("p", "wa-help", "Chopping is non-destructive — click a slice to hear it. Sync BPM matches the project tempo to the break; Assign + pattern replays the chopped break on the pads, ready to rearrange in the Sequence lane."));
 
-  // ── Synth ──
+  // ── Synth: VV-1 wavetable ──
   const synthPanel = el("div", "wa-panel");
-  const oscRow = el("div", "wa-knobs");
-  (["sawtooth", "square", "sine", "triangle"] as OscillatorType[]).forEach((t) => {
-    const b = btn(t.slice(0, 3).toUpperCase(), "wa-tab" + (t === synth.osc ? " active" : "")); b.classList.remove("wa-btn");
-    b.addEventListener("click", () => { synth.osc = t; oscRow.querySelectorAll(".wa-tab").forEach((x) => x.classList.remove("active")); b.classList.add("active"); });
-    oscRow.append(b);
-  });
-  const lfoTargetRow = el("div", "wa-knobs");
-  (["filter", "pitch"] as const).forEach((t) => {
-    const b = btn(t === "filter" ? "FILTER" : "PITCH", "wa-tab" + (lfo.target === t ? " active" : "")); b.classList.remove("wa-btn");
-    b.addEventListener("click", () => {
-      lfo.target = t; lfoTargetRow.querySelectorAll(".wa-tab").forEach((x) => x.classList.remove("active")); b.classList.add("active");
+  const liveKeys = new LiveVoices();
+  const audition = (note: string, vel = 105, lenSteps = 2): void => {
+    ensureNodes(); playNote(ac(), engine.synthGain!, vsynthPatch, note, vel, ac().currentTime, stepDur() * lenSteps);
+  };
+  function ensureMatrixSlots(): void {
+    while (vsynthPatch.matrix.length < 6) vsynthPatch.matrix.push({ src: "lfo1", dest: "cutoff", amt: 0 });
+    vsynthPatch.matrix.length = 6;
+  }
+  ensureMatrixSlots();
+  const selRow = (label: string, options: Array<[string, string]>, value: string, on: (v: string) => void): HTMLElement => {
+    const row = el("div", "wa-slider-row");
+    row.append(el("span", "wa-lbl", label));
+    const sel = document.createElement("select");
+    options.forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sel.append(o); });
+    sel.value = value;
+    sel.addEventListener("change", () => on(sel.value));
+    row.append(sel); return row;
+  };
+  // Preset row
+  const presetRow = el("div", "wa-export");
+  const presetSel = document.createElement("select");
+  Object.keys(PRESETS).forEach((name) => { const o = document.createElement("option"); o.value = name; o.textContent = name; presetSel.append(o); });
+  const loadPresetBtn = btn("Load preset", "wa-btn-sm");
+  const auditionBtn = btn("♪ Audition", "wa-btn-sm");
+  help(loadPresetBtn, "Replace the whole synth patch with the selected preset.");
+  help(auditionBtn, "Play a short note with the current patch.");
+  loadPresetBtn.addEventListener("click", () => {
+    const preset = PRESETS[presetSel.value]; if (!preset) return;
+    const copy = JSON.parse(JSON.stringify(preset)) as VPatch;
+    (Object.keys(copy) as Array<keyof VPatch>).forEach((key) => {
+      const value = copy[key];
+      if (Array.isArray(value)) (vsynthPatch[key] as unknown[]) = value;
+      else if (typeof value === "object" && value !== null) Object.assign(vsynthPatch[key] as object, value);
+      else (vsynthPatch[key] as unknown) = value;
     });
-    lfoTargetRow.append(b);
+    ensureMatrixSlots();
+    renderPatchEditor(); saveAll(); audition("C4");
   });
-  const synthKeys = el("div", "wa-keys"); buildKeys(synthKeys);
+  auditionBtn.addEventListener("click", () => audition("C4"));
+  presetRow.append(el("span", "wa-lbl", "PRESET"), presetSel, loadPresetBtn, auditionBtn);
+  // Patch editor — rebuilt whenever a preset load replaces the patch wholesale.
+  const patchBox = el("div", "wa-vpatch");
+  function renderPatchEditor(): void {
+    patchBox.replaceChildren();
+    const pSlider = (host: HTMLElement, label: string, min: number, max: number, step: number, get: () => number, set: (v: number) => void) => {
+      host.append(sliderRow(label, min, max, get(), step, (v) => { set(v); saveAll(); }));
+    };
+    (["osc1", "osc2"] as const).forEach((key, i) => {
+      const o = vsynthPatch[key];
+      const box = el("div", "wa-vblock");
+      box.append(el("div", "wa-fx-title", `OSC ${i + 1}`));
+      box.append(selRow("Table", TABLE_NAMES.map((n) => [n, n.toUpperCase()]), o.table, (v) => { o.table = v; saveAll(); }));
+      pSlider(box, "Position", 0, 1, 0.01, () => o.pos, (v) => { o.pos = v; });
+      pSlider(box, "Octave", -2, 2, 1, () => o.octave, (v) => { o.octave = v; });
+      pSlider(box, "Semi", -12, 12, 1, () => o.semi, (v) => { o.semi = v; });
+      pSlider(box, "Level", 0, 1, 0.01, () => o.level, (v) => { o.level = v; });
+      pSlider(box, "Unison", 1, 8, 1, () => o.unison, (v) => { o.unison = v; });
+      pSlider(box, "Detune", 0, 100, 1, () => o.detune, (v) => { o.detune = v; });
+      patchBox.append(box);
+    });
+    const noiseBox = el("div", "wa-vblock");
+    noiseBox.append(el("div", "wa-fx-title", "NOISE"));
+    pSlider(noiseBox, "Level", 0, 1, 0.01, () => vsynthPatch.noise.level, (v) => { vsynthPatch.noise.level = v; });
+    pSlider(noiseBox, "Colour", 200, 16000, 100, () => vsynthPatch.noise.colour, (v) => { vsynthPatch.noise.colour = v; });
+    patchBox.append(noiseBox);
+    const filterBox = el("div", "wa-vblock");
+    filterBox.append(el("div", "wa-fx-title", "FILTER"));
+    filterBox.append(selRow("Type", [["lowpass", "LOW PASS"], ["highpass", "HIGH PASS"], ["bandpass", "BAND PASS"], ["notch", "NOTCH"]], vsynthPatch.filter.type, (v) => { vsynthPatch.filter.type = v as VPatch["filter"]["type"]; saveAll(); }));
+    pSlider(filterBox, "Cutoff", 30, 18000, 10, () => vsynthPatch.filter.cutoff, (v) => { vsynthPatch.filter.cutoff = v; });
+    pSlider(filterBox, "Res", 0.1, 12, 0.1, () => vsynthPatch.filter.res, (v) => { vsynthPatch.filter.res = v; });
+    pSlider(filterBox, "Env2 amt", -1, 1, 0.01, () => vsynthPatch.filter.env2, (v) => { vsynthPatch.filter.env2 = v; });
+    pSlider(filterBox, "Key track", 0, 1, 0.05, () => vsynthPatch.filter.track, (v) => { vsynthPatch.filter.track = v; });
+    patchBox.append(filterBox);
+    (["env1", "env2"] as const).forEach((key, i) => {
+      const e = vsynthPatch[key];
+      const box = el("div", "wa-vblock");
+      box.append(el("div", "wa-fx-title", i === 0 ? "ENV 1 · AMP" : "ENV 2 · MOD"));
+      pSlider(box, "Attack", 0, 2, 0.005, () => e.a, (v) => { e.a = v; });
+      pSlider(box, "Decay", 0.01, 2, 0.01, () => e.d, (v) => { e.d = v; });
+      pSlider(box, "Sustain", 0, 1, 0.01, () => e.s, (v) => { e.s = v; });
+      pSlider(box, "Release", 0.01, 3, 0.01, () => e.r, (v) => { e.r = v; });
+      patchBox.append(box);
+    });
+    (["lfo1", "lfo2"] as const).forEach((key, i) => {
+      const l = vsynthPatch[key];
+      const box = el("div", "wa-vblock");
+      box.append(el("div", "wa-fx-title", `LFO ${i + 1}`));
+      box.append(selRow("Shape", [["sine", "SINE"], ["triangle", "TRI"], ["sawtooth", "SAW"], ["square", "SQR"]], l.shape, (v) => { l.shape = v as VPatch["lfo1"]["shape"]; saveAll(); }));
+      pSlider(box, "Rate Hz", 0.05, 20, 0.05, () => l.rate, (v) => { l.rate = v; });
+      patchBox.append(box);
+    });
+    const matrixBox = el("div", "wa-vblock wa-vmatrix");
+    matrixBox.append(el("div", "wa-fx-title", "MOD MATRIX"));
+    vsynthPatch.matrix.forEach((slot: ModSlot) => {
+      const row = el("div", "wa-vmatrix-row");
+      const srcSel = document.createElement("select");
+      MOD_SRCS.forEach((s) => { const o = document.createElement("option"); o.value = s; o.textContent = s.toUpperCase(); srcSel.append(o); });
+      srcSel.value = slot.src;
+      srcSel.addEventListener("change", () => { slot.src = srcSel.value as ModSlot["src"]; saveAll(); });
+      const destSel = document.createElement("select");
+      MOD_DESTS.forEach((d) => { const o = document.createElement("option"); o.value = d; o.textContent = d.toUpperCase(); destSel.append(o); });
+      destSel.value = slot.dest;
+      destSel.addEventListener("change", () => { slot.dest = destSel.value as ModSlot["dest"]; saveAll(); });
+      row.append(srcSel, el("span", "wa-lbl", "→"), destSel);
+      row.append(sliderRow("Amt", -1, 1, slot.amt, 0.01, (v) => { slot.amt = v; saveAll(); }));
+      matrixBox.append(row);
+    });
+    patchBox.append(matrixBox);
+    const macroBox = el("div", "wa-vblock");
+    macroBox.append(el("div", "wa-fx-title", "MACROS — map via matrix"));
+    ["Macro 1", "Macro 2", "Macro 3", "Macro 4"].forEach((name, i) => {
+      pSlider(macroBox, name, 0, 1, 0.01, () => vsynthPatch.macros[i] ?? 0, (v) => { vsynthPatch.macros[i] = v; });
+    });
+    pSlider(macroBox, "Volume", 0, 1, 0.01, () => vsynthPatch.volume, (v) => { vsynthPatch.volume = v; });
+    patchBox.append(macroBox);
+  }
+  renderPatchEditor();
+  // Chord player
   const chordRow = el("div", "wa-chords");
   const chords: Array<[string, string[]]> = [
     ["Cm", ["C4", "D#4", "G4"]], ["Fm", ["F4", "G#4", "C5"]], ["Gm", ["G4", "A#4", "D5"]],
@@ -759,30 +950,57 @@ export async function initStudio(): Promise<void> {
   ];
   chords.forEach(([label, notes]) => {
     const button = btn(label, "wa-btn-sm");
-    button.addEventListener("click", () => {
-      ensureNodes(); notes.forEach((note) => playSynthStep(ac(), engine.synthGain!, note, ac().currentTime, stepDur() * 3.5, 0.32));
-    });
+    button.addEventListener("click", () => { notes.forEach((note) => audition(note, 90, 3.5)); });
     chordRow.append(button);
   });
-  const pianoRoll = el("div", "wa-piano-roll");
-  PIANO_NOTES.forEach((note, r) => {
-    const row = el("div", "wa-piano-row");
+  // Piano roll — 3 octaves, notes with length + velocity. Click to add/remove,
+  // drag right to set length, right-click a note for velocity.
+  const pianoRoll = el("div", "wa-piano-roll wa-vroll");
+  const rollNoteAt = (row: number, step: number): VNote | undefined =>
+    synthNotes[clip.sel].find((n) => n.note === ROLL_NOTES[row] && step >= n.step && step < n.step + n.len);
+  let dragNote: VNote | null = null, dragRow = -1;
+  function paintRoll(): void {
+    synthCells.forEach((rowCells, row) => rowCells.forEach((cell, step) => {
+      const n = rollNoteAt(row, step);
+      cell.classList.toggle("on", !!n && n.step === step);
+      cell.classList.toggle("tail", !!n && n.step !== step);
+      if (n && n.step === step) setCellOpacity(cell, n.vel); else cell.style.opacity = "";
+    }));
+  }
+  ROLL_NOTES.forEach((note, r) => {
+    const row = el("div", "wa-piano-row" + (note.startsWith("C") && !note.startsWith("C#") ? " wa-roll-oct" : ""));
     row.append(el("span", "wa-piano-note", note));
     const rowCells: HTMLElement[] = [];
     for (let c = 0; c < STEPS; c++) {
       const cell = el("button", "wa-cell wa-piano-cell" + (c % 4 === 0 ? " wa-beat" : "")) as HTMLButtonElement;
       cell.type = "button";
       cell.title = `${note}, step ${c + 1}`;
-      cell.classList.toggle("on", synthPats[clip.sel][r][c]);
-      cell.addEventListener("click", () => {
-        synthPats[clip.sel][r][c] = !synthPats[clip.sel][r][c];
-        cell.classList.toggle("on", synthPats[clip.sel][r][c]);
-        if (synthPats[clip.sel][r][c]) {
-          ensureNodes();
-          playSynthStep(ac(), engine.synthGain!, note, ac().currentTime, stepDur() * 0.9, 0.55);
+      cell.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return; // right-click is velocity, not toggle
+        event.preventDefault();
+        const existing = rollNoteAt(r, c);
+        checkpoint();
+        if (existing) {
+          synthNotes[clip.sel] = synthNotes[clip.sel].filter((n) => n !== existing);
+        } else {
+          const fresh: VNote = { note, step: c, len: 1, vel: 100 };
+          synthNotes[clip.sel].push(fresh);
+          dragNote = fresh; dragRow = r;
+          audition(note, 100, 1);
         }
-        paintSession();
-        saveAll();
+        paintRoll(); paintSession(); saveAll();
+      });
+      cell.addEventListener("pointerenter", () => {
+        if (!dragNote || dragRow !== r) return;
+        if (c >= dragNote.step) { dragNote.len = Math.min(STEPS - dragNote.step, c - dragNote.step + 1); paintRoll(); }
+      });
+      cell.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        const existing = rollNoteAt(r, c); if (!existing) return;
+        const origin = synthCells[r][existing.step];
+        showVelocityPopup(existing.vel, (event as MouseEvent).clientX, (event as MouseEvent).clientY, (v) => {
+          existing.vel = v; setCellOpacity(origin, v);
+        });
       });
       rowCells.push(cell);
       row.append(cell);
@@ -790,21 +1008,18 @@ export async function initStudio(): Promise<void> {
     synthCells.push(rowCells);
     pianoRoll.append(row);
   });
+  window.addEventListener("pointerup", () => { if (dragNote) saveAll(); dragNote = null; dragRow = -1; });
+  const synthKeys = el("div", "wa-keys");
+  buildKeys(synthKeys,
+    (note) => { ensureNodes(); liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, note); },
+    (note) => liveKeys.noteOff(ac(), note));
   synthPanel.append(
-    el("div", "wa-lbl", "OSC"), oscRow,
-    sliderRow("CUTOFF",  200,  6000, synth.cutoff,  1,    (v) => { synth.cutoff  = v; if (engine.synthFilter) engine.synthFilter.frequency.value = v; }),
-    sliderRow("RESO",    0,    20,   synth.q,        0.5,  (v) => { synth.q      = v; if (engine.synthFilter) engine.synthFilter.Q.value = v; }),
-    sliderRow("ATTACK",  0,    1,    synth.attack,   0.01, (v) => { synth.attack  = v; }),
-    sliderRow("RELEASE", 0.05, 2,    synth.release,  0.05, (v) => { synth.release = v; }),
-    el("div", "wa-sep-h"),
-    el("div", "wa-lbl", "LFO"),
-    sliderRow("RATE",  0.1, 20, lfo.rate,  0.1,  (v) => { lfo.rate  = v; }),
-    sliderRow("DEPTH", 0,   1,  lfo.depth, 0.01, (v) => { lfo.depth = v; if (v > 0) startLFO(); }),
-    lfoTargetRow,
+    presetRow,
+    patchBox,
     el("div", "wa-sep-h"),
     el("div", "wa-lbl", "CHORD PLAYER"), chordRow,
     el("div", "wa-sep-h"),
-    el("div", "wa-lbl", "PIANO ROLL — edit scene"), pianoRoll,
+    el("div", "wa-lbl", "PIANO ROLL — click to add, drag right for length, right-click for velocity"), pianoRoll,
     el("div", "wa-sep-h"),
     el("div", "wa-lbl", "KEYS — click or use A–K"), synthKeys,
   );
@@ -818,7 +1033,7 @@ export async function initStudio(): Promise<void> {
   function clipHasContent(track: TrackId, scene: number): boolean {
     if (track === "drums") return allPats[scene].some((row) => row.some(Boolean));
     if (track === "pads") return padEvents[scene].length > 0;
-    return synthPats[scene].some((row) => row.some(Boolean));
+    return synthNotes[scene].length > 0;
   }
   function paintSession(): void {
     sessionCells.forEach((row, scene) => row.forEach((cell, ti) => {
@@ -1051,7 +1266,7 @@ export async function initStudio(): Promise<void> {
       Chop: "Load or record longer audio and divide it into playable slices.",
       "Sample Rack": "Quick controls for the original drum voices and loaded samples.",
       "Drum Sequence": "Program the legacy eight-lane drum grid and adjust generated drum sounds.",
-      "Synth + Piano Roll": "Design and sequence the built-in subtractive synth.",
+      "Synth + Piano Roll": "Design and sequence the VV-1 wavetable synth.",
       "Session + Song": "Launch clips and scenes live, or order scenes into a linear song.",
       Devices: "Apply groove, macros and the modular master processing chain.",
       Mixer: "Set drum, synth and master levels, mute or solo channels, and adjust effects.",
@@ -1229,7 +1444,7 @@ export async function initStudio(): Promise<void> {
       const on = allPats[clip.sel][r][c]; cell.classList.toggle("on", on);
       if (on) setCellOpacity(cell, allVels[clip.sel][r][c]); else cell.style.opacity = "";
     }));
-    synthCells.forEach((row, r) => row.forEach((cell, c) => cell.classList.toggle("on", synthPats[clip.sel][r][c])));
+    paintRoll();
     paintEventLane();
     paintSession();
   }
@@ -1307,8 +1522,8 @@ export async function initStudio(): Promise<void> {
       });
     }
     if (synthClip !== null) {
-      PIANO_NOTES.forEach((note, r) => {
-        if (synthPats[synthClip][r][s]) playSynthStep(a, engine.synthGain!, note, when, stepDur() * 0.9, 0.55);
+      synthNotes[synthClip].forEach((n) => {
+        if (n.step === s) playNote(a, engine.synthGain!, vsynthPatch, n.note, n.vel, when, stepDur() * n.len * 0.98);
       });
     }
     if (transport.metro && s % 4 === 0) metroClick(a, engine.master!, baseWhen, s === 0);
@@ -1398,8 +1613,7 @@ export async function initStudio(): Promise<void> {
     }
     const ot: GainNode[] = [];
     for (let i = 0; i < 8; i++) { const g = off.createGain(); g.gain.value = trackGain[i].gain.value; g.connect(om); ot.push(g); }
-    const osf = off.createBiquadFilter(); osf.type = "lowpass"; osf.frequency.value = synth.cutoff; osf.Q.value = synth.q;
-    const osg = off.createGain(); osg.gain.value = engine.synthGain!.gain.value; osg.connect(osf); osf.connect(om);
+    const osg = off.createGain(); osg.gain.value = engine.synthGain!.gain.value; osg.connect(om);
     scenes.forEach((_, sceneIndex) => { for (let s = 0; s < STEPS; s++) {
       const base = (sceneIndex * STEPS + s) * sd;
       const groove = s % 2 === 1 ? rackState.grooveTiming * sd * 0.5 : 0;
@@ -1415,8 +1629,8 @@ export async function initStudio(): Promise<void> {
           playPad(off, event.pad, event.velocity, Math.max(base, when + event.offset / 1000 + i * spacing), event.pad % PAD_BANK_SIZE, ot[event.pad % ot.length]);
         }
       });
-      if (synthClip !== null) PIANO_NOTES.forEach((note, r) => {
-        if (synthPats[synthClip][r][s]) playSynthStep(off, osg, note, when, sd * 0.9, 0.55);
+      if (synthClip !== null) synthNotes[synthClip].forEach((n) => {
+        if (n.step === s) playNote(off, osg, vsynthPatch, n.note, n.vel, when, sd * n.len * 0.98);
       });
       if (transport.metro && s % 4 === 0) metroClick(off, om, base, s === 0);
     } });
@@ -1474,14 +1688,14 @@ export async function initStudio(): Promise<void> {
     if (activeTab !== 1) return;
     const n = keyMap[ev.key.toLowerCase()];
     if (!n || downSet.has(n) || ev.metaKey || ev.ctrlKey) return;
-    downSet.add(n); noteOn(n); highlightKey(synthKeys, n, true);
+    downSet.add(n); ensureNodes(); liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, n); highlightKey(synthKeys, n, true);
   });
   window.addEventListener("keyup", (ev) => {
     const localPad = padKeyMap[ev.key.toLowerCase()];
     if (localPad != null) padButtons[localPad].classList.remove("down");
     if (activeTab !== 1) return;
     const n = keyMap[ev.key.toLowerCase()]; if (!n) return;
-    downSet.delete(n); noteOff(n); highlightKey(synthKeys, n, false);
+    downSet.delete(n); liveKeys.noteOff(ac(), n); highlightKey(synthKeys, n, false);
   });
 
   // Initial paint reflects loaded project state (scene selection, session grid).
@@ -1491,18 +1705,19 @@ export async function initStudio(): Promise<void> {
 // ─── Key builders ─────────────────────────────────────────────────────────────
 const WHITE = ["C", "D", "E", "F", "G", "A", "B"];
 const HAS_BLACK: Record<string, boolean> = { C: true, D: true, F: true, G: true, A: true };
-function buildKeys(host: HTMLElement): void {
+type NoteFn = (note: string) => void;
+function buildKeys(host: HTMLElement, noteOn: NoteFn, noteOff: NoteFn): void {
   for (let oct = 3; oct <= 4; oct++) {
     for (const w of WHITE) {
-      const key = el("button", "wa-key") as HTMLButtonElement; key.type = "button"; key.dataset.note = `${w}${oct}`; bindKey(key, `${w}${oct}`);
+      const key = el("button", "wa-key") as HTMLButtonElement; key.type = "button"; key.dataset.note = `${w}${oct}`; bindKey(key, `${w}${oct}`, noteOn, noteOff);
       if (HAS_BLACK[w]) {
-        const bk = el("button", "wa-key wa-key-black") as HTMLButtonElement; bk.type = "button"; bk.dataset.note = `${w}#${oct}`; bindKey(bk, `${w}#${oct}`); key.append(bk);
+        const bk = el("button", "wa-key wa-key-black") as HTMLButtonElement; bk.type = "button"; bk.dataset.note = `${w}#${oct}`; bindKey(bk, `${w}#${oct}`, noteOn, noteOff); key.append(bk);
       }
       host.append(key);
     }
   }
 }
-function bindKey(key: HTMLElement, note: string): void {
+function bindKey(key: HTMLElement, note: string, noteOn: NoteFn, noteOff: NoteFn): void {
   const on = (e: Event) => { e.preventDefault(); e.stopPropagation(); noteOn(note); key.classList.add("down"); };
   const off = () => { noteOff(note); key.classList.remove("down"); };
   key.addEventListener("mousedown", on); key.addEventListener("mouseup", off);

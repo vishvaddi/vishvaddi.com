@@ -93,11 +93,16 @@ export function euclideanPattern(steps: number, pulses: number, rotation: number
   const pattern = Array.from({ length: steps }, (_, step) => ((step * pulses) % steps) < pulses);
   return pattern.map((_, i) => pattern[(i - rotation + steps) % steps]);
 }
-export function drawWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer, slices: Array<[number, number]>): void {
+export function drawWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer, slices: Array<[number, number]>, selected = -1): void {
   const scale = window.devicePixelRatio || 1, width = canvas.clientWidth || 900, height = canvas.clientHeight || 220;
   canvas.width = Math.floor(width * scale); canvas.height = Math.floor(height * scale);
   const ctx = canvas.getContext("2d"); if (!ctx) return;
   ctx.scale(scale, scale); ctx.fillStyle = "#0c0c12"; ctx.fillRect(0, 0, width, height);
+  if (selected >= 0 && slices[selected]) {
+    const [start, end] = slices[selected];
+    ctx.fillStyle = "rgba(47, 227, 166, 0.16)";
+    ctx.fillRect(start * width, 0, (end - start) * width, height);
+  }
   const data = buffer.getChannelData(0), stride = Math.max(1, Math.floor(data.length / width));
   ctx.strokeStyle = "#22ee55"; ctx.beginPath();
   for (let x = 0; x < width; x++) {

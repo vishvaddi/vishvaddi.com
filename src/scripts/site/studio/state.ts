@@ -1,6 +1,9 @@
 // VishAmp shared data model. All mutable project state lives here so the
 // engine, persistence and UI modules can share it without circular imports.
 
+import { initPatch } from "./vsynth";
+import type { VPatch } from "./vsynth";
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 export interface DrumP {
   pitch: number;      // tone start Hz
@@ -59,10 +62,16 @@ export interface RackState {
   macros: number[];
   devices: Record<string, boolean>;
 }
+export interface VNote {
+  note: string;   // e.g. "D#4"
+  step: number;   // 0–15 start step
+  len: number;    // steps, ≥1
+  vel: number;    // 1–127
+}
 export interface HistoryState {
   pats: boolean[][][];
   vels: number[][][];
-  synthPats: boolean[][][];
+  synthNotes: VNote[][];
   padEvents: PadEvent[][];
   sampleParams: SamplerP[];
   sampleData: Array<string | null>;
@@ -91,7 +100,15 @@ export const SONG_SLOTS = 8;
 export const DRUMS = ["Kick", "Snare", "HH Cl", "HH Op", "Clap", "Tom", "Rim", "Crash"];
 export const PAD_COUNT = 64;
 export const PAD_BANK_SIZE = 16;
+// Legacy 12-note grid rows (v5 and older projects) — kept for migration only.
 export const PIANO_NOTES = ["B4", "A#4", "A4", "G#4", "G4", "F#4", "F4", "E4", "D#4", "D4", "C#4", "C4"];
+// Piano-roll rows, top to bottom: B5 down to C3 (3 octaves).
+export const ROLL_NOTES: string[] = (() => {
+  const semis = ["B", "A#", "A", "G#", "G", "F#", "F", "E", "D#", "D", "C#", "C"];
+  const rows: string[] = [];
+  for (let oct = 5; oct >= 3; oct--) semis.forEach((s) => rows.push(`${s}${oct}`));
+  return rows;
+})();
 
 // ─── Drum defaults & param specs ─────────────────────────────────────────────
 export const DP_DEF: DrumP[] = [
@@ -150,7 +167,7 @@ export const clip = {
 // ─── Pattern data ────────────────────────────────────────────────────────────
 export const allPats: boolean[][][] = Array.from({ length: SCENES }, () => DRUMS.map(() => new Array(STEPS).fill(false)));
 export const allVels: number[][][] = Array.from({ length: SCENES }, () => DRUMS.map(() => new Array(STEPS).fill(100)));
-export const synthPats: boolean[][][] = Array.from({ length: SCENES }, () => PIANO_NOTES.map(() => new Array(STEPS).fill(false)));
+export const synthNotes: VNote[][] = Array.from({ length: SCENES }, () => []);
 export const songChain = Array.from({ length: SONG_SLOTS }, (_, i) => i % 4);
 export const padEvents: PadEvent[][] = Array.from({ length: SCENES }, () => []);
 
@@ -181,9 +198,9 @@ export const fx: FxState = {
   reverb: 0, delayTime: 0.25, delayFeedback: 0.25, delayMix: 0,
 };
 
-// ─── Synth params ────────────────────────────────────────────────────────────
-export const synth = { osc: "sawtooth" as OscillatorType, cutoff: 2200, q: 4, attack: 0.01, release: 0.3 };
-export const lfo = { rate: 3, depth: 0, target: "filter" as "filter" | "pitch", phase: 0, timer: 0 };
+// ─── Synth ───────────────────────────────────────────────────────────────────
+// The VV-1 wavetable synth patch (see vsynth.ts). One patch per project.
+export const vsynthPatch: VPatch = initPatch();
 
 // ─── Mixer ───────────────────────────────────────────────────────────────────
 export const mute = new Array(8).fill(false);

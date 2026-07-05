@@ -3,7 +3,7 @@
 // the current node instances.
 
 import {
-  DRUMS, dp, fx, rackState, synth, lfo, mpc, sampleParams, sampleBuffers, sampleData, transport,
+  DRUMS, dp, fx, rackState, mpc, sampleParams, sampleBuffers, sampleData, transport,
 } from "./state";
 import type { SamplerP } from "./state";
 import { dataUrlToBytes } from "./helpers";
@@ -18,7 +18,6 @@ let compressor: DynamicsCompressorNode | null = null;
 let limiter: DynamicsCompressorNode | null = null;
 export const trackGain: GainNode[] = [];
 export let synthGain: GainNode | null = null;
-export let synthFilter: BiquadFilterNode | null = null;
 let reverbConv: ConvolverNode | null = null;
 let reverbWetGain: GainNode | null = null;
 let delayNode: DelayNode | null = null;
@@ -47,10 +46,9 @@ export function ensureNodes(): void {
   for (let i = 0; i < 8; i++) {
     const g = a.createGain(); g.gain.value = 0.8; g.connect(master!); trackGain.push(g);
   }
-  synthFilter = a.createBiquadFilter();
-  synthFilter.type = "lowpass"; synthFilter.frequency.value = synth.cutoff; synthFilter.Q.value = synth.q;
+  // VV-1 voices carry their own per-note filters — the synth bus is just a fader.
   synthGain = a.createGain(); synthGain.gain.value = 0.7;
-  synthGain.connect(synthFilter); synthFilter.connect(master!);
+  synthGain.connect(master!);
 }
 export function initReverb(wet: number): void {
   const a = ac();
@@ -183,79 +181,33 @@ export function playDrum(a: BaseAudioContext, out: AudioNode, r: number, vol: nu
   if (playSample(a, out, r, vol, when)) return;
   if (r >= DRUMS.length) return;
   const p = dp[r];
+  // Rack Tune applies to synth drums too, varispeed-style: pitch and noise
+  // colour shift together, decay shortens as you tune up (like a repitched sample).
+  const rate = Math.pow(2, (sampleParams[r]?.tune ?? 0) / 12);
+  const pitch = p.pitch * rate, pitchEnd = p.pitchEnd * rate;
+  const filt = Math.max(40, Math.min(18000, p.filter * rate));
+  const decay = Math.max(0.01, p.decay / rate);
   switch (r) {
     case 0: // Kick: tone sweep + transient click
-      dTone(a, out, vol, p.pitch, p.pitchEnd, p.decay, when);
-      dTone(a, out, vol * 0.25, p.pitch * 3, p.pitch * 3, 0.004, when, "square");
+      dTone(a, out, vol, pitch, pitchEnd, decay, when);
+      dTone(a, out, vol * 0.25, pitch * 3, pitch * 3, 0.004, when, "square");
       break;
     case 1: // Snare: noise + optional tone body
-      dNoise(a, out, vol, p.filter, p.decay, when);
-      if (p.toneLevel > 0) dTone(a, out, vol * p.toneLevel, p.pitch, p.pitch * 0.5, p.decay * 0.7, when);
+      dNoise(a, out, vol, filt, decay, when);
+      if (p.toneLevel > 0) dTone(a, out, vol * p.toneLevel, pitch, pitch * 0.5, decay * 0.7, when);
       break;
-    case 2: dNoise(a, out, vol, p.filter, p.decay, when); break;           // HH Cl
-    case 3: dNoise(a, out, vol, p.filter, p.decay, when); break;           // HH Op
+    case 2: dNoise(a, out, vol, filt, decay, when); break;           // HH Cl
+    case 3: dNoise(a, out, vol, filt, decay, when); break;           // HH Op
     case 4: // Clap: staggered noise bursts
-      for (let i = 0; i < 3; i++) dNoise(a, out, vol * 0.9, p.filter, p.decay, when + i * (p.spread / 1000), "bandpass", 0.5);
+      for (let i = 0; i < 3; i++) dNoise(a, out, vol * 0.9, filt, decay, when + i * (p.spread / 1000), "bandpass", 0.5);
       break;
-    case 5: dTone(a, out, vol, p.pitch, p.pitchEnd, p.decay, when); break; // Tom
+    case 5: dTone(a, out, vol, pitch, pitchEnd, decay, when); break; // Tom
     case 6: // Rim: triangle tone + noise
-      dTone(a, out, vol * p.toneLevel, p.pitch, p.pitch, 0.06, when, "triangle");
-      dNoise(a, out, vol * (1 - p.toneLevel) * 0.6, p.filter, 0.06, when);
+      dTone(a, out, vol * p.toneLevel, pitch, pitch, 0.06, when, "triangle");
+      dNoise(a, out, vol * (1 - p.toneLevel) * 0.6, filt, 0.06, when);
       break;
-    case 7: dNoise(a, out, vol * 0.6, p.filter, p.decay, when); break;    // Crash
+    case 7: dNoise(a, out, vol * 0.6, filt, decay, when); break;    // Crash
   }
-}
-
-// ─── Live synth voices ───────────────────────────────────────────────────────
-const activeN = new Map<string, { osc: OscillatorNode; gain: GainNode }>();
-const SEMI = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-
-export function freq(note: string): number {
-  const m = /^([A-G]#?)(\d)$/.exec(note); if (!m) return 440;
-  const n = SEMI.indexOf(m[1]) + (parseInt(m[2], 10) + 1) * 12;
-  return 440 * Math.pow(2, (n - 69) / 12);
-}
-export function noteOn(note: string): void {
-  ensureNodes(); if (activeN.has(note)) return;
-  const a = ac(), osc = a.createOscillator(), g = a.createGain();
-  osc.type = synth.osc; osc.frequency.value = freq(note);
-  g.gain.setValueAtTime(0, a.currentTime);
-  g.gain.linearRampToValueAtTime(0.4, a.currentTime + synth.attack);
-  osc.connect(g); g.connect(synthGain!); osc.start();
-  activeN.set(note, { osc, gain: g });
-}
-export function noteOff(note: string): void {
-  const n = activeN.get(note); if (!n) return;
-  const a = ac();
-  n.gain.gain.cancelScheduledValues(a.currentTime);
-  n.gain.gain.setValueAtTime(n.gain.gain.value, a.currentTime);
-  n.gain.gain.linearRampToValueAtTime(0.0001, a.currentTime + synth.release);
-  n.osc.stop(a.currentTime + synth.release + 0.05); activeN.delete(note);
-}
-export function startLFO(): void {
-  if (lfo.timer) return;
-  lfo.timer = window.setInterval(() => {
-    if (!AC || lfo.depth === 0) return;
-    lfo.phase += (lfo.rate / 60) * Math.PI * 2;
-    const mod = Math.sin(lfo.phase);
-    if (lfo.target === "filter" && synthFilter) {
-      synthFilter.frequency.value = synth.cutoff * (1 + mod * lfo.depth * 0.9);
-    } else if (lfo.target === "pitch") {
-      activeN.forEach(({ osc }) => { osc.detune.value = mod * lfo.depth * 100; });
-    }
-  }, 1000 / 60);
-}
-export function playSynthStep(a: BaseAudioContext, out: AudioNode, note: string, when: number, duration: number, vol: number): void {
-  const osc = a.createOscillator(), g = a.createGain(), filter = a.createBiquadFilter();
-  osc.type = synth.osc; osc.frequency.value = freq(note);
-  filter.type = "lowpass"; filter.frequency.value = synth.cutoff; filter.Q.value = synth.q;
-  const attackEnd = when + Math.min(synth.attack, duration * 0.45);
-  const releaseStart = Math.max(attackEnd, when + duration - synth.release);
-  g.gain.setValueAtTime(0.0001, when);
-  g.gain.linearRampToValueAtTime(vol, attackEnd);
-  g.gain.setValueAtTime(vol, releaseStart);
-  g.gain.exponentialRampToValueAtTime(0.0001, when + duration);
-  osc.connect(filter); filter.connect(g); g.connect(out); osc.start(when); osc.stop(when + duration + 0.02);
 }
 
 export function playPad(
