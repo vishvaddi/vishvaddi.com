@@ -9,6 +9,7 @@ import type { ModSlot, VPatch } from "./vsynth";
 import { saveAll } from "./persistence";
 import { el, btn, help, sliderRow } from "./helpers";
 import { buildPianoRoll } from "./pianoroll";
+import { knob } from "./knob";
 
 export interface SynthUI {
   synthPanel: HTMLElement;
@@ -67,7 +68,7 @@ export function buildSynthUI(): SynthUI {
   function renderPatchEditor(): void {
     patchBox.replaceChildren();
     const pSlider = (host: HTMLElement, label: string, min: number, max: number, step: number, get: () => number, set: (v: number) => void) => {
-      host.append(sliderRow(label, min, max, get(), step, (v) => { set(v); saveAll(); }));
+      host.append(knob({ label, min, max, value: get(), step, def: get(), onInput: (v) => { set(v); saveAll(); } }).el);
     };
     (["osc1", "osc2"] as const).forEach((key, i) => {
       const o = vsynthPatch[key];

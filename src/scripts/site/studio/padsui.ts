@@ -10,6 +10,8 @@ import { ac, ensureNodes, playPad, hydrateSample, crushBuffer } from "./engine";
 import { saveAll } from "./persistence";
 import { el, btn, help, sliderRow, readAsDataUrl, blobAsDataUrl, encodeWav } from "./helpers";
 import { ctx } from "./ctx";
+import { knob } from "./knob";
+import type { KnobControl } from "./knob";
 
 export interface PadsUI {
   mpcPanel: HTMLElement;
@@ -86,14 +88,10 @@ export function buildPads(): PadsUI {
   const padGrid = el("div", "wa-mpc-pads");
   const selectedPadLabel = el("span", "wa-status");
   const selectedSampleEditor = el("div", "wa-selected-sample");
-  const selectedInputs: Array<{ key: keyof SamplerP; input: HTMLInputElement; out: HTMLElement }> = [];
+  const selectedInputs: Array<{ key: keyof SamplerP; control: KnobControl }> = [];
   function selectedParam(label: string, key: keyof SamplerP, min: number, max: number, step: number): HTMLElement {
-    const row = el("div", "wa-slider-row"), input = document.createElement("input"), out = el("span", "wa-val");
-    input.type = "range"; input.min = String(min); input.max = String(max); input.step = String(step); input.className = "wa-slider";
-    input.addEventListener("input", () => {
-      const value = Number(input.value); (sampleParams[mpc.selectedPad][key] as number) = value; out.textContent = String(value); saveAll();
-    });
-    selectedInputs.push({ key, input, out }); row.append(el("span", "wa-lbl", label), input, out); return row;
+    const control = knob({ label, min, max, value: Number(sampleParams[mpc.selectedPad][key]), step, onInput: (value) => { (sampleParams[mpc.selectedPad][key] as number) = value; saveAll(); } });
+    selectedInputs.push({ key, control }); return control.el;
   }
   const reverseSelectedBtn = btn("Reverse", "wa-toggle wa-btn-sm"), loopSelectedBtn = btn("Loop", "wa-toggle wa-btn-sm"), warpSelectedBtn = btn("Warp", "wa-toggle wa-btn-sm");
   const muteSelectedBtn = btn("Mute", "wa-toggle wa-btn-sm"), soloSelectedBtn = btn("Solo", "wa-toggle wa-btn-sm");
@@ -141,9 +139,7 @@ export function buildPads(): PadsUI {
     });
     selectedPadLabel.textContent = `Selected: ${sampleParams[mpc.selectedPad].name || `Pad ${mpc.selectedPad + 1}`}`;
     const selected = sampleParams[mpc.selectedPad];
-    selectedInputs.forEach(({ key, input, out }) => {
-      input.value = String(selected[key]); out.textContent = String(selected[key]);
-    });
+    selectedInputs.forEach(({ key, control }) => control.set(Number(selected[key]), false));
     reverseSelectedBtn.classList.toggle("active", selected.reverse); loopSelectedBtn.classList.toggle("active", selected.loop);
     warpSelectedBtn.classList.toggle("active", selected.warp);
     muteSelectedBtn.classList.toggle("active", mpc.padMute[mpc.selectedPad]);

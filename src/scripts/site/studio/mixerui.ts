@@ -2,8 +2,9 @@ import { DRUMS, clip, padEvents, mpc, rackState, fx, mute, solo } from "./state"
 import { ensureNodes, trackGain, initReverb, initDelay, applyFxState } from "./engine";
 import * as engine from "./engine";
 import { saveAll } from "./persistence";
-import { el, btn, help, sliderRow, euclideanPattern } from "./helpers";
+import { el, btn, help, euclideanPattern } from "./helpers";
 import { ctx } from "./ctx";
+import { knob } from "./knob";
 
 function mixChannel(name: string, value: number, onInput: (value: number) => void, index: number): HTMLElement {
   const channel = el("div", "wa-ch");
@@ -33,7 +34,7 @@ export function buildMixer(): MixerUI {
   mixGrid.append(mixChannel("MASTER", 0.8, (value) => { ensureNodes(); engine.master!.gain.value = value; }, -1));
   const effects = el("div", "wa-effects");
   const fxSlider = (label: string, min: number, max: number, value: number, step: number, apply: (value: number) => void): HTMLElement =>
-    sliderRow(label, min, max, value, step, (next) => { ensureNodes(); apply(next); applyFxState(); saveAll(); });
+    knob({ label, min, max, value, step, def: value, onInput: (next) => { ensureNodes(); apply(next); applyFxState(); saveAll(); } }).el;
   effects.append(el("div", "wa-fx-title", "MASTER EFFECTS"),
     fxSlider("EQ LOW", -12, 12, fx.low, 0.5, (v) => { fx.low = v; }),
     fxSlider("EQ MID", -12, 12, fx.mid, 0.5, (v) => { fx.mid = v; }),
@@ -55,11 +56,11 @@ export function buildMixer(): MixerUI {
   write.addEventListener("click", () => { ctx.checkpoint(); const pattern = euclideanPattern(16, Number(pulses.value), Number(rotate.value)), pad = mpc.selectedPad; padEvents[clip.sel] = padEvents[clip.sel].filter((event) => event.pad !== pad); pattern.forEach((on, step) => { if (on) padEvents[clip.sel].push({ pad, step, velocity: step % 4 === 0 ? 115 : 86, offset: 0, probability: 100, ratchets: 1 }); }); ctx.paintEventLane(); saveAll(); });
   euclid.append(el("span", "wa-lbl", "Pulses"), pulses, el("span", "wa-lbl", "Rotate"), rotate, write);
   player.append(el("div", "wa-device-title", "PLAYER · GROOVE + NOTE ECHO"),
-    sliderRow("Timing", 0, 0.75, rackState.grooveTiming, 0.01, (v) => { rackState.grooveTiming = v; saveAll(); }),
-    sliderRow("Velocity", 0, 0.5, rackState.grooveVelocity, 0.01, (v) => { rackState.grooveVelocity = v; saveAll(); }),
-    sliderRow("Random", 0, 40, rackState.grooveRandom, 1, (v) => { rackState.grooveRandom = v; saveAll(); }),
-    sliderRow("Echoes", 0, 8, rackState.noteEcho, 1, (v) => { rackState.noteEcho = v; saveAll(); }),
-    sliderRow("Echo decay", 0.1, 0.95, rackState.echoDecay, 0.01, (v) => { rackState.echoDecay = v; saveAll(); }), euclid);
+    knob({ label: "Timing", min: 0, max: 0.75, value: rackState.grooveTiming, step: 0.01, def: 0, onInput: (v) => { rackState.grooveTiming = v; saveAll(); } }).el,
+    knob({ label: "Velocity", min: 0, max: 0.5, value: rackState.grooveVelocity, step: 0.01, def: 0, onInput: (v) => { rackState.grooveVelocity = v; saveAll(); } }).el,
+    knob({ label: "Random", min: 0, max: 40, value: rackState.grooveRandom, step: 1, def: 0, unit: "ms", onInput: (v) => { rackState.grooveRandom = v; saveAll(); } }).el,
+    knob({ label: "Echoes", min: 0, max: 8, value: rackState.noteEcho, step: 1, def: 0, onInput: (v) => { rackState.noteEcho = v; saveAll(); } }).el,
+    knob({ label: "Echo decay", min: 0.1, max: 0.95, value: rackState.echoDecay, step: 0.01, def: 0.5, onInput: (v) => { rackState.echoDecay = v; saveAll(); } }).el, euclid);
   const stack = el("div", "wa-device-stack");
   [["sampler", "MPC PROGRAM · 64 pads / slices"], ["character", "CHARACTER · macros / sampler colour"], ["eq", "CHANNEL EQ · low / mid / high"], ["compressor", "BUS COMPRESSOR"], ["delay", "FEEDBACK DELAY · parallel return"], ["reverb", "CONVOLUTION REVERB · parallel return"], ["limiter", "MASTER LIMITER"]].forEach(([key, label]) => {
     const device = el("div", "wa-device"), header = el("div", "wa-device-header"), bypass = btn(rackState.devices[key] ? "ON" : "BYPASS", "wa-toggle wa-btn-sm");

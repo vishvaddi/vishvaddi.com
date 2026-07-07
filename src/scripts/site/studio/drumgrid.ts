@@ -9,6 +9,7 @@ import { ac, ensureNodes, trackGain, playDrum } from "./engine";
 import { saveAll } from "./persistence";
 import { el, btn } from "./helpers";
 import { ctx } from "./ctx";
+import { knob } from "./knob";
 
 export interface DrumGrid {
   beat: HTMLElement;
@@ -103,27 +104,14 @@ export function buildDrumGrid(): DrumGrid {
     const sdRow = el("div", "wa-sd-row");
     const specs = DP_SPECS[r];
     specs.forEach((spec) => {
-      const item = el("div", "wa-sd-item");
-      const inp = document.createElement("input");
-      inp.type = "range"; inp.min = String(spec.min); inp.max = String(spec.max); inp.step = String(spec.step); inp.value = String(dp[r][spec.key]);
-      const vout = el("span", "wa-sd-val", `${dp[r][spec.key]}${spec.unit ?? ""}`);
-      inp.addEventListener("input", () => {
-        const v = Number(inp.value); (dp[r][spec.key] as number) = v; vout.textContent = `${v}${spec.unit ?? ""}`; saveAll();
-      });
-      item.append(el("span", "wa-sd-lbl", spec.label), inp, vout);
-      sdRow.append(item);
+      sdRow.append(knob({ label: spec.label, min: spec.min, max: spec.max, value: dp[r][spec.key], step: spec.step, unit: spec.unit, def: DP_DEF[r][spec.key], onInput: (v) => { (dp[r][spec.key] as number) = v; saveAll(); } }).el);
     });
     const testBtn = btn("▶ Test", "wa-btn-sm");
     testBtn.addEventListener("click", () => { ensureNodes(); playDrum(ac(), trackGain[r], r, 1, ac().currentTime); });
     const resetBtn = btn("Reset", "wa-btn-sm");
     resetBtn.addEventListener("click", () => {
       Object.assign(dp[r], DP_DEF[r]);
-      sdPanel.querySelectorAll<HTMLInputElement>("input[type=range]").forEach((inp, i) => {
-        if (i >= specs.length) return;
-        inp.value = String(dp[r][specs[i].key]);
-        const vout = inp.nextElementSibling as HTMLElement;
-        if (vout) vout.textContent = `${dp[r][specs[i].key]}${specs[i].unit ?? ""}`;
-      });
+      sdPanel.querySelectorAll<HTMLElement>(".wa-knob").forEach((control) => control.dispatchEvent(new MouseEvent("dblclick")));
       saveAll();
     });
     const actions = el("div", "wa-sd-actions"); actions.append(testBtn, resetBtn);

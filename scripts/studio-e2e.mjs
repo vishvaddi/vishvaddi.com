@@ -1,10 +1,11 @@
 import { spawn, spawnSync } from "node:child_process";
 import { chromium } from "playwright-core";
 
-const base = "http://127.0.0.1:4321";
+const port = 10000 + Math.floor(Math.random() * 20000);
+const base = `http://127.0.0.1:${port}`;
 const server = process.platform === "win32"
-  ? spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", "npm run dev -- --host 127.0.0.1"], { stdio: "pipe" })
-  : spawn("npm", ["run", "dev", "--", "--host", "127.0.0.1"], { stdio: "pipe" });
+  ? spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", `npm run dev -- --host 127.0.0.1 --port ${port}`], { stdio: "pipe" })
+  : spawn("npm", ["run", "dev", "--", "--host", "127.0.0.1", "--port", String(port)], { stdio: "pipe" });
 const waitForServer = async () => {
   for (let attempt = 0; attempt < 60; attempt++) {
     try { if ((await fetch(`${base}/studio`)).ok) return; } catch {}
@@ -27,6 +28,7 @@ try {
   await page.goto(`${base}/studio`, { waitUntil: "networkidle" });
   await page.locator(".wa-tab").evaluateAll((tabs) => tabs.forEach((tab) => /** @type {HTMLElement} */ (tab).click()));
   await page.locator(".wa-tab").nth(1).click();
+  if (await page.locator('.wa-knob[role="slider"]').count() < 1) throw new Error("Accessible knobs were not rendered");
   await page.locator(".wa-grid .wa-cell").first().click();
   await page.locator(".wa-piano-cell").first().click();
   await page.locator(".wa-tab").nth(2).click();
