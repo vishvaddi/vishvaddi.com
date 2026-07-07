@@ -1,4 +1,4 @@
-import { STEPS, SONG_SLOTS, PAD_BANK_SIZE, TRACKS, clip, transport, stepDur, audible, allPats, allVels, synthNotes, padEvents, songChain, rackState, vsynthPatch } from "./state";
+import { STEPS, SONG_SLOTS, PAD_BANK_SIZE, TRACKS, clip, transport, stepDur, allPats, allVels, synthNotes, padEvents, songChain, rackState, vsynthPatch } from "./state";
 import { ac, ensureNodes, trackGain, metroClick, playDrum, playPad } from "./engine";
 import * as engine from "./engine";
 import { playNote } from "./vsynth";
@@ -26,7 +26,7 @@ export function buildPlayback(shell: Shell, cells: HTMLElement[][], synthCells: 
     const random = (Math.random() * 2 - 1) * rackState.grooveRandom / 1000;
     const when = baseWhen + (current % 2 === 1 ? transport.swing * stepDur() : 0) + groove + random;
     const drumClip = clip.play.drums, padClip = clip.play.pads, synthClip = clip.play.synth;
-    if (drumClip !== null) for (let row = 0; row < 8; row++) if (allPats[drumClip][row][current] && audible(row)) playDrum(audio, trackGain[row], row, allVels[drumClip][row][current] / 127, when);
+    if (drumClip !== null) for (let row = 0; row < 8; row++) if (allPats[drumClip][row][current]) playDrum(audio, trackGain[row], row, allVels[drumClip][row][current] / 127, when);
     if (padClip !== null) padEvents[padClip].filter((event) => event.step === current).forEach((event) => {
       if (Math.random() * 100 > event.probability) return;
       const velocity = Math.max(1, Math.min(127, event.velocity * (1 + (Math.random() * 2 - 1) * rackState.grooveVelocity)));

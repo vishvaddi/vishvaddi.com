@@ -5,11 +5,11 @@
 import {
   SCENES, STEPS, SONG_SLOTS, PAD_COUNT, PIANO_NOTES, TRACKS, clip, transport,
   allPats, allVels, synthNotes, padEvents, songChain, sampleParams, sampleData, sampleBuffers,
-  dp, mpc, rackState, fx, vsynthPatch,
+  dp, mpc, rackState, mixerState, fx, vsynthPatch,
 } from "./state";
-import type { HistoryState, PadEvent, SamplerP, DrumP, RackState, TrackId, VNote } from "./state";
+import type { HistoryState, PadEvent, SamplerP, DrumP, RackState, MixerState, TrackId, VNote } from "./state";
 import type { VPatch } from "./vsynth";
-import { applyFxState, hydrateSample } from "./engine";
+import { applyFxState, applyMixerState, hydrateSample } from "./engine";
 
 export function saveAll(): void {
   try {
@@ -27,7 +27,8 @@ export function historyState(): HistoryState {
     sampleData: [...sampleData],
     songChain: [...songChain],
     fx: { ...fx },
-    rackState: { ...rackState, macros: [...rackState.macros], devices: { ...rackState.devices } },
+    rackState: { ...rackState, devices: { ...rackState.devices } },
+    mixer: { masterGain: mixerState.masterGain, channels: mixerState.channels.map((channel) => ({ ...channel })) },
   };
 }
 export function restoreHistory(state: HistoryState): void {
@@ -40,8 +41,9 @@ export function restoreHistory(state: HistoryState): void {
   state.songChain.forEach((pattern, i) => { songChain[i] = pattern; });
   Object.assign(fx, state.fx);
   Object.assign(rackState, state.rackState);
-  rackState.macros = [...state.rackState.macros]; rackState.devices = { ...state.rackState.devices };
-  applyFxState(); saveAll();
+  rackState.devices = { ...state.rackState.devices };
+  if (state.mixer) { mixerState.masterGain = state.mixer.masterGain; state.mixer.channels.forEach((channel, index) => { if (mixerState.channels[index]) Object.assign(mixerState.channels[index], channel); }); }
+  applyFxState(); applyMixerState(); saveAll();
 }
 export function projectState(includeSamples = true): object {
   const samplePool: string[] = [];
@@ -52,7 +54,7 @@ export function projectState(includeSamples = true): object {
     return index;
   });
   return {
-    version: 6,
+    version: 7,
     pats: allPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
     vels: allVels,
     dp,
@@ -70,6 +72,7 @@ export function projectState(includeSamples = true): object {
     padEvents,
     mpc,
     rackState,
+    mixer: mixerState,
   };
 }
 export function loadAll(): void {
@@ -155,6 +158,12 @@ export function applyProject(saved: Record<string, unknown>): void {
         const incoming = saved.rackState as Partial<RackState>;
         Object.assign(rackState, incoming);
         rackState.devices = { ...rackState.devices, ...(incoming.devices ?? {}) };
+      }
+      if (saved.mixer && typeof saved.mixer === "object") {
+        const incoming = saved.mixer as Partial<MixerState>;
+        if (typeof incoming.masterGain === "number") mixerState.masterGain = incoming.masterGain;
+        incoming.channels?.forEach((channel, index) => { if (mixerState.channels[index]) Object.assign(mixerState.channels[index], channel); });
+        applyMixerState();
       }
     } else if (Array.isArray(saved) && saved.length === 8) {
       for (let r = 0; r < 8; r++) for (let c = 0; c < STEPS; c++) allPats[0][r][c] = !!saved[r][c];

@@ -4,8 +4,8 @@ import { chromium } from "playwright-core";
 const port = 10000 + Math.floor(Math.random() * 20000);
 const base = `http://127.0.0.1:${port}`;
 const server = process.platform === "win32"
-  ? spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", `npm run dev -- --host 127.0.0.1 --port ${port}`], { stdio: "pipe" })
-  : spawn("npm", ["run", "dev", "--", "--host", "127.0.0.1", "--port", String(port)], { stdio: "pipe" });
+  ? spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", `npm run dev -- --host 127.0.0.1 --port ${port} --force`], { stdio: "pipe" })
+  : spawn("npm", ["run", "dev", "--", "--host", "127.0.0.1", "--port", String(port), "--force"], { stdio: "pipe" });
 const waitForServer = async () => {
   for (let attempt = 0; attempt < 60; attempt++) {
     try { if ((await fetch(`${base}/studio`)).ok) return; } catch {}
@@ -44,6 +44,22 @@ try {
     return { duration: buffer.duration, rms: Math.sqrt(sum / left.length) };
   });
   if (audio.duration <= 0 || audio.rms <= 0.00001) throw new Error(`Invalid render: ${JSON.stringify(audio)}`);
+  const pan = await page.evaluate(async () => {
+    window.__vishamp.mixerState.channels[0].pan = -1;
+    const buffer = await window.__vishamp.renderBuffer("pattern");
+    const rms = (data) => Math.sqrt(data.reduce((sum, sample) => sum + sample * sample, 0) / data.length);
+    const result = { left: rms(buffer.getChannelData(0)), right: rms(buffer.getChannelData(1)) };
+    window.__vishamp.mixerState.channels[0].pan = 0;
+    return result;
+  });
+  if (pan.left <= pan.right * 2) throw new Error(`Pan was not applied to export: ${JSON.stringify(pan)}`);
+  const mutedRms = await page.evaluate(async () => {
+    window.__vishamp.mixerState.channels[0].mute = true;
+    const buffer = await window.__vishamp.renderBuffer("pattern"), data = buffer.getChannelData(0);
+    window.__vishamp.mixerState.channels[0].mute = false;
+    return Math.sqrt(data.reduce((sum, sample) => sum + sample * sample, 0) / data.length);
+  });
+  if (mutedRms >= audio.rms * 0.1) throw new Error(`Mute was not applied to export: ${mutedRms}`);
   if (errors.length) throw new Error(`Browser errors:\n${errors.join("\n")}`);
   console.log(`studio e2e passed: ${audio.duration.toFixed(2)}s, RMS ${audio.rms.toFixed(5)}`);
 } finally {

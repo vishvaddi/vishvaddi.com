@@ -74,7 +74,8 @@ export function buildPads(): PadsUI {
     const option = document.createElement("option"); option.value = value; option.textContent = label; quantSel.append(option);
   });
   quantSel.value = String(mpc.quantize);
-  mpcToolbar.append(fullLevelBtn, levelsBtn, levelModeSel, repeatBtn, repeatSel, recordBtn, overdubBtn, undoPassBtn, quantSel, rotateBtn, mutateBtn, fillBtn, ghostBtn, extractGrooveBtn, midiBtn, resampleQuality, resampleBtn, performanceStatus);
+  const quantStrength = knob({ label: "Quantise", min: 0, max: 100, value: mpc.quantizeStrength, step: 1, unit: "%", def: 100, size: 40, onInput: (value) => { mpc.quantizeStrength = value; saveAll(); } });
+  mpcToolbar.append(fullLevelBtn, levelsBtn, levelModeSel, repeatBtn, repeatSel, recordBtn, overdubBtn, undoPassBtn, quantSel, quantStrength.el, rotateBtn, mutateBtn, fillBtn, ghostBtn, extractGrooveBtn, midiBtn, resampleQuality, resampleBtn, performanceStatus);
 
   const padBankRow = el("div", "wa-pad-banks");
   ["A", "B", "C", "D"].forEach((label, bank) => {

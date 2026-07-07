@@ -1,7 +1,6 @@
-import { STEPS, PAD_BANK_SIZE, clip, transport, allPats, allVels, synthNotes, padEvents, songChain, rackState, fx, vsynthPatch, audible } from "./state";
+import { STEPS, PAD_BANK_SIZE, clip, transport, allPats, allVels, synthNotes, padEvents, songChain, rackState, mixerState, chAudible, fx, vsynthPatch } from "./state";
 import type { TrackId } from "./state";
-import { ensureNodes, trackGain, playDrum, playPad, metroClick } from "./engine";
-import * as engine from "./engine";
+import { ensureNodes, playDrum, playPad, metroClick } from "./engine";
 import { playNote } from "./vsynth";
 import { projectState, pendingProjectStore } from "./persistence";
 import { el, btn, help, download, encodeWav, encodeMp3 } from "./helpers";
@@ -28,7 +27,7 @@ export function buildRender(): RenderUI {
     const scenes = mode === "song" ? [...songChain] : [0];
     const clipFor = (track: TrackId, index: number): number | null => mode === "song" ? scenes[index] : clip.play[track];
     const offline = new OfflineAudioContext(2, Math.ceil((scenes.length * STEPS * durationStep + 2.2) * sampleRate), sampleRate);
-    const master = offline.createGain(); master.gain.value = engine.master!.gain.value;
+    const master = offline.createGain(); master.gain.value = mixerState.masterGain;
     const low = offline.createBiquadFilter(); low.type = "lowshelf"; low.frequency.value = 180; low.gain.value = rackState.devices.eq ? fx.low : 0;
     const mid = offline.createBiquadFilter(); mid.type = "peaking"; mid.frequency.value = 1200; mid.Q.value = 0.8; mid.gain.value = rackState.devices.eq ? fx.mid : 0;
     const high = offline.createBiquadFilter(); high.type = "highshelf"; high.frequency.value = 6500; high.gain.value = rackState.devices.eq ? fx.high : 0;
@@ -43,16 +42,15 @@ export function buildRender(): RenderUI {
     if (rackState.devices.delay && fx.delayMix > 0) {
       const delay = offline.createDelay(2), feedback = offline.createGain(), wet = offline.createGain(); delay.delayTime.value = fx.delayTime; feedback.gain.value = fx.delayFeedback; wet.gain.value = fx.delayMix; master.connect(delay); delay.connect(feedback); feedback.connect(delay); delay.connect(wet); wet.connect(low);
     }
-    const tracks: GainNode[] = [];
-    for (let i = 0; i < 8; i++) { const gain = offline.createGain(); gain.gain.value = trackGain[i].gain.value; gain.connect(master); tracks.push(gain); }
-    const synth = offline.createGain(); synth.gain.value = engine.synthGain!.gain.value; synth.connect(master);
+    const channels: GainNode[] = [];
+    for (let i = 0; i < 10; i++) { const gain = offline.createGain(), pan = offline.createStereoPanner(); gain.gain.value = chAudible(i) ? mixerState.channels[i].gain : 0; pan.pan.value = mixerState.channels[i].pan; gain.connect(pan); pan.connect(master); channels.push(gain); }
     scenes.forEach((_, sceneIndex) => { for (let step = 0; step < STEPS; step++) {
       const base = (sceneIndex * STEPS + step) * durationStep;
       const when = base + (step % 2 === 1 ? transport.swing * durationStep + rackState.grooveTiming * durationStep * 0.5 : 0);
       const drums = clipFor("drums", sceneIndex), pads = clipFor("pads", sceneIndex), synthClip = clipFor("synth", sceneIndex);
-      if (drums !== null) for (let row = 0; row < 8; row++) if (allPats[drums][row][step] && audible(row)) playDrum(offline, tracks[row], row, allVels[drums][row][step] / 127, when);
-      if (pads !== null) padEvents[pads].filter((event) => event.step === step).forEach((event) => { if (Math.random() * 100 > event.probability) return; const ratchets = Math.max(1, event.ratchets); for (let i = 0; i < ratchets; i++) playPad(offline, event.pad, event.velocity, Math.max(base, when + event.offset / 1000 + i * durationStep / ratchets), event.pad % PAD_BANK_SIZE, tracks[event.pad % tracks.length]); });
-      if (synthClip !== null) synthNotes[synthClip].forEach((note) => { if (note.step === step) playNote(offline, synth, vsynthPatch, note.note, note.vel, when, durationStep * note.len * 0.98); });
+      if (drums !== null) for (let row = 0; row < 8; row++) if (allPats[drums][row][step]) playDrum(offline, channels[row], row, allVels[drums][row][step] / 127, when);
+      if (pads !== null) padEvents[pads].filter((event) => event.step === step).forEach((event) => { if (Math.random() * 100 > event.probability) return; const ratchets = Math.max(1, event.ratchets); for (let i = 0; i < ratchets; i++) { const eventWhen = Math.max(base, when + event.offset / 1000 + i * durationStep / ratchets); playPad(offline, event.pad, event.velocity, eventWhen, event.pad % PAD_BANK_SIZE, channels[8]); for (let echo = 1; echo <= rackState.noteEcho; echo++) playPad(offline, event.pad, event.velocity * Math.pow(rackState.echoDecay, echo), eventWhen + echo * durationStep, event.pad % PAD_BANK_SIZE, channels[8]); } });
+      if (synthClip !== null) synthNotes[synthClip].forEach((note) => { if (note.step === step) playNote(offline, channels[9], vsynthPatch, note.note, note.vel, when, durationStep * note.len * 0.98); });
       if (transport.metro && step % 4 === 0) metroClick(offline, master, base, step === 0);
     } });
     return offline.startRendering();

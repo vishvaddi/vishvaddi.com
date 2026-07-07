@@ -1,26 +1,24 @@
-import { DRUMS, clip, padEvents, mpc, rackState, fx, mute, solo } from "./state";
-import { ensureNodes, trackGain, initReverb, initDelay, applyFxState } from "./engine";
-import * as engine from "./engine";
+import { DRUMS, clip, padEvents, mpc, rackState, mixerState, fx } from "./state";
+import { ensureNodes, initReverb, initDelay, applyFxState, applyMixerState } from "./engine";
 import { saveAll } from "./persistence";
 import { el, btn, help, euclideanPattern } from "./helpers";
 import { ctx } from "./ctx";
 import { knob } from "./knob";
 
-function mixChannel(name: string, value: number, onInput: (value: number) => void, index: number): HTMLElement {
+function mixChannel(name: string, index: number): HTMLElement {
+  const state = mixerState.channels[index];
   const channel = el("div", "wa-ch");
   const fader = document.createElement("input");
-  fader.type = "range"; fader.min = "0"; fader.max = "1"; fader.step = "0.01"; fader.value = String(value); fader.className = "wa-fader";
-  fader.addEventListener("input", () => onInput(Number(fader.value)));
-  channel.append(fader);
-  if (index >= 0) {
-    const controls = el("div", "wa-ms");
-    const muteButton = btn("M", "wa-mute"); muteButton.classList.remove("wa-btn");
-    const soloButton = btn("S", "wa-solo"); soloButton.classList.remove("wa-btn");
-    muteButton.classList.toggle("active", mute[index]); soloButton.classList.toggle("active", solo[index]);
-    muteButton.addEventListener("click", () => { mute[index] = !mute[index]; muteButton.classList.toggle("active", mute[index]); saveAll(); });
-    soloButton.addEventListener("click", () => { solo[index] = !solo[index]; soloButton.classList.toggle("active", solo[index]); saveAll(); });
-    controls.append(muteButton, soloButton); channel.append(controls);
-  }
+  fader.type = "range"; fader.min = "0"; fader.max = "1"; fader.step = "0.01"; fader.value = String(state.gain); fader.className = "wa-fader";
+  fader.addEventListener("input", () => { state.gain = Number(fader.value); ensureNodes(); applyMixerState(); saveAll(); });
+  channel.append(knob({ label: "Pan", min: -1, max: 1, value: state.pan, step: 0.01, def: 0, fmt: (v) => v === 0 ? "C" : `${v < 0 ? "L" : "R"}${Math.round(Math.abs(v) * 100)}`, onInput: (v) => { state.pan = v; ensureNodes(); applyMixerState(); saveAll(); } }).el, fader);
+  const controls = el("div", "wa-ms");
+  const muteButton = btn("M", "wa-mute"); muteButton.classList.remove("wa-btn");
+  const soloButton = btn("S", "wa-solo"); soloButton.classList.remove("wa-btn");
+  muteButton.classList.toggle("active", state.mute); soloButton.classList.toggle("active", state.solo);
+  muteButton.addEventListener("click", () => { state.mute = !state.mute; muteButton.classList.toggle("active", state.mute); ensureNodes(); applyMixerState(); saveAll(); });
+  soloButton.addEventListener("click", () => { state.solo = !state.solo; soloButton.classList.toggle("active", state.solo); ensureNodes(); applyMixerState(); saveAll(); });
+  controls.append(muteButton, soloButton); channel.append(controls);
   channel.append(el("span", "wa-ch-name", name));
   return channel;
 }
@@ -29,9 +27,10 @@ export interface MixerUI { mixer: HTMLElement; devicePanel: HTMLElement }
 
 export function buildMixer(): MixerUI {
   const mixer = el("div", "wa-panel"), mixGrid = el("div", "wa-mixer");
-  DRUMS.forEach((name, index) => mixGrid.append(mixChannel(name, 0.8, (value) => { ensureNodes(); trackGain[index].gain.value = value; }, index)));
-  mixGrid.append(mixChannel("Synth", 0.7, (value) => { ensureNodes(); engine.synthGain!.gain.value = value; }, -1));
-  mixGrid.append(mixChannel("MASTER", 0.8, (value) => { ensureNodes(); engine.master!.gain.value = value; }, -1));
+  DRUMS.forEach((name, index) => mixGrid.append(mixChannel(name, index)));
+  mixGrid.append(mixChannel("Pads", 8), mixChannel("Synth", 9));
+  const masterChannel = el("div", "wa-ch"), masterFader = document.createElement("input"); masterFader.type = "range"; masterFader.min = "0"; masterFader.max = "1"; masterFader.step = "0.01"; masterFader.value = String(mixerState.masterGain); masterFader.className = "wa-fader";
+  masterFader.addEventListener("input", () => { mixerState.masterGain = Number(masterFader.value); ensureNodes(); applyMixerState(); saveAll(); }); masterChannel.append(masterFader, el("span", "wa-ch-name", "MASTER")); mixGrid.append(masterChannel);
   const effects = el("div", "wa-effects");
   const fxSlider = (label: string, min: number, max: number, value: number, step: number, apply: (value: number) => void): HTMLElement =>
     knob({ label, min, max, value, step, def: value, onInput: (next) => { ensureNodes(); apply(next); applyFxState(); saveAll(); } }).el;
@@ -62,7 +61,7 @@ export function buildMixer(): MixerUI {
     knob({ label: "Echoes", min: 0, max: 8, value: rackState.noteEcho, step: 1, def: 0, onInput: (v) => { rackState.noteEcho = v; saveAll(); } }).el,
     knob({ label: "Echo decay", min: 0.1, max: 0.95, value: rackState.echoDecay, step: 0.01, def: 0.5, onInput: (v) => { rackState.echoDecay = v; saveAll(); } }).el, euclid);
   const stack = el("div", "wa-device-stack");
-  [["sampler", "MPC PROGRAM · 64 pads / slices"], ["character", "CHARACTER · macros / sampler colour"], ["eq", "CHANNEL EQ · low / mid / high"], ["compressor", "BUS COMPRESSOR"], ["delay", "FEEDBACK DELAY · parallel return"], ["reverb", "CONVOLUTION REVERB · parallel return"], ["limiter", "MASTER LIMITER"]].forEach(([key, label]) => {
+  [["eq", "CHANNEL EQ · low / mid / high"], ["compressor", "BUS COMPRESSOR"], ["delay", "FEEDBACK DELAY · parallel return"], ["reverb", "CONVOLUTION REVERB · parallel return"], ["limiter", "MASTER LIMITER"]].forEach(([key, label]) => {
     const device = el("div", "wa-device"), header = el("div", "wa-device-header"), bypass = btn(rackState.devices[key] ? "ON" : "BYPASS", "wa-toggle wa-btn-sm");
     bypass.classList.toggle("active", rackState.devices[key]); bypass.addEventListener("click", () => { rackState.devices[key] = !rackState.devices[key]; bypass.textContent = rackState.devices[key] ? "ON" : "BYPASS"; bypass.classList.toggle("active", rackState.devices[key]); applyFxState(); saveAll(); });
     header.append(el("span", "wa-device-title", label), bypass); device.append(header); stack.append(device);

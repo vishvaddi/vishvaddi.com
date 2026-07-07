@@ -59,9 +59,10 @@ export interface RackState {
   grooveRandom: number;
   noteEcho: number;
   echoDecay: number;
-  macros: number[];
   devices: Record<string, boolean>;
 }
+export interface ChannelState { gain: number; pan: number; mute: boolean; solo: boolean }
+export interface MixerState { channels: ChannelState[]; masterGain: number }
 export interface VNote {
   note: string;   // e.g. "D#4"
   step: number;   // 0–15 start step
@@ -78,6 +79,7 @@ export interface HistoryState {
   songChain: number[];
   fx: FxState;
   rackState: RackState;
+  mixer?: MixerState;
 }
 export interface FxState {
   low: number;
@@ -189,8 +191,8 @@ export const mpc: MpcState = {
 };
 export const rackState: RackState = {
   grooveTiming: 0, grooveVelocity: 0, grooveRandom: 0,
-  noteEcho: 0, echoDecay: 0.65, macros: [0, 0, 0, 0],
-  devices: { player: true, sampler: true, character: true, eq: true, compressor: true, delay: true, reverb: true, limiter: true },
+  noteEcho: 0, echoDecay: 0.65,
+  devices: { eq: true, compressor: true, delay: true, reverb: true, limiter: true },
 };
 export const fx: FxState = {
   low: 0, mid: 0, high: 0,
@@ -203,6 +205,12 @@ export const fx: FxState = {
 export const vsynthPatch: VPatch = initPatch();
 
 // ─── Mixer ───────────────────────────────────────────────────────────────────
-export const mute = new Array(8).fill(false);
-export const solo = new Array(8).fill(false);
-export function audible(r: number): boolean { const s = solo.some(Boolean); return !mute[r] && (!s || solo[r]); }
+export const mixerState: MixerState = {
+  channels: Array.from({ length: 10 }, (_, index) => ({ gain: index < 8 ? 0.8 : 0.7, pan: 0, mute: false, solo: false })),
+  masterGain: 0.8,
+};
+export function chAudible(index: number): boolean {
+  const anySolo = mixerState.channels.some((channel) => channel.solo);
+  const channel = mixerState.channels[index];
+  return !channel.mute && (!anySolo || channel.solo);
+}

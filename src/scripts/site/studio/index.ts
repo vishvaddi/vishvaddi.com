@@ -1,6 +1,6 @@
 import "../../../styles/studio.css";
-import { SCENES, clip, allPats, allVels, songChain, sampleData, mpc, vsynthPatch } from "./state";
-import { ac, ensureNodes, hydrateSample, applyFxState } from "./engine";
+import { SCENES, clip, allPats, allVels, songChain, sampleData, mpc, mixerState, vsynthPatch } from "./state";
+import { ac, ensureNodes, hydrateSample, applyFxState, applyMixerState } from "./engine";
 import * as engine from "./engine";
 import { loadAll, applyProject, pendingProjectStore } from "./persistence";
 import { buildShell } from "./shell";
@@ -55,5 +55,5 @@ export async function initStudio(): Promise<void> {
   window.addEventListener("keyup", (event) => { const localPad = padMap[event.key.toLowerCase()]; if (localPad != null) pads.padButtons[localPad].classList.remove("down"); if (shell.activeTab() !== 1) return; const note = keyMap[event.key.toLowerCase()]; if (!note) return; down.delete(note); synth.liveKeys.noteOff(ac(), note); highlightKey(synth.synthKeys, note, false); });
 
   ctx.selectScene(clip.sel);
-  if (import.meta.env.DEV) (window as unknown as { __vishamp: { renderBuffer: typeof ctx.renderBuffer } }).__vishamp = { renderBuffer: ctx.renderBuffer };
+  if (import.meta.env.DEV) (window as unknown as { __vishamp: object }).__vishamp = { renderBuffer: ctx.renderBuffer, mixerState, applyMixerState };
 }
