@@ -68,6 +68,14 @@ try {
   });
   if (longClip < 10) throw new Error(`Four-bar export was too short: ${longClip}`);
   if (errors.length) throw new Error(`Browser errors:\n${errors.join("\n")}`);
+  const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await mobile.goto(`${base}/studio`, { waitUntil: "networkidle" });
+  if (!await mobile.locator(".wa-session").isVisible()) throw new Error("Session grid is not visible on mobile");
+  await mobile.getByRole("button", { name: "PADS", exact: true }).click();
+  if (!await mobile.locator(".wa-mpc-pads").isVisible()) throw new Error("Pads editor is not visible on mobile");
+  await mobile.getByRole("button", { name: "SYNTH", exact: true }).click();
+  if (!await mobile.locator(".wa-roll-grid").isVisible()) throw new Error("Piano roll is not visible on mobile");
+  await mobile.close();
   console.log(`studio e2e passed: ${audio.duration.toFixed(2)}s, RMS ${audio.rms.toFixed(5)}`);
 } finally {
   await browser?.close();

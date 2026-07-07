@@ -3,7 +3,7 @@
 
 import {
   MAX_STEPS, SCENES, SCENE_LABELS, DRUMS, clip, clipLen,
-  allPats, allVels, synthNotes, padEvents, sampleParams, dp, DP_DEF, DP_SPECS,
+  allPats, allVels, synthNotes, padEvents, dp, DP_DEF, DP_SPECS,
 } from "./state";
 import { ac, ensureNodes, trackGain, playDrum } from "./engine";
 import { saveAll } from "./persistence";

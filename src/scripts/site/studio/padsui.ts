@@ -2,7 +2,7 @@
 // grid, the selected-pad inspector, and the per-pad event lane + editor.
 
 import {
-  STEPS, MAX_STEPS, SCENE_LABELS, PAD_BANK_SIZE, clip, clipLen, transport, stepDur,
+  STEPS, MAX_STEPS, SCENE_LABELS, PAD_BANK_SIZE, clip, clipLen, stepDur,
   padEvents, sampleParams, sampleBuffers, sampleData, mpc, rackState,
 } from "./state";
 import type { MpcState, PadEvent, SamplerP } from "./state";

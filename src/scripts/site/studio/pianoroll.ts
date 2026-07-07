@@ -1,4 +1,4 @@
-import { MAX_STEPS, ROLL_NOTES, clip, clipLen, synthNotes } from "./state";
+import { ROLL_NOTES, clip, clipLen, synthNotes } from "./state";
 import type { VNote } from "./state";
 import { saveAll } from "./persistence";
 import { el, btn } from "./helpers";

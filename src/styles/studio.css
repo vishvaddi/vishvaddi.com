@@ -466,16 +466,12 @@
 .wa-effects .wa-slider-row { margin: 9px 0; }
 
 /* ── Modular device rack ── */
-.wa-combinator,
 .wa-device {
   margin-bottom: 10px; padding: 12px;
   background: var(--wa-surface-2);
   border: 1px solid var(--wa-border-2);
   border-radius: var(--wa-radius-sm);
 }
-.wa-combinator { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
-.wa-combinator > .wa-fx-title,
-.wa-combinator > .wa-export { grid-column: 1 / -1; }
 .wa-device-stack { margin-top: 12px; }
 .wa-device-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; }
 .wa-device-title { color: var(--wa-text); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; }
@@ -741,7 +737,7 @@
   .wa-tabs { overflow-x: auto; overscroll-behavior-inline: contain; }
   .wa-tab { flex: 1 0 auto; min-width: 92px; padding: 11px 12px; white-space: nowrap; }
   .wa-rack, .wa-song-chain { grid-template-columns: 1fr; }
-  .wa-selected-sample, .wa-event-editor, .wa-combinator { grid-template-columns: 1fr; }
+  .wa-selected-sample, .wa-event-editor { grid-template-columns: 1fr; }
   .wa-inspector .wa-selected-sample { grid-template-columns: 1fr; }
   .wa-mpc-toolbar > *,
   .wa-chop-toolbar > * { flex: 1 0 auto; }

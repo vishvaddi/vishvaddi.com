@@ -2,7 +2,7 @@
 // the linear song chain.
 
 import {
-  SCENE_LABELS, SONG_SLOTS, TRACKS, TRACK_LABELS, clip, clipLen, transport,
+  SCENE_LABELS, TRACKS, TRACK_LABELS, clip, clipLen, transport,
   allPats, synthNotes, padEvents, songChain,
 } from "./state";
 import type { TrackId } from "./state";
