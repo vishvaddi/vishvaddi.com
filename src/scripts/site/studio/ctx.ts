@@ -12,6 +12,8 @@ export interface StudioCtx {
   paintMpcPads(): void;
   selectScene(scene: number): void;
   refreshVisibleState(): void;
+  selectTrack(track: "drums" | "pads" | "synth"): void;
+  currentTrack(): "drums" | "pads" | "synth";
   // Undo (owned by shell).
   checkpoint(): void;
   // Shared widgets (owned by shell).

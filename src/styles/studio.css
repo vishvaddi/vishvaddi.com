@@ -871,3 +871,10 @@
 .wa-roll-velocity { display: block; border-top: 1px solid var(--wa-border); }
 .wa-roll-grid, .wa-roll-velocity { touch-action: pan-x pan-y; }
 .wa-roll-grid:focus-visible { outline: 2px solid var(--wa-accent); outline-offset: -2px; }
+.wa-workarea-single { grid-template-columns: minmax(0, 1fr); }
+.wa-session-top { position: sticky; top: 0; z-index: 8; background: var(--wa-bg); padding-bottom: 4px; }
+.wa-track-tabs { position: sticky; top: 0; z-index: 7; display: flex; gap: 4px; padding: 8px; background: var(--wa-surface); border: 1px solid var(--wa-border); }
+.wa-track-tab.active { border-color: var(--wa-accent); color: var(--wa-accent); }
+.wa-track-panel[hidden] { display: none; }
+.wa-inline-inspector { margin: 10px 0; padding: 10px; border: 1px solid var(--wa-border); background: var(--wa-surface); }
+@media (max-width: 760px) { .wa-session-top .wa-panel { overflow-x: auto; } .wa-session-top .wa-session { min-width: 430px; } }

@@ -27,11 +27,12 @@ try {
   });
   await page.goto(`${base}/studio`, { waitUntil: "networkidle" });
   await page.locator(".wa-tab").evaluateAll((tabs) => tabs.forEach((tab) => /** @type {HTMLElement} */ (tab).click()));
-  await page.locator(".wa-tab").nth(1).click();
+  await page.locator(".wa-tab").nth(0).click();
+  await page.locator(".wa-track-tab").nth(0).click();
   if (await page.locator('.wa-knob[role="slider"]').count() < 1) throw new Error("Accessible knobs were not rendered");
   await page.locator(".wa-grid .wa-cell").first().click();
+  await page.locator(".wa-track-tab").nth(2).click();
   await page.locator(".wa-roll-grid").click({ position: { x: 12, y: 90 } });
-  await page.locator(".wa-tab").nth(2).click();
   await page.locator(".wa-clip").first().click();
   await page.locator(".wa-transport button").first().click();
   await page.waitForTimeout(2000);

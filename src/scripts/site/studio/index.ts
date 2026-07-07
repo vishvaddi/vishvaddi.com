@@ -50,11 +50,11 @@ export async function initStudio(): Promise<void> {
   const padMap: Record<string, number> = { "1": 12, "2": 13, "3": 14, "4": 15, q: 8, w: 9, e: 10, r: 11, a: 4, s: 5, d: 6, f: 7, z: 0, x: 1, c: 2, v: 3 };
   const down = new Set<string>();
   window.addEventListener("keydown", (event) => {
-    if (shell.activeTab() === 0) { const localPad = padMap[event.key.toLowerCase()]; if (localPad != null && !event.repeat && !event.metaKey && !event.ctrlKey) { event.preventDefault(); pads.triggerPerformancePad(localPad, mpc.fullLevel ? 127 : 105); pads.padButtons[localPad].classList.add("down"); return; } }
-    if (shell.activeTab() !== 1) return; const note = keyMap[event.key.toLowerCase()]; if (!note || down.has(note) || event.metaKey || event.ctrlKey) return;
+    if (shell.activeTab() === 0 && ctx.currentTrack() === "pads") { const localPad = padMap[event.key.toLowerCase()]; if (localPad != null && !event.repeat && !event.metaKey && !event.ctrlKey) { event.preventDefault(); pads.triggerPerformancePad(localPad, mpc.fullLevel ? 127 : 105); pads.padButtons[localPad].classList.add("down"); return; } }
+    if (shell.activeTab() !== 0 || ctx.currentTrack() !== "synth") return; const note = keyMap[event.key.toLowerCase()]; if (!note || down.has(note) || event.metaKey || event.ctrlKey) return;
     down.add(note); ensureNodes(); synth.liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, note); highlightKey(synth.synthKeys, note, true);
   });
-  window.addEventListener("keyup", (event) => { const localPad = padMap[event.key.toLowerCase()]; if (localPad != null) pads.padButtons[localPad].classList.remove("down"); if (shell.activeTab() !== 1) return; const note = keyMap[event.key.toLowerCase()]; if (!note) return; down.delete(note); synth.liveKeys.noteOff(ac(), note); highlightKey(synth.synthKeys, note, false); });
+  window.addEventListener("keyup", (event) => { const localPad = padMap[event.key.toLowerCase()]; if (localPad != null) pads.padButtons[localPad].classList.remove("down"); if (shell.activeTab() !== 0 || ctx.currentTrack() !== "synth") return; const note = keyMap[event.key.toLowerCase()]; if (!note) return; down.delete(note); synth.liveKeys.noteOff(ac(), note); highlightKey(synth.synthKeys, note, false); });
 
   ctx.selectScene(clip.sel);
   if (import.meta.env.DEV) (window as unknown as { __vishamp: object }).__vishamp = { renderBuffer: ctx.renderBuffer, mixerState, applyMixerState, clipLen, allPats };

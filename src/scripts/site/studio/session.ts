@@ -44,6 +44,7 @@ export function buildSession(): SessionUI {
   }
   ctx.paintSession = paintSession;
   function launchClip(track: TrackId, scene: number | null): void {
+    ctx.selectTrack(track);
     if (ctx.isPlaying()) {
       // Clicking an already-queued clip cancels the queue.
       clip.queued[track] = clip.queued[track] === scene ? undefined : scene;

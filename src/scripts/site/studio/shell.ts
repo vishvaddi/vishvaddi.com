@@ -116,19 +116,16 @@ export function buildShell(): Shell {
 
   // ── Workspaces ──
   const tabbar = el("div", "wa-tabs"), panels = el("div", "wa-panels");
-  const tabNames = ["Create", "Sequence", "Arrange", "Mix"];
+  const tabNames = ["SESSION", "MIX"];
   const tabBtns: HTMLElement[] = [], panelEls: HTMLElement[] = [];
-  let activeTab = Math.max(0, Math.min(3, Number(localStorage.getItem("vv_studio_workspace")) || 0));
+  let storedTab = 0;
+  try { const stored = JSON.parse(localStorage.getItem("vv_studio_workspace") || "{}"); storedTab = Number(stored.tab) || 0; } catch { storedTab = Number(localStorage.getItem("vv_studio_workspace")) || 0; }
+  let activeTab = Math.max(0, Math.min(1, storedTab));
   tabNames.forEach((t, i) => {
     const b = btn(t, "wa-tab"); b.classList.remove("wa-btn");
-    const descriptions = [
-      "Load or record samples, chop breaks and perform on the pads.",
-      "Program drums and synth notes with step and piano-roll editors.",
-      "Launch clips and scenes live, or order scenes into a complete song.",
-      "Shape the sound, balance tracks and save or export the project.",
-    ];
+    const descriptions = ["Launch clips and edit the selected drums, pads or synth track.", "Balance channels, process the master and save or export the project."];
     help(b, descriptions[i]);
-    b.addEventListener("click", () => { activeTab = i; localStorage.setItem("vv_studio_workspace", String(i)); paintTabs(); });
+    b.addEventListener("click", () => { activeTab = i; let track = "drums"; try { track = JSON.parse(localStorage.getItem("vv_studio_workspace") || "{}").track || track; } catch {} localStorage.setItem("vv_studio_workspace", JSON.stringify({ tab: i, track })); paintTabs(); });
     tabBtns.push(b); tabbar.append(b);
   });
   function paintTabs(): void {
