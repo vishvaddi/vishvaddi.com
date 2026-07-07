@@ -30,7 +30,7 @@ try {
   await page.locator(".wa-tab").nth(1).click();
   if (await page.locator('.wa-knob[role="slider"]').count() < 1) throw new Error("Accessible knobs were not rendered");
   await page.locator(".wa-grid .wa-cell").first().click();
-  await page.locator(".wa-piano-cell").first().click();
+  await page.locator(".wa-roll-grid").click({ position: { x: 12, y: 90 } });
   await page.locator(".wa-tab").nth(2).click();
   await page.locator(".wa-clip").first().click();
   await page.locator(".wa-transport button").first().click();

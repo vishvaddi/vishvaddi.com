@@ -18,6 +18,7 @@ export function buildPlayback(shell: Shell, cells: HTMLElement[][], synthCells: 
     if (clip.play.drums === clip.sel) cells.forEach((row) => row[current]?.classList.add("play"));
     if (clip.play.synth === clip.sel) synthCells.forEach((row) => row[current]?.classList.add("play"));
     lastStarted = performance.now(); last = current;
+    ctx.onStep?.(current);
     shell.lcdState.textContent = `▶ ${String(current + 1).padStart(2, "0")}`;
   };
   const scheduleStep = (current: number, baseWhen: number): void => {

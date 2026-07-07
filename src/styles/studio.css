@@ -857,3 +857,17 @@
 .wa-knob-dial { --wa-knob-angle: -135deg; --wa-knob-fill: 0%; position: relative; width: var(--wa-knob-size); height: var(--wa-knob-size); border: 1px solid var(--wa-border-2); border-radius: 50%; background: radial-gradient(circle at 50% 42%, var(--wa-surface-3) 0 54%, transparent 56%), conic-gradient(from 225deg, var(--wa-accent) 0 var(--wa-knob-fill), var(--wa-border-2) var(--wa-knob-fill) 75%, transparent 75%); box-shadow: inset 0 1px rgba(255,255,255,.08), 0 2px 5px rgba(0,0,0,.25); cursor: ns-resize; }
 .wa-knob-pointer { position: absolute; left: calc(50% - 1px); top: 5px; width: 2px; height: 42%; background: var(--wa-text); border-radius: 2px; transform: rotate(var(--wa-knob-angle)); transform-origin: 50% calc(var(--wa-knob-size) / 2 - 5px); }
 @media (pointer: coarse) { .wa-knob { min-width: 64px; min-height: 68px; padding: 4px; } }
+
+.wa-canvas-roll { border: 1px solid var(--wa-border); background: var(--wa-surface); }
+.wa-roll-tools { display: flex; gap: 4px; padding: 6px; border-bottom: 1px solid var(--wa-border); }
+.wa-roll-tools .active { border-color: var(--wa-accent); color: var(--wa-accent); }
+.wa-roll-viewport { display: grid; grid-template-columns: 54px minmax(0, 1fr); max-height: 520px; overflow: auto; }
+.wa-roll-keys { position: sticky; left: 0; z-index: 3; background: var(--wa-surface-2); }
+.wa-roll-key { display: block; width: 54px; height: 18px; padding: 0 4px; border: 0; border-bottom: 1px solid var(--wa-border); color: var(--wa-text); background: var(--wa-surface-2); font: 9px inherit; text-align: right; }
+.wa-roll-key:nth-child(12n + 1) { border-top: 1px solid var(--wa-accent-dim); }
+.wa-roll-canvases { position: relative; width: max-content; }
+.wa-roll-grid { display: block; }
+.wa-roll-overlay { position: absolute; inset: 0 auto auto 0; pointer-events: none; }
+.wa-roll-velocity { display: block; border-top: 1px solid var(--wa-border); }
+.wa-roll-grid, .wa-roll-velocity { touch-action: pan-x pan-y; }
+.wa-roll-grid:focus-visible { outline: 2px solid var(--wa-accent); outline-offset: -2px; }

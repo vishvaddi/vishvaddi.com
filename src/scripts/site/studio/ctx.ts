@@ -23,6 +23,7 @@ export interface StudioCtx {
   currentSchedStep(): number;
   lastHighlightedStep(): number;
   lastStepStartedMs(): number;
+  onStep?(step: number): void;
   // Transport / export elements other modules poke at call time.
   launchStatus: HTMLElement;
   songBtn: HTMLButtonElement;
