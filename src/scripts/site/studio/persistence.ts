@@ -3,7 +3,7 @@
 // pattern projects still load), undo history.
 
 import {
-  SCENES, STEPS, SONG_SLOTS, PAD_COUNT, PIANO_NOTES, TRACKS, clip, transport,
+  SCENES, STEPS, MAX_STEPS, SONG_SLOTS, PAD_COUNT, PIANO_NOTES, TRACKS, clip, clipLen, transport,
   allPats, allVels, synthNotes, padEvents, songChain, sampleParams, sampleData, sampleBuffers,
   dp, mpc, rackState, mixerState, fx, vsynthPatch,
 } from "./state";
@@ -29,6 +29,7 @@ export function historyState(): HistoryState {
     fx: { ...fx },
     rackState: { ...rackState, devices: { ...rackState.devices } },
     mixer: { masterGain: mixerState.masterGain, channels: mixerState.channels.map((channel) => ({ ...channel })) },
+    clipLens: clipLen.map((lengths) => ({ ...lengths })),
   };
 }
 export function restoreHistory(state: HistoryState): void {
@@ -43,6 +44,7 @@ export function restoreHistory(state: HistoryState): void {
   Object.assign(rackState, state.rackState);
   rackState.devices = { ...state.rackState.devices };
   if (state.mixer) { mixerState.masterGain = state.mixer.masterGain; state.mixer.channels.forEach((channel, index) => { if (mixerState.channels[index]) Object.assign(mixerState.channels[index], channel); }); }
+  state.clipLens?.forEach((lengths, index) => { if (clipLen[index]) Object.assign(clipLen[index], lengths); });
   applyFxState(); applyMixerState(); saveAll();
 }
 export function projectState(includeSamples = true): object {
@@ -73,6 +75,7 @@ export function projectState(includeSamples = true): object {
     mpc,
     rackState,
     mixer: mixerState,
+    clipLens: clipLen,
   };
 }
 export function loadAll(): void {
@@ -87,11 +90,11 @@ export function applyProject(saved: Record<string, unknown>): void {
     if (saved.pats) {
       (saved.pats as number[][][]).forEach((pp, pi) => {
         if (pi >= SCENES) return;
-        pp.forEach((row, ri) => { if (ri < 8) row.forEach((v, ci) => { if (ci < STEPS) allPats[pi][ri][ci] = !!v; }); });
+        pp.forEach((row, ri) => { if (ri < 8) row.forEach((v, ci) => { if (ci < MAX_STEPS) allPats[pi][ri][ci] = !!v; }); });
       });
       if (saved.vels) (saved.vels as number[][][]).forEach((pp, pi) => {
         if (pi >= SCENES) return;
-        pp.forEach((row, ri) => { if (ri < 8) row.forEach((v, ci) => { if (ci < STEPS) allVels[pi][ri][ci] = v; }); });
+        pp.forEach((row, ri) => { if (ri < 8) row.forEach((v, ci) => { if (ci < MAX_STEPS) allVels[pi][ri][ci] = v; }); });
       });
       if (saved.dp) (saved.dp as Partial<DrumP>[]).forEach((d, i) => { if (i < 8) Object.assign(dp[i], d); });
       if (saved.bpm) transport.bpm = saved.bpm as number;
@@ -114,7 +117,7 @@ export function applyProject(saved: Record<string, unknown>): void {
           if (i >= SCENES || !Array.isArray(notes)) return;
           synthNotes[i] = notes
             .filter((n) => n && typeof n.note === "string" && typeof n.step === "number")
-            .map((n) => ({ note: n.note, step: n.step % STEPS, len: Math.max(1, Math.min(STEPS, n.len || 1)), vel: Math.max(1, Math.min(127, n.vel || 100)) }));
+            .map((n) => ({ note: n.note, step: n.step % MAX_STEPS, len: Math.max(1, Math.min(MAX_STEPS, n.len || 1)), vel: Math.max(1, Math.min(127, n.vel || 100)) }));
         });
       } else if (saved.synthPats) {
         // v5 and older stored a 12-row on/off grid — convert to 1-step notes.
@@ -165,6 +168,10 @@ export function applyProject(saved: Record<string, unknown>): void {
         incoming.channels?.forEach((channel, index) => { if (mixerState.channels[index]) Object.assign(mixerState.channels[index], channel); });
         applyMixerState();
       }
+      if (Array.isArray(saved.clipLens)) (saved.clipLens as Array<Partial<Record<TrackId, number>>>).forEach((lengths, index) => {
+        if (!clipLen[index]) return;
+        TRACKS.forEach((track) => { const value = Number(lengths[track]); if ([16, 32, 64].includes(value)) clipLen[index][track] = value; });
+      });
     } else if (Array.isArray(saved) && saved.length === 8) {
       for (let r = 0; r < 8; r++) for (let c = 0; c < STEPS; c++) allPats[0][r][c] = !!saved[r][c];
     }

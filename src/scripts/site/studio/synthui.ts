@@ -10,6 +10,7 @@ import { saveAll } from "./persistence";
 import { el, btn, help, sliderRow } from "./helpers";
 import { buildPianoRoll } from "./pianoroll";
 import { knob } from "./knob";
+import { clipLengthControl } from "./cliplenui";
 
 export interface SynthUI {
   synthPanel: HTMLElement;
@@ -162,6 +163,7 @@ export function buildSynthUI(): SynthUI {
     el("div", "wa-sep-h"),
     el("div", "wa-lbl", "CHORD PLAYER"), chordRow,
     el("div", "wa-sep-h"),
+    clipLengthControl("synth"),
     el("div", "wa-lbl", "PIANO ROLL — click to add, drag right for length, right-click for velocity"), pianoRoll,
     el("div", "wa-sep-h"),
     el("div", "wa-lbl", "KEYS — click or use A–K"), synthKeys,

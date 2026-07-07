@@ -835,6 +835,10 @@
   width: 10px; height: 10px; border-radius: 50%;
   border: 1px solid var(--wa-border-2); opacity: 0.6;
 }
+.wa-clip::after { content: attr(data-bars); position: absolute; right: 4px; bottom: 2px; font-size: 8px; color: var(--wa-muted); }
+.wa-clip-length { display: flex; align-items: center; gap: 4px; margin: 6px 0; }
+.wa-clip-length .active { border-color: var(--wa-accent); color: var(--wa-accent); }
+.wa-cell.wa-bar { border-left-width: 2px; border-left-color: var(--wa-accent-dim); }
 .wa-clip.has::before { background: var(--wa-muted); border-color: var(--wa-muted); opacity: 0.9; }
 .wa-clip.sel { border-color: var(--wa-accent-dim); }
 .wa-clip.armed.has::before { background: var(--wa-amber); border-color: var(--wa-amber); }

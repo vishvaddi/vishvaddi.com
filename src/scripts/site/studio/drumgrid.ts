@@ -2,7 +2,7 @@
 // grid with velocity editing, per-drum sound-design panels and pattern tools.
 
 import {
-  STEPS, SCENES, SCENE_LABELS, DRUMS, clip,
+  MAX_STEPS, SCENES, SCENE_LABELS, DRUMS, clip, clipLen,
   allPats, allVels, synthNotes, padEvents, sampleParams, dp, DP_DEF, DP_SPECS,
 } from "./state";
 import { ac, ensureNodes, trackGain, playDrum } from "./engine";
@@ -10,6 +10,7 @@ import { saveAll } from "./persistence";
 import { el, btn } from "./helpers";
 import { ctx } from "./ctx";
 import { knob } from "./knob";
+import { clipLengthControl } from "./cliplenui";
 
 export interface DrumGrid {
   beat: HTMLElement;
@@ -34,7 +35,7 @@ export function buildDrumGrid(): DrumGrid {
   copyBtn.addEventListener("click", () => {
     ctx.checkpoint();
     const next = (clip.sel + 1) % SCENES;
-    for (let r = 0; r < 8; r++) for (let c = 0; c < STEPS; c++) {
+    for (let r = 0; r < 8; r++) for (let c = 0; c < MAX_STEPS; c++) {
       allPats[next][r][c] = allPats[clip.sel][r][c];
       allVels[next][r][c] = allVels[clip.sel][r][c];
     }
@@ -45,7 +46,7 @@ export function buildDrumGrid(): DrumGrid {
     setTimeout(() => { copyBtn.textContent = orig; }, 1200);
   });
   patRow.append(el("span", "wa-sep"), copyBtn);
-  beat.append(patRow);
+  beat.append(patRow, clipLengthControl("drums"));
 
   const grid = el("div", "wa-grid");
   const cells: HTMLElement[][] = [];
@@ -70,8 +71,8 @@ export function buildDrumGrid(): DrumGrid {
     rowEl.append(lab);
 
     const rowCells: HTMLElement[] = [];
-    for (let c = 0; c < STEPS; c++) {
-      const cell = el("button", "wa-cell" + (c % 4 === 0 ? " wa-beat" : "")) as HTMLButtonElement;
+    for (let c = 0; c < MAX_STEPS; c++) {
+      const cell = el("button", "wa-cell" + (c % 4 === 0 ? " wa-beat" : "") + (c % 16 === 0 ? " wa-bar" : "")) as HTMLButtonElement;
       cell.type = "button";
       if (allPats[clip.sel][r][c]) { cell.classList.add("on"); ctx.setCellOpacity(cell, allVels[clip.sel][r][c]); }
       cell.addEventListener("click", () => {
@@ -122,7 +123,7 @@ export function buildDrumGrid(): DrumGrid {
   const clearBtn = btn("CLEAR", "wa-btn-sm");
   clearBtn.addEventListener("click", () => {
     ctx.checkpoint();
-    for (let r = 0; r < 8; r++) for (let c = 0; c < STEPS; c++) {
+    for (let r = 0; r < 8; r++) for (let c = 0; c < clipLen[clip.sel].drums; c++) {
       allPats[clip.sel][r][c] = false; cells[r][c].classList.remove("on"); cells[r][c].style.opacity = "";
     }
     ctx.paintSession();

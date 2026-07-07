@@ -2,7 +2,7 @@
 // drag right to set length, right-click a note for velocity.
 // (DOM-button implementation; Phase 4 replaces this with a canvas editor.)
 
-import { STEPS, ROLL_NOTES, clip, synthNotes } from "./state";
+import { MAX_STEPS, ROLL_NOTES, clip, clipLen, synthNotes } from "./state";
 import type { VNote } from "./state";
 import { saveAll } from "./persistence";
 import { el } from "./helpers";
@@ -32,7 +32,7 @@ export function buildPianoRoll(audition: (note: string, vel?: number, lenSteps?:
     const row = el("div", "wa-piano-row" + (note.startsWith("C") && !note.startsWith("C#") ? " wa-roll-oct" : ""));
     row.append(el("span", "wa-piano-note", note));
     const rowCells: HTMLElement[] = [];
-    for (let c = 0; c < STEPS; c++) {
+    for (let c = 0; c < MAX_STEPS; c++) {
       const cell = el("button", "wa-cell wa-piano-cell" + (c % 4 === 0 ? " wa-beat" : "")) as HTMLButtonElement;
       cell.type = "button";
       cell.title = `${note}, step ${c + 1}`;
@@ -53,7 +53,7 @@ export function buildPianoRoll(audition: (note: string, vel?: number, lenSteps?:
       });
       cell.addEventListener("pointerenter", () => {
         if (!dragNote || dragRow !== r) return;
-        if (c >= dragNote.step) { dragNote.len = Math.min(STEPS - dragNote.step, c - dragNote.step + 1); paintRoll(); }
+        if (c >= dragNote.step) { dragNote.len = Math.min(clipLen[clip.sel].synth - dragNote.step, c - dragNote.step + 1); paintRoll(); }
       });
       cell.addEventListener("contextmenu", (event) => {
         event.preventDefault();

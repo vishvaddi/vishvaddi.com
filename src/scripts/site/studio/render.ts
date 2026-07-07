@@ -1,4 +1,4 @@
-import { STEPS, PAD_BANK_SIZE, clip, transport, allPats, allVels, synthNotes, padEvents, songChain, rackState, mixerState, chAudible, fx, vsynthPatch } from "./state";
+import { STEPS, PAD_BANK_SIZE, TRACKS, clip, clipLen, transport, allPats, allVels, synthNotes, padEvents, songChain, rackState, mixerState, chAudible, fx, vsynthPatch } from "./state";
 import type { TrackId } from "./state";
 import { ensureNodes, playDrum, playPad, metroClick } from "./engine";
 import { playNote } from "./vsynth";
@@ -26,7 +26,11 @@ export function buildRender(): RenderUI {
     const sampleRate = 44100, durationStep = 60 / transport.bpm / 4;
     const scenes = mode === "song" ? [...songChain] : [0];
     const clipFor = (track: TrackId, index: number): number | null => mode === "song" ? scenes[index] : clip.play[track];
-    const offline = new OfflineAudioContext(2, Math.ceil((scenes.length * STEPS * durationStep + 2.2) * sampleRate), sampleRate);
+    const segmentLength = (index: number): number => mode === "song"
+      ? Math.max(...TRACKS.map((track) => clipLen[scenes[index]][track]))
+      : Math.max(...TRACKS.map((track) => { const scene = clip.play[track]; return scene === null ? STEPS : clipLen[scene][track]; }));
+    const totalSteps = scenes.reduce((sum, _, index) => sum + segmentLength(index), 0);
+    const offline = new OfflineAudioContext(2, Math.ceil((totalSteps * durationStep + 2.2) * sampleRate), sampleRate);
     const master = offline.createGain(); master.gain.value = mixerState.masterGain;
     const low = offline.createBiquadFilter(); low.type = "lowshelf"; low.frequency.value = 180; low.gain.value = rackState.devices.eq ? fx.low : 0;
     const mid = offline.createBiquadFilter(); mid.type = "peaking"; mid.frequency.value = 1200; mid.Q.value = 0.8; mid.gain.value = rackState.devices.eq ? fx.mid : 0;
@@ -44,15 +48,17 @@ export function buildRender(): RenderUI {
     }
     const channels: GainNode[] = [];
     for (let i = 0; i < 10; i++) { const gain = offline.createGain(), pan = offline.createStereoPanner(); gain.gain.value = chAudible(i) ? mixerState.channels[i].gain : 0; pan.pan.value = mixerState.channels[i].pan; gain.connect(pan); pan.connect(master); channels.push(gain); }
-    scenes.forEach((_, sceneIndex) => { for (let step = 0; step < STEPS; step++) {
-      const base = (sceneIndex * STEPS + step) * durationStep;
+    let segmentStart = 0;
+    scenes.forEach((_, sceneIndex) => { const length = segmentLength(sceneIndex); for (let step = 0; step < length; step++) {
+      const base = (segmentStart + step) * durationStep;
       const when = base + (step % 2 === 1 ? transport.swing * durationStep + rackState.grooveTiming * durationStep * 0.5 : 0);
       const drums = clipFor("drums", sceneIndex), pads = clipFor("pads", sceneIndex), synthClip = clipFor("synth", sceneIndex);
-      if (drums !== null) for (let row = 0; row < 8; row++) if (allPats[drums][row][step]) playDrum(offline, channels[row], row, allVels[drums][row][step] / 127, when);
-      if (pads !== null) padEvents[pads].filter((event) => event.step === step).forEach((event) => { if (Math.random() * 100 > event.probability) return; const ratchets = Math.max(1, event.ratchets); for (let i = 0; i < ratchets; i++) { const eventWhen = Math.max(base, when + event.offset / 1000 + i * durationStep / ratchets); playPad(offline, event.pad, event.velocity, eventWhen, event.pad % PAD_BANK_SIZE, channels[8]); for (let echo = 1; echo <= rackState.noteEcho; echo++) playPad(offline, event.pad, event.velocity * Math.pow(rackState.echoDecay, echo), eventWhen + echo * durationStep, event.pad % PAD_BANK_SIZE, channels[8]); } });
-      if (synthClip !== null) synthNotes[synthClip].forEach((note) => { if (note.step === step) playNote(offline, channels[9], vsynthPatch, note.note, note.vel, when, durationStep * note.len * 0.98); });
+      const drumStep = drums === null ? 0 : step % clipLen[drums].drums, padStep = pads === null ? 0 : step % clipLen[pads].pads, synthStep = synthClip === null ? 0 : step % clipLen[synthClip].synth;
+      if (drums !== null) for (let row = 0; row < 8; row++) if (allPats[drums][row][drumStep]) playDrum(offline, channels[row], row, allVels[drums][row][drumStep] / 127, when);
+      if (pads !== null) padEvents[pads].filter((event) => event.step === padStep).forEach((event) => { if (Math.random() * 100 > event.probability) return; const ratchets = Math.max(1, event.ratchets); for (let i = 0; i < ratchets; i++) { const eventWhen = Math.max(base, when + event.offset / 1000 + i * durationStep / ratchets); playPad(offline, event.pad, event.velocity, eventWhen, event.pad % PAD_BANK_SIZE, channels[8]); for (let echo = 1; echo <= rackState.noteEcho; echo++) playPad(offline, event.pad, event.velocity * Math.pow(rackState.echoDecay, echo), eventWhen + echo * durationStep, event.pad % PAD_BANK_SIZE, channels[8]); } });
+      if (synthClip !== null) synthNotes[synthClip].forEach((note) => { if (note.step === synthStep) playNote(offline, channels[9], vsynthPatch, note.note, note.vel, when, durationStep * note.len * 0.98); });
       if (transport.metro && step % 4 === 0) metroClick(offline, master, base, step === 0);
-    } });
+    } segmentStart += length; });
     return offline.startRendering();
   };
   const exportAudio = async (format: "wav" | "mp3"): Promise<void> => {

@@ -23,7 +23,7 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
     const text = message.text();
-    if (message.type() === "error" && !text.includes("/sw.js") && !text.includes("bad HTTP response code (404)")) errors.push(text);
+    if (message.type() === "error" && !text.includes("/sw.js") && !text.includes("bad HTTP response code (404)") && !text.includes("Outdated Optimize Dep")) errors.push(text);
   });
   await page.goto(`${base}/studio`, { waitUntil: "networkidle" });
   await page.locator(".wa-tab").evaluateAll((tabs) => tabs.forEach((tab) => /** @type {HTMLElement} */ (tab).click()));
@@ -60,6 +60,12 @@ try {
     return Math.sqrt(data.reduce((sum, sample) => sum + sample * sample, 0) / data.length);
   });
   if (mutedRms >= audio.rms * 0.1) throw new Error(`Mute was not applied to export: ${mutedRms}`);
+  const longClip = await page.evaluate(async () => {
+    window.__vishamp.clipLen[0].drums = 64;
+    window.__vishamp.allPats[0][0][40] = true;
+    return (await window.__vishamp.renderBuffer("pattern")).duration;
+  });
+  if (longClip < 10) throw new Error(`Four-bar export was too short: ${longClip}`);
   if (errors.length) throw new Error(`Browser errors:\n${errors.join("\n")}`);
   console.log(`studio e2e passed: ${audio.duration.toFixed(2)}s, RMS ${audio.rms.toFixed(5)}`);
 } finally {

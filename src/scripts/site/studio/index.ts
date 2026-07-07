@@ -1,5 +1,5 @@
 import "../../../styles/studio.css";
-import { SCENES, clip, allPats, allVels, songChain, sampleData, mpc, mixerState, vsynthPatch } from "./state";
+import { SCENES, clip, clipLen, allPats, allVels, songChain, sampleData, mpc, mixerState, vsynthPatch } from "./state";
 import { ac, ensureNodes, hydrateSample, applyFxState, applyMixerState } from "./engine";
 import * as engine from "./engine";
 import { loadAll, applyProject, pendingProjectStore } from "./persistence";
@@ -16,6 +16,7 @@ import { buildPlayback } from "./playback";
 import { buildLayout } from "./layout";
 import { buildTutorial } from "./tutorial";
 import { ctx } from "./ctx";
+import { refreshClipLengthControls } from "./cliplenui";
 
 export async function initStudio(): Promise<void> {
   const root = document.getElementById("studio"); if (!root) return;
@@ -39,8 +40,9 @@ export async function initStudio(): Promise<void> {
   ctx.selectScene = (scene: number): void => {
     clip.sel = Math.max(0, Math.min(SCENES - 1, scene));
     drums.sceneBtns.forEach((button, index) => button.classList.toggle("active", index === clip.sel));
-    drums.cells.forEach((row, rowIndex) => row.forEach((cell, step) => { const on = allPats[clip.sel][rowIndex][step]; cell.classList.toggle("on", on); if (on) ctx.setCellOpacity(cell, allVels[clip.sel][rowIndex][step]); else cell.style.opacity = ""; }));
-    ctx.paintRoll(); ctx.paintEventLane(); ctx.paintSession();
+    drums.cells.forEach((row, rowIndex) => row.forEach((cell, step) => { cell.hidden = step >= clipLen[clip.sel].drums; const on = allPats[clip.sel][rowIndex][step]; cell.classList.toggle("on", on); if (on) ctx.setCellOpacity(cell, allVels[clip.sel][rowIndex][step]); else cell.style.opacity = ""; }));
+    synth.synthCells.forEach((row) => row.forEach((cell, step) => { cell.hidden = step >= clipLen[clip.sel].synth; }));
+    refreshClipLengthControls(); ctx.paintRoll(); ctx.paintEventLane(); ctx.paintSession();
   };
   ctx.refreshVisibleState = (): void => { ctx.selectScene(clip.sel); session.chainSelects.forEach((select, index) => { select.value = String(songChain[index]); }); ctx.paintMpcPads(); ctx.paintEventLane(); applyFxState(); };
 
@@ -55,5 +57,5 @@ export async function initStudio(): Promise<void> {
   window.addEventListener("keyup", (event) => { const localPad = padMap[event.key.toLowerCase()]; if (localPad != null) pads.padButtons[localPad].classList.remove("down"); if (shell.activeTab() !== 1) return; const note = keyMap[event.key.toLowerCase()]; if (!note) return; down.delete(note); synth.liveKeys.noteOff(ac(), note); highlightKey(synth.synthKeys, note, false); });
 
   ctx.selectScene(clip.sel);
-  if (import.meta.env.DEV) (window as unknown as { __vishamp: object }).__vishamp = { renderBuffer: ctx.renderBuffer, mixerState, applyMixerState };
+  if (import.meta.env.DEV) (window as unknown as { __vishamp: object }).__vishamp = { renderBuffer: ctx.renderBuffer, mixerState, applyMixerState, clipLen, allPats };
 }

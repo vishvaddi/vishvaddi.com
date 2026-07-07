@@ -80,6 +80,7 @@ export interface HistoryState {
   fx: FxState;
   rackState: RackState;
   mixer?: MixerState;
+  clipLens?: Array<Record<TrackId, number>>;
 }
 export interface FxState {
   low: number;
@@ -96,6 +97,8 @@ export interface FxState {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 export const STEPS = 16;
+export const MAX_STEPS = 64;
+export const BAR_CHOICES = [16, 32, 64] as const;
 export const SCENES = 8;
 export const SCENE_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 export const SONG_SLOTS = 8;
@@ -165,10 +168,11 @@ export const clip = {
   play: { drums: 0, pads: 0, synth: 0 } as Record<TrackId, number | null>,
   queued: { drums: undefined, pads: undefined, synth: undefined } as Record<TrackId, number | null | undefined>,
 };
+export const clipLen: Array<Record<TrackId, number>> = Array.from({ length: SCENES }, () => ({ drums: STEPS, pads: STEPS, synth: STEPS }));
 
 // ─── Pattern data ────────────────────────────────────────────────────────────
-export const allPats: boolean[][][] = Array.from({ length: SCENES }, () => DRUMS.map(() => new Array(STEPS).fill(false)));
-export const allVels: number[][][] = Array.from({ length: SCENES }, () => DRUMS.map(() => new Array(STEPS).fill(100)));
+export const allPats: boolean[][][] = Array.from({ length: SCENES }, () => DRUMS.map(() => new Array(MAX_STEPS).fill(false)));
+export const allVels: number[][][] = Array.from({ length: SCENES }, () => DRUMS.map(() => new Array(MAX_STEPS).fill(100)));
 export const synthNotes: VNote[][] = Array.from({ length: SCENES }, () => []);
 export const songChain = Array.from({ length: SONG_SLOTS }, (_, i) => i % 4);
 export const padEvents: PadEvent[][] = Array.from({ length: SCENES }, () => []);

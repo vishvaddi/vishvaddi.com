@@ -2,7 +2,7 @@
 // grid, the selected-pad inspector, and the per-pad event lane + editor.
 
 import {
-  STEPS, SCENE_LABELS, PAD_BANK_SIZE, clip, transport, stepDur,
+  STEPS, MAX_STEPS, SCENE_LABELS, PAD_BANK_SIZE, clip, clipLen, transport, stepDur,
   padEvents, sampleParams, sampleBuffers, sampleData, mpc, rackState,
 } from "./state";
 import type { MpcState, PadEvent, SamplerP } from "./state";
@@ -12,6 +12,7 @@ import { el, btn, help, sliderRow, readAsDataUrl, blobAsDataUrl, encodeWav } fro
 import { ctx } from "./ctx";
 import { knob } from "./knob";
 import type { KnobControl } from "./knob";
+import { clipLengthControl } from "./cliplenui";
 
 export interface PadsUI {
   mpcPanel: HTMLElement;
@@ -75,7 +76,7 @@ export function buildPads(): PadsUI {
   });
   quantSel.value = String(mpc.quantize);
   const quantStrength = knob({ label: "Quantise", min: 0, max: 100, value: mpc.quantizeStrength, step: 1, unit: "%", def: 100, size: 40, onInput: (value) => { mpc.quantizeStrength = value; saveAll(); } });
-  mpcToolbar.append(fullLevelBtn, levelsBtn, levelModeSel, repeatBtn, repeatSel, recordBtn, overdubBtn, undoPassBtn, quantSel, quantStrength.el, rotateBtn, mutateBtn, fillBtn, ghostBtn, extractGrooveBtn, midiBtn, resampleQuality, resampleBtn, performanceStatus);
+  mpcToolbar.append(fullLevelBtn, levelsBtn, levelModeSel, repeatBtn, repeatSel, recordBtn, overdubBtn, undoPassBtn, quantSel, quantStrength.el, clipLengthControl("pads"), rotateBtn, mutateBtn, fillBtn, ghostBtn, extractGrooveBtn, midiBtn, resampleQuality, resampleBtn, performanceStatus);
 
   const padBankRow = el("div", "wa-pad-banks");
   ["A", "B", "C", "D"].forEach((label, bank) => {
@@ -161,10 +162,10 @@ export function buildPads(): PadsUI {
     const target = recordTarget();
     const lastHi = ctx.lastHighlightedStep();
     const rawStep = lastHi >= 0 ? lastHi : ctx.currentSchedStep();
-    const grid = mpc.quantize || STEPS;
+    const length = clipLen[clip.sel].pads, grid = mpc.quantize || STEPS;
     const snapped = Math.round(rawStep / (STEPS / grid)) * (STEPS / grid);
     const strength = mpc.quantizeStrength / 100;
-    const step = Math.round(rawStep + (snapped - rawStep) * strength) % STEPS;
+    const step = Math.round(rawStep + (snapped - rawStep) * strength) % length;
     if (!mpc.overdub) padEvents[target] = padEvents[target].filter((event) => event.step !== step);
     else padEvents[target] = padEvents[target].filter((event) => !(event.step === step && event.pad === pad));
     const started = ctx.lastStepStartedMs();
@@ -262,12 +263,12 @@ export function buildPads(): PadsUI {
   levelModeSel.addEventListener("change", () => { mpc.levelMode = levelModeSel.value as MpcState["levelMode"]; saveAll(); });
   rotateBtn.addEventListener("click", () => {
     ctx.checkpoint();
-    padEvents[clip.sel].forEach((event) => { event.step = (event.step + 1) % STEPS; }); paintEventLane(); saveAll();
+    const length = clipLen[clip.sel].pads; padEvents[clip.sel].forEach((event) => { event.step = (event.step + 1) % length; }); paintEventLane(); saveAll();
   });
   mutateBtn.addEventListener("click", () => {
     ctx.checkpoint();
     padEvents[clip.sel].forEach((event) => {
-      if (Math.random() < 0.35) event.step = (event.step + (Math.random() < 0.5 ? -1 : 1) + STEPS) % STEPS;
+      const length = clipLen[clip.sel].pads; if (Math.random() < 0.35) event.step = (event.step + (Math.random() < 0.5 ? -1 : 1) + length) % length;
       event.velocity = Math.max(20, Math.min(127, event.velocity + Math.round((Math.random() * 2 - 1) * 18)));
       if (Math.random() < 0.2) event.ratchets = 1 + Math.floor(Math.random() * 4);
     });
@@ -276,16 +277,18 @@ export function buildPads(): PadsUI {
   fillBtn.addEventListener("click", () => {
     ctx.checkpoint();
     const pad = mpc.selectedPad;
-    for (let step = 12; step < 16; step++) {
+    const length = clipLen[clip.sel].pads, start = length - 4;
+    for (let step = start; step < length; step++) {
       padEvents[clip.sel] = padEvents[clip.sel].filter((event) => !(event.pad === pad && event.step === step));
-      padEvents[clip.sel].push({ pad, step, velocity: 72 + (step - 12) * 14, offset: 0, probability: 100, ratchets: step === 15 ? 4 : 1 });
+      padEvents[clip.sel].push({ pad, step, velocity: 72 + (step - start) * 14, offset: 0, probability: 100, ratchets: step === length - 1 ? 4 : 1 });
     }
     paintEventLane(); saveAll();
   });
   ghostBtn.addEventListener("click", () => {
     ctx.checkpoint();
     const pad = mpc.selectedPad;
-    [3, 7, 11, 15].forEach((step, i) => {
+    const length = clipLen[clip.sel].pads;
+    Array.from({ length: length / 4 }, (_, index) => index * 4 + 3).forEach((step, i) => {
       if (!padEvents[clip.sel].some((event) => event.pad === pad && event.step === step)) {
         padEvents[clip.sel].push({ pad, step, velocity: 34 + i * 5, offset: i % 2 ? 12 : -8, probability: 72, ratchets: 1 });
       }
@@ -318,13 +321,14 @@ export function buildPads(): PadsUI {
   let paintingEvents = false, paintEventsOn = true;
   function paintEventLane(): void {
     eventCells.forEach((cell, step) => {
+      cell.hidden = step >= clipLen[clip.sel].pads;
       const event = padEvents[clip.sel].find((item) => item.pad === mpc.selectedPad && item.step === step);
       cell.classList.toggle("on", !!event);
       cell.title = event ? `Velocity ${event.velocity}, chance ${event.probability}%, ratchets ${event.ratchets}, offset ${event.offset}ms` : `Step ${step + 1}`;
     });
   }
   ctx.paintEventLane = paintEventLane;
-  for (let step = 0; step < STEPS; step++) {
+  for (let step = 0; step < MAX_STEPS; step++) {
     const cell = el("button", "wa-cell wa-event-cell" + (step % 4 === 0 ? " wa-beat" : "")) as HTMLButtonElement; cell.type = "button";
     const paint = () => {
       const existing = padEvents[clip.sel].findIndex((event) => event.pad === mpc.selectedPad && event.step === step);

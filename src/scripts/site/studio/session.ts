@@ -2,7 +2,7 @@
 // the linear song chain.
 
 import {
-  SCENE_LABELS, SONG_SLOTS, TRACKS, TRACK_LABELS, clip, transport,
+  SCENE_LABELS, SONG_SLOTS, TRACKS, TRACK_LABELS, clip, clipLen, transport,
   allPats, synthNotes, padEvents, songChain,
 } from "./state";
 import type { TrackId } from "./state";
@@ -38,6 +38,7 @@ export function buildSession(): SessionUI {
       cell.classList.toggle("armed", !playing && clip.play[track] === scene);
       cell.classList.toggle("queued", clip.queued[track] === scene);
       cell.classList.toggle("sel", clip.sel === scene);
+      cell.dataset.bars = `${clipLen[scene][track] / 16}B`;
     }));
     sceneLaunchBtns.forEach((b, scene) => b.classList.toggle("active", clip.sel === scene));
   }

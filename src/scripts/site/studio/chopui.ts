@@ -4,7 +4,7 @@
 // which falls back to the loaded break when the selected pad has no sample.
 
 import {
-  STEPS, SCENE_LABELS, PAD_BANK_SIZE, clip, transport,
+  SCENE_LABELS, PAD_BANK_SIZE, clip, clipLen, transport,
   padEvents, sampleParams, sampleBuffers, sampleData, mpc,
 } from "./state";
 import { ac, ensureNodes, reversedBuffer } from "./engine";
@@ -147,7 +147,7 @@ export function buildChop(): ChopUI {
     const bankStart = mpc.bank * PAD_BANK_SIZE;
     const count = Math.min(PAD_BANK_SIZE, slices.length);
     padEvents[clip.sel] = Array.from({ length: count }, (_, i) => ({
-      pad: bankStart + i, step: Math.round((i * STEPS) / count) % STEPS,
+      pad: bankStart + i, step: Math.round((i * clipLen[clip.sel].pads) / count) % clipLen[clip.sel].pads,
       velocity: 110, offset: 0, probability: 100, ratchets: 1,
     }));
     if (clip.play.pads === null) clip.play.pads = clip.sel;
