@@ -118,6 +118,32 @@ export function drawWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer, sli
   });
 }
 
+export function drawScope(canvas: HTMLCanvasElement, samples: Float32Array, color = "#22ee55"): void {
+  const scale = window.devicePixelRatio || 1, width = canvas.clientWidth || 200, height = canvas.clientHeight || 40;
+  canvas.width = Math.floor(width * scale); canvas.height = Math.floor(height * scale);
+  const ctx = canvas.getContext("2d"); if (!ctx) return;
+  ctx.scale(scale, scale); ctx.fillStyle = "#0c0c12"; ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath();
+  for (let i = 0; i < samples.length; i++) {
+    const x = (i / (samples.length - 1)) * width, y = height / 2 - samples[i] * height * 0.45;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
+export function drawEnvelopeShape(canvas: HTMLCanvasElement, points: Array<[number, number]>, color = "#22ee55"): void {
+  const scale = window.devicePixelRatio || 1, width = canvas.clientWidth || 200, height = canvas.clientHeight || 70;
+  canvas.width = Math.floor(width * scale); canvas.height = Math.floor(height * scale);
+  const ctx = canvas.getContext("2d"); if (!ctx) return;
+  ctx.scale(scale, scale); ctx.fillStyle = "#0c0c12"; ctx.fillRect(0, 0, width, height);
+  const toPx = ([x, y]: [number, number]): [number, number] => [x * width, (1 - y) * (height - 6) + 3];
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath();
+  points.forEach((p, i) => { const [px, py] = toPx(p); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); });
+  ctx.stroke();
+  ctx.fillStyle = color;
+  points.slice(1).forEach((p) => { const [px, py] = toPx(p); ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill(); });
+}
+
 // ─── Encoders ────────────────────────────────────────────────────────────────
 export function encodeWav(buf: AudioBuffer): Blob {
   const ch = buf.numberOfChannels, len = buf.length, sr = buf.sampleRate;

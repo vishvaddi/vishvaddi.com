@@ -320,8 +320,11 @@
 }
 .wa-selected-sample .wa-slider-row,
 .wa-event-editor .wa-slider-row { margin: 7px 0; }
-.wa-event-lane { display: flex; gap: 4px; min-width: 680px; margin: 8px 0; }
-.wa-event-cell { height: 34px; }
+.wa-event-grid { display: flex; flex-direction: column; gap: 4px; min-width: 680px; margin: 8px 0; }
+.wa-event-cell { height: 26px; }
+.wa-event-row-label { width: 84px; flex: 0 0 84px; font-size: 10px; }
+.wa-row.selected .wa-event-row-label { color: var(--wa-accent); border-color: var(--wa-accent-dim); }
+.wa-row.selected .wa-event-cell { border-color: var(--wa-accent-dim); }
 
 /* ── Chop / waveform ── */
 .wa-waveform {
@@ -374,14 +377,48 @@
 .wa-key-black.down { background: var(--wa-blue); }
 
 /* ── Piano roll ── */
-.wa-piano-roll { min-width: 720px; margin-top: 8px; }
+.wa-piano-roll { min-width: 720px; margin-top: 8px; position: relative; }
 .wa-panel:has(.wa-piano-roll) { overflow-x: auto; }
-.wa-piano-row { display: flex; align-items: center; gap: 3px; margin-bottom: 3px; }
+.wa-piano-row { display: flex; align-items: stretch; gap: 3px; margin-bottom: 3px; }
 .wa-piano-note { width: 34px; flex: 0 0 34px; color: var(--wa-muted); font-size: 10px; }
+.wa-piano-track { position: relative; display: flex; flex: 1 1 auto; gap: 0; }
 .wa-piano-cell { height: 20px; }
+/* Notes/playhead overlay is absolutely positioned to exactly cover the step
+   tracks (34px label + 3px row gap = 37px inset) so percentage math lines up
+   pixel-for-pixel with the background cells underneath. */
+.wa-roll-notes, .wa-roll-playhead { position: absolute; top: 0; bottom: 0; left: 37px; right: 0; pointer-events: none; }
+.wa-roll-note {
+  position: absolute; box-sizing: border-box;
+  background: var(--wa-accent); border: 1px solid var(--wa-accent-dim); border-radius: 3px;
+  pointer-events: auto; cursor: grab; touch-action: none;
+  box-shadow: 0 0 5px rgba(47, 227, 166, 0.35);
+}
+.wa-roll-note:active { cursor: grabbing; }
+.wa-roll-playhead-bar { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--wa-amber); display: none; }
+.wa-roll-playhead-bar.on { display: block; }
 
 /* ── VV-1 synth ── */
+.wa-scope {
+  display: block; width: 100%; height: 90px; margin: 10px 0;
+  border: 1px solid var(--wa-border-2); border-radius: var(--wa-radius-sm);
+}
+.wa-wave-mini {
+  display: block; width: 100%; height: 40px; margin-bottom: 8px;
+  border: 1px solid var(--wa-border-2); border-radius: 4px;
+}
+.wa-mod-badge {
+  font-size: 9px; letter-spacing: 0.06em; white-space: nowrap;
+  color: var(--wa-muted); visibility: hidden;
+}
+.wa-mod-badge.active { visibility: visible; color: var(--wa-amber); }
+.wa-env-canvas {
+  display: block; width: 100%; height: 70px; margin-bottom: 8px; cursor: pointer;
+  border: 1px solid var(--wa-border-2); border-radius: 4px;
+  touch-action: none;
+}
 .wa-vpatch { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 10px; margin-top: 12px; }
+.wa-vpatch.wa-simple .wa-advanced-only,
+.wa-vpatch.wa-simple .wa-advanced-only-block { display: none; }
 .wa-vblock {
   min-width: 0; padding: 11px 13px;
   background: var(--wa-surface-2);
@@ -400,10 +437,9 @@
   gap: 8px; align-items: center; margin: 6px 0;
 }
 .wa-vmatrix-row .wa-slider-row { margin: 0; }
-.wa-vroll .wa-piano-row { margin-bottom: 2px; }
+.wa-vroll .wa-piano-row { margin-bottom: 0; }
 .wa-vroll .wa-piano-cell { height: 15px; }
 .wa-vroll .wa-roll-oct { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--wa-border-2); }
-.wa-piano-cell.tail { background: var(--wa-accent-dim); border-color: var(--wa-accent-dim); opacity: 0.7; }
 
 /* ── Mixer ── */
 .wa-mixer { display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; padding: 12px 0; }
@@ -433,6 +469,15 @@
 .wa-export { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 8px; }
 .wa-status { font-size: 13px; color: var(--wa-accent); }
 .wa-help { font-size: 12px; color: var(--wa-muted); margin: 0 0 4px; }
+.wa-preset-search {
+  flex: 1 1 160px; min-width: 120px; min-height: 38px;
+  font-family: inherit; font-size: 13px; color: var(--wa-text);
+  background: var(--wa-surface-2);
+  border: 1px solid var(--wa-border-2);
+  border-radius: var(--wa-radius-sm);
+  padding: 6px 10px;
+}
+.wa-preset-categories { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* ── Song arrangement ── */
 .wa-launcher {
@@ -447,13 +492,24 @@
   background: var(--wa-amber); border-color: var(--wa-amber); font-weight: 700;
 }
 .wa-scene-launch:hover { filter: brightness(1.07); background: var(--wa-amber); }
-.wa-song-chain { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; margin-top: 12px; }
-.wa-song-slot {
-  display: flex; align-items: center; gap: 8px; padding: 11px;
+/* ── Arrangement — one lane per track, blocks sized by bar count ── */
+.wa-arrange-lanes { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.wa-arrange-lane { display: flex; align-items: stretch; gap: 8px; }
+.wa-arrange-lane-label {
+  width: 60px; flex: 0 0 60px; align-self: center;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--wa-muted);
+}
+.wa-arrange-blocks { display: flex; flex: 1 1 auto; gap: 6px; min-height: 64px; flex-wrap: wrap; }
+.wa-arrange-block {
+  display: flex; flex-direction: column; gap: 4px; justify-content: center;
+  min-width: 92px; padding: 8px;
   background: var(--wa-surface);
   border: 1px solid var(--wa-border);
   border-radius: var(--wa-radius-sm);
 }
+.wa-arrange-block.sel { border-color: var(--wa-accent-dim); }
+.wa-arrange-bars-row { display: flex; align-items: center; gap: 4px; justify-content: space-between; }
+.wa-arrange-bars { font-size: 10px; color: var(--wa-muted); font-variant-numeric: tabular-nums; }
 
 .wa-fx-title { margin-bottom: 11px; color: var(--wa-accent); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
 .wa-device .wa-slider-row { margin: 9px 0; }
@@ -525,7 +581,7 @@
 .wa-win select,
 .wa-mpc-toolbar select,
 .wa-chop-toolbar select,
-.wa-song-slot select,
+.wa-arrange-block select,
 .wa-export select,
 .wa-vblock select,
 .wa-device input[type="number"] {
@@ -562,7 +618,7 @@
   .wa-mpc-pad { min-height: 112px; }
   .wa-ms button { width: 34px; height: 32px; }
   .wa-win select,
-  .wa-song-slot select,
+  .wa-arrange-block select,
   .wa-export select { min-height: 44px; }
 }
 
@@ -683,7 +739,7 @@
 .wa-workarea { grid-template-columns: minmax(0, 1fr) minmax(240px, 280px); }
 .wa-panels { overflow: hidden; }
 .wa-panel:has(> .wa-grid),
-.wa-panel:has(> .wa-event-lane),
+.wa-panel:has(> .wa-event-grid),
 .wa-panel:has(> .wa-piano-roll) {
   max-width: 100%;
   overflow-x: auto;
@@ -694,7 +750,7 @@
   -webkit-overflow-scrolling: touch;
 }
 .wa-panel:has(> .wa-grid)::after,
-.wa-panel:has(> .wa-event-lane)::after,
+.wa-panel:has(> .wa-event-grid)::after,
 .wa-panel:has(> .wa-piano-roll)::after {
   content: "scroll sideways for all steps";
   display: none;
@@ -733,7 +789,9 @@
   .wa-workspace-section { padding: 9px; overflow: hidden; }
   .wa-tabs { overflow-x: auto; overscroll-behavior-inline: contain; }
   .wa-tab { flex: 1 0 auto; min-width: 92px; padding: 11px 12px; white-space: nowrap; }
-  .wa-rack, .wa-song-chain { grid-template-columns: 1fr; }
+  .wa-rack { grid-template-columns: 1fr; }
+  .wa-arrange-lane { flex-direction: column; }
+  .wa-arrange-lane-label { width: auto; }
   .wa-selected-sample, .wa-event-editor, .wa-combinator { grid-template-columns: 1fr; }
   .wa-inspector .wa-selected-sample { grid-template-columns: 1fr; }
   .wa-mpc-toolbar > *,
@@ -745,10 +803,10 @@
   .wa-mpc-pad-name { font-size: 9px; }
   .wa-waveform { height: 170px; }
   .wa-panel:has(> .wa-grid)::after,
-  .wa-panel:has(> .wa-event-lane)::after,
+  .wa-panel:has(> .wa-event-grid)::after,
   .wa-panel:has(> .wa-piano-roll)::after { display: block; }
   .wa-grid { min-width: 690px; }
-  .wa-event-lane { min-width: 600px; }
+  .wa-event-grid { min-width: 600px; }
   .wa-piano-roll { min-width: 690px; }
   .wa-slider-row {
     display: grid;

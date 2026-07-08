@@ -4,10 +4,10 @@
 
 import {
   SCENES, STEPS, SONG_SLOTS, PAD_COUNT, PIANO_NOTES, TRACKS, clip, transport,
-  allPats, allVels, synthNotes, padEvents, songChain, sampleParams, sampleData, sampleBuffers,
+  allPats, allVels, synthNotes, padEvents, songChain, arrangement, sampleParams, sampleData, sampleBuffers,
   dp, mpc, rackState, fx, vsynthPatch,
 } from "./state";
-import type { HistoryState, PadEvent, SamplerP, DrumP, RackState, TrackId, VNote } from "./state";
+import type { ArrangeBlock, HistoryState, PadEvent, SamplerP, DrumP, RackState, TrackId, VNote } from "./state";
 import type { VPatch } from "./vsynth";
 import { applyFxState, hydrateSample } from "./engine";
 
@@ -26,6 +26,11 @@ export function historyState(): HistoryState {
     sampleParams: sampleParams.map((params) => ({ ...params })),
     sampleData: [...sampleData],
     songChain: [...songChain],
+    arrangement: {
+      drums: arrangement.drums.map((b) => ({ ...b })),
+      pads: arrangement.pads.map((b) => ({ ...b })),
+      synth: arrangement.synth.map((b) => ({ ...b })),
+    },
     fx: { ...fx },
     rackState: { ...rackState, macros: [...rackState.macros], devices: { ...rackState.devices } },
   };
@@ -38,6 +43,7 @@ export function restoreHistory(state: HistoryState): void {
   state.sampleParams.forEach((params, i) => Object.assign(sampleParams[i], params));
   state.sampleData.forEach((data, i) => { sampleData[i] = data; sampleBuffers[i] = null; if (data) void hydrateSample(i); });
   state.songChain.forEach((pattern, i) => { songChain[i] = pattern; });
+  TRACKS.forEach((track) => { arrangement[track] = state.arrangement[track].map((b) => ({ ...b })); });
   Object.assign(fx, state.fx);
   Object.assign(rackState, state.rackState);
   rackState.macros = [...state.rackState.macros]; rackState.devices = { ...state.rackState.devices };
@@ -52,7 +58,7 @@ export function projectState(includeSamples = true): object {
     return index;
   });
   return {
-    version: 6,
+    version: 7,
     pats: allPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
     vels: allVels,
     dp,
@@ -61,7 +67,8 @@ export function projectState(includeSamples = true): object {
     clipPlay: clip.play,
     synthNotes,
     vsynth: vsynthPatch,
-    songChain,
+    songChain, // kept read-only for one version so older saves aren't stranded
+    arrangement,
     songMode: transport.songMode,
     sampleParams,
     samplePool,
@@ -138,6 +145,25 @@ export function applyProject(saved: Record<string, unknown>): void {
       if (saved.songChain) (saved.songChain as number[]).forEach((v, i) => {
         if (i < SONG_SLOTS) songChain[i] = Math.max(0, Math.min(SCENES - 1, Number(v) || 0));
       });
+      if (saved.arrangement && typeof saved.arrangement === "object") {
+        const incoming = saved.arrangement as Partial<Record<TrackId, ArrangeBlock[]>>;
+        TRACKS.forEach((track) => {
+          const blocks = incoming[track];
+          if (Array.isArray(blocks)) {
+            arrangement[track] = blocks
+              .filter((b) => b && typeof b.scene === "number" && typeof b.bars === "number")
+              .map((b) => ({ scene: Math.max(0, Math.min(SCENES - 1, b.scene)), bars: Math.max(1, Math.min(64, b.bars)) }));
+          }
+        });
+      } else if (saved.songChain) {
+        // v6 and older: one shared scene per slot, forced onto every track.
+        // Give each track its own equivalent 1-bar-per-slot arrangement so
+        // old songs still play back the same way until edited further.
+        const chain = saved.songChain as number[];
+        TRACKS.forEach((track) => {
+          arrangement[track] = chain.map((scene) => ({ scene: Math.max(0, Math.min(SCENES - 1, Number(scene) || 0)), bars: 1 }));
+        });
+      }
       if (typeof saved.songMode === "boolean") transport.songMode = saved.songMode;
       if (saved.sampleParams) (saved.sampleParams as Partial<SamplerP>[]).forEach((p, i) => { if (i < PAD_COUNT) Object.assign(sampleParams[i], p); });
       if (saved.samplePool && saved.sampleRefs) {

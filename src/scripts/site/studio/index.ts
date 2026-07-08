@@ -5,12 +5,12 @@ import "../../../styles/studio.css";
 // the 8 scenes, Ableton-style; launches apply on the next pattern boundary.
 
 import {
-  STEPS, SCENES, SCENE_LABELS, SONG_SLOTS, DRUMS, PAD_BANK_SIZE, ROLL_NOTES,
+  STEPS, SCENES, SCENE_LABELS, DRUMS, PAD_BANK_SIZE, ROLL_NOTES,
   TRACKS, TRACK_LABELS, clip, transport, stepDur, audible,
-  allPats, allVels, synthNotes, padEvents, songChain,
+  allPats, allVels, synthNotes, padEvents, arrangement, arrangePos,
   sampleParams, sampleBuffers, sampleData, dp, DP_DEF, DP_SPECS, mpc, rackState, fx, vsynthPatch, mute, solo,
 } from "./state";
-import type { HistoryState, MpcState, PadEvent, SamplerP, TrackId, VNote } from "./state";
+import type { ArrangeBlock, HistoryState, MpcState, PadEvent, SamplerP, TrackId, VNote } from "./state";
 import {
   ac, ensureNodes, trackGain,
   initReverb, initDelay, applyFxState, metroClick,
@@ -18,7 +18,7 @@ import {
   reversedBuffer, hydrateSample, crushBuffer,
 } from "./engine";
 import * as engine from "./engine";
-import { playNote, LiveVoices, PRESETS, TABLE_NAMES, MOD_SRCS, MOD_DESTS } from "./vsynth";
+import { playNote, LiveVoices, PRESETS, PRESET_CATEGORIES, TABLE_NAMES, MOD_SRCS, MOD_DESTS, sampleWaveform, noteToMidi, midiToNote } from "./vsynth";
 import type { ModSlot, VPatch } from "./vsynth";
 import {
   saveAll, historyState, restoreHistory, projectState, loadAll, applyProject, pendingProjectStore,
@@ -26,7 +26,7 @@ import {
 import {
   el, btn, help, sliderRow, download,
   dataUrlToBytes, readAsDataUrl, blobAsDataUrl,
-  equalSlices, transientSlices, snapZero, euclideanPattern, drawWaveform,
+  equalSlices, transientSlices, snapZero, euclideanPattern, drawWaveform, drawScope, drawEnvelopeShape,
   encodeWav, encodeMp3,
 } from "./helpers";
 
@@ -83,13 +83,13 @@ export async function initStudio(): Promise<void> {
   const swingIn = document.createElement("input");
   swingIn.type = "range"; swingIn.min = "0"; swingIn.max = "0.6"; swingIn.step = "0.02"; swingIn.value = "0"; swingIn.className = "wa-swing-in";
   const swingWrap = el("span", "wa-swing"); swingWrap.append(el("span", "wa-lbl", "Swing"), swingIn);
-  const metroBtn = btn("Metro", "wa-toggle"), songBtn = btn(transport.songMode ? "Song" : "Session", "wa-toggle"), rotBtn = btn("⤢ Flip", "wa-btn-sm");
+  const metroBtn = btn("Metro", "wa-toggle"), songBtn = btn(transport.songMode ? "Arrange" : "Session", "wa-toggle"), rotBtn = btn("⤢ Flip", "wa-btn-sm");
   const undoBtn = btn("Undo", "wa-btn-sm"), redoBtn = btn("Redo", "wa-btn-sm");
   const tutorialBtn = btn("? Tutorial", "wa-btn-sm");
   help(playBtn, "Start playback from the beginning of the current clips or song.");
   help(stopBtn, "Stop playback and clear the playhead.");
   help(metroBtn, "Toggle the metronome. It is also included in audio export while enabled.");
-  help(songBtn, "Switch between looping the launched session clips and playing the arranged song chain.");
+  help(songBtn, "Switch between looping the launched session clips and playing each track's own arrangement.");
   help(undoBtn, "Restore the previous destructive edit, including chops, fills and dropped samples.");
   help(redoBtn, "Reapply the last undone edit.");
   help(rotBtn, "Expand Studio to the viewport. On portrait phones this rotates the workstation.");
@@ -124,7 +124,12 @@ export async function initStudio(): Promise<void> {
   function paintTabs(): void {
     tabBtns.forEach((b, i) => b.classList.toggle("active", i === activeTab));
     panelEls.forEach((p, i) => { p.style.display = i === activeTab ? "block" : "none"; });
+    // Canvases drawn while their tab is hidden measure 0 width — redraw once
+    // the Sequence tab (synth waveform previews) actually becomes visible.
+    if (activeTab === 1) waveRedraws.forEach((fn) => fn());
   }
+  let waveRedraws: Array<() => void> = [];
+  let modBadgeRefreshers: Array<() => void> = [];
 
   // ── Shared velocity popup ──
   const velPopup = el("div", "wa-vel-popup");
@@ -187,7 +192,6 @@ export async function initStudio(): Promise<void> {
   const grid = el("div", "wa-grid");
   const cells: HTMLElement[][] = [];
   const sdPanels: HTMLElement[] = [];
-  const synthCells: HTMLElement[][] = [];
 
   DRUMS.forEach((name, r) => {
     // Drum row
@@ -281,7 +285,9 @@ export async function initStudio(): Promise<void> {
   const mpcToolbar = el("div", "wa-mpc-toolbar");
   const bankButtons: HTMLButtonElement[] = [];
   const padButtons: HTMLButtonElement[] = [];
-  const eventCells: HTMLButtonElement[] = [];
+  const eventCells: HTMLButtonElement[][] = [];
+  const eventRows: HTMLElement[] = [];
+  const eventRowLabels: HTMLElement[] = [];
   const repeatTimers = new Map<number, number>();
   const performanceStatus = el("span", "wa-status", "Ready");
   const fullLevelBtn = btn("Full Level", "wa-toggle wa-btn-sm");
@@ -568,29 +574,63 @@ export async function initStudio(): Promise<void> {
     } catch { performanceStatus.textContent = "Resampling failed"; }
   });
 
-  const eventLane = el("div", "wa-event-lane");
+  // All 16 pads in the current bank get their own lane, mirroring the legacy
+  // drum grid's UX — switching the selected pad no longer swaps the lane's
+  // contents out from under you, it just moves which row is highlighted.
+  const eventLane = el("div", "wa-event-grid");
   let paintingEvents = false, paintEventsOn = true;
   function paintEventLane(): void {
-    eventCells.forEach((cell, step) => {
-      const event = padEvents[clip.sel].find((item) => item.pad === mpc.selectedPad && item.step === step);
-      cell.classList.toggle("on", !!event);
-      cell.title = event ? `Velocity ${event.velocity}, chance ${event.probability}%, ratchets ${event.ratchets}, offset ${event.offset}ms` : `Step ${step + 1}`;
+    eventRowLabels.forEach((label, localPad) => {
+      const pad = selectedGlobalPad(localPad);
+      label.textContent = sampleParams[pad].name || `Pad ${pad + 1}`;
+      eventRows[localPad].classList.toggle("selected", pad === mpc.selectedPad);
+    });
+    eventCells.forEach((rowCells, localPad) => {
+      const pad = selectedGlobalPad(localPad);
+      rowCells.forEach((cell, step) => {
+        const event = padEvents[clip.sel].find((item) => item.pad === pad && item.step === step);
+        cell.classList.toggle("on", !!event);
+        cell.title = event
+          ? `${eventRowLabels[localPad].textContent}, step ${step + 1}: velocity ${event.velocity}, chance ${event.probability}%, ratchets ${event.ratchets}, offset ${event.offset}ms`
+          : `${eventRowLabels[localPad].textContent}, step ${step + 1}`;
+      });
     });
   }
-  for (let step = 0; step < STEPS; step++) {
-    const cell = el("button", "wa-cell wa-event-cell" + (step % 4 === 0 ? " wa-beat" : "")) as HTMLButtonElement; cell.type = "button";
-    const paint = () => {
-      const existing = padEvents[clip.sel].findIndex((event) => event.pad === mpc.selectedPad && event.step === step);
-      if (paintEventsOn && existing < 0) padEvents[clip.sel].push({ pad: mpc.selectedPad, step, velocity: 100, offset: 0, probability: 100, ratchets: 1 });
-      if (!paintEventsOn && existing >= 0) padEvents[clip.sel].splice(existing, 1);
-      paintEventLane(); paintSession(); saveAll();
-    };
-    cell.addEventListener("pointerdown", (event) => {
-      event.preventDefault(); checkpoint(); paintingEvents = true;
-      paintEventsOn = !padEvents[clip.sel].some((item) => item.pad === mpc.selectedPad && item.step === step); paint();
-    });
-    cell.addEventListener("pointerenter", () => { if (paintingEvents) paint(); });
-    eventCells.push(cell); eventLane.append(cell);
+  for (let localPad = 0; localPad < PAD_BANK_SIZE; localPad++) {
+    const rowEl = el("div", "wa-row");
+    const label = el("span", "wa-drum wa-event-row-label");
+    label.addEventListener("click", () => { mpc.selectedPad = selectedGlobalPad(localPad); paintMpcPads(); });
+    rowEl.append(label);
+    const rowCells: HTMLButtonElement[] = [];
+    for (let step = 0; step < STEPS; step++) {
+      const cell = el("button", "wa-cell wa-event-cell" + (step % 4 === 0 ? " wa-beat" : "")) as HTMLButtonElement; cell.type = "button";
+      const paint = () => {
+        const pad = selectedGlobalPad(localPad);
+        const existing = padEvents[clip.sel].findIndex((event) => event.pad === pad && event.step === step);
+        if (paintEventsOn && existing < 0) padEvents[clip.sel].push({ pad, step, velocity: 100, offset: 0, probability: 100, ratchets: 1 });
+        if (!paintEventsOn && existing >= 0) padEvents[clip.sel].splice(existing, 1);
+        paintEventLane(); paintSession(); saveAll();
+      };
+      cell.addEventListener("pointerdown", (event) => {
+        event.preventDefault(); checkpoint(); paintingEvents = true;
+        const pad = selectedGlobalPad(localPad);
+        mpc.selectedPad = pad; paintMpcPads();
+        paintEventsOn = !padEvents[clip.sel].some((item) => item.pad === pad && item.step === step); paint();
+      });
+      cell.addEventListener("pointerenter", () => { if (paintingEvents) paint(); });
+      cell.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        const pad = selectedGlobalPad(localPad);
+        const existing = padEvents[clip.sel].find((item) => item.pad === pad && item.step === step);
+        if (!existing) return;
+        showVelocityPopup(existing.velocity, (event as MouseEvent).clientX, (event as MouseEvent).clientY, (v) => {
+          existing.velocity = v; paintEventLane(); saveAll();
+        });
+      });
+      rowCells.push(cell); rowEl.append(cell);
+    }
+    eventCells.push(rowCells); eventRows.push(rowEl); eventRowLabels.push(label);
+    eventLane.append(rowEl);
   }
   window.addEventListener("pointerup", () => { paintingEvents = false; });
   const eventEditor = el("div", "wa-event-editor");
@@ -605,7 +645,7 @@ export async function initStudio(): Promise<void> {
   const mpcPadArea = el("div", "wa-mpc-pad-area"); mpcPadArea.append(padBankRow, padGrid);
   const mpcSide = el("div", "wa-mpc-side"); mpcSide.append(mpcToolbar);
   const mpcDeck = el("div", "wa-mpc-deck"); mpcDeck.append(mpcPadArea, mpcSide);
-  mpcPanel.append(mpcDeck, el("div", "wa-lbl", "Selected pad sequence"), eventLane, eventEditor);
+  mpcPanel.append(mpcDeck, el("div", "wa-lbl", "Pad sequence — current bank"), eventLane, eventEditor);
   paintMpcPads();
 
   // ── Drum rack / sampler ──
@@ -843,14 +883,84 @@ export async function initStudio(): Promise<void> {
     sel.addEventListener("change", () => on(sel.value));
     row.append(sel); return row;
   };
-  // Preset row
+  // Preset row — searchable + filterable by category (Surge XT style).
   const presetRow = el("div", "wa-export");
+  const presetBrowserRow = el("div", "wa-export");
+  const presetSearch = document.createElement("input");
+  presetSearch.type = "text"; presetSearch.placeholder = "Search presets…"; presetSearch.className = "wa-preset-search";
+  const presetCategoryRow = el("div", "wa-preset-categories");
+  const presetCategories = ["All", ...Array.from(new Set(Object.keys(PRESETS).map((name) => PRESET_CATEGORIES[name] ?? "Utility")))];
+  let activePresetCategory = "All";
+  const categoryBtns: HTMLButtonElement[] = [];
   const presetSel = document.createElement("select");
-  Object.keys(PRESETS).forEach((name) => { const o = document.createElement("option"); o.value = name; o.textContent = name; presetSel.append(o); });
+  function refreshPresetOptions(): void {
+    const query = presetSearch.value.trim().toLowerCase(), prevValue = presetSel.value;
+    presetSel.replaceChildren();
+    Object.keys(PRESETS).forEach((name) => {
+      const category = PRESET_CATEGORIES[name] ?? "Utility";
+      if (activePresetCategory !== "All" && category !== activePresetCategory) return;
+      if (query && !name.toLowerCase().includes(query)) return;
+      const o = document.createElement("option"); o.value = name; o.textContent = name; presetSel.append(o);
+    });
+    if (Array.from(presetSel.options).some((o) => o.value === prevValue)) presetSel.value = prevValue;
+  }
+  presetCategories.forEach((category) => {
+    const b = btn(category, "wa-btn-sm" + (category === "All" ? " active" : ""));
+    b.addEventListener("click", () => {
+      activePresetCategory = category;
+      categoryBtns.forEach((other) => other.classList.toggle("active", other === b));
+      refreshPresetOptions();
+    });
+    categoryBtns.push(b); presetCategoryRow.append(b);
+  });
+  presetSearch.addEventListener("input", refreshPresetOptions);
+  refreshPresetOptions();
   const loadPresetBtn = btn("Load preset", "wa-btn-sm");
   const auditionBtn = btn("♪ Audition", "wa-btn-sm");
+  const randomizeBtn = btn("🎲 Randomize", "wa-btn-sm");
   help(loadPresetBtn, "Replace the whole synth patch with the selected preset.");
   help(auditionBtn, "Play a short note with the current patch.");
+  help(randomizeBtn, "Jitter the current patch's oscillators, filter, envelopes and modulation within musical ranges.");
+  // Randomize — biased toward playable results rather than pure chaos: only
+  // 1-2 of the 6 mod-matrix slots get a nonzero amount, cutoff is picked on
+  // a log scale, and osc2 is silent half the time.
+  function randomizePatch(): void {
+    const rand = (min: number, max: number) => min + Math.random() * (max - min);
+    function pick<T>(arr: readonly T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+    const filterTypes = ["lowpass", "highpass", "bandpass", "notch"] as const;
+    const lfoShapes = ["sine", "triangle", "sawtooth", "square"] as const;
+    vsynthPatch.osc1 = {
+      table: pick(TABLE_NAMES), pos: Math.random(), octave: Math.round(rand(-1, 1)), semi: 0,
+      level: rand(0.6, 1), unison: 1 + Math.floor(Math.random() * 4), detune: rand(0, 35),
+    };
+    vsynthPatch.osc2 = Math.random() < 0.5
+      ? { table: "basic", pos: 0.6, octave: 0, semi: 0, level: 0, unison: 1, detune: 12 }
+      : {
+          table: pick(TABLE_NAMES), pos: Math.random(), octave: Math.round(rand(-2, 1)), semi: pick([0, 7, 12, -12] as const),
+          level: rand(0.3, 0.8), unison: 1 + Math.floor(Math.random() * 3), detune: rand(0, 35),
+        };
+    vsynthPatch.noise = { level: Math.random() < 0.7 ? 0 : rand(0.05, 0.3), colour: rand(2000, 14000) };
+    vsynthPatch.filter = {
+      type: pick(filterTypes) as VPatch["filter"]["type"],
+      cutoff: 200 * Math.pow(2, Math.random() * 6),
+      res: rand(0.3, 4), env2: rand(-0.4, 0.8), track: rand(0, 0.6),
+    };
+    vsynthPatch.env1 = { a: Math.random() < 0.8 ? rand(0.001, 0.05) : rand(0.1, 1), d: rand(0.05, 1), s: rand(0, 1), r: rand(0.05, 1) };
+    vsynthPatch.env2 = { a: rand(0.001, 0.3), d: rand(0.05, 0.8), s: Math.random() < 0.5 ? 0 : rand(0, 0.6), r: rand(0.05, 0.8) };
+    vsynthPatch.lfo1 = { shape: pick(lfoShapes) as VPatch["lfo1"]["shape"], rate: rand(0.1, 8) };
+    vsynthPatch.lfo2 = { shape: pick(lfoShapes) as VPatch["lfo2"]["shape"], rate: rand(0.1, 6) };
+    ensureMatrixSlots();
+    const activeSlots = new Set<number>();
+    while (activeSlots.size < 1 + Math.floor(Math.random() * 2)) activeSlots.add(Math.floor(Math.random() * vsynthPatch.matrix.length));
+    vsynthPatch.matrix.forEach((slot, i) => {
+      slot.src = pick(MOD_SRCS); slot.dest = pick(MOD_DESTS);
+      slot.amt = activeSlots.has(i) ? rand(-0.6, 0.6) : 0;
+    });
+    vsynthPatch.macros = vsynthPatch.macros.map(() => Math.random());
+    vsynthPatch.volume = rand(0.6, 0.9);
+    renderPatchEditor(); saveAll(); audition("C4");
+  }
+  randomizeBtn.addEventListener("click", randomizePatch);
   loadPresetBtn.addEventListener("click", () => {
     const preset = PRESETS[presetSel.value]; if (!preset) return;
     const copy = JSON.parse(JSON.stringify(preset)) as VPatch;
@@ -864,28 +974,99 @@ export async function initStudio(): Promise<void> {
     renderPatchEditor(); saveAll(); audition("C4");
   });
   auditionBtn.addEventListener("click", () => audition("C4"));
-  presetRow.append(el("span", "wa-lbl", "PRESET"), presetSel, loadPresetBtn, auditionBtn);
+  presetBrowserRow.append(presetSearch, presetCategoryRow);
+  presetRow.append(el("span", "wa-lbl", "PRESET"), presetSel, loadPresetBtn, auditionBtn, randomizeBtn, simpleBtn);
+  // Live oscilloscope — taps synthGain via an analyser. Stays a flat line
+  // until audio has actually started (ensureNodes() runs on first pad/key
+  // press), matching the rest of the app's "audio starts on first click" rule.
+  const scopeCanvas = document.createElement("canvas"); scopeCanvas.className = "wa-scope";
+  let scopeAnalyser: AnalyserNode | null = null;
+  function drawSynthScope(): void {
+    requestAnimationFrame(drawSynthScope);
+    if (!engine.synthGain) return;
+    if (!scopeAnalyser) { scopeAnalyser = ac().createAnalyser(); scopeAnalyser.fftSize = 1024; engine.synthGain.connect(scopeAnalyser); }
+    const data = new Uint8Array(scopeAnalyser.fftSize);
+    scopeAnalyser.getByteTimeDomainData(data);
+    const floats = new Float32Array(data.length);
+    for (let i = 0; i < data.length; i++) floats[i] = (data[i] - 128) / 128;
+    drawScope(scopeCanvas, floats, "#ffe24d");
+  }
+  drawSynthScope();
   // Patch editor — rebuilt whenever a preset load replaces the patch wholesale.
   const patchBox = el("div", "wa-vpatch");
+  // Simple/Advanced — collapses to Wave/Filter/Envelope/Volume for newcomers
+  // (CS50 Synth's "only 3 engines" lesson); the class lives on patchBox
+  // itself, so it survives renderPatchEditor()'s replaceChildren() rebuilds.
+  const simpleBtn = btn("Simple view", "wa-toggle wa-btn-sm");
+  let simpleMode = localStorage.getItem("vv_studio_synth_simple") === "1";
+  function applySimpleMode(): void {
+    patchBox.classList.toggle("wa-simple", simpleMode);
+    simpleBtn.textContent = simpleMode ? "Advanced view" : "Simple view";
+    simpleBtn.classList.toggle("active", simpleMode);
+  }
+  help(simpleBtn, "Collapse the patch editor to Wave, Filter, Envelope and Volume, or show the full mod matrix and macros.");
+  simpleBtn.addEventListener("click", () => {
+    simpleMode = !simpleMode;
+    localStorage.setItem("vv_studio_synth_simple", simpleMode ? "1" : "0");
+    applySimpleMode();
+  });
+  applySimpleMode();
   function renderPatchEditor(): void {
     patchBox.replaceChildren();
+    waveRedraws = [];
+    modBadgeRefreshers = [];
     const pSlider = (host: HTMLElement, label: string, min: number, max: number, step: number, get: () => number, set: (v: number) => void) => {
       host.append(sliderRow(label, min, max, get(), step, (v) => { set(v); saveAll(); }));
     };
+    // Shows total incoming mod-matrix depth on the one slider it targets
+    // (Vital-style knob highlight, simplified to a text badge) instead of
+    // only listing it in the separate matrix table below.
+    const modBadge = (dest: ModSlot["dest"]): HTMLElement => {
+      const badge = el("span", "wa-mod-badge");
+      const refresh = () => {
+        const depth = vsynthPatch.matrix.filter((s) => s.dest === dest).reduce((sum, s) => sum + Math.abs(s.amt), 0);
+        badge.textContent = depth > 0.001 ? `MOD ±${Math.round(depth * 100)}%` : "";
+        badge.classList.toggle("active", depth > 0.001);
+      };
+      modBadgeRefreshers.push(refresh); refresh();
+      return badge;
+    };
     (["osc1", "osc2"] as const).forEach((key, i) => {
       const o = vsynthPatch[key];
-      const box = el("div", "wa-vblock");
+      const box = el("div", "wa-vblock" + (i === 1 ? " wa-advanced-only-block" : ""));
       box.append(el("div", "wa-fx-title", `OSC ${i + 1}`));
-      box.append(selRow("Table", TABLE_NAMES.map((n) => [n, n.toUpperCase()]), o.table, (v) => { o.table = v; saveAll(); }));
-      pSlider(box, "Position", 0, 1, 0.01, () => o.pos, (v) => { o.pos = v; });
-      pSlider(box, "Octave", -2, 2, 1, () => o.octave, (v) => { o.octave = v; });
-      pSlider(box, "Semi", -12, 12, 1, () => o.semi, (v) => { o.semi = v; });
+      const waveCanvas = document.createElement("canvas"); waveCanvas.className = "wa-wave-mini";
+      box.append(waveCanvas);
+      const redrawWave = () => drawScope(waveCanvas, sampleWaveform(o.table, o.pos));
+      waveRedraws.push(redrawWave);
+      const tableOptions: Array<[string, string]> = TABLE_NAMES.map((n) => [n, n.toUpperCase()]);
+      if (o.table.startsWith("text:")) tableOptions.push([o.table, `TEXT "${o.table.slice(5)}"`]);
+      box.append(selRow("Table", tableOptions, o.table, (v) => { o.table = v; saveAll(); redrawWave(); }));
+      const oscAdvanced = el("div", "wa-advanced-only");
+      const textRow = el("div", "wa-export");
+      const textInput = document.createElement("input");
+      textInput.type = "text"; textInput.placeholder = "type a word…"; textInput.maxLength = 24;
+      const genBtn = btn("Generate", "wa-btn-sm");
+      help(genBtn, "Hash the typed text into a unique, reproducible wavetable shape (Vital-style text-to-wavetable).");
+      genBtn.addEventListener("click", () => {
+        const text = textInput.value.trim(); if (!text) return;
+        o.table = `text:${text}`; saveAll(); renderPatchEditor();
+      });
+      textRow.append(textInput, genBtn);
+      oscAdvanced.append(textRow);
+      const posRow = sliderRow("Position", 0, 1, o.pos, 0.01, (v) => { o.pos = v; redrawWave(); saveAll(); });
+      posRow.append(modBadge(i === 0 ? "pos1" : "pos2"));
+      box.append(posRow);
+      pSlider(oscAdvanced, "Octave", -2, 2, 1, () => o.octave, (v) => { o.octave = v; });
+      pSlider(oscAdvanced, "Semi", -12, 12, 1, () => o.semi, (v) => { o.semi = v; });
       pSlider(box, "Level", 0, 1, 0.01, () => o.level, (v) => { o.level = v; });
-      pSlider(box, "Unison", 1, 8, 1, () => o.unison, (v) => { o.unison = v; });
-      pSlider(box, "Detune", 0, 100, 1, () => o.detune, (v) => { o.detune = v; });
+      pSlider(oscAdvanced, "Unison", 1, 8, 1, () => o.unison, (v) => { o.unison = v; });
+      pSlider(oscAdvanced, "Detune", 0, 100, 1, () => o.detune, (v) => { o.detune = v; });
+      box.append(oscAdvanced);
       patchBox.append(box);
+      redrawWave();
     });
-    const noiseBox = el("div", "wa-vblock");
+    const noiseBox = el("div", "wa-vblock wa-advanced-only-block");
     noiseBox.append(el("div", "wa-fx-title", "NOISE"));
     pSlider(noiseBox, "Level", 0, 1, 0.01, () => vsynthPatch.noise.level, (v) => { vsynthPatch.noise.level = v; });
     pSlider(noiseBox, "Colour", 200, 16000, 100, () => vsynthPatch.noise.colour, (v) => { vsynthPatch.noise.colour = v; });
@@ -893,52 +1074,100 @@ export async function initStudio(): Promise<void> {
     const filterBox = el("div", "wa-vblock");
     filterBox.append(el("div", "wa-fx-title", "FILTER"));
     filterBox.append(selRow("Type", [["lowpass", "LOW PASS"], ["highpass", "HIGH PASS"], ["bandpass", "BAND PASS"], ["notch", "NOTCH"]], vsynthPatch.filter.type, (v) => { vsynthPatch.filter.type = v as VPatch["filter"]["type"]; saveAll(); }));
-    pSlider(filterBox, "Cutoff", 30, 18000, 10, () => vsynthPatch.filter.cutoff, (v) => { vsynthPatch.filter.cutoff = v; });
-    pSlider(filterBox, "Res", 0.1, 12, 0.1, () => vsynthPatch.filter.res, (v) => { vsynthPatch.filter.res = v; });
-    pSlider(filterBox, "Env2 amt", -1, 1, 0.01, () => vsynthPatch.filter.env2, (v) => { vsynthPatch.filter.env2 = v; });
-    pSlider(filterBox, "Key track", 0, 1, 0.05, () => vsynthPatch.filter.track, (v) => { vsynthPatch.filter.track = v; });
+    const cutoffRow = sliderRow("Cutoff", 30, 18000, vsynthPatch.filter.cutoff, 10, (v) => { vsynthPatch.filter.cutoff = v; saveAll(); });
+    cutoffRow.append(modBadge("cutoff"));
+    filterBox.append(cutoffRow);
+    const filterAdvanced = el("div", "wa-advanced-only");
+    pSlider(filterAdvanced, "Res", 0.1, 12, 0.1, () => vsynthPatch.filter.res, (v) => { vsynthPatch.filter.res = v; });
+    pSlider(filterAdvanced, "Env2 amt", -1, 1, 0.01, () => vsynthPatch.filter.env2, (v) => { vsynthPatch.filter.env2 = v; });
+    pSlider(filterAdvanced, "Key track", 0, 1, 0.05, () => vsynthPatch.filter.track, (v) => { vsynthPatch.filter.track = v; });
+    filterBox.append(filterAdvanced);
     patchBox.append(filterBox);
+    // Envelope: draggable shape (attack peak, decay/sustain point, release
+    // end) above the same sliders for precise numeric entry — dragging and
+    // sliders both write straight into the same EnvPatch fields and redraw
+    // each other. Segment widths are fixed thirds (not literally time-to-
+    // scale) so a 5ms attack next to a 3s release is still visible/draggable.
+    const ENV_MAX = { a: 2, d: 2, r: 3 };
     (["env1", "env2"] as const).forEach((key, i) => {
       const e = vsynthPatch[key];
-      const box = el("div", "wa-vblock");
+      const box = el("div", "wa-vblock" + (i === 1 ? " wa-advanced-only-block" : ""));
       box.append(el("div", "wa-fx-title", i === 0 ? "ENV 1 · AMP" : "ENV 2 · MOD"));
-      pSlider(box, "Attack", 0, 2, 0.005, () => e.a, (v) => { e.a = v; });
-      pSlider(box, "Decay", 0.01, 2, 0.01, () => e.d, (v) => { e.d = v; });
-      pSlider(box, "Sustain", 0, 1, 0.01, () => e.s, (v) => { e.s = v; });
-      pSlider(box, "Release", 0.01, 3, 0.01, () => e.r, (v) => { e.r = v; });
+      const envCanvas = document.createElement("canvas"); envCanvas.className = "wa-env-canvas";
+      box.append(envCanvas);
+      const envPoints = (): Array<[number, number]> => [
+        [0, 0],
+        [(e.a / ENV_MAX.a) * (1 / 3), 1],
+        [1 / 3 + (e.d / ENV_MAX.d) * (1 / 3), 1 - e.s],
+        [2 / 3, 1 - e.s],
+        [2 / 3 + (e.r / ENV_MAX.r) * (1 / 3), 0],
+      ];
+      const redrawEnv = () => drawEnvelopeShape(envCanvas, envPoints());
+      waveRedraws.push(redrawEnv);
+      let dragHandle: 1 | 2 | 4 | null = null;
+      const onEnvMove = (event: PointerEvent) => {
+        if (!dragHandle) return;
+        const rect = envCanvas.getBoundingClientRect();
+        const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+        const y = Math.max(0, Math.min(1, 1 - (event.clientY - rect.top) / rect.height));
+        if (dragHandle === 1) e.a = Math.max(0, Math.min(ENV_MAX.a, (x / (1 / 3)) * ENV_MAX.a));
+        else if (dragHandle === 2) {
+          e.d = Math.max(0.01, Math.min(ENV_MAX.d, ((x - 1 / 3) / (1 / 3)) * ENV_MAX.d));
+          e.s = Math.max(0, Math.min(1, y));
+        } else if (dragHandle === 4) {
+          e.r = Math.max(0.01, Math.min(ENV_MAX.r, ((x - 2 / 3) / (1 / 3)) * ENV_MAX.r));
+        }
+        redrawEnv();
+      };
+      envCanvas.addEventListener("pointerdown", (event) => {
+        const rect = envCanvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / rect.width;
+        dragHandle = x < 1 / 3 ? 1 : x < 2 / 3 ? 2 : 4;
+        envCanvas.setPointerCapture(event.pointerId);
+        onEnvMove(event);
+      });
+      envCanvas.addEventListener("pointermove", onEnvMove);
+      envCanvas.addEventListener("pointerup", () => { if (dragHandle) saveAll(); dragHandle = null; });
+      redrawEnv();
+      pSlider(box, "Attack", 0, 2, 0.005, () => e.a, (v) => { e.a = v; redrawEnv(); });
+      pSlider(box, "Decay", 0.01, 2, 0.01, () => e.d, (v) => { e.d = v; redrawEnv(); });
+      pSlider(box, "Sustain", 0, 1, 0.01, () => e.s, (v) => { e.s = v; redrawEnv(); });
+      pSlider(box, "Release", 0.01, 3, 0.01, () => e.r, (v) => { e.r = v; redrawEnv(); });
       patchBox.append(box);
     });
     (["lfo1", "lfo2"] as const).forEach((key, i) => {
       const l = vsynthPatch[key];
-      const box = el("div", "wa-vblock");
+      const box = el("div", "wa-vblock wa-advanced-only-block");
       box.append(el("div", "wa-fx-title", `LFO ${i + 1}`));
       box.append(selRow("Shape", [["sine", "SINE"], ["triangle", "TRI"], ["sawtooth", "SAW"], ["square", "SQR"]], l.shape, (v) => { l.shape = v as VPatch["lfo1"]["shape"]; saveAll(); }));
       pSlider(box, "Rate Hz", 0.05, 20, 0.05, () => l.rate, (v) => { l.rate = v; });
       patchBox.append(box);
     });
-    const matrixBox = el("div", "wa-vblock wa-vmatrix");
+    const matrixBox = el("div", "wa-vblock wa-vmatrix wa-advanced-only-block");
     matrixBox.append(el("div", "wa-fx-title", "MOD MATRIX"));
     vsynthPatch.matrix.forEach((slot: ModSlot) => {
       const row = el("div", "wa-vmatrix-row");
       const srcSel = document.createElement("select");
       MOD_SRCS.forEach((s) => { const o = document.createElement("option"); o.value = s; o.textContent = s.toUpperCase(); srcSel.append(o); });
       srcSel.value = slot.src;
-      srcSel.addEventListener("change", () => { slot.src = srcSel.value as ModSlot["src"]; saveAll(); });
+      srcSel.addEventListener("change", () => { slot.src = srcSel.value as ModSlot["src"]; saveAll(); modBadgeRefreshers.forEach((fn) => fn()); });
       const destSel = document.createElement("select");
       MOD_DESTS.forEach((d) => { const o = document.createElement("option"); o.value = d; o.textContent = d.toUpperCase(); destSel.append(o); });
       destSel.value = slot.dest;
-      destSel.addEventListener("change", () => { slot.dest = destSel.value as ModSlot["dest"]; saveAll(); });
+      destSel.addEventListener("change", () => { slot.dest = destSel.value as ModSlot["dest"]; saveAll(); modBadgeRefreshers.forEach((fn) => fn()); });
       row.append(srcSel, el("span", "wa-lbl", "→"), destSel);
-      row.append(sliderRow("Amt", -1, 1, slot.amt, 0.01, (v) => { slot.amt = v; saveAll(); }));
+      row.append(sliderRow("Amt", -1, 1, slot.amt, 0.01, (v) => { slot.amt = v; saveAll(); modBadgeRefreshers.forEach((fn) => fn()); }));
       matrixBox.append(row);
     });
     patchBox.append(matrixBox);
     const macroBox = el("div", "wa-vblock");
     macroBox.append(el("div", "wa-fx-title", "MACROS — map via matrix"));
-    ["Macro 1", "Macro 2", "Macro 3", "Macro 4"].forEach((name, i) => {
-      pSlider(macroBox, name, 0, 1, 0.01, () => vsynthPatch.macros[i] ?? 0, (v) => { vsynthPatch.macros[i] = v; });
-    });
     pSlider(macroBox, "Volume", 0, 1, 0.01, () => vsynthPatch.volume, (v) => { vsynthPatch.volume = v; });
+    const macroAdvanced = el("div", "wa-advanced-only");
+    ["Macro 1", "Macro 2", "Macro 3", "Macro 4"].forEach((name, i) => {
+      pSlider(macroAdvanced, name, 0, 1, 0.01, () => vsynthPatch.macros[i] ?? 0, (v) => { vsynthPatch.macros[i] = v; });
+    });
+    macroBox.append(macroAdvanced);
     patchBox.append(macroBox);
   }
   renderPatchEditor();
@@ -953,75 +1182,129 @@ export async function initStudio(): Promise<void> {
     button.addEventListener("click", () => { notes.forEach((note) => audition(note, 90, 3.5)); });
     chordRow.append(button);
   });
-  // Piano roll — 3 octaves, notes with length + velocity. Click to add/remove,
-  // drag right to set length, right-click a note for velocity.
+  // Piano roll — 3 octaves, notes with length + velocity, rendered as
+  // draggable/resizable blocks over a background grid (Ableton-style):
+  // drag empty space to draw a note and set its length; drag a note's body
+  // to move it (drag vertically to change pitch); drag its right edge to
+  // resize; click without dragging deletes it; right-click sets velocity.
+  // Still keyed off the same 16-step/1-bar note model, so the scheduler and
+  // offline render (which key off n.step/n.len) are untouched.
   const pianoRoll = el("div", "wa-piano-roll wa-vroll");
+  const rollNotesLayer = el("div", "wa-roll-notes");
+  const rollPlayhead = el("div", "wa-roll-playhead");
+  const rollPlayheadBar = el("div", "wa-roll-playhead-bar");
+  rollPlayhead.append(rollPlayheadBar);
   const rollNoteAt = (row: number, step: number): VNote | undefined =>
     synthNotes[clip.sel].find((n) => n.note === ROLL_NOTES[row] && step >= n.step && step < n.step + n.len);
-  let dragNote: VNote | null = null, dragRow = -1;
+  const ROLL_RESIZE_PX = 8;
   function paintRoll(): void {
-    synthCells.forEach((rowCells, row) => rowCells.forEach((cell, step) => {
-      const n = rollNoteAt(row, step);
-      cell.classList.toggle("on", !!n && n.step === step);
-      cell.classList.toggle("tail", !!n && n.step !== step);
-      if (n && n.step === step) setCellOpacity(cell, n.vel); else cell.style.opacity = "";
-    }));
+    rollNotesLayer.replaceChildren();
+    synthNotes[clip.sel].forEach((n) => {
+      const row = ROLL_NOTES.indexOf(n.note); if (row < 0) return;
+      const block = el("div", "wa-roll-note");
+      block.style.left = `${(n.step / STEPS) * 100}%`;
+      block.style.width = `${(n.len / STEPS) * 100}%`;
+      block.style.top = `${(row / ROLL_NOTES.length) * 100}%`;
+      block.style.height = `${(1 / ROLL_NOTES.length) * 100}%`;
+      block.style.opacity = String(0.45 + 0.55 * (n.vel / 127));
+      block.title = `${n.note}, step ${n.step + 1}`;
+      block.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault(); event.stopPropagation();
+        checkpoint();
+        const rect = rollNotesLayer.getBoundingClientRect();
+        const stepWidth = rect.width / STEPS, rowHeight = rect.height / ROLL_NOTES.length;
+        const blockRect = block.getBoundingClientRect();
+        const resizing = event.clientX - blockRect.left > blockRect.width - ROLL_RESIZE_PX;
+        const startX = event.clientX, startY = event.clientY;
+        const origStep = n.step, origLen = n.len, origRow = row;
+        let moved = false;
+        const onMove = (moveEvent: PointerEvent) => {
+          const dx = moveEvent.clientX - startX, dy = moveEvent.clientY - startY;
+          if (!moved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+          moved = true;
+          if (resizing) {
+            n.len = Math.max(1, Math.min(STEPS - origStep, origLen + Math.round(dx / stepWidth)));
+            block.style.width = `${(n.len / STEPS) * 100}%`;
+          } else {
+            n.step = Math.max(0, Math.min(STEPS - n.len, origStep + Math.round(dx / stepWidth)));
+            const newRow = Math.max(0, Math.min(ROLL_NOTES.length - 1, origRow + Math.round(dy / rowHeight)));
+            n.note = ROLL_NOTES[newRow];
+            block.style.left = `${(n.step / STEPS) * 100}%`;
+            block.style.top = `${(newRow / ROLL_NOTES.length) * 100}%`;
+          }
+        };
+        const onUp = () => {
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("pointerup", onUp);
+          if (!resizing && !moved) { synthNotes[clip.sel] = synthNotes[clip.sel].filter((existing) => existing !== n); paintRoll(); }
+          paintSession(); saveAll();
+        };
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+      });
+      block.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        showVelocityPopup(n.vel, (event as MouseEvent).clientX, (event as MouseEvent).clientY, (v) => {
+          n.vel = v; block.style.opacity = String(0.45 + 0.55 * (v / 127)); saveAll();
+        });
+      });
+      rollNotesLayer.append(block);
+    });
   }
+  let dragNote: VNote | null = null, dragRow = -1;
   ROLL_NOTES.forEach((note, r) => {
     const row = el("div", "wa-piano-row" + (note.startsWith("C") && !note.startsWith("C#") ? " wa-roll-oct" : ""));
     row.append(el("span", "wa-piano-note", note));
-    const rowCells: HTMLElement[] = [];
+    const track = el("div", "wa-piano-track");
     for (let c = 0; c < STEPS; c++) {
       const cell = el("button", "wa-cell wa-piano-cell" + (c % 4 === 0 ? " wa-beat" : "")) as HTMLButtonElement;
       cell.type = "button";
       cell.title = `${note}, step ${c + 1}`;
       cell.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0) return; // right-click is velocity, not toggle
+        if (event.button !== 0 || rollNoteAt(r, c)) return; // existing notes are handled by their own block, on top
         event.preventDefault();
-        const existing = rollNoteAt(r, c);
         checkpoint();
-        if (existing) {
-          synthNotes[clip.sel] = synthNotes[clip.sel].filter((n) => n !== existing);
-        } else {
-          const fresh: VNote = { note, step: c, len: 1, vel: 100 };
-          synthNotes[clip.sel].push(fresh);
-          dragNote = fresh; dragRow = r;
-          audition(note, 100, 1);
-        }
+        const fresh: VNote = { note, step: c, len: 1, vel: 100 };
+        synthNotes[clip.sel].push(fresh);
+        dragNote = fresh; dragRow = r;
+        audition(note, 100, 1);
         paintRoll(); paintSession(); saveAll();
       });
       cell.addEventListener("pointerenter", () => {
         if (!dragNote || dragRow !== r) return;
         if (c >= dragNote.step) { dragNote.len = Math.min(STEPS - dragNote.step, c - dragNote.step + 1); paintRoll(); }
       });
-      cell.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        const existing = rollNoteAt(r, c); if (!existing) return;
-        const origin = synthCells[r][existing.step];
-        showVelocityPopup(existing.vel, (event as MouseEvent).clientX, (event as MouseEvent).clientY, (v) => {
-          existing.vel = v; setCellOpacity(origin, v);
-        });
-      });
-      rowCells.push(cell);
-      row.append(cell);
+      track.append(cell);
     }
-    synthCells.push(rowCells);
+    row.append(track);
     pianoRoll.append(row);
   });
+  pianoRoll.append(rollNotesLayer, rollPlayhead);
   window.addEventListener("pointerup", () => { if (dragNote) saveAll(); dragNote = null; dragRow = -1; });
   const synthKeys = el("div", "wa-keys");
+  let octaveShift = 0;
+  const octaveLabel = el("span", "wa-status", "OCT 0");
+  function setOctaveShift(v: number): void {
+    octaveShift = Math.max(-3, Math.min(3, v));
+    octaveLabel.textContent = `OCT ${octaveShift >= 0 ? "+" : ""}${octaveShift}`;
+  }
   buildKeys(synthKeys,
-    (note) => { ensureNodes(); liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, note); },
-    (note) => liveKeys.noteOff(ac(), note));
+    (note) => { ensureNodes(); liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, midiToNote(noteToMidi(note) + octaveShift * 12)); },
+    (note) => liveKeys.noteOff(ac(), midiToNote(noteToMidi(note) + octaveShift * 12)));
+  const keysHeader = el("div", "wa-export");
+  keysHeader.append(el("span", "wa-lbl", "KEYS — click, or use A–K (Z/X shift octave)"), octaveLabel);
   synthPanel.append(
+    presetBrowserRow,
     presetRow,
+    scopeCanvas,
     patchBox,
     el("div", "wa-sep-h"),
     el("div", "wa-lbl", "CHORD PLAYER"), chordRow,
     el("div", "wa-sep-h"),
-    el("div", "wa-lbl", "PIANO ROLL — click to add, drag right for length, right-click for velocity"), pianoRoll,
+    el("div", "wa-lbl", "PIANO ROLL — drag empty space to draw, drag a note to move (vertical = pitch) or its right edge to resize, click to delete, right-click for velocity"), pianoRoll,
     el("div", "wa-sep-h"),
-    el("div", "wa-lbl", "KEYS — click or use A–K"), synthKeys,
+    keysHeader, synthKeys,
   );
 
   // ── Session view ──
@@ -1099,21 +1382,57 @@ export async function initStudio(): Promise<void> {
     sessionCells.push(rowCells);
     sessionGrid.append(row);
   });
-  const chain = el("div", "wa-song-chain");
-  const chainSelects: HTMLSelectElement[] = [];
-  songChain.forEach((pattern, i) => {
-    const slot = el("label", "wa-song-slot");
-    slot.append(el("span", "wa-lbl", String(i + 1)));
-    const select = document.createElement("select");
-    SCENE_LABELS.forEach((label, pi) => {
-      const option = document.createElement("option"); option.value = String(pi); option.textContent = `Scene ${label}`; select.append(option);
+  // Arrangement — each track keeps its own ordered list of blocks (scene +
+  // bar-length), independent of the other tracks, so a drum groove can loop
+  // for 4 bars while the synth changes scene every bar underneath it.
+  const arrangeLanes = el("div", "wa-arrange-lanes");
+  const arrangeLanePaints: Array<() => void> = [];
+  TRACKS.forEach((track) => {
+    const lane = el("div", "wa-arrange-lane");
+    lane.append(el("span", "wa-arrange-lane-label", TRACK_LABELS[track]));
+    const blocksHost = el("div", "wa-arrange-blocks");
+    function paintLane(): void {
+      blocksHost.replaceChildren();
+      arrangement[track].forEach((block, i) => {
+        const chip = el("div", "wa-arrange-block");
+        chip.classList.toggle("sel", block.scene === clip.sel);
+        chip.style.flexGrow = String(block.bars);
+        const sceneSel = document.createElement("select");
+        SCENE_LABELS.forEach((label, si) => {
+          const option = document.createElement("option"); option.value = String(si); option.textContent = label; sceneSel.append(option);
+        });
+        sceneSel.value = String(block.scene);
+        sceneSel.addEventListener("change", () => { block.scene = Number(sceneSel.value); saveAll(); paintLane(); });
+        const barsRow = el("div", "wa-arrange-bars-row");
+        const barsOut = el("span", "wa-arrange-bars", `${block.bars} bar${block.bars === 1 ? "" : "s"}`);
+        const barsMinus = btn("−", "wa-btn-sm"), barsPlus = btn("+", "wa-btn-sm");
+        const setBars = (bars: number) => {
+          block.bars = Math.max(1, Math.min(64, bars));
+          barsOut.textContent = `${block.bars} bar${block.bars === 1 ? "" : "s"}`;
+          chip.style.flexGrow = String(block.bars); saveAll();
+        };
+        barsMinus.addEventListener("click", () => setBars(block.bars - 1));
+        barsPlus.addEventListener("click", () => setBars(block.bars + 1));
+        barsRow.append(barsMinus, barsOut, barsPlus);
+        const delBtn = btn("✕", "wa-btn-sm");
+        help(delBtn, `Remove this ${TRACK_LABELS[track].toLowerCase()} block.`);
+        delBtn.addEventListener("click", () => { arrangement[track].splice(i, 1); saveAll(); paintLane(); });
+        chip.append(sceneSel, barsRow, delBtn);
+        blocksHost.append(chip);
+      });
+    }
+    arrangeLanePaints.push(paintLane);
+    const addBtn = btn("+ Block", "wa-btn-sm");
+    help(addBtn, `Append a block playing the currently selected scene to the ${TRACK_LABELS[track].toLowerCase()} arrangement.`);
+    addBtn.addEventListener("click", () => {
+      arrangement[track].push({ scene: clip.sel, bars: 1 } as ArrangeBlock); saveAll(); paintLane();
     });
-    select.value = String(pattern);
-    select.addEventListener("change", () => { songChain[i] = Number(select.value); saveAll(); });
-    chainSelects.push(select); slot.append(select); chain.append(slot);
+    lane.append(blocksHost, addBtn);
+    paintLane();
+    arrangeLanes.append(lane);
   });
-  const songHelp = el("p", "wa-help", "Each column is a track, each row a scene. Launch single clips or whole scenes — changes land on the next bar. Song mode plays the scene chain left to right.");
-  song.append(songHelp, launchStatus, sessionGrid, el("div", "wa-sep-h"), el("div", "wa-lbl", "SONG CHAIN"), chain);
+  const songHelp = el("p", "wa-help", "Each column is a track, each row a scene. Launch single clips or whole scenes — changes land on the next bar. Arrange mode plays each track's own block list independently, looping shorter tracks to match the longest.");
+  song.append(songHelp, launchStatus, sessionGrid, el("div", "wa-sep-h"), el("div", "wa-lbl", "ARRANGEMENT"), arrangeLanes);
 
   // ── Mixer ── (channel levels only — device parameters live in the rack below)
   const mixer = el("div", "wa-panel");
@@ -1239,7 +1558,7 @@ export async function initStudio(): Promise<void> {
   const exp = el("div", "wa-panel");
   const expRow = el("div", "wa-export");
   const renderSel = document.createElement("select");
-  [["pattern","Launched clips"],["song","Full song"]].forEach(([v, l]) => {
+  [["pattern","Launched clips"],["song","Full arrangement"]].forEach(([v, l]) => {
     const o = document.createElement("option"); o.value = v; o.textContent = l; renderSel.append(o);
   });
   renderSel.value = transport.songMode ? "song" : "pattern";
@@ -1456,10 +1775,11 @@ export async function initStudio(): Promise<void> {
     paintRoll();
     paintEventLane();
     paintSession();
+    arrangeLanePaints.forEach((fn) => fn());
   }
   function refreshVisibleState(): void {
     selectScene(clip.sel);
-    chainSelects.forEach((select, i) => { select.value = String(songChain[i]); });
+    arrangeLanePaints.forEach((fn) => fn());
     paintMpcPads(); paintEventLane(); applyFxState();
   }
   undoBtn.addEventListener("click", () => {
@@ -1481,7 +1801,7 @@ export async function initStudio(): Promise<void> {
   swingIn.addEventListener("input", () => { transport.swing = Number(swingIn.value); });
   metroBtn.addEventListener("click", () => { transport.metro = !transport.metro; metroBtn.classList.toggle("active", transport.metro); });
   songBtn.addEventListener("click", () => {
-    transport.songMode = !transport.songMode; songBtn.textContent = transport.songMode ? "Song" : "Session"; songBtn.classList.toggle("active", transport.songMode);
+    transport.songMode = !transport.songMode; songBtn.textContent = transport.songMode ? "Arrange" : "Session"; songBtn.classList.toggle("active", transport.songMode);
     renderSel.value = transport.songMode ? "song" : "pattern"; saveAll();
   });
   const flipBackdrop = el("div", "wa-flip-backdrop");
@@ -1496,12 +1816,28 @@ export async function initStudio(): Promise<void> {
   flipExit.addEventListener("click", () => setFlip(false));
 
   // ── Transport / scheduler ──
-  let playing = false, schedTimer = 0, nextTime = 0, schStep = 0, songPos = 0, lastHi = -1, lastStepStartedMs = 0;
+  let playing = false, schedTimer = 0, nextTime = 0, schStep = 0, lastHi = -1, lastStepStartedMs = 0;
+  // Arrangement playback: each track independently follows its own block list
+  // (scene + bar-length), advancing at bar boundaries — replaces the old
+  // single shared songChain, which forced every track onto the same scene.
+  function applyArrangePos(track: TrackId): void {
+    const blocks = arrangement[track];
+    clip.play[track] = blocks.length ? blocks[Math.min(arrangePos[track].block, blocks.length - 1)].scene : null;
+  }
+  function advanceArrangeTrack(track: TrackId): void {
+    const blocks = arrangement[track];
+    if (!blocks.length) { arrangePos[track] = { block: 0, barInBlock: 0 }; clip.play[track] = null; return; }
+    const pos = arrangePos[track];
+    if (pos.block >= blocks.length) pos.block = 0;
+    pos.barInBlock++;
+    if (pos.barInBlock >= blocks[pos.block].bars) { pos.barInBlock = 0; pos.block = (pos.block + 1) % blocks.length; }
+    clip.play[track] = blocks[pos.block].scene;
+  }
   function highlight(s: number): void {
     if (lastHi >= 0) for (let r = 0; r < 8; r++) cells[r][lastHi].classList.remove("play");
-    if (lastHi >= 0) synthCells.forEach((row) => row[lastHi].classList.remove("play"));
     if (clip.play.drums === clip.sel) for (let r = 0; r < 8; r++) cells[r][s].classList.add("play");
-    if (clip.play.synth === clip.sel) synthCells.forEach((row) => row[s].classList.add("play"));
+    rollPlayheadBar.classList.toggle("on", clip.play.synth === clip.sel);
+    rollPlayheadBar.style.left = `${(s / STEPS) * 100}%`;
     lastStepStartedMs = performance.now();
     lastHi = s; lcdState.textContent = `▶ ${String(s + 1).padStart(2, "0")}`;
   }
@@ -1563,9 +1899,7 @@ export async function initStudio(): Promise<void> {
           songBtn.textContent = "Session"; songBtn.classList.remove("active"); renderSel.value = "pattern";
           launchStatus.textContent = "Launched";
         } else if (transport.songMode) {
-          songPos = (songPos + 1) % SONG_SLOTS;
-          const scene = songChain[songPos];
-          TRACKS.forEach((track) => { clip.play[track] = scene; });
+          TRACKS.forEach((track) => advanceArrangeTrack(track));
         }
         paintSession();
       }
@@ -1573,9 +1907,10 @@ export async function initStudio(): Promise<void> {
   }
   playBtn.addEventListener("click", () => {
     if (playing) return;
-    ensureNodes(); playing = true; schStep = 0; songPos = 0;
+    ensureNodes(); playing = true; schStep = 0;
+    TRACKS.forEach((track) => { arrangePos[track] = { block: 0, barInBlock: 0 }; });
     applyQueued();
-    if (transport.songMode) { const scene = songChain[0]; TRACKS.forEach((track) => { clip.play[track] = scene; }); }
+    if (transport.songMode) TRACKS.forEach((track) => applyArrangePos(track));
     paintSession();
     nextTime = ac().currentTime + 0.06;
     schedTimer = window.setInterval(scheduler, 25);
@@ -1583,7 +1918,7 @@ export async function initStudio(): Promise<void> {
   stopBtn.addEventListener("click", () => {
     playing = false; if (schedTimer) { clearInterval(schedTimer); schedTimer = 0; }
     if (lastHi >= 0) for (let r = 0; r < 8; r++) cells[r][lastHi].classList.remove("play");
-    synthCells.forEach((row) => row.forEach((cell) => cell.classList.remove("play")));
+    rollPlayheadBar.classList.remove("on");
     TRACKS.forEach((track) => { clip.queued[track] = undefined; });
     paintSession();
     lastHi = -1; lcdState.textContent = "■ STOP";
@@ -1593,11 +1928,23 @@ export async function initStudio(): Promise<void> {
   async function renderBuffer(mode: "pattern" | "song"): Promise<AudioBuffer> {
     ensureNodes();
     const sr = 44100, sd = 60 / transport.bpm / 4;
-    // Song mode renders whole scenes; clip mode renders the launched per-track clips once.
-    const scenes = mode === "song" ? [...songChain] : [0];
-    const clipFor = (track: TrackId, sceneIndex: number): number | null =>
-      mode === "song" ? scenes[sceneIndex] : clip.play[track];
-    const dur = scenes.length * STEPS * sd + 2.2;
+    // Song mode renders each track's own arrangement independently (looping
+    // shorter tracks to match the longest one); clip mode renders the
+    // launched per-track clips once.
+    const totalBars = (track: TrackId): number => arrangement[track].reduce((sum, b) => sum + b.bars, 0);
+    const bars = mode === "song" ? Math.max(1, ...TRACKS.map(totalBars)) : 1;
+    const sceneAt = (track: TrackId, bar: number): number | null => {
+      if (mode !== "song") return clip.play[track];
+      const blocks = arrangement[track], total = totalBars(track);
+      if (!blocks.length || !total) return null;
+      let offset = bar % total;
+      for (const block of blocks) {
+        if (offset < block.bars) return block.scene;
+        offset -= block.bars;
+      }
+      return blocks[blocks.length - 1].scene;
+    };
+    const dur = bars * STEPS * sd + 2.2;
     const off = new OfflineAudioContext(2, Math.ceil(dur * sr), sr);
     const om = off.createGain(); om.gain.value = engine.master!.gain.value;
     const ol = off.createBiquadFilter(); ol.type = "lowshelf"; ol.frequency.value = 180; ol.gain.value = rackState.devices.eq ? fx.low : 0;
@@ -1623,11 +1970,11 @@ export async function initStudio(): Promise<void> {
     const ot: GainNode[] = [];
     for (let i = 0; i < 8; i++) { const g = off.createGain(); g.gain.value = trackGain[i].gain.value; g.connect(om); ot.push(g); }
     const osg = off.createGain(); osg.gain.value = engine.synthGain!.gain.value; osg.connect(om);
-    scenes.forEach((_, sceneIndex) => { for (let s = 0; s < STEPS; s++) {
-      const base = (sceneIndex * STEPS + s) * sd;
+    for (let bar = 0; bar < bars; bar++) { for (let s = 0; s < STEPS; s++) {
+      const base = (bar * STEPS + s) * sd;
       const groove = rackState.devices.player && s % 2 === 1 ? rackState.grooveTiming * sd * 0.5 : 0;
       const when = base + (s % 2 === 1 ? transport.swing * sd : 0) + groove;
-      const drumClip = clipFor("drums", sceneIndex), padClip = clipFor("pads", sceneIndex), synthClip = clipFor("synth", sceneIndex);
+      const drumClip = sceneAt("drums", bar), padClip = sceneAt("pads", bar), synthClip = sceneAt("synth", bar);
       if (drumClip !== null) for (let r = 0; r < 8; r++) {
         if (allPats[drumClip][r][s] && audible(r)) playDrum(off, ot[r], r, allVels[drumClip][r][s] / 127, when);
       }
@@ -1642,7 +1989,7 @@ export async function initStudio(): Promise<void> {
         if (n.step === s) playNote(off, osg, vsynthPatch, n.note, n.vel, when, sd * n.len * 0.98);
       });
       if (transport.metro && s % 4 === 0) metroClick(off, om, base, s === 0);
-    } });
+    } }
     return off.startRendering();
   }
   async function doExport(fmt: "wav" | "mp3"): Promise<void> {
@@ -1686,7 +2033,9 @@ export async function initStudio(): Promise<void> {
     a: 4, s: 5, d: 6, f: 7,
     z: 0, x: 1, c: 2, v: 3,
   };
-  const downSet = new Set<string>();
+  // Physical key -> the actual (octave-shifted) note it triggered, so keyup
+  // releases the right note even if the octave changed while it was held.
+  const downMap = new Map<string, string>();
   window.addEventListener("keydown", (ev) => {
     if (activeTab === 0) {
       const localPad = padKeyMap[ev.key.toLowerCase()];
@@ -1695,16 +2044,23 @@ export async function initStudio(): Promise<void> {
       }
     }
     if (activeTab !== 1) return;
-    const n = keyMap[ev.key.toLowerCase()];
-    if (!n || downSet.has(n) || ev.metaKey || ev.ctrlKey) return;
-    downSet.add(n); ensureNodes(); liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, n); highlightKey(synthKeys, n, true);
+    const key = ev.key.toLowerCase();
+    if (!ev.repeat && !ev.metaKey && !ev.ctrlKey) {
+      if (key === "z") { setOctaveShift(octaveShift - 1); return; }
+      if (key === "x") { setOctaveShift(octaveShift + 1); return; }
+    }
+    const n0 = keyMap[key];
+    if (!n0 || downMap.has(key) || ev.metaKey || ev.ctrlKey) return;
+    const n = midiToNote(noteToMidi(n0) + octaveShift * 12);
+    downMap.set(key, n); ensureNodes(); liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, n); highlightKey(synthKeys, n0, true);
   });
   window.addEventListener("keyup", (ev) => {
     const localPad = padKeyMap[ev.key.toLowerCase()];
     if (localPad != null) padButtons[localPad].classList.remove("down");
     if (activeTab !== 1) return;
-    const n = keyMap[ev.key.toLowerCase()]; if (!n) return;
-    downSet.delete(n); liveKeys.noteOff(ac(), n); highlightKey(synthKeys, n, false);
+    const key = ev.key.toLowerCase();
+    const n = downMap.get(key); if (!n) return;
+    downMap.delete(key); liveKeys.noteOff(ac(), n); highlightKey(synthKeys, keyMap[key], false);
   });
 
   // Initial paint reflects loaded project state (scene selection, session grid).

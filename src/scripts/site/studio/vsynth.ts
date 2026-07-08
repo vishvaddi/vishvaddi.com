@@ -114,12 +114,36 @@ export const PRESETS: Record<string, VPatch> = {
   },
 };
 
+export const PRESET_CATEGORIES: Record<string, string> = {
+  "Init": "Utility",
+  "Sub Bass": "Bass",
+  "Reese": "Bass",
+  "Acid": "Bass",
+  "Hoover": "Lead",
+  "Pluck": "Pluck",
+  "Pad": "Pad",
+  "Keys": "Keys",
+};
+
 // ─── Wavetables ──────────────────────────────────────────────────────────────
 const FRAMES = 8;
 const HARMONICS = 64;
 
+// Text-to-wavetable: the table's whole identity lives in the string itself
+// ("text:<word>"), so no separate storage is needed for save/load — hashing
+// is a GLSL-style fract(sin(x)*large) trick, deterministic per (text, n, t),
+// rolled off at 1/n so it reads as a wave rather than white noise.
+function textHarmonicAmp(text: string, f: number, n: number): number {
+  const t = f / (FRAMES - 1);
+  let seed = 0;
+  for (let i = 0; i < text.length; i++) seed = (seed * 31 + text.charCodeAt(i)) >>> 0;
+  const h = Math.sin(seed * 0.0001 + n * 12.9898 + t * 78.233) * 43758.5453;
+  return ((h - Math.floor(h)) * 2 - 1) / n;
+}
+
 // Harmonic amplitude (sine-phase) for each named table at frame f (0..FRAMES-1).
 function harmonicAmp(table: string, f: number, n: number): number {
+  if (table.startsWith("text:")) return textHarmonicAmp(table.slice(5) || "VISHAMP", f, n);
   const t = f / (FRAMES - 1); // 0–1 across the table
   switch (table) {
     case "basic": {
@@ -153,6 +177,28 @@ function harmonicAmp(table: string, f: number, n: number): number {
     }
     default: return n === 1 ? 1 : 0;
   }
+}
+
+// One cycle of a table/position's shape, for a static waveform preview — sums
+// the same crossfaded harmonic frames playNote() uses for oscA/oscB, just
+// evaluated directly into samples instead of a PeriodicWave.
+export function sampleWaveform(table: string, framePos: number, n = 256): Float32Array {
+  const clamped = Math.max(0, Math.min(1, framePos)) * (FRAMES - 1);
+  const frameA = Math.min(FRAMES - 2, Math.floor(clamped));
+  const frac = clamped - frameA;
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const phase = (i / n) * Math.PI * 2;
+    let sum = 0;
+    for (let h = 1; h <= HARMONICS; h++) {
+      const ampA = harmonicAmp(table, frameA, h), ampB = harmonicAmp(table, frameA + 1, h);
+      sum += (ampA * (1 - frac) + ampB * frac) * Math.sin(phase * h);
+    }
+    out[i] = sum;
+  }
+  let peak = 0; for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(out[i]));
+  if (peak > 0.0001) for (let i = 0; i < n; i++) out[i] /= peak;
+  return out;
 }
 
 const tableCache = new WeakMap<BaseAudioContext, Map<string, PeriodicWave>>();
@@ -189,6 +235,10 @@ export function noteToMidi(note: string): number {
   return SEMI.indexOf(m[1]) + (parseInt(m[2], 10) + 1) * 12;
 }
 export function midiToFreq(midi: number): number { return 440 * Math.pow(2, (midi - 69) / 12); }
+export function midiToNote(midi: number): string {
+  const m = Math.round(midi);
+  return `${SEMI[((m % 12) + 12) % 12]}${Math.floor(m / 12) - 1}`;
+}
 
 interface ModBus {
   // node-based sources (connect through a scaling gain into AudioParams)

@@ -76,6 +76,7 @@ export interface HistoryState {
   sampleParams: SamplerP[];
   sampleData: Array<string | null>;
   songChain: number[];
+  arrangement: Record<TrackId, ArrangeBlock[]>;
   fx: FxState;
   rackState: RackState;
 }
@@ -162,6 +163,17 @@ export const clip = {
   sel: 0,
   play: { drums: 0, pads: 0, synth: 0 } as Record<TrackId, number | null>,
   queued: { drums: undefined, pads: undefined, synth: undefined } as Record<TrackId, number | null | undefined>,
+};
+
+// ─── Arrangement ─────────────────────────────────────────────────────────────
+// Each track gets its own ordered list of blocks (scene + bar-length), so
+// e.g. drums can loop scene A for 4 bars while synth plays 1 bar of A then 3
+// of C — real per-track independence, unlike the old shared songChain below.
+export interface ArrangeBlock { scene: number; bars: number; }
+export const arrangement: Record<TrackId, ArrangeBlock[]> = { drums: [], pads: [], synth: [] };
+// Per-track playhead while transport.songMode drives the arrangement.
+export const arrangePos: Record<TrackId, { block: number; barInBlock: number }> = {
+  drums: { block: 0, barInBlock: 0 }, pads: { block: 0, barInBlock: 0 }, synth: { block: 0, barInBlock: 0 },
 };
 
 // ─── Pattern data ────────────────────────────────────────────────────────────
