@@ -567,11 +567,12 @@
 /* ── Tooltips (data-help, rendered on hover/focus) ── */
 .wa-tooltip {
   position: fixed; z-index: 10002; max-width: 260px; padding: 8px 11px;
-  /* wa-surface (#1b1e25) sits almost on top of wa-bg (#14161b) — too close
-     to read as solid. wa-surface-3 is the most-elevated tone this theme
-     has, so it actually stands off the panel behind it. */
-  background: var(--wa-surface-3); border: 1px solid var(--wa-border-2); border-radius: var(--wa-radius-sm);
-  color: var(--wa-text); font-size: 12px; line-height: 1.5;
+  /* Every dark tone in this theme (wa-surface/-2/-3) sits close enough to
+     wa-bg to read as translucent once it's floating over arbitrary busy
+     content. A light, high-contrast card — the same trick native OS
+     tooltips use — stands off a dark UI unambiguously, no shade-matching. */
+  background: #f2eee3; border: 1px solid #00000040; border-radius: var(--wa-radius-sm);
+  color: #17181c; font-size: 12px; line-height: 1.5;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.7);
   pointer-events: none;
 }
