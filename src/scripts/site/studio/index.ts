@@ -99,7 +99,7 @@ export async function initStudio(): Promise<void> {
   }
   document.addEventListener("pointerover", (event) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
-    if (target && target !== tooltipTarget) showTooltip(target, 450);
+    if (target && target !== tooltipTarget) showTooltip(target, 750);
   });
   document.addEventListener("pointerout", (event) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
