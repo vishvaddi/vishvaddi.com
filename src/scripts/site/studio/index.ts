@@ -974,24 +974,6 @@ export async function initStudio(): Promise<void> {
     renderPatchEditor(); saveAll(); audition("C4");
   });
   auditionBtn.addEventListener("click", () => audition("C4"));
-  presetBrowserRow.append(presetSearch, presetCategoryRow);
-  presetRow.append(el("span", "wa-lbl", "PRESET"), presetSel, loadPresetBtn, auditionBtn, randomizeBtn, simpleBtn);
-  // Live oscilloscope — taps synthGain via an analyser. Stays a flat line
-  // until audio has actually started (ensureNodes() runs on first pad/key
-  // press), matching the rest of the app's "audio starts on first click" rule.
-  const scopeCanvas = document.createElement("canvas"); scopeCanvas.className = "wa-scope";
-  let scopeAnalyser: AnalyserNode | null = null;
-  function drawSynthScope(): void {
-    requestAnimationFrame(drawSynthScope);
-    if (!engine.synthGain) return;
-    if (!scopeAnalyser) { scopeAnalyser = ac().createAnalyser(); scopeAnalyser.fftSize = 1024; engine.synthGain.connect(scopeAnalyser); }
-    const data = new Uint8Array(scopeAnalyser.fftSize);
-    scopeAnalyser.getByteTimeDomainData(data);
-    const floats = new Float32Array(data.length);
-    for (let i = 0; i < data.length; i++) floats[i] = (data[i] - 128) / 128;
-    drawScope(scopeCanvas, floats, "#ffe24d");
-  }
-  drawSynthScope();
   // Patch editor — rebuilt whenever a preset load replaces the patch wholesale.
   const patchBox = el("div", "wa-vpatch");
   // Simple/Advanced — collapses to Wave/Filter/Envelope/Volume for newcomers
@@ -1011,6 +993,24 @@ export async function initStudio(): Promise<void> {
     applySimpleMode();
   });
   applySimpleMode();
+  presetBrowserRow.append(presetSearch, presetCategoryRow);
+  presetRow.append(el("span", "wa-lbl", "PRESET"), presetSel, loadPresetBtn, auditionBtn, randomizeBtn, simpleBtn);
+  // Live oscilloscope — taps synthGain via an analyser. Stays a flat line
+  // until audio has actually started (ensureNodes() runs on first pad/key
+  // press), matching the rest of the app's "audio starts on first click" rule.
+  const scopeCanvas = document.createElement("canvas"); scopeCanvas.className = "wa-scope";
+  let scopeAnalyser: AnalyserNode | null = null;
+  function drawSynthScope(): void {
+    requestAnimationFrame(drawSynthScope);
+    if (!engine.synthGain) return;
+    if (!scopeAnalyser) { scopeAnalyser = ac().createAnalyser(); scopeAnalyser.fftSize = 1024; engine.synthGain.connect(scopeAnalyser); }
+    const data = new Uint8Array(scopeAnalyser.fftSize);
+    scopeAnalyser.getByteTimeDomainData(data);
+    const floats = new Float32Array(data.length);
+    for (let i = 0; i < data.length; i++) floats[i] = (data[i] - 128) / 128;
+    drawScope(scopeCanvas, floats, "#ffe24d");
+  }
+  drawSynthScope();
   function renderPatchEditor(): void {
     patchBox.replaceChildren();
     waveRedraws = [];
