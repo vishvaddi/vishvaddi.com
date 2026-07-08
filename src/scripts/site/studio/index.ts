@@ -1734,7 +1734,7 @@ export async function initStudio(): Promise<void> {
     { workspace: 1, target: eventLane, title: "Sequence pad events", text: "Drag across the lane to paint or erase hits. Use velocity, chance, microtiming and ratchets to make the pattern move." },
     { workspace: 1, target: pianoRoll, title: "Add musical parts", text: "Program synth notes in the piano roll or play them from the on-screen and computer keyboards." },
     { workspace: 2, target: sessionGrid, title: "Launch clips and scenes", text: "Each column is a track and each row a scene. Launch single clips or a whole row — changes wait for the next bar so transitions stay in time." },
-    { workspace: 2, target: chain, title: "Arrange the song", text: "Choose a scene for each song slot, then enable Song mode in the transport to play the full chain." },
+    { workspace: 2, target: arrangeLanes, title: "Arrange the song", text: "Each track keeps its own list of blocks (scene + bar length) — add, resize or reassign them, then enable Arrange mode in the transport to play them back independently." },
     { workspace: 3, target: devicePanel, title: "Process the sound", text: "Use macros, groove controls and device bypass switches to shape the complete signal chain." },
     { workspace: 3, target: exp, title: "Save and export", text: "Save an editable project before exporting. WAV preserves full quality; MP3 is smaller for sharing." },
     { workspace: 3, target: transportBar, title: "Transport stays available", text: "Playback, BPM, session/song mode, undo and tutorial controls remain visible in every workspace." },
