@@ -64,25 +64,42 @@ export async function initStudio(): Promise<void> {
 
   // ── Tooltips ── help() has been setting data-help/aria-description on
   // controls throughout this file all along, but nothing ever rendered it —
-  // this delegated listener is what finally shows it, on hover or keyboard
-  // focus, wherever it's already been authored.
+  // this delegated listener is what finally shows it. Right-click was
+  // considered instead of hover, but the drum grid, piano roll and pad-event
+  // grid all already use right-click for velocity editing, so it would
+  // collide on exactly the busiest screens. Hover stays, but: (a) it only
+  // shows after a short pause instead of flashing on every mouse pass, and
+  // (b) it prefers appearing ABOVE the target so it doesn't sit on top of
+  // whatever's in the row directly below (dense stacked sliders/lists).
   const tooltip = el("div", "wa-tooltip"); tooltip.hidden = true;
   document.body.append(tooltip);
   let tooltipTarget: HTMLElement | null = null;
-  function showTooltip(target: HTMLElement): void {
+  let tooltipTimer = 0;
+  function positionTooltip(target: HTMLElement): void {
+    const rect = target.getBoundingClientRect();
+    const tipRect = tooltip.getBoundingClientRect();
+    const fitsAbove = rect.top - tipRect.height - 8 >= 0;
+    const top = fitsAbove ? rect.top - tipRect.height - 8 : Math.min(window.innerHeight - tipRect.height - 8, rect.bottom + 8);
+    tooltip.style.top = `${Math.max(8, top)}px`;
+    tooltip.style.left = `${Math.min(window.innerWidth - 268, Math.max(8, rect.left))}px`;
+  }
+  function showTooltipNow(target: HTMLElement): void {
     const text = target.dataset.help; if (!text) return;
     tooltipTarget = target;
     tooltip.textContent = text; tooltip.hidden = false;
-    const rect = target.getBoundingClientRect();
-    tooltip.style.top = `${Math.min(window.innerHeight - 40, rect.bottom + 8)}px`;
-    tooltip.style.left = `${Math.min(window.innerWidth - 268, Math.max(8, rect.left))}px`;
+    positionTooltip(target);
+  }
+  function showTooltip(target: HTMLElement, delayMs: number): void {
+    window.clearTimeout(tooltipTimer);
+    tooltipTimer = window.setTimeout(() => showTooltipNow(target), delayMs);
   }
   function hideTooltip(target: HTMLElement): void {
+    window.clearTimeout(tooltipTimer);
     if (tooltipTarget === target) { tooltip.hidden = true; tooltipTarget = null; }
   }
   document.addEventListener("pointerover", (event) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
-    if (target && target !== tooltipTarget) showTooltip(target);
+    if (target && target !== tooltipTarget) showTooltip(target, 450);
   });
   document.addEventListener("pointerout", (event) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
@@ -90,7 +107,7 @@ export async function initStudio(): Promise<void> {
   });
   document.addEventListener("focusin", (event) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
-    if (target) showTooltip(target);
+    if (target) showTooltipNow(target);
   });
   document.addEventListener("focusout", (event) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");

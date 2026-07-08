@@ -566,10 +566,10 @@
 
 /* ── Tooltips (data-help, rendered on hover/focus) ── */
 .wa-tooltip {
-  position: fixed; z-index: 10002; max-width: 260px; padding: 7px 10px;
-  background: var(--wa-surface-2); border: 1px solid var(--wa-border-2); border-radius: var(--wa-radius-sm);
-  color: var(--wa-text); font-size: 11px; line-height: 1.45;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  position: fixed; z-index: 10002; max-width: 260px; padding: 8px 11px;
+  background: var(--wa-surface); border: 1px solid var(--wa-border-2); border-radius: var(--wa-radius-sm);
+  color: var(--wa-text); font-size: 12px; line-height: 1.5;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
   pointer-events: none;
 }
 .wa-tooltip[hidden] { display: none; }
