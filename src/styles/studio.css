@@ -238,7 +238,15 @@
 .wa-tutorial-step { color: var(--wa-accent); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; }
 .wa-tutorial-title { margin: 7px 0; color: var(--wa-amber); font-size: 18px; }
 .wa-tutorial-text { margin: 0 0 16px; color: var(--wa-muted); font-size: 12px; line-height: 1.55; }
-.wa-tutorial-actions { display: flex; justify-content: flex-end; gap: 7px; }
+.wa-tutorial-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.wa-tutorial-tour-view[hidden], .wa-tutorial-browse-view[hidden] { display: none; }
+/* Browse Help needs real room for the shortcuts list + search + topics,
+   vs. the compact corner card the step-by-step tour uses. */
+.wa-tutorial-card.wa-tutorial-browsing {
+  width: min(480px, calc(100vw - 24px));
+  max-height: min(680px, calc(100vh - 40px));
+  overflow-y: auto;
+}
 .wa-tutorial-target {
   position: relative; z-index: 10002 !important;
   outline: 3px solid var(--wa-amber) !important; outline-offset: 5px;

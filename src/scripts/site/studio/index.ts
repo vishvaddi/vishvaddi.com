@@ -159,6 +159,7 @@ export async function initStudio(): Promise<void> {
   help(songBtn, "Switch between looping the launched session clips and playing each track's own arrangement.");
   help(undoBtn, "Restore the previous destructive edit, including chops, fills and dropped samples.");
   help(redoBtn, "Reapply the last undone edit.");
+  help(tutorialBtn, "Open the guided tour, or switch to Browse Help for a searchable reference and keyboard shortcuts.");
   help(rotBtn, "Expand Studio to the viewport. On portrait phones this rotates the workstation.");
   songBtn.classList.toggle("active", transport.songMode);
   transportBar.append(
@@ -1719,18 +1720,10 @@ export async function initStudio(): Promise<void> {
   openRackBtn.addEventListener("click", () => { rackDrawer.classList.add("open"); rackOverlay.classList.add("open"); });
   const createBar = el("div", "wa-mpc-toolbar"); createBar.append(openRackBtn);
 
-  // ── Help drawer — searchable reference covering every section, plus a
-  // keyboard-shortcuts quick list. Complements the linear tutorial below:
-  // the tutorial is a guided first pass, this is what you come back to.
-  const helpDrawer = el("aside", "wa-drawer wa-help-drawer");
-  const helpOverlay = el("div", "wa-drawer-overlay");
-  const helpCloseBtn = btn("✕ Close", "wa-btn-sm");
-  const helpHead = el("div", "wa-drawer-head");
-  helpHead.append(el("span", "wa-drawer-title", "HELP"), helpCloseBtn);
-  const closeHelp = (): void => { helpDrawer.classList.remove("open"); helpOverlay.classList.remove("open"); };
-  helpCloseBtn.addEventListener("click", closeHelp);
-  helpOverlay.addEventListener("click", closeHelp);
-
+  // ── Help content — folded into the tutorial overlay below as a second
+  // "browse" view (searchable reference + shortcuts), rather than a
+  // separate drawer: one overlay, reached the same way, for both the
+  // guided first pass and coming back later to look something up.
   const shortcutsBox = el("div", "wa-help-shortcuts");
   shortcutsBox.append(el("div", "wa-fx-title", "KEYBOARD SHORTCUTS"));
   ([
@@ -1785,11 +1778,6 @@ export async function initStudio(): Promise<void> {
   }
   helpSearch.addEventListener("input", () => renderHelpTopics(helpSearch.value));
   renderHelpTopics("");
-  helpDrawer.append(helpHead, shortcutsBox, el("div", "wa-sep-h"), helpSearch, helpList);
-  const helpBtn = btn("? Help", "wa-btn-sm");
-  help(helpBtn, "Open a searchable reference covering every section, plus keyboard shortcuts.");
-  helpBtn.addEventListener("click", () => { helpDrawer.classList.add("open"); helpOverlay.classList.add("open"); });
-  transportBar.append(helpBtn);
 
   // ── Vinyl scratchpad — drag the platter to scratch the selected pad's sample
   // (or the loaded break) over whatever's playing. Forward drags play the buffer
@@ -1883,20 +1871,37 @@ export async function initStudio(): Promise<void> {
   const inspector = el("aside", "wa-inspector");
   inspector.append(el("div", "wa-inspector-title", "SELECTED PAD"), selectedPadLabel, selectedSampleEditor);
   const workarea = el("div", "wa-workarea"); workarea.append(panels, inspector);
-  win.append(titleBar, lcd, tabbar, transportBar, workarea, rackOverlay, rackDrawer, helpOverlay, helpDrawer);
+  win.append(titleBar, lcd, tabbar, transportBar, workarea, rackOverlay, rackDrawer);
   root.append(win);
   paintTabs();
 
-  // ── Help and tutorial ──
+  // ── Help and tutorial ── one overlay, two views: the guided tour (a
+  // spotlight walkthrough) and Browse Help (the searchable reference built
+  // above) — reached from the same "? Tutorial" button and switchable
+  // mid-overlay, instead of two separate entry points.
   const tutorial = el("div", "wa-tutorial"); tutorial.hidden = true;
   const tutorialShade = el("div", "wa-tutorial-shade");
   const tutorialCard = el("div", "wa-tutorial-card");
   const tutorialStep = el("span", "wa-tutorial-step"), tutorialTitle = el("h2", "wa-tutorial-title"), tutorialText = el("p", "wa-tutorial-text");
+  const tourView = el("div", "wa-tutorial-tour-view");
+  tourView.append(tutorialStep, tutorialTitle, tutorialText);
+  const browseView = el("div", "wa-tutorial-browse-view"); browseView.hidden = true;
+  browseView.append(el("h2", "wa-tutorial-title", "Help"), shortcutsBox, el("div", "wa-sep-h"), helpSearch, helpList);
   const tutorialActions = el("div", "wa-tutorial-actions");
-  const tutorialPrev = btn("Previous", "wa-btn-sm"), tutorialNext = btn("Next", "wa-btn-sm"), tutorialClose = btn("Skip tutorial", "wa-btn-sm");
-  tutorialActions.append(tutorialClose, tutorialPrev, tutorialNext);
-  tutorialCard.append(tutorialStep, tutorialTitle, tutorialText, tutorialActions);
+  const tutorialPrev = btn("Previous", "wa-btn-sm"), tutorialNext = btn("Next", "wa-btn-sm"), tutorialClose = btn("✕ Close", "wa-btn-sm");
+  const browseHelpBtn = btn("Browse Help ▤", "wa-btn-sm"), takeTourBtn = btn("▶ Take the Tour", "wa-btn-sm");
+  tutorialActions.append(tutorialClose, browseHelpBtn, takeTourBtn, tutorialPrev, tutorialNext);
+  tutorialCard.append(tourView, browseView, tutorialActions);
   tutorial.append(tutorialShade, tutorialCard); document.body.append(tutorial);
+  function setTutorialMode(mode: "tour" | "browse"): void {
+    tourView.hidden = mode !== "tour";
+    browseView.hidden = mode !== "browse";
+    tutorialCard.classList.toggle("wa-tutorial-browsing", mode === "browse");
+    tutorialPrev.hidden = mode !== "tour"; tutorialNext.hidden = mode !== "tour";
+    browseHelpBtn.hidden = mode !== "tour"; takeTourBtn.hidden = mode !== "browse";
+  }
+  help(browseHelpBtn, "Switch to a searchable reference covering every section, plus keyboard shortcuts.");
+  help(takeTourBtn, "Switch back to the guided step-by-step tour.");
   const tutorialSteps: Array<{ workspace: number; target: HTMLElement; title: string; text: string }> = [
     { workspace: 0, target: tabBtns[0], title: "Create", text: "This is the sampling and performance workspace. Start here whenever you are building a new beat." },
     { workspace: 0, target: padGrid, title: "Play the pads", text: "Use the mouse, touch, computer keyboard or MIDI controller. Drop an audio file directly onto any pad to replace it." },
@@ -1911,7 +1916,7 @@ export async function initStudio(): Promise<void> {
     { workspace: 3, target: devicePanel, title: "Process the sound", text: "Use macros, groove controls and device bypass switches to shape the complete signal chain." },
     { workspace: 3, target: exp, title: "Save and export", text: "Save an editable project before exporting. WAV preserves full quality; MP3 is smaller for sharing." },
     { workspace: 3, target: transportBar, title: "Transport stays available", text: "Playback, BPM, grid, metronome, undo and tutorial controls remain visible in every workspace. Space plays/stops; Ctrl+Z undoes." },
-    { workspace: 3, target: helpBtn, title: "Come back anytime", text: "This tutorial is a one-time guided pass. Help is the place to come back to later — a searchable reference for every section, plus the full keyboard-shortcut list." },
+    { workspace: 3, target: tutorialBtn, title: "Come back anytime", text: "This same button reopens things later — Browse Help (top of this card) is a searchable reference for every section plus the full keyboard-shortcut list, or replay this tour from the start." },
   ];
   let tutorialIndex = 0, tutorialTarget: HTMLElement | null = null;
   function closeTutorial(): void {
@@ -1919,6 +1924,7 @@ export async function initStudio(): Promise<void> {
     localStorage.setItem("vv_studio_tutorial_seen", "1");
   }
   function showTutorialStep(index: number): void {
+    setTutorialMode("tour");
     tutorialIndex = Math.max(0, Math.min(tutorialSteps.length - 1, index));
     const step = tutorialSteps[tutorialIndex];
     tutorialTarget?.classList.remove("wa-tutorial-target"); tabBtns[step.workspace].click();
@@ -1930,12 +1936,19 @@ export async function initStudio(): Promise<void> {
     tutorialNext.textContent = tutorialIndex === tutorialSteps.length - 1 ? "Finish" : "Next";
     tutorial.hidden = false;
   }
+  function showHelpBrowse(): void {
+    tutorialTarget?.classList.remove("wa-tutorial-target"); tutorialTarget = null;
+    setTutorialMode("browse");
+    tutorial.hidden = false;
+  }
   tutorialPrev.addEventListener("click", () => showTutorialStep(tutorialIndex - 1));
   tutorialNext.addEventListener("click", () => {
     if (tutorialIndex === tutorialSteps.length - 1) closeTutorial(); else showTutorialStep(tutorialIndex + 1);
   });
   tutorialClose.addEventListener("click", closeTutorial);
   tutorialShade.addEventListener("click", closeTutorial);
+  browseHelpBtn.addEventListener("click", showHelpBrowse);
+  takeTourBtn.addEventListener("click", () => showTutorialStep(0));
   tutorialBtn.addEventListener("click", () => showTutorialStep(0));
 
   // ── Scene selection + repaint ──
