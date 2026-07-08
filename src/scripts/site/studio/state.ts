@@ -190,7 +190,7 @@ export const mpc: MpcState = {
 export const rackState: RackState = {
   grooveTiming: 0, grooveVelocity: 0, grooveRandom: 0,
   noteEcho: 0, echoDecay: 0.65, macros: [0, 0, 0, 0],
-  devices: { player: true, sampler: true, character: true, eq: true, compressor: true, delay: true, reverb: true, limiter: true },
+  devices: { player: true, eq: true, compressor: true, delay: true, reverb: true, limiter: true },
 };
 export const fx: FxState = {
   low: 0, mid: 0, high: 0,

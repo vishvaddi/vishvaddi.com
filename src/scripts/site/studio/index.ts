@@ -435,7 +435,7 @@ export async function initStudio(): Promise<void> {
     mpc.selectedPad = pad; paintMpcPads();
     playPad(ac(), pad, finalVelocity, ac().currentTime, variationFor(localPad));
     recordPadEvent(pad, finalVelocity);
-    if (rackState.noteEcho > 0) {
+    if (rackState.devices.player && rackState.noteEcho > 0) {
       for (let i = 1; i <= rackState.noteEcho; i++) {
         playPad(ac(), pad, finalVelocity * Math.pow(rackState.echoDecay, i), ac().currentTime + i * stepDur(), variationFor(localPad));
       }
@@ -1115,32 +1115,30 @@ export async function initStudio(): Promise<void> {
   const songHelp = el("p", "wa-help", "Each column is a track, each row a scene. Launch single clips or whole scenes — changes land on the next bar. Song mode plays the scene chain left to right.");
   song.append(songHelp, launchStatus, sessionGrid, el("div", "wa-sep-h"), el("div", "wa-lbl", "SONG CHAIN"), chain);
 
-  // ── Mixer ──
+  // ── Mixer ── (channel levels only — device parameters live in the rack below)
   const mixer = el("div", "wa-panel");
   const mixGrid = el("div", "wa-mixer");
   DRUMS.forEach((name, i) => mixGrid.append(mixChannel(name, 0.8, (v) => { ensureNodes(); trackGain[i].gain.value = v; }, i)));
   mixGrid.append(mixChannel("Synth",  0.7, (v) => { ensureNodes(); engine.synthGain!.gain.value = v; }, -1));
   mixGrid.append(mixChannel("MASTER", 0.8, (v) => { ac(); engine.master!.gain.value = v; }, -1));
-  const effects = el("div", "wa-effects");
-  const fxSlider = (label: string, min: number, max: number, value: number, step: number, apply: (v: number) => void) =>
-    sliderRow(label, min, max, value, step, (v) => { ensureNodes(); apply(v); applyFxState(); saveAll(); });
-  effects.append(
-    el("div", "wa-fx-title", "MASTER EFFECTS"),
-    fxSlider("EQ LOW", -12, 12, fx.low, 0.5, (v) => { fx.low = v; }),
-    fxSlider("EQ MID", -12, 12, fx.mid, 0.5, (v) => { fx.mid = v; }),
-    fxSlider("EQ HIGH", -12, 12, fx.high, 0.5, (v) => { fx.high = v; }),
-    fxSlider("COMP THRESH", -50, 0, fx.compThreshold, 1, (v) => { fx.compThreshold = v; }),
-    fxSlider("COMP RATIO", 1, 20, fx.compRatio, 0.5, (v) => { fx.compRatio = v; }),
-    fxSlider("LIMIT", -12, 0, fx.limiter, 0.5, (v) => { fx.limiter = v; }),
-    fxSlider("REVERB", 0, 0.6, fx.reverb, 0.02, (v) => { fx.reverb = v; initReverb(v); }),
-    fxSlider("DELAY TIME", 0.05, 1, fx.delayTime, 0.01, (v) => { fx.delayTime = v; initDelay(); }),
-    fxSlider("DELAY FDBK", 0, 0.85, fx.delayFeedback, 0.01, (v) => { fx.delayFeedback = v; initDelay(); }),
-    fxSlider("DELAY MIX", 0, 0.6, fx.delayMix, 0.02, (v) => { fx.delayMix = v; initDelay(); }),
-  );
-  mixer.append(mixGrid, effects);
+  mixer.append(mixGrid);
 
   // ── Modular device rack ──
   const devicePanel = el("div", "wa-panel");
+  const fxSlider = (label: string, min: number, max: number, value: number, step: number, apply: (v: number) => void) =>
+    sliderRow(label, min, max, value, step, (v) => { ensureNodes(); apply(v); applyFxState(); saveAll(); });
+  const deviceHeader = (key: string, label: string): HTMLElement => {
+    const header = el("div", "wa-device-header");
+    const bypass = btn(rackState.devices[key] ? "ON" : "BYPASS", "wa-toggle wa-btn-sm");
+    bypass.classList.toggle("active", rackState.devices[key]);
+    bypass.addEventListener("click", () => {
+      rackState.devices[key] = !rackState.devices[key];
+      bypass.textContent = rackState.devices[key] ? "ON" : "BYPASS"; bypass.classList.toggle("active", rackState.devices[key]);
+      applyFxState(); saveAll();
+    });
+    header.append(el("span", "wa-device-title", label), bypass);
+    return header;
+  };
   const combinator = el("div", "wa-combinator");
   combinator.append(el("div", "wa-fx-title", "COMBINATOR MACROS"));
   const applyMacro = (index: number, value: number) => {
@@ -1192,7 +1190,7 @@ export async function initStudio(): Promise<void> {
   });
   euclidControls.append(el("span", "wa-lbl", "Pulses"), euclidPulses, el("span", "wa-lbl", "Rotate"), euclidRotate, euclidBtn);
   playerRack.append(
-    el("div", "wa-device-title", "PLAYER · GROOVE + NOTE ECHO"),
+    deviceHeader("player", "PLAYER · GROOVE + NOTE ECHO"),
     sliderRow("Timing", 0, 0.75, rackState.grooveTiming, 0.01, (v) => { rackState.grooveTiming = v; saveAll(); }),
     sliderRow("Velocity", 0, 0.5, rackState.grooveVelocity, 0.01, (v) => { rackState.grooveVelocity = v; saveAll(); }),
     sliderRow("Random", 0, 40, rackState.grooveRandom, 1, (v) => { rackState.grooveRandom = v; saveAll(); }),
@@ -1201,28 +1199,39 @@ export async function initStudio(): Promise<void> {
     euclidControls,
   );
   const deviceRack = el("div", "wa-device-stack");
-  const devices: Array<[string, string]> = [
-    ["sampler", "MPC PROGRAM · 64 pads / slices"],
-    ["character", "CHARACTER · macros / sampler colour"],
-    ["eq", "CHANNEL EQ · low / mid / high"],
-    ["compressor", "BUS COMPRESSOR"],
-    ["delay", "FEEDBACK DELAY · parallel return"],
-    ["reverb", "CONVOLUTION REVERB · parallel return"],
-    ["limiter", "MASTER LIMITER"],
-  ];
-  devices.forEach(([key, label]) => {
-    const device = el("div", "wa-device"), header = el("div", "wa-device-header");
-    const bypass = btn(rackState.devices[key] ? "ON" : "BYPASS", "wa-toggle wa-btn-sm");
-    bypass.classList.toggle("active", rackState.devices[key]);
-    bypass.addEventListener("click", () => {
-      rackState.devices[key] = !rackState.devices[key];
-      bypass.textContent = rackState.devices[key] ? "ON" : "BYPASS"; bypass.classList.toggle("active", rackState.devices[key]);
-      applyFxState(); saveAll();
-    });
-    header.append(el("span", "wa-device-title", label), bypass); device.append(header); deviceRack.append(device);
-  });
+  const eqDevice = el("div", "wa-device");
+  eqDevice.append(
+    deviceHeader("eq", "CHANNEL EQ · low / mid / high"),
+    fxSlider("LOW", -12, 12, fx.low, 0.5, (v) => { fx.low = v; }),
+    fxSlider("MID", -12, 12, fx.mid, 0.5, (v) => { fx.mid = v; }),
+    fxSlider("HIGH", -12, 12, fx.high, 0.5, (v) => { fx.high = v; }),
+  );
+  const compDevice = el("div", "wa-device");
+  compDevice.append(
+    deviceHeader("compressor", "BUS COMPRESSOR"),
+    fxSlider("THRESH", -50, 0, fx.compThreshold, 1, (v) => { fx.compThreshold = v; }),
+    fxSlider("RATIO", 1, 20, fx.compRatio, 0.5, (v) => { fx.compRatio = v; }),
+  );
+  const delayDevice = el("div", "wa-device");
+  delayDevice.append(
+    deviceHeader("delay", "FEEDBACK DELAY · parallel return"),
+    fxSlider("TIME", 0.05, 1, fx.delayTime, 0.01, (v) => { fx.delayTime = v; initDelay(); }),
+    fxSlider("FEEDBACK", 0, 0.85, fx.delayFeedback, 0.01, (v) => { fx.delayFeedback = v; initDelay(); }),
+    fxSlider("MIX", 0, 0.6, fx.delayMix, 0.02, (v) => { fx.delayMix = v; initDelay(); }),
+  );
+  const reverbDevice = el("div", "wa-device");
+  reverbDevice.append(
+    deviceHeader("reverb", "CONVOLUTION REVERB · parallel return"),
+    fxSlider("AMOUNT", 0, 0.6, fx.reverb, 0.02, (v) => { fx.reverb = v; initReverb(v); }),
+  );
+  const limiterDevice = el("div", "wa-device");
+  limiterDevice.append(
+    deviceHeader("limiter", "MASTER LIMITER"),
+    fxSlider("CEILING", -12, 0, fx.limiter, 0.5, (v) => { fx.limiter = v; }),
+  );
+  deviceRack.append(eqDevice, compDevice, delayDevice, reverbDevice, limiterDevice);
   devicePanel.append(
-    el("p", "wa-help", "Signal flow: Player → MPC Program → character controls → EQ → compressor → parallel delay/reverb → limiter."),
+    el("p", "wa-help", "Signal flow: Player → MPC Program → EQ → compressor → parallel delay/reverb → limiter."),
     combinator, playerRack, deviceRack,
   );
 
@@ -1498,8 +1507,8 @@ export async function initStudio(): Promise<void> {
   }
   function scheduleStep(s: number, baseWhen: number): void {
     const a = ac();
-    const groove = s % 2 === 1 ? rackState.grooveTiming * stepDur() * 0.5 : 0;
-    const random = (Math.random() * 2 - 1) * rackState.grooveRandom / 1000;
+    const groove = rackState.devices.player && s % 2 === 1 ? rackState.grooveTiming * stepDur() * 0.5 : 0;
+    const random = rackState.devices.player ? (Math.random() * 2 - 1) * rackState.grooveRandom / 1000 : 0;
     const when = baseWhen + (s % 2 === 1 ? transport.swing * stepDur() : 0) + groove + random;
     const drumClip = clip.play.drums, padClip = clip.play.pads, synthClip = clip.play.synth;
     if (drumClip !== null) {
@@ -1510,12 +1519,12 @@ export async function initStudio(): Promise<void> {
     if (padClip !== null) {
       padEvents[padClip].filter((event) => event.step === s).forEach((event) => {
         if (Math.random() * 100 > event.probability) return;
-        const velocity = Math.max(1, Math.min(127, event.velocity * (1 + (Math.random() * 2 - 1) * rackState.grooveVelocity)));
+        const velocity = Math.max(1, Math.min(127, event.velocity * (1 + (rackState.devices.player ? (Math.random() * 2 - 1) * rackState.grooveVelocity : 0))));
         const ratchets = Math.max(1, event.ratchets), spacing = stepDur() / ratchets;
         for (let i = 0; i < ratchets; i++) {
           const eventWhen = Math.max(baseWhen, when + event.offset / 1000 + i * spacing);
           playPad(a, event.pad, velocity, eventWhen, event.pad % PAD_BANK_SIZE);
-          if (rackState.noteEcho > 0) for (let echo = 1; echo <= rackState.noteEcho; echo++) {
+          if (rackState.devices.player && rackState.noteEcho > 0) for (let echo = 1; echo <= rackState.noteEcho; echo++) {
             playPad(a, event.pad, velocity * Math.pow(rackState.echoDecay, echo), eventWhen + echo * stepDur(), event.pad % PAD_BANK_SIZE);
           }
         }
@@ -1616,7 +1625,7 @@ export async function initStudio(): Promise<void> {
     const osg = off.createGain(); osg.gain.value = engine.synthGain!.gain.value; osg.connect(om);
     scenes.forEach((_, sceneIndex) => { for (let s = 0; s < STEPS; s++) {
       const base = (sceneIndex * STEPS + s) * sd;
-      const groove = s % 2 === 1 ? rackState.grooveTiming * sd * 0.5 : 0;
+      const groove = rackState.devices.player && s % 2 === 1 ? rackState.grooveTiming * sd * 0.5 : 0;
       const when = base + (s % 2 === 1 ? transport.swing * sd : 0) + groove;
       const drumClip = clipFor("drums", sceneIndex), padClip = clipFor("pads", sceneIndex), synthClip = clipFor("synth", sceneIndex);
       if (drumClip !== null) for (let r = 0; r < 8; r++) {

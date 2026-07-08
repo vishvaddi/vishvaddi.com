@@ -455,15 +455,8 @@
   border-radius: var(--wa-radius-sm);
 }
 
-/* ── Effects rack ── */
-.wa-effects {
-  max-width: 720px; margin: 12px auto 0; padding: 13px;
-  background: var(--wa-surface);
-  border: 1px solid var(--wa-border);
-  border-radius: var(--wa-radius-sm);
-}
 .wa-fx-title { margin-bottom: 11px; color: var(--wa-accent); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
-.wa-effects .wa-slider-row { margin: 9px 0; }
+.wa-device .wa-slider-row { margin: 9px 0; }
 
 /* ── Modular device rack ── */
 .wa-combinator,
