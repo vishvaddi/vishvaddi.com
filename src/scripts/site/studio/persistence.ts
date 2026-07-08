@@ -33,6 +33,7 @@ export function historyState(): HistoryState {
     },
     fx: { ...fx },
     rackState: { ...rackState, macros: [...rackState.macros], devices: { ...rackState.devices } },
+    vsynth: JSON.parse(JSON.stringify(vsynthPatch)) as VPatch,
   };
 }
 export function restoreHistory(state: HistoryState): void {
@@ -47,6 +48,12 @@ export function restoreHistory(state: HistoryState): void {
   Object.assign(fx, state.fx);
   Object.assign(rackState, state.rackState);
   rackState.macros = [...state.rackState.macros]; rackState.devices = { ...state.rackState.devices };
+  (Object.keys(state.vsynth) as Array<keyof VPatch>).forEach((key) => {
+    const value = state.vsynth[key];
+    if (Array.isArray(value)) (vsynthPatch[key] as unknown[]) = JSON.parse(JSON.stringify(value));
+    else if (typeof value === "object" && value !== null) Object.assign(vsynthPatch[key] as object, value);
+    else (vsynthPatch[key] as unknown) = value;
+  });
   applyFxState(); saveAll();
 }
 export function projectState(includeSamples = true): object {
@@ -70,6 +77,8 @@ export function projectState(includeSamples = true): object {
     songChain, // kept read-only for one version so older saves aren't stranded
     arrangement,
     songMode: transport.songMode,
+    quantizeGrid: transport.quantizeGrid,
+    metroVolume: transport.metroVolume,
     sampleParams,
     samplePool,
     sampleRefs,
@@ -165,6 +174,8 @@ export function applyProject(saved: Record<string, unknown>): void {
         });
       }
       if (typeof saved.songMode === "boolean") transport.songMode = saved.songMode;
+      if (typeof saved.quantizeGrid === "number" && [4, 8, 16].includes(saved.quantizeGrid)) transport.quantizeGrid = saved.quantizeGrid;
+      if (typeof saved.metroVolume === "number") transport.metroVolume = Math.max(0, Math.min(1, saved.metroVolume));
       if (saved.sampleParams) (saved.sampleParams as Partial<SamplerP>[]).forEach((p, i) => { if (i < PAD_COUNT) Object.assign(sampleParams[i], p); });
       if (saved.samplePool && saved.sampleRefs) {
         const pool = saved.samplePool as string[], refs = saved.sampleRefs as number[];

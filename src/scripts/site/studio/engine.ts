@@ -117,7 +117,8 @@ function dTone(a: BaseAudioContext, out: AudioNode, vol: number, f0: number, f1:
 export function metroClick(a: BaseAudioContext, out: AudioNode, when: number, accent: boolean): void {
   const o = a.createOscillator(); const g = a.createGain();
   o.frequency.value = accent ? 1600 : 1000;
-  g.gain.setValueAtTime(0.0001, when); g.gain.exponentialRampToValueAtTime(accent ? 0.5 : 0.3, when + 0.001); g.gain.exponentialRampToValueAtTime(0.0001, when + 0.04);
+  const peak = (accent ? 0.5 : 0.3) * transport.metroVolume;
+  g.gain.setValueAtTime(0.0001, when); g.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), when + 0.001); g.gain.exponentialRampToValueAtTime(0.0001, when + 0.04);
   o.connect(g); g.connect(out); o.start(when); o.stop(when + 0.05);
 }
 

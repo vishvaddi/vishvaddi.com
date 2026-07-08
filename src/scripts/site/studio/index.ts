@@ -30,6 +30,10 @@ import {
   encodeWav, encodeMp3,
 } from "./helpers";
 
+// One color per scene (A-H), distinct from the accent/amber/blue already
+// used for state (playing/queued/selected) — identity, not status.
+const SCENE_COLORS = ["#ff6b8a", "#b98bff", "#ffe066", "#5fd9d9", "#ff8c5a", "#7c8cff", "#b4e66e", "#ff6bd6"];
+
 function mixChannel(name: string, val: number, on: (v: number) => void, idx: number): HTMLElement {
   const ch = el("div", "wa-ch");
   const inp = document.createElement("input");
@@ -58,6 +62,41 @@ export async function initStudio(): Promise<void> {
   if (pending) applyProject(pending); else loadAll();
   sampleData.forEach((data, r) => { if (data) void hydrateSample(r); });
 
+  // ── Tooltips ── help() has been setting data-help/aria-description on
+  // controls throughout this file all along, but nothing ever rendered it —
+  // this delegated listener is what finally shows it, on hover or keyboard
+  // focus, wherever it's already been authored.
+  const tooltip = el("div", "wa-tooltip"); tooltip.hidden = true;
+  document.body.append(tooltip);
+  let tooltipTarget: HTMLElement | null = null;
+  function showTooltip(target: HTMLElement): void {
+    const text = target.dataset.help; if (!text) return;
+    tooltipTarget = target;
+    tooltip.textContent = text; tooltip.hidden = false;
+    const rect = target.getBoundingClientRect();
+    tooltip.style.top = `${Math.min(window.innerHeight - 40, rect.bottom + 8)}px`;
+    tooltip.style.left = `${Math.min(window.innerWidth - 268, Math.max(8, rect.left))}px`;
+  }
+  function hideTooltip(target: HTMLElement): void {
+    if (tooltipTarget === target) { tooltip.hidden = true; tooltipTarget = null; }
+  }
+  document.addEventListener("pointerover", (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
+    if (target && target !== tooltipTarget) showTooltip(target);
+  });
+  document.addEventListener("pointerout", (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
+    if (target) hideTooltip(target);
+  });
+  document.addEventListener("focusin", (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
+    if (target) showTooltip(target);
+  });
+  document.addEventListener("focusout", (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
+    if (target) hideTooltip(target);
+  });
+
   const win = el("div", "wa-win");
   const titleBar = el("div", "wa-title");
   const projectName = document.createElement("input");
@@ -79,11 +118,22 @@ export async function initStudio(): Promise<void> {
   const transportBar = el("div", "wa-transport");
   const playBtn = btn("▶"), stopBtn = btn("■");
   const bpmDown = btn("–", "wa-btn-sm"), bpmUp = btn("+", "wa-btn-sm");
-  const bpmLabel = el("span", "wa-bpm", String(transport.bpm));
+  const bpmInput = document.createElement("input");
+  bpmInput.type = "number"; bpmInput.min = "40"; bpmInput.max = "240"; bpmInput.value = String(transport.bpm); bpmInput.className = "wa-bpm";
+  help(bpmInput, "Type an exact tempo, or use the – / + buttons.");
   const swingIn = document.createElement("input");
   swingIn.type = "range"; swingIn.min = "0"; swingIn.max = "0.6"; swingIn.step = "0.02"; swingIn.value = "0"; swingIn.className = "wa-swing-in";
   const swingWrap = el("span", "wa-swing"); swingWrap.append(el("span", "wa-lbl", "Swing"), swingIn);
   const metroBtn = btn("Metro", "wa-toggle"), songBtn = btn(transport.songMode ? "Arrange" : "Session", "wa-toggle"), rotBtn = btn("⤢ Flip", "wa-btn-sm");
+  const metroVolIn = document.createElement("input");
+  metroVolIn.type = "range"; metroVolIn.min = "0"; metroVolIn.max = "1"; metroVolIn.step = "0.05"; metroVolIn.value = String(transport.metroVolume); metroVolIn.className = "wa-swing-in";
+  help(metroVolIn, "Metronome click volume.");
+  const gridSel = document.createElement("select");
+  [["4", "1/4"], ["8", "1/8"], ["16", "1/16 (off)"]].forEach(([value, label]) => {
+    const o = document.createElement("option"); o.value = value; o.textContent = label; gridSel.append(o);
+  });
+  gridSel.value = String(transport.quantizeGrid);
+  help(gridSel, "Snap/grid resolution for the drum, pad-event and piano-roll editors.");
   const undoBtn = btn("Undo", "wa-btn-sm"), redoBtn = btn("Redo", "wa-btn-sm");
   const tutorialBtn = btn("? Tutorial", "wa-btn-sm");
   help(playBtn, "Start playback from the beginning of the current clips or song.");
@@ -94,7 +144,11 @@ export async function initStudio(): Promise<void> {
   help(redoBtn, "Reapply the last undone edit.");
   help(rotBtn, "Expand Studio to the viewport. On portrait phones this rotates the workstation.");
   songBtn.classList.toggle("active", transport.songMode);
-  transportBar.append(playBtn, stopBtn, el("span", "wa-sep"), el("span", "wa-lbl", "BPM"), bpmDown, bpmLabel, bpmUp, el("span", "wa-sep"), swingWrap, metroBtn, songBtn, el("span", "wa-sep"), undoBtn, redoBtn, tutorialBtn, rotBtn);
+  transportBar.append(
+    playBtn, stopBtn, el("span", "wa-sep"), el("span", "wa-lbl", "BPM"), bpmDown, bpmInput, bpmUp, el("span", "wa-sep"),
+    swingWrap, el("span", "wa-lbl", "Grid"), gridSel, metroBtn, metroVolIn, songBtn, el("span", "wa-sep"),
+    undoBtn, redoBtn, tutorialBtn, rotBtn,
+  );
   const undoStack: HistoryState[] = [], redoStack: HistoryState[] = [];
   function checkpoint(): void {
     undoStack.push(historyState());
@@ -130,6 +184,12 @@ export async function initStudio(): Promise<void> {
   }
   let waveRedraws: Array<() => void> = [];
   let modBadgeRefreshers: Array<() => void> = [];
+  // Populated by the drum grid, pad-event grid and piano roll as they build
+  // themselves; re-run whenever the Grid selector changes so all three
+  // repaint their "wa-beat" line grouping to match.
+  const gridRepainters: Array<() => void> = [];
+  function stepsPerGridLine(): number { return STEPS / transport.quantizeGrid; }
+  function isGridLine(step: number): boolean { return step % stepsPerGridLine() === 0; }
 
   // ── Shared velocity popup ──
   const velPopup = el("div", "wa-vel-popup");
@@ -207,7 +267,7 @@ export async function initStudio(): Promise<void> {
 
     const rowCells: HTMLElement[] = [];
     for (let c = 0; c < STEPS; c++) {
-      const cell = el("button", "wa-cell" + (c % 4 === 0 ? " wa-beat" : "")) as HTMLButtonElement;
+      const cell = el("button", "wa-cell" + (isGridLine(c) ? " wa-beat" : "")) as HTMLButtonElement;
       cell.type = "button";
       if (allPats[clip.sel][r][c]) { cell.classList.add("on"); setCellOpacity(cell, allVels[clip.sel][r][c]); }
       cell.addEventListener("click", () => {
@@ -267,6 +327,7 @@ export async function initStudio(): Promise<void> {
     sdPanel.append(sdRow, actions);
     sdPanels.push(sdPanel); grid.append(sdPanel);
   });
+  gridRepainters.push(() => cells.forEach((row) => row.forEach((cell, c) => cell.classList.toggle("wa-beat", isGridLine(c)))));
 
   const clearBtn = btn("CLEAR", "wa-btn-sm");
   clearBtn.addEventListener("click", () => {
@@ -521,10 +582,13 @@ export async function initStudio(): Promise<void> {
   quantSel.addEventListener("change", () => { mpc.quantize = Number(quantSel.value); saveAll(); });
   levelModeSel.addEventListener("change", () => { mpc.levelMode = levelModeSel.value as MpcState["levelMode"]; saveAll(); });
   rotateBtn.addEventListener("click", () => {
+    if (!padEvents[clip.sel].length) { performanceStatus.textContent = "Pattern is empty — nothing to rotate"; return; }
     checkpoint();
     padEvents[clip.sel].forEach((event) => { event.step = (event.step + 1) % STEPS; }); paintEventLane(); saveAll();
+    performanceStatus.textContent = "Pattern rotated one step later";
   });
   mutateBtn.addEventListener("click", () => {
+    if (!padEvents[clip.sel].length) { performanceStatus.textContent = "Pattern is empty — nothing to mutate"; return; }
     checkpoint();
     padEvents[clip.sel].forEach((event) => {
       if (Math.random() < 0.35) event.step = (event.step + (Math.random() < 0.5 ? -1 : 1) + STEPS) % STEPS;
@@ -532,6 +596,7 @@ export async function initStudio(): Promise<void> {
       if (Math.random() < 0.2) event.ratchets = 1 + Math.floor(Math.random() * 4);
     });
     paintEventLane(); saveAll();
+    performanceStatus.textContent = "Pattern mutated";
   });
   fillBtn.addEventListener("click", () => {
     checkpoint();
@@ -541,19 +606,24 @@ export async function initStudio(): Promise<void> {
       padEvents[clip.sel].push({ pad, step, velocity: 72 + (step - 12) * 14, offset: 0, probability: 100, ratchets: step === 15 ? 4 : 1 });
     }
     paintEventLane(); saveAll();
+    performanceStatus.textContent = `Fill written for ${sampleParams[pad].name || `pad ${pad + 1}`}`;
   });
   ghostBtn.addEventListener("click", () => {
     checkpoint();
     const pad = mpc.selectedPad;
+    let added = 0;
     [3, 7, 11, 15].forEach((step, i) => {
       if (!padEvents[clip.sel].some((event) => event.pad === pad && event.step === step)) {
         padEvents[clip.sel].push({ pad, step, velocity: 34 + i * 5, offset: i % 2 ? 12 : -8, probability: 72, ratchets: 1 });
+        added++;
       }
     });
     paintEventLane(); saveAll();
+    performanceStatus.textContent = added ? `${added} ghost note${added === 1 ? "" : "s"} added` : "Ghost steps already occupied — nothing added";
   });
   extractGrooveBtn.addEventListener("click", () => {
-    const events = padEvents[clip.sel]; if (!events.length) return;
+    const events = padEvents[clip.sel];
+    if (!events.length) { performanceStatus.textContent = "Pattern is empty — nothing to extract"; return; }
     const odd = events.filter((event) => event.step % 2 === 1);
     rackState.grooveTiming = Math.max(0, Math.min(0.75, odd.reduce((sum, event) => sum + Math.max(0, event.offset), 0) / Math.max(1, odd.length) / 80));
     const velocities = events.map((event) => event.velocity), mean = velocities.reduce((sum, value) => sum + value, 0) / velocities.length;
@@ -603,7 +673,7 @@ export async function initStudio(): Promise<void> {
     rowEl.append(label);
     const rowCells: HTMLButtonElement[] = [];
     for (let step = 0; step < STEPS; step++) {
-      const cell = el("button", "wa-cell wa-event-cell" + (step % 4 === 0 ? " wa-beat" : "")) as HTMLButtonElement; cell.type = "button";
+      const cell = el("button", "wa-cell wa-event-cell" + (isGridLine(step) ? " wa-beat" : "")) as HTMLButtonElement; cell.type = "button";
       const paint = () => {
         const pad = selectedGlobalPad(localPad);
         const existing = padEvents[clip.sel].findIndex((event) => event.pad === pad && event.step === step);
@@ -632,6 +702,7 @@ export async function initStudio(): Promise<void> {
     eventCells.push(rowCells); eventRows.push(rowEl); eventRowLabels.push(label);
     eventLane.append(rowEl);
   }
+  gridRepainters.push(() => eventCells.forEach((row) => row.forEach((cell, step) => cell.classList.toggle("wa-beat", isGridLine(step)))));
   window.addEventListener("pointerup", () => { paintingEvents = false; });
   const eventEditor = el("div", "wa-event-editor");
   eventEditor.append(
@@ -925,6 +996,7 @@ export async function initStudio(): Promise<void> {
   // 1-2 of the 6 mod-matrix slots get a nonzero amount, cutoff is picked on
   // a log scale, and osc2 is silent half the time.
   function randomizePatch(): void {
+    checkpoint();
     const rand = (min: number, max: number) => min + Math.random() * (max - min);
     function pick<T>(arr: readonly T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
     const filterTypes = ["lowpass", "highpass", "bandpass", "notch"] as const;
@@ -963,6 +1035,7 @@ export async function initStudio(): Promise<void> {
   randomizeBtn.addEventListener("click", randomizePatch);
   loadPresetBtn.addEventListener("click", () => {
     const preset = PRESETS[presetSel.value]; if (!preset) return;
+    checkpoint();
     const copy = JSON.parse(JSON.stringify(preset)) as VPatch;
     (Object.keys(copy) as Array<keyof VPatch>).forEach((key) => {
       const value = copy[key];
@@ -1197,6 +1270,8 @@ export async function initStudio(): Promise<void> {
   const rollNoteAt = (row: number, step: number): VNote | undefined =>
     synthNotes[clip.sel].find((n) => n.note === ROLL_NOTES[row] && step >= n.step && step < n.step + n.len);
   const ROLL_RESIZE_PX = 8;
+  const snapStep = (step: number): number => { const g = stepsPerGridLine(); return Math.round(step / g) * g; };
+  const snapLen = (len: number): number => { const g = stepsPerGridLine(); return Math.max(g, Math.round(len / g) * g); };
   function paintRoll(): void {
     rollNotesLayer.replaceChildren();
     synthNotes[clip.sel].forEach((n) => {
@@ -1223,11 +1298,12 @@ export async function initStudio(): Promise<void> {
           const dx = moveEvent.clientX - startX, dy = moveEvent.clientY - startY;
           if (!moved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
           moved = true;
+          const deltaSteps = Math.round((dx / stepWidth) / stepsPerGridLine()) * stepsPerGridLine();
           if (resizing) {
-            n.len = Math.max(1, Math.min(STEPS - origStep, origLen + Math.round(dx / stepWidth)));
+            n.len = Math.max(stepsPerGridLine(), Math.min(STEPS - origStep, origLen + deltaSteps));
             block.style.width = `${(n.len / STEPS) * 100}%`;
           } else {
-            n.step = Math.max(0, Math.min(STEPS - n.len, origStep + Math.round(dx / stepWidth)));
+            n.step = Math.max(0, Math.min(STEPS - n.len, origStep + deltaSteps));
             const newRow = Math.max(0, Math.min(ROLL_NOTES.length - 1, origRow + Math.round(dy / rowHeight)));
             n.note = ROLL_NOTES[newRow];
             block.style.left = `${(n.step / STEPS) * 100}%`;
@@ -1253,19 +1329,21 @@ export async function initStudio(): Promise<void> {
     });
   }
   let dragNote: VNote | null = null, dragRow = -1;
+  const rollBackgroundCells: HTMLButtonElement[][] = [];
   ROLL_NOTES.forEach((note, r) => {
     const row = el("div", "wa-piano-row" + (note.startsWith("C") && !note.startsWith("C#") ? " wa-roll-oct" : ""));
     row.append(el("span", "wa-piano-note", note));
     const track = el("div", "wa-piano-track");
+    const bgCells: HTMLButtonElement[] = [];
     for (let c = 0; c < STEPS; c++) {
-      const cell = el("button", "wa-cell wa-piano-cell" + (c % 4 === 0 ? " wa-beat" : "")) as HTMLButtonElement;
+      const cell = el("button", "wa-cell wa-piano-cell" + (isGridLine(c) ? " wa-beat" : "")) as HTMLButtonElement;
       cell.type = "button";
       cell.title = `${note}, step ${c + 1}`;
       cell.addEventListener("pointerdown", (event) => {
         if (event.button !== 0 || rollNoteAt(r, c)) return; // existing notes are handled by their own block, on top
         event.preventDefault();
         checkpoint();
-        const fresh: VNote = { note, step: c, len: 1, vel: 100 };
+        const fresh: VNote = { note, step: Math.min(STEPS - stepsPerGridLine(), snapStep(c)), len: stepsPerGridLine(), vel: 100 };
         synthNotes[clip.sel].push(fresh);
         dragNote = fresh; dragRow = r;
         audition(note, 100, 1);
@@ -1273,13 +1351,15 @@ export async function initStudio(): Promise<void> {
       });
       cell.addEventListener("pointerenter", () => {
         if (!dragNote || dragRow !== r) return;
-        if (c >= dragNote.step) { dragNote.len = Math.min(STEPS - dragNote.step, c - dragNote.step + 1); paintRoll(); }
+        if (c >= dragNote.step) { dragNote.len = Math.min(STEPS - dragNote.step, snapLen(c - dragNote.step + 1)); paintRoll(); }
       });
-      track.append(cell);
+      bgCells.push(cell); track.append(cell);
     }
+    rollBackgroundCells.push(bgCells);
     row.append(track);
     pianoRoll.append(row);
   });
+  gridRepainters.push(() => rollBackgroundCells.forEach((row) => row.forEach((cell, c) => cell.classList.toggle("wa-beat", isGridLine(c)))));
   pianoRoll.append(rollNotesLayer, rollPlayhead);
   window.addEventListener("pointerup", () => { if (dragNote) saveAll(); dragNote = null; dragRow = -1; });
   const synthKeys = el("div", "wa-keys");
@@ -1375,6 +1455,7 @@ export async function initStudio(): Promise<void> {
     TRACKS.forEach((track) => {
       const cell = btn("", "wa-clip");
       cell.classList.remove("wa-btn");
+      cell.style.setProperty("--scene-color", SCENE_COLORS[scene]);
       help(cell, `Launch ${TRACK_LABELS[track].toLowerCase()} clip ${label}. Tracks can play clips from different scenes.`);
       cell.addEventListener("click", () => launchClip(track, scene));
       rowCells.push(cell); row.append(cell);
@@ -1397,6 +1478,7 @@ export async function initStudio(): Promise<void> {
         const chip = el("div", "wa-arrange-block");
         chip.classList.toggle("sel", block.scene === clip.sel);
         chip.style.flexGrow = String(block.bars);
+        chip.style.setProperty("--scene-color", SCENE_COLORS[block.scene]);
         const sceneSel = document.createElement("select");
         SCENE_LABELS.forEach((label, si) => {
           const option = document.createElement("option"); option.value = String(si); option.textContent = label; sceneSel.append(option);
@@ -1416,7 +1498,7 @@ export async function initStudio(): Promise<void> {
         barsRow.append(barsMinus, barsOut, barsPlus);
         const delBtn = btn("✕", "wa-btn-sm");
         help(delBtn, `Remove this ${TRACK_LABELS[track].toLowerCase()} block.`);
-        delBtn.addEventListener("click", () => { arrangement[track].splice(i, 1); saveAll(); paintLane(); });
+        delBtn.addEventListener("click", () => { checkpoint(); arrangement[track].splice(i, 1); saveAll(); paintLane(); });
         chip.append(sceneSel, barsRow, delBtn);
         blocksHost.append(chip);
       });
@@ -1620,6 +1702,78 @@ export async function initStudio(): Promise<void> {
   openRackBtn.addEventListener("click", () => { rackDrawer.classList.add("open"); rackOverlay.classList.add("open"); });
   const createBar = el("div", "wa-mpc-toolbar"); createBar.append(openRackBtn);
 
+  // ── Help drawer — searchable reference covering every section, plus a
+  // keyboard-shortcuts quick list. Complements the linear tutorial below:
+  // the tutorial is a guided first pass, this is what you come back to.
+  const helpDrawer = el("aside", "wa-drawer wa-help-drawer");
+  const helpOverlay = el("div", "wa-drawer-overlay");
+  const helpCloseBtn = btn("✕ Close", "wa-btn-sm");
+  const helpHead = el("div", "wa-drawer-head");
+  helpHead.append(el("span", "wa-drawer-title", "HELP"), helpCloseBtn);
+  const closeHelp = (): void => { helpDrawer.classList.remove("open"); helpOverlay.classList.remove("open"); };
+  helpCloseBtn.addEventListener("click", closeHelp);
+  helpOverlay.addEventListener("click", closeHelp);
+
+  const shortcutsBox = el("div", "wa-help-shortcuts");
+  shortcutsBox.append(el("div", "wa-fx-title", "KEYBOARD SHORTCUTS"));
+  ([
+    ["Space", "Play / stop"],
+    ["Ctrl+Z", "Undo"],
+    ["Ctrl+Shift+Z or Ctrl+Y", "Redo"],
+    ["1-4, Q-R, A-F, Z-V", "Play MPC pads (Create tab)"],
+    ["A-K row", "Play synth notes C4-C5 (Sequence tab)"],
+    ["Z / X", "Shift synth keyboard octave (Sequence tab)"],
+    ["Enter", "Confirm the typed BPM"],
+  ] as const).forEach(([key, desc]) => {
+    const row = el("div", "wa-help-shortcut-row");
+    row.append(el("span", "wa-help-key", key), el("span", "wa-help-desc", desc));
+    shortcutsBox.append(row);
+  });
+
+  const helpSearch = document.createElement("input");
+  helpSearch.type = "text"; helpSearch.placeholder = "Search help…"; helpSearch.className = "wa-preset-search";
+  const helpTopics: Array<{ section: string; title: string; text: string }> = [
+    { section: "Create", title: "Pads & sampling", text: "Drop an audio file onto any pad, or record from the mic. The inspector on the right shows the selected pad's tune, start/end, filter, attack/decay, choke group, loop and warp controls." },
+    { section: "Create", title: "Chopping breaks", text: "Load or record a longer break, then slice it equally, by transient detection, or manually. Sync BPM matches the project tempo to the break; Assign + pattern replays the chop across the pads." },
+    { section: "Create", title: "Scratch pad", text: "Drag the vinyl left/right to scratch the selected pad's sample (or the loaded break) over the beat. Forward and backward both play; release to stop." },
+    { section: "Create", title: "MPC performance tools", text: "Full Level forces max velocity; 16 Levels maps the pad bank across velocity, pitch, filter or start. Note Repeat retriggers a held pad. Rotate, Mutate, Fill and Ghosts generate variations on the selected pad's pattern; Extract Groove captures its timing/velocity feel into the Player device." },
+    { section: "Sequence", title: "Drum sequencer", text: "Click a step to toggle a hit, right-click (or long-press) for velocity. Click a drum's name to open its sound-design panel below the row." },
+    { section: "Sequence", title: "Pad sequence grid", text: "Every pad in the current bank gets its own row — switching the selected pad highlights its row instead of swapping what you're looking at. Velocity/Chance/Micro/Ratchet sliders apply to whichever pad is selected." },
+    { section: "Sequence", title: "Piano roll", text: "Drag empty space to draw a note and set its length. Drag a note's body to move it (drag vertically to change pitch), drag its right edge to resize, click without dragging to delete, right-click for velocity. Notes snap to the Grid setting in the transport bar." },
+    { section: "Sequence", title: "Grid / quantize", text: "The Grid selector in the transport bar (1/4, 1/8, 1/16) sets the snap resolution for the piano roll, and the beat-line grouping shown on the drum and pad grids." },
+    { section: "Synth", title: "Oscillators & wavetables", text: "Each oscillator picks a table (Basic, PWM, Harmonic, Vocal, Digital) and a position that morphs through it. The mini waveform above each oscillator shows the current shape live." },
+    { section: "Synth", title: "Text-to-wavetable", text: "Type a word into an oscillator's text box and hit Generate — it hashes into a unique, reproducible wavetable shape, saved as part of the patch." },
+    { section: "Synth", title: "Filter & envelopes", text: "The filter has low/high/band-pass/notch types with resonance and envelope amount. Drag the envelope shape directly (attack peak, decay/sustain point, release end) or use the sliders below it — both stay in sync." },
+    { section: "Synth", title: "LFOs & mod matrix", text: "Two LFOs and a 6-slot mod matrix route sources (LFOs, envelope 2, velocity, macros) to destinations (pitch, cutoff, amp, pan, oscillator position). A small MOD badge appears on the Cutoff and Position sliders when something is modulating them." },
+    { section: "Synth", title: "Presets, Randomize & Simple view", text: "Search or filter presets by category. Randomize jitters the current patch within musical ranges. Simple view collapses the editor to Wave/Filter/Envelope/Volume for quick sound design; Advanced view shows everything including the mod matrix and macros." },
+    { section: "Arrange", title: "Session view", text: "Each column is a track (drums/pads/synth), each row a scene. Launch single clips or a whole scene — changes land on the next bar so transitions stay in time." },
+    { section: "Arrange", title: "Arrangement", text: "Each track keeps its own ordered list of blocks (scene + bar length), independent of the other tracks. Add, resize (+/-) or reassign a block's scene, then enable Arrange mode in the transport to play the full arrangement." },
+    { section: "Mix", title: "Mixer & device rack", text: "The Mixer sets channel/synth/master levels. The Devices panel is the actual signal chain — Channel EQ, Bus Compressor, Feedback Delay, Convolution Reverb and Master Limiter each have their own editable parameters plus a bypass toggle." },
+    { section: "Mix", title: "Metronome & BPM", text: "Type an exact BPM directly, or use the – / + buttons. The Metro toggle enables the click (included in export while on); its volume slider sits right beside the toggle." },
+    { section: "Mix", title: "Save, export & undo", text: "Save Project downloads an editable file with all patterns, sounds and settings; Open Project loads one back. Export WAV/MP3 renders either the launched clips or the full arrangement. Undo/Redo (or Ctrl+Z / Ctrl+Shift+Z) cover pattern, sample, synth-patch and arrangement edits." },
+  ];
+  const helpList = el("div", "wa-help-topics");
+  function renderHelpTopics(query: string): void {
+    helpList.replaceChildren();
+    const q = query.trim().toLowerCase();
+    const matches = helpTopics.filter((t) => !q || t.title.toLowerCase().includes(q) || t.text.toLowerCase().includes(q) || t.section.toLowerCase().includes(q));
+    if (!matches.length) { helpList.append(el("p", "wa-help", "No matching topics.")); return; }
+    let lastSection = "";
+    matches.forEach((t) => {
+      if (t.section !== lastSection) { helpList.append(el("div", "wa-fx-title", t.section.toUpperCase())); lastSection = t.section; }
+      const item = el("div", "wa-help-topic");
+      item.append(el("h3", "wa-help-topic-title", t.title), el("p", "wa-help", t.text));
+      helpList.append(item);
+    });
+  }
+  helpSearch.addEventListener("input", () => renderHelpTopics(helpSearch.value));
+  renderHelpTopics("");
+  helpDrawer.append(helpHead, shortcutsBox, el("div", "wa-sep-h"), helpSearch, helpList);
+  const helpBtn = btn("? Help", "wa-btn-sm");
+  help(helpBtn, "Open a searchable reference covering every section, plus keyboard shortcuts.");
+  helpBtn.addEventListener("click", () => { helpDrawer.classList.add("open"); helpOverlay.classList.add("open"); });
+  transportBar.append(helpBtn);
+
   // ── Vinyl scratchpad — drag the platter to scratch the selected pad's sample
   // (or the loaded break) over whatever's playing. Forward drags play the buffer
   // forwards; backward drags play a reversed copy. Rate tracks hand speed. ──
@@ -1712,7 +1866,7 @@ export async function initStudio(): Promise<void> {
   const inspector = el("aside", "wa-inspector");
   inspector.append(el("div", "wa-inspector-title", "SELECTED PAD"), selectedPadLabel, selectedSampleEditor);
   const workarea = el("div", "wa-workarea"); workarea.append(panels, inspector);
-  win.append(titleBar, lcd, tabbar, transportBar, workarea, rackOverlay, rackDrawer);
+  win.append(titleBar, lcd, tabbar, transportBar, workarea, rackOverlay, rackDrawer, helpOverlay, helpDrawer);
   root.append(win);
   paintTabs();
 
@@ -1732,12 +1886,15 @@ export async function initStudio(): Promise<void> {
     { workspace: 0, target: selectedSampleEditor, title: "Shape the selected pad", text: "The inspector follows your selected pad across every workspace. Trim, tune, filter, choke, reverse, loop or warp it here." },
     { workspace: 0, target: waveform, title: "Chop a break", text: "Load or record audio, choose equal, transient or manual slicing, then assign the slices to the active pad bank." },
     { workspace: 1, target: eventLane, title: "Sequence pad events", text: "Drag across the lane to paint or erase hits. Use velocity, chance, microtiming and ratchets to make the pattern move." },
-    { workspace: 1, target: pianoRoll, title: "Add musical parts", text: "Program synth notes in the piano roll or play them from the on-screen and computer keyboards." },
+    { workspace: 1, target: pianoRoll, title: "Add musical parts", text: "Program synth notes in the piano roll or play them from the on-screen and computer keyboards. Drag a note to move it, its right edge to resize, or click without dragging to delete it." },
+    { workspace: 1, target: gridSel, title: "Grid & quantize", text: "Sets the snap resolution for the piano roll, and the beat-line grouping shown on the drum and pad grids. Coarser (1/4) locks notes to the beat; 1/16 allows free placement." },
+    { workspace: 1, target: presetRow, title: "The VV-1 synth", text: "Search or randomize a patch, or drag the envelope shape and watch the live waveform preview react. Simple view collapses the editor to the essentials — Advanced view reveals the full mod matrix." },
     { workspace: 2, target: sessionGrid, title: "Launch clips and scenes", text: "Each column is a track and each row a scene. Launch single clips or a whole row — changes wait for the next bar so transitions stay in time." },
     { workspace: 2, target: arrangeLanes, title: "Arrange the song", text: "Each track keeps its own list of blocks (scene + bar length) — add, resize or reassign them, then enable Arrange mode in the transport to play them back independently." },
     { workspace: 3, target: devicePanel, title: "Process the sound", text: "Use macros, groove controls and device bypass switches to shape the complete signal chain." },
     { workspace: 3, target: exp, title: "Save and export", text: "Save an editable project before exporting. WAV preserves full quality; MP3 is smaller for sharing." },
-    { workspace: 3, target: transportBar, title: "Transport stays available", text: "Playback, BPM, session/song mode, undo and tutorial controls remain visible in every workspace." },
+    { workspace: 3, target: transportBar, title: "Transport stays available", text: "Playback, BPM, grid, metronome, undo and tutorial controls remain visible in every workspace. Space plays/stops; Ctrl+Z undoes." },
+    { workspace: 3, target: helpBtn, title: "Come back anytime", text: "This tutorial is a one-time guided pass. Help is the place to come back to later — a searchable reference for every section, plus the full keyboard-shortcut list." },
   ];
   let tutorialIndex = 0, tutorialTarget: HTMLElement | null = null;
   function closeTutorial(): void {
@@ -1780,7 +1937,7 @@ export async function initStudio(): Promise<void> {
   function refreshVisibleState(): void {
     selectScene(clip.sel);
     arrangeLanePaints.forEach((fn) => fn());
-    paintMpcPads(); paintEventLane(); applyFxState();
+    paintMpcPads(); paintEventLane(); applyFxState(); renderPatchEditor();
   }
   undoBtn.addEventListener("click", () => {
     const previous = undoStack.pop(); if (!previous) return;
@@ -1793,13 +1950,20 @@ export async function initStudio(): Promise<void> {
     undoBtn.disabled = false; redoBtn.disabled = redoStack.length === 0;
   });
   function setBpm(v: number): void {
-    transport.bpm = Math.max(40, Math.min(240, v));
-    bpmLabel.textContent = String(transport.bpm); lcdBpm.textContent = `${transport.bpm} BPM`;
+    transport.bpm = Math.max(40, Math.min(240, Math.round(v) || transport.bpm));
+    bpmInput.value = String(transport.bpm); lcdBpm.textContent = `${transport.bpm} BPM`; saveAll();
   }
   bpmDown.addEventListener("click", () => setBpm(transport.bpm - 1));
   bpmUp.addEventListener("click", () => setBpm(transport.bpm + 1));
+  bpmInput.addEventListener("change", () => setBpm(Number(bpmInput.value)));
+  bpmInput.addEventListener("keydown", (event) => { if (event.key === "Enter") bpmInput.blur(); });
   swingIn.addEventListener("input", () => { transport.swing = Number(swingIn.value); });
-  metroBtn.addEventListener("click", () => { transport.metro = !transport.metro; metroBtn.classList.toggle("active", transport.metro); });
+  metroBtn.addEventListener("click", () => { transport.metro = !transport.metro; metroBtn.classList.toggle("active", transport.metro); saveAll(); });
+  metroVolIn.addEventListener("input", () => { transport.metroVolume = Number(metroVolIn.value); saveAll(); });
+  gridSel.addEventListener("change", () => {
+    transport.quantizeGrid = Number(gridSel.value); saveAll();
+    gridRepainters.forEach((fn) => fn());
+  });
   songBtn.addEventListener("click", () => {
     transport.songMode = !transport.songMode; songBtn.textContent = transport.songMode ? "Arrange" : "Session"; songBtn.classList.toggle("active", transport.songMode);
     renderSel.value = transport.songMode ? "song" : "pattern"; saveAll();
@@ -1924,6 +2088,19 @@ export async function initStudio(): Promise<void> {
     lastHi = -1; lcdState.textContent = "■ STOP";
   });
 
+  // Global transport/undo shortcuts — skipped while typing in any text
+  // field so Space still types a space and Ctrl+Z still edits text natively.
+  window.addEventListener("keydown", (ev) => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) return;
+    if (ev.code === "Space" && !ev.repeat) { ev.preventDefault(); (playing ? stopBtn : playBtn).click(); return; }
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey) {
+      const key = ev.key.toLowerCase();
+      if (key === "z" && !ev.shiftKey) { ev.preventDefault(); undoBtn.click(); }
+      else if ((key === "z" && ev.shiftKey) || key === "y") { ev.preventDefault(); redoBtn.click(); }
+    }
+  });
+
   // ── Export logic ──
   async function renderBuffer(mode: "pattern" | "song"): Promise<AudioBuffer> {
     ensureNodes();
@@ -2013,6 +2190,9 @@ export async function initStudio(): Promise<void> {
   loadProjectBtn.addEventListener("click", () => projectInput.click());
   projectInput.addEventListener("change", async () => {
     const file = projectInput.files?.[0]; if (!file) return;
+    if (!window.confirm("Open this project? It replaces everything currently in the studio — save first if you want to keep it.")) {
+      projectInput.value = ""; return;
+    }
     try {
       const raw = await file.text();
       const parsed = JSON.parse(raw) as Record<string, unknown>;
@@ -2065,6 +2245,9 @@ export async function initStudio(): Promise<void> {
 
   // Initial paint reflects loaded project state (scene selection, session grid).
   selectScene(clip.sel);
+  // First-time visitors get the guided tour automatically; the flag was
+  // already written on close/finish, it just had nothing reading it back.
+  if (!localStorage.getItem("vv_studio_tutorial_seen")) showTutorialStep(0);
 }
 
 // ─── Key builders ─────────────────────────────────────────────────────────────

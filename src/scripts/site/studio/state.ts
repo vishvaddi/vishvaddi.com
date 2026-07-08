@@ -79,6 +79,7 @@ export interface HistoryState {
   arrangement: Record<TrackId, ArrangeBlock[]>;
   fx: FxState;
   rackState: RackState;
+  vsynth: VPatch;
 }
 export interface FxState {
   low: number;
@@ -149,7 +150,12 @@ export const DP_SPECS: ParamSpec[][] = [
 ];
 
 // ─── Transport ───────────────────────────────────────────────────────────────
-export const transport = { bpm: 120, swing: 0, metro: false, songMode: false };
+export const transport = {
+  bpm: 120, swing: 0, metro: false, metroVolume: 1, songMode: false,
+  // Snap/grid resolution shared by the drum, pad-event and piano-roll
+  // editors — 4/8/16 subdivisions per 16-step bar (16 = every step, finest).
+  quantizeGrid: 4,
+};
 export const stepDur = (): number => 60 / transport.bpm / 4;
 
 // ─── Session clips ───────────────────────────────────────────────────────────

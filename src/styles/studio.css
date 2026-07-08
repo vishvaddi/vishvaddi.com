@@ -102,8 +102,12 @@
 .wa-sep { width: 1px; height: 26px; background: var(--wa-border-2); margin: 0 5px; }
 .wa-lbl { font-size: 11px; letter-spacing: 0.12em; color: var(--wa-muted); text-transform: uppercase; }
 .wa-bpm {
-  font-size: 20px; font-weight: 600; min-width: 42px; text-align: center;
+  font-family: inherit; font-size: 20px; font-weight: 600; width: 60px; text-align: center;
   font-variant-numeric: tabular-nums; color: var(--wa-accent);
+  background: var(--wa-surface-2);
+  border: 1px solid var(--wa-border-2);
+  border-radius: var(--wa-radius-sm);
+  padding: 4px 2px;
 }
 
 /* ── Buttons ── */
@@ -501,13 +505,20 @@
 }
 .wa-arrange-blocks { display: flex; flex: 1 1 auto; gap: 6px; min-height: 64px; flex-wrap: wrap; }
 .wa-arrange-block {
-  display: flex; flex-direction: column; gap: 4px; justify-content: center;
+  position: relative; display: flex; flex-direction: column; gap: 4px; justify-content: center;
   min-width: 92px; padding: 8px;
   background: var(--wa-surface);
   border: 1px solid var(--wa-border);
   border-radius: var(--wa-radius-sm);
 }
 .wa-arrange-block.sel { border-color: var(--wa-accent-dim); }
+/* Scene-identity color strip — separate from the state-based border/dot
+   colors (playing/queued/selected), so both stay legible together. */
+.wa-arrange-block::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--scene-color, transparent);
+  border-radius: var(--wa-radius-sm) var(--wa-radius-sm) 0 0;
+}
 .wa-arrange-bars-row { display: flex; align-items: center; gap: 4px; justify-content: space-between; }
 .wa-arrange-bars { font-size: 10px; color: var(--wa-muted); font-variant-numeric: tabular-nums; }
 
@@ -552,6 +563,17 @@
 .wa-sd-val { font-size: 11px; color: var(--wa-accent); min-width: 48px; font-variant-numeric: tabular-nums; }
 .wa-sd-item input[type=range] { accent-color: var(--wa-accent); width: 100%; height: 4px; }
 .wa-sd-actions { display: flex; gap: 6px; }
+
+/* ── Tooltips (data-help, rendered on hover/focus) ── */
+.wa-tooltip {
+  position: fixed; z-index: 10002; max-width: 260px; padding: 7px 10px;
+  background: var(--wa-surface-2); border: 1px solid var(--wa-border-2); border-radius: var(--wa-radius-sm);
+  color: var(--wa-text); font-size: 11px; line-height: 1.45;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+.wa-tooltip[hidden] { display: none; }
+@media (pointer: coarse) { .wa-tooltip { display: none !important; } }
 
 /* ── Velocity popup ── */
 .wa-vel-popup {
@@ -693,6 +715,16 @@
   border-bottom: 1px solid var(--wa-border);
 }
 .wa-drawer-title { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; color: var(--wa-accent); }
+
+/* ── Help drawer ── */
+.wa-help-shortcuts { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--wa-border); }
+.wa-help-shortcut-row { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0; font-size: 12px; }
+.wa-help-key { flex: 0 0 auto; color: var(--wa-accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wa-help-desc { color: var(--wa-muted); text-align: right; }
+.wa-help-topics { margin-top: 12px; }
+.wa-help-topic { margin: 4px 0 14px; }
+.wa-help-topic-title { margin: 10px 0 4px; color: var(--wa-text); font-size: 13px; }
+.wa-help-topic .wa-help { margin: 0; }
 
 /* ── Fullscreen "Flip" — a fixed app frame like FL Studio Mobile / Cubasis:
    pinned chrome (title, LCD, tabs, transport) up top, the work area scrolls
@@ -893,6 +925,12 @@
 .wa-clip.playing.has::before { background: var(--wa-accent); border-color: var(--wa-accent); }
 .wa-clip.queued { border-color: var(--wa-amber); animation: wa-clip-blink 0.7s linear infinite alternate; }
 .wa-clip.queued::before { background: var(--wa-amber); border-color: var(--wa-amber); }
+/* Scene-identity color strip — separate from the ::before state dot. */
+.wa-clip::after {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--scene-color, transparent);
+  border-radius: var(--wa-radius-sm) var(--wa-radius-sm) 0 0;
+}
 @keyframes wa-clip-blink { from { background: var(--wa-surface-2); } to { background: rgba(255, 196, 66, 0.18); } }
 @media (max-width: 760px) {
   .wa-session-row { grid-template-columns: 64px repeat(3, minmax(0, 1fr)); }
