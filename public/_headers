@@ -26,5 +26,10 @@
 /sw.js
   Cache-Control: no-cache
 
+# Deep Swarm — unlisted while in development; direct URL only
+/games/deep-swarm/*
+  X-Robots-Tag: noindex
+  Cache-Control: public, max-age=0, must-revalidate
+
 /manifest.webmanifest
   Cache-Control: public, max-age=604800
