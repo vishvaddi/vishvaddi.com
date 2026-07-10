@@ -2,7 +2,7 @@
 import Base from "../layouts/Base.astro";
 ---
 
-<Base title="Reader" description="Read classic books from Project Gutenberg.">
+<Base title="Reader" description="Read classic books from Project Gutenberg and Standard Ebooks.">
   <style is:global>
     .reader-wrap { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem; }
 
@@ -242,6 +242,7 @@ import Base from "../layouts/Base.astro";
       <div class="search-bar">
         <select id="source-select" aria-label="Library source">
           <option value="gutenberg">Project Gutenberg</option>
+          <option value="standardebooks">Standard Ebooks</option>
           <option value="librivox">LibriVox audiobooks</option>
         </select>
         <input type="text" id="search-input" placeholder="Search Project Gutenberg…" />

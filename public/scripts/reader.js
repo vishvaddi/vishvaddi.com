@@ -32,6 +32,7 @@ function $(id) { return document.getElementById(id); }
 
 var SOURCE_META = {
   gutenberg: { label: "Project Gutenberg", placeholder: "Search Project Gutenberg…" },
+  standardebooks: { label: "Standard Ebooks", placeholder: "Search Standard Ebooks…" },
   librivox: { label: "LibriVox audiobooks", placeholder: "Search LibriVox audiobooks…" },
 };
 
@@ -103,6 +104,24 @@ function normaliseLibriVox(data) {
   }).filter(function (book) { return book.chapters.length; });
 }
 
+function normaliseStandardEbooks(data) {
+  var items = (data && data.results) || [];
+  return items.map(function (book) {
+    return {
+      source: "standardebooks",
+      kind: "text",
+      id: "standardebooks:" + book.id,
+      rawId: book.id,
+      title: book.title,
+      author: book.author || "Unknown",
+      cover: book.cover || COVER_PLACEHOLDER,
+      formats: { "text/html": book.textUrl || "" },
+      url: book.url || "",
+      license: "Standard Ebooks public-domain edition",
+    };
+  }).filter(function (book) { return !!book.formats["text/html"]; });
+}
+
 function loadAnnotations(bookId) {
   var raw = localStorage.getItem("reader-ann-" + bookId);
   annotations = raw ? JSON.parse(raw) : {};
@@ -154,6 +173,17 @@ async function searchSource(source, query, cursor, append) {
     libraryBooks = append ? libraryBooks.concat(incoming) : incoming;
     books = libraryBooks.slice();
     nextCursor = data.next || null;
+  } else if (source === "standardebooks") {
+    var seUrl = cursor
+      ? "/api/standardebooks?cursor=" + encodeURIComponent(cursor)
+      : "/api/standardebooks" + (query ? "?query=" + encodeURIComponent(query) : "");
+    var se = await fetch(seUrl);
+    if (!se.ok) throw new Error(String(se.status));
+    var seData = await se.json();
+    var seIncoming = normaliseStandardEbooks(seData);
+    libraryBooks = append ? libraryBooks.concat(seIncoming) : seIncoming;
+    books = libraryBooks.slice();
+    nextCursor = seData.next || null;
   } else if (source === "librivox") {
     var lvUrl = cursor
       ? "/api/librivox?offset=" + encodeURIComponent(cursor) + (query ? "&query=" + encodeURIComponent(query) : "")
@@ -261,6 +291,7 @@ async function openBook(b) {
     var textUrl = b.formats["text/plain; charset=utf-8"]
       || b.formats["text/plain; charset=us-ascii"]
       || b.formats["text/plain"]
+      || b.formats["text/html"]
       || "";
     if (!textUrl) {
       $("left-panel").innerHTML = '<span class="error-msg">No plain text available for this book.</span>';

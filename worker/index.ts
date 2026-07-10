@@ -65,6 +65,7 @@ const UA = "vishvaddi.com field-survival tool (personal, low volume)";
 const MAX_FEED_BYTES = 2_000_000;
 const MAX_ICY_BYTES = 1_000_000;
 const GUTENBERG_OPDS = "https://www.gutenberg.org/ebooks/search.opds/";
+const STANDARD_EBOOKS = "https://standardebooks.org";
 
 function isBlockedHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
@@ -146,9 +147,12 @@ function textMatch(source: string, pattern: RegExp): string {
 }
 
 function htmlToReadableText(html: string): string {
-  return decodeHtmlEntities(html
+  const main = html.match(/<main[\s\S]*?<\/main>/i)?.[0] || html;
+  return decodeHtmlEntities(main
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<header[\s\S]*?<\/header>/gi, " ")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
     .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(p|div|h[1-6]|li|blockquote|tr)>/gi, "\n\n")
@@ -181,6 +185,37 @@ function parseOpds(xml: string) {
       };
     })
     .filter(Boolean);
+}
+
+function parseStandardEbooksList(html: string, base = STANDARD_EBOOKS) {
+  const entries = html.split(/<li[^>]+typeof="schema:Book"[^>]*>/i).slice(1);
+  return entries
+    .map((entry) => {
+      const about = textMatch(entry, /about="([^"]+)"/i);
+      const path = about || textMatch(entry, /<a[^>]+href="(\/ebooks\/[^"]+)"[^>]+property="schema:url"/i);
+      if (!/^\/ebooks\/[^?#]+$/.test(path)) return null;
+      const title = textMatch(entry, /<span[^>]+property="schema:name"[^>]*>([^<]+)<\/span>/i);
+      const authorBlock = entry.match(/<p[^>]+class="author"[\s\S]*?<\/p>/i)?.[0] || "";
+      const author = textMatch(authorBlock, /<span[^>]+property="schema:name"[^>]*>([^<]+)<\/span>/i);
+      const coverPath = textMatch(entry, /<img[^>]+src="([^"]+)"/i);
+      const url = new URL(path, base).toString();
+      return {
+        id: path.replace(/^\/ebooks\//, ""),
+        title: title || path.split("/").pop()?.replace(/-/g, " ") || "Standard Ebook",
+        author: author || "Unknown",
+        url,
+        textUrl: new URL(`${path}/text/single-page`, base).toString(),
+        cover: coverPath ? new URL(coverPath, base).toString() : "",
+      };
+    })
+    .filter(Boolean);
+}
+
+function standardEbooksNext(html: string, base: string): string | null {
+  const next = textMatch(html, /<a[^>]+href="([^"]+)"[^>]*>\s*Next/i);
+  if (!next) return null;
+  const url = new URL(next, base);
+  return url.hostname === "standardebooks.org" && url.pathname === "/ebooks" ? url.toString() : null;
 }
 
 async function fetchOpdsPage(target: string): Promise<{ items: unknown[]; next: string | null }> {
@@ -305,19 +340,25 @@ export default {
       });
     }
 
-    // Gutenberg text proxy — avoids CORS, caches at edge
+    // Reader text proxy — avoids CORS, caches at edge. Locked to Gutenberg
+    // plain text and Standard Ebooks' public single-page XHTML reader.
     if (path === "/api/book" && request.method === "GET") {
-      const bookUrl = url.searchParams.get("url") || "";
-      if (!bookUrl || !/^https:\/\/www\.gutenberg\.org\//.test(bookUrl)) {
+      const target = publicHttpsUrl(url.searchParams.get("url") || "");
+      if (!target) {
         return new Response("bad url", { status: 400 });
       }
       try {
-        const upstream = await fetch(bookUrl, {
-          headers: { "User-Agent": UA },
+        const isGutenberg = target.hostname === "www.gutenberg.org" || target.hostname === "gutenberg.org";
+        const isStandardEbooks = target.hostname === "standardebooks.org" && /^\/ebooks\/[^?#]+\/text\/single-page$/.test(target.pathname);
+        if (!isGutenberg && !isStandardEbooks) return new Response("bad url", { status: 400 });
+        const upstream = await fetchPublic(target, {
+          headers: { "User-Agent": UA, "Accept": isStandardEbooks ? "application/xhtml+xml,text/html" : "text/plain" },
           signal: AbortSignal.timeout(20000),
-        });
+          cf: { cacheTtl: 86400, cacheEverything: true },
+        } as RequestInit);
         if (!upstream.ok) return new Response("upstream error", { status: 502 });
-        return new Response(upstream.body, {
+        const body = isStandardEbooks ? htmlToReadableText(await upstream.text()) : upstream.body;
+        return new Response(body, {
           status: 200,
           headers: {
             "Content-Type": "text/plain; charset=utf-8",
@@ -372,6 +413,40 @@ export default {
         });
       } catch {
         return Response.json({ results: [] }, { status: 504 });
+      }
+    }
+
+    if (path === "/api/standardebooks" && request.method === "GET") {
+      const query = (url.searchParams.get("query") || "").trim();
+      const cursor = url.searchParams.get("cursor");
+      let target: URL;
+      if (cursor) {
+        const c = publicHttpsUrl(cursor);
+        if (!c || c.hostname !== "standardebooks.org" || c.pathname !== "/ebooks") {
+          return Response.json({ results: [], next: null }, { status: 400 });
+        }
+        target = c;
+      } else {
+        target = new URL("/ebooks", STANDARD_EBOOKS);
+        if (query) target.searchParams.set("query", query);
+      }
+      try {
+        const upstream = await fetchPublic(target, {
+          headers: {
+            "User-Agent": UA,
+            "Accept": "application/xhtml+xml,text/html",
+          },
+          signal: AbortSignal.timeout(15000),
+          cf: { cacheTtl: 900, cacheEverything: true },
+        } as RequestInit);
+        if (!upstream.ok) return Response.json({ results: [], next: null }, { status: 502 });
+        const html = await upstream.text();
+        return Response.json(
+          { results: parseStandardEbooksList(html, target.toString()), next: standardEbooksNext(html, target.toString()) },
+          { headers: { "Cache-Control": "public, max-age=900" } },
+        );
+      } catch {
+        return Response.json({ results: [], next: null }, { status: 504 });
       }
     }
 

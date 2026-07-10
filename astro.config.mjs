@@ -40,6 +40,47 @@ function localBookProxy() {
         }).filter(Boolean);
       };
 
+      const htmlToReadableText = (html) => decodeHtml((html.match(/<main[\s\S]*?<\/main>/i)?.[0] || html)
+        .replace(/<head[\s\S]*?<\/head>/gi, ' ')
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<header[\s\S]*?<\/header>/gi, ' ')
+        .replace(/<footer[\s\S]*?<\/footer>/gi, ' ')
+        .replace(/<nav[\s\S]*?<\/nav>/gi, ' ')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|h[1-6]|li|blockquote|tr|section)>/gi, '\n\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim());
+
+      const parseStandardEbooksList = (html, base = 'https://standardebooks.org') => {
+        return html.split(/<li[^>]+typeof="schema:Book"[^>]*>/i).slice(1).map((entry) => {
+          const about = textMatch(entry, /about="([^"]+)"/i);
+          const path = about || textMatch(entry, /<a[^>]+href="(\/ebooks\/[^"]+)"[^>]+property="schema:url"/i);
+          if (!/^\/ebooks\/[^?#]+$/.test(path)) return null;
+          const title = textMatch(entry, /<span[^>]+property="schema:name"[^>]*>([^<]+)<\/span>/i);
+          const authorBlock = entry.match(/<p[^>]+class="author"[\s\S]*?<\/p>/i)?.[0] || '';
+          const author = textMatch(authorBlock, /<span[^>]+property="schema:name"[^>]*>([^<]+)<\/span>/i);
+          const coverPath = textMatch(entry, /<img[^>]+src="([^"]+)"/i);
+          return {
+            id: path.replace(/^\/ebooks\//, ''),
+            title: title || path.split('/').pop()?.replace(/-/g, ' ') || 'Standard Ebook',
+            author: author || 'Unknown',
+            url: new URL(path, base).toString(),
+            textUrl: new URL(`${path}/text/single-page`, base).toString(),
+            cover: coverPath ? new URL(coverPath, base).toString() : '',
+          };
+        }).filter(Boolean);
+      };
+
+      const standardEbooksNext = (html, base) => {
+        const next = textMatch(html, /<a[^>]+href="([^"]+)"[^>]*>\s*Next/i);
+        if (!next) return null;
+        const nextUrl = new URL(next, base);
+        return nextUrl.hostname === 'standardebooks.org' && nextUrl.pathname === '/ebooks' ? nextUrl.toString() : null;
+      };
+
       const fetchOpdsPage = async (target) => {
         const upstream = await fetch(target, {
           headers: {
@@ -60,15 +101,28 @@ function localBookProxy() {
       server.middlewares.use('/api/book', async (req, res) => {
         const url = new URL(req.url || '', 'http://localhost');
         const bookUrl = url.searchParams.get('url') || '';
-        if (!/^https:\/\/www\.gutenberg\.org\//.test(bookUrl)) {
+        let target;
+        try {
+          target = new URL(bookUrl);
+        } catch {
+          res.statusCode = 400;
+          res.end('bad url');
+          return;
+        }
+        const isGutenberg = target.protocol === 'https:' && (target.hostname === 'www.gutenberg.org' || target.hostname === 'gutenberg.org');
+        const isStandardEbooks = target.protocol === 'https:' && target.hostname === 'standardebooks.org' && /^\/ebooks\/[^?#]+\/text\/single-page$/.test(target.pathname);
+        if (!isGutenberg && !isStandardEbooks) {
           res.statusCode = 400;
           res.end('bad url');
           return;
         }
 
         try {
-          const upstream = await fetch(bookUrl, {
-            headers: { 'User-Agent': 'vishvaddi-reader/1.0' },
+          const upstream = await fetch(target, {
+            headers: {
+              'User-Agent': 'vishvaddi-reader/1.0',
+              'Accept': isStandardEbooks ? 'application/xhtml+xml,text/html' : 'text/plain',
+            },
             signal: AbortSignal.timeout(20000),
           });
           if (!upstream.ok) {
@@ -78,7 +132,7 @@ function localBookProxy() {
           }
           res.statusCode = 200;
           res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-          res.end(Buffer.from(await upstream.arrayBuffer()));
+          res.end(isStandardEbooks ? htmlToReadableText(await upstream.text()) : Buffer.from(await upstream.arrayBuffer()));
         } catch {
           res.statusCode = 504;
           res.end('fetch failed');
@@ -112,6 +166,52 @@ function localBookProxy() {
           res.statusCode = 504;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ results: [] }));
+        }
+      });
+
+      server.middlewares.use('/api/standardebooks', async (req, res) => {
+        const url = new URL(req.url || '', 'http://localhost');
+        const query = (url.searchParams.get('query') || '').trim();
+        const cursor = url.searchParams.get('cursor');
+        let target;
+        if (cursor) {
+          try {
+            target = new URL(cursor);
+          } catch {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ results: [], next: null }));
+            return;
+          }
+          if (target.hostname !== 'standardebooks.org' || target.pathname !== '/ebooks') {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ results: [], next: null }));
+            return;
+          }
+        } else {
+          target = new URL('https://standardebooks.org/ebooks');
+          if (query) target.searchParams.set('query', query);
+        }
+
+        try {
+          const upstream = await fetch(target, {
+            headers: {
+              'User-Agent': 'vishvaddi-reader/1.0',
+              'Accept': 'application/xhtml+xml,text/html',
+            },
+            signal: AbortSignal.timeout(15000),
+          });
+          if (!upstream.ok) throw new Error('upstream error');
+          const html = await upstream.text();
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({
+            results: parseStandardEbooksList(html, target.toString()),
+            next: standardEbooksNext(html, target.toString()),
+          }));
+        } catch {
+          res.statusCode = 504;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ results: [], next: null }));
         }
       });
     },
