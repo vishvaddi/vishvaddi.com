@@ -102,8 +102,12 @@
 .wa-sep { width: 1px; height: 26px; background: var(--wa-border-2); margin: 0 5px; }
 .wa-lbl { font-size: 11px; letter-spacing: 0.12em; color: var(--wa-muted); text-transform: uppercase; }
 .wa-bpm {
-  font-size: 20px; font-weight: 600; min-width: 42px; text-align: center;
+  font-family: inherit; font-size: 20px; font-weight: 600; width: 60px; text-align: center;
   font-variant-numeric: tabular-nums; color: var(--wa-accent);
+  background: var(--wa-surface-2);
+  border: 1px solid var(--wa-border-2);
+  border-radius: var(--wa-radius-sm);
+  padding: 4px 2px;
 }
 
 /* ── Buttons ── */
@@ -234,7 +238,15 @@
 .wa-tutorial-step { color: var(--wa-accent); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; }
 .wa-tutorial-title { margin: 7px 0; color: var(--wa-amber); font-size: 18px; }
 .wa-tutorial-text { margin: 0 0 16px; color: var(--wa-muted); font-size: 12px; line-height: 1.55; }
-.wa-tutorial-actions { display: flex; justify-content: flex-end; gap: 7px; }
+.wa-tutorial-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.wa-tutorial-tour-view[hidden], .wa-tutorial-browse-view[hidden] { display: none; }
+/* Browse Help needs real room for the shortcuts list + search + topics,
+   vs. the compact corner card the step-by-step tour uses. */
+.wa-tutorial-card.wa-tutorial-browsing {
+  width: min(480px, calc(100vw - 24px));
+  max-height: min(680px, calc(100vh - 40px));
+  overflow-y: auto;
+}
 .wa-tutorial-target {
   position: relative; z-index: 10002 !important;
   outline: 3px solid var(--wa-amber) !important; outline-offset: 5px;
@@ -320,8 +332,11 @@
 }
 .wa-selected-sample .wa-slider-row,
 .wa-event-editor .wa-slider-row { margin: 7px 0; }
-.wa-event-lane { display: flex; gap: 4px; min-width: 680px; margin: 8px 0; }
-.wa-event-cell { height: 34px; }
+.wa-event-grid { display: flex; flex-direction: column; gap: 4px; min-width: 680px; margin: 8px 0; }
+.wa-event-cell { height: 26px; }
+.wa-event-row-label { width: 84px; flex: 0 0 84px; font-size: 10px; }
+.wa-row.selected .wa-event-row-label { color: var(--wa-accent); border-color: var(--wa-accent-dim); }
+.wa-row.selected .wa-event-cell { border-color: var(--wa-accent-dim); }
 
 /* ── Chop / waveform ── */
 .wa-waveform {
@@ -374,14 +389,48 @@
 .wa-key-black.down { background: var(--wa-blue); }
 
 /* ── Piano roll ── */
-.wa-piano-roll { min-width: 720px; margin-top: 8px; }
+.wa-piano-roll { min-width: 720px; margin-top: 8px; position: relative; }
 .wa-panel:has(.wa-piano-roll) { overflow-x: auto; }
-.wa-piano-row { display: flex; align-items: center; gap: 3px; margin-bottom: 3px; }
+.wa-piano-row { display: flex; align-items: stretch; gap: 3px; margin-bottom: 3px; }
 .wa-piano-note { width: 34px; flex: 0 0 34px; color: var(--wa-muted); font-size: 10px; }
+.wa-piano-track { position: relative; display: flex; flex: 1 1 auto; gap: 0; }
 .wa-piano-cell { height: 20px; }
+/* Notes/playhead overlay is absolutely positioned to exactly cover the step
+   tracks (34px label + 3px row gap = 37px inset) so percentage math lines up
+   pixel-for-pixel with the background cells underneath. */
+.wa-roll-notes, .wa-roll-playhead { position: absolute; top: 0; bottom: 0; left: 37px; right: 0; pointer-events: none; }
+.wa-roll-note {
+  position: absolute; box-sizing: border-box;
+  background: var(--wa-accent); border: 1px solid var(--wa-accent-dim); border-radius: 3px;
+  pointer-events: auto; cursor: grab; touch-action: none;
+  box-shadow: 0 0 5px rgba(47, 227, 166, 0.35);
+}
+.wa-roll-note:active { cursor: grabbing; }
+.wa-roll-playhead-bar { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--wa-amber); display: none; }
+.wa-roll-playhead-bar.on { display: block; }
 
 /* ── VV-1 synth ── */
+.wa-scope {
+  display: block; width: 100%; height: 90px; margin: 10px 0;
+  border: 1px solid var(--wa-border-2); border-radius: var(--wa-radius-sm);
+}
+.wa-wave-mini {
+  display: block; width: 100%; height: 40px; margin-bottom: 8px;
+  border: 1px solid var(--wa-border-2); border-radius: 4px;
+}
+.wa-mod-badge {
+  font-size: 9px; letter-spacing: 0.06em; white-space: nowrap;
+  color: var(--wa-muted); visibility: hidden;
+}
+.wa-mod-badge.active { visibility: visible; color: var(--wa-amber); }
+.wa-env-canvas {
+  display: block; width: 100%; height: 70px; margin-bottom: 8px; cursor: pointer;
+  border: 1px solid var(--wa-border-2); border-radius: 4px;
+  touch-action: none;
+}
 .wa-vpatch { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 10px; margin-top: 12px; }
+.wa-vpatch.wa-simple .wa-advanced-only,
+.wa-vpatch.wa-simple .wa-advanced-only-block { display: none; }
 .wa-vblock {
   min-width: 0; padding: 11px 13px;
   background: var(--wa-surface-2);
@@ -400,10 +449,9 @@
   gap: 8px; align-items: center; margin: 6px 0;
 }
 .wa-vmatrix-row .wa-slider-row { margin: 0; }
-.wa-vroll .wa-piano-row { margin-bottom: 2px; }
+.wa-vroll .wa-piano-row { margin-bottom: 0; }
 .wa-vroll .wa-piano-cell { height: 15px; }
 .wa-vroll .wa-roll-oct { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--wa-border-2); }
-.wa-piano-cell.tail { background: var(--wa-accent-dim); border-color: var(--wa-accent-dim); opacity: 0.7; }
 
 /* ── Mixer ── */
 .wa-mixer { display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; padding: 12px 0; }
@@ -433,6 +481,15 @@
 .wa-export { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 8px; }
 .wa-status { font-size: 13px; color: var(--wa-accent); }
 .wa-help { font-size: 12px; color: var(--wa-muted); margin: 0 0 4px; }
+.wa-preset-search {
+  flex: 1 1 160px; min-width: 120px; min-height: 38px;
+  font-family: inherit; font-size: 13px; color: var(--wa-text);
+  background: var(--wa-surface-2);
+  border: 1px solid var(--wa-border-2);
+  border-radius: var(--wa-radius-sm);
+  padding: 6px 10px;
+}
+.wa-preset-categories { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* ── Song arrangement ── */
 .wa-launcher {
@@ -447,31 +504,46 @@
   background: var(--wa-amber); border-color: var(--wa-amber); font-weight: 700;
 }
 .wa-scene-launch:hover { filter: brightness(1.07); background: var(--wa-amber); }
-.wa-song-chain { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; margin-top: 12px; }
-.wa-song-slot {
-  display: flex; align-items: center; gap: 8px; padding: 11px;
+/* ── Arrangement — one lane per track, blocks sized by bar count ── */
+.wa-arrange-lanes { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.wa-arrange-lane { display: flex; align-items: stretch; gap: 8px; }
+.wa-arrange-lane-label {
+  width: 60px; flex: 0 0 60px; align-self: center;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--wa-muted);
+}
+.wa-arrange-blocks { display: flex; flex: 1 1 auto; gap: 6px; min-height: 64px; flex-wrap: wrap; }
+.wa-arrange-block {
+  position: relative; display: flex; flex-direction: column; gap: 4px; justify-content: center;
+  min-width: 92px; padding: 8px;
   background: var(--wa-surface);
   border: 1px solid var(--wa-border);
   border-radius: var(--wa-radius-sm);
 }
+.wa-arrange-block.sel { border-color: var(--wa-accent-dim); }
+/* Scene-identity color strip — separate from the state-based border/dot
+   colors (playing/queued/selected), so both stay legible together. */
+.wa-arrange-block::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--scene-color, transparent);
+  border-radius: var(--wa-radius-sm) var(--wa-radius-sm) 0 0;
+}
+.wa-arrange-bars-row { display: flex; align-items: center; gap: 4px; justify-content: space-between; }
+.wa-arrange-bars { font-size: 10px; color: var(--wa-muted); font-variant-numeric: tabular-nums; }
 
-/* ── Effects rack ── */
-.wa-effects {
-  max-width: 720px; margin: 12px auto 0; padding: 13px;
-  background: var(--wa-surface);
-  border: 1px solid var(--wa-border);
-  border-radius: var(--wa-radius-sm);
-}
 .wa-fx-title { margin-bottom: 11px; color: var(--wa-accent); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
-.wa-effects .wa-slider-row { margin: 9px 0; }
+.wa-device .wa-slider-row { margin: 9px 0; }
 
 /* ── Modular device rack ── */
+.wa-combinator,
 .wa-device {
   margin-bottom: 10px; padding: 12px;
   background: var(--wa-surface-2);
   border: 1px solid var(--wa-border-2);
   border-radius: var(--wa-radius-sm);
 }
+.wa-combinator { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
+.wa-combinator > .wa-fx-title,
+.wa-combinator > .wa-export { grid-column: 1 / -1; }
 .wa-device-stack { margin-top: 12px; }
 .wa-device-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; }
 .wa-device-title { color: var(--wa-text); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; }
@@ -499,6 +571,21 @@
 .wa-sd-val { font-size: 11px; color: var(--wa-accent); min-width: 48px; font-variant-numeric: tabular-nums; }
 .wa-sd-item input[type=range] { accent-color: var(--wa-accent); width: 100%; height: 4px; }
 .wa-sd-actions { display: flex; gap: 6px; }
+
+/* ── Tooltips (data-help, rendered on hover/focus) ── */
+.wa-tooltip {
+  position: fixed; z-index: 10002; max-width: 260px; padding: 8px 11px;
+  /* Every dark tone in this theme (wa-surface/-2/-3) sits close enough to
+     wa-bg to read as translucent once it's floating over arbitrary busy
+     content. A light, high-contrast card — the same trick native OS
+     tooltips use — stands off a dark UI unambiguously, no shade-matching. */
+  background: #f2eee3; border: 1px solid #00000040; border-radius: var(--wa-radius-sm);
+  color: #17181c; font-size: 12px; line-height: 1.5;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+.wa-tooltip[hidden] { display: none; }
+@media (pointer: coarse) { .wa-tooltip { display: none !important; } }
 
 /* ── Velocity popup ── */
 .wa-vel-popup {
@@ -528,7 +615,7 @@
 .wa-win select,
 .wa-mpc-toolbar select,
 .wa-chop-toolbar select,
-.wa-song-slot select,
+.wa-arrange-block select,
 .wa-export select,
 .wa-vblock select,
 .wa-device input[type="number"] {
@@ -565,7 +652,7 @@
   .wa-mpc-pad { min-height: 112px; }
   .wa-ms button { width: 34px; height: 32px; }
   .wa-win select,
-  .wa-song-slot select,
+  .wa-arrange-block select,
   .wa-export select { min-height: 44px; }
 }
 
@@ -641,6 +728,16 @@
 }
 .wa-drawer-title { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; color: var(--wa-accent); }
 
+/* ── Help drawer ── */
+.wa-help-shortcuts { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--wa-border); }
+.wa-help-shortcut-row { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0; font-size: 12px; }
+.wa-help-key { flex: 0 0 auto; color: var(--wa-accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wa-help-desc { color: var(--wa-muted); text-align: right; }
+.wa-help-topics { margin-top: 12px; }
+.wa-help-topic { margin: 4px 0 14px; }
+.wa-help-topic-title { margin: 10px 0 4px; color: var(--wa-text); font-size: 13px; }
+.wa-help-topic .wa-help { margin: 0; }
+
 /* ── Fullscreen "Flip" — a fixed app frame like FL Studio Mobile / Cubasis:
    pinned chrome (title, LCD, tabs, transport) up top, the work area scrolls
    beneath it; the page itself never scrolls. Controls stay full size. ── */
@@ -686,7 +783,7 @@
 .wa-workarea { grid-template-columns: minmax(0, 1fr) minmax(240px, 280px); }
 .wa-panels { overflow: hidden; }
 .wa-panel:has(> .wa-grid),
-.wa-panel:has(> .wa-event-lane),
+.wa-panel:has(> .wa-event-grid),
 .wa-panel:has(> .wa-piano-roll) {
   max-width: 100%;
   overflow-x: auto;
@@ -697,7 +794,7 @@
   -webkit-overflow-scrolling: touch;
 }
 .wa-panel:has(> .wa-grid)::after,
-.wa-panel:has(> .wa-event-lane)::after,
+.wa-panel:has(> .wa-event-grid)::after,
 .wa-panel:has(> .wa-piano-roll)::after {
   content: "scroll sideways for all steps";
   display: none;
@@ -736,8 +833,10 @@
   .wa-workspace-section { padding: 9px; overflow: hidden; }
   .wa-tabs { overflow-x: auto; overscroll-behavior-inline: contain; }
   .wa-tab { flex: 1 0 auto; min-width: 92px; padding: 11px 12px; white-space: nowrap; }
-  .wa-rack, .wa-song-chain { grid-template-columns: 1fr; }
-  .wa-selected-sample, .wa-event-editor { grid-template-columns: 1fr; }
+  .wa-rack { grid-template-columns: 1fr; }
+  .wa-arrange-lane { flex-direction: column; }
+  .wa-arrange-lane-label { width: auto; }
+  .wa-selected-sample, .wa-event-editor, .wa-combinator { grid-template-columns: 1fr; }
   .wa-inspector .wa-selected-sample { grid-template-columns: 1fr; }
   .wa-mpc-toolbar > *,
   .wa-chop-toolbar > * { flex: 1 0 auto; }
@@ -748,10 +847,10 @@
   .wa-mpc-pad-name { font-size: 9px; }
   .wa-waveform { height: 170px; }
   .wa-panel:has(> .wa-grid)::after,
-  .wa-panel:has(> .wa-event-lane)::after,
+  .wa-panel:has(> .wa-event-grid)::after,
   .wa-panel:has(> .wa-piano-roll)::after { display: block; }
   .wa-grid { min-width: 690px; }
-  .wa-event-lane { min-width: 600px; }
+  .wa-event-grid { min-width: 600px; }
   .wa-piano-roll { min-width: 690px; }
   .wa-slider-row {
     display: grid;
@@ -831,10 +930,6 @@
   width: 10px; height: 10px; border-radius: 50%;
   border: 1px solid var(--wa-border-2); opacity: 0.6;
 }
-.wa-clip::after { content: attr(data-bars); position: absolute; right: 4px; bottom: 2px; font-size: 8px; color: var(--wa-muted); }
-.wa-clip-length { display: flex; align-items: center; gap: 4px; margin: 6px 0; }
-.wa-clip-length .active { border-color: var(--wa-accent); color: var(--wa-accent); }
-.wa-cell.wa-bar { border-left-width: 2px; border-left-color: var(--wa-accent-dim); }
 .wa-clip.has::before { background: var(--wa-muted); border-color: var(--wa-muted); opacity: 0.9; }
 .wa-clip.sel { border-color: var(--wa-accent-dim); }
 .wa-clip.armed.has::before { background: var(--wa-amber); border-color: var(--wa-amber); }
@@ -842,35 +937,13 @@
 .wa-clip.playing.has::before { background: var(--wa-accent); border-color: var(--wa-accent); }
 .wa-clip.queued { border-color: var(--wa-amber); animation: wa-clip-blink 0.7s linear infinite alternate; }
 .wa-clip.queued::before { background: var(--wa-amber); border-color: var(--wa-amber); }
+/* Scene-identity color strip — separate from the ::before state dot. */
+.wa-clip::after {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--scene-color, transparent);
+  border-radius: var(--wa-radius-sm) var(--wa-radius-sm) 0 0;
+}
 @keyframes wa-clip-blink { from { background: var(--wa-surface-2); } to { background: rgba(255, 196, 66, 0.18); } }
 @media (max-width: 760px) {
   .wa-session-row { grid-template-columns: 64px repeat(3, minmax(0, 1fr)); }
 }
-
-.wa-knob { --wa-knob-size: 48px; display: inline-grid; justify-items: center; gap: 4px; min-width: 58px; color: var(--wa-text); outline: none; touch-action: none; user-select: none; }
-.wa-knob:focus-visible .wa-knob-dial { outline: 2px solid var(--wa-accent); outline-offset: 2px; }
-.wa-knob-label, .wa-knob-value { max-width: 74px; overflow: hidden; text-overflow: ellipsis; font-size: 10px; white-space: nowrap; color: var(--wa-muted); }
-.wa-knob-dial { --wa-knob-angle: -135deg; --wa-knob-fill: 0%; position: relative; width: var(--wa-knob-size); height: var(--wa-knob-size); border: 1px solid var(--wa-border-2); border-radius: 50%; background: radial-gradient(circle at 50% 42%, var(--wa-surface-3) 0 54%, transparent 56%), conic-gradient(from 225deg, var(--wa-accent) 0 var(--wa-knob-fill), var(--wa-border-2) var(--wa-knob-fill) 75%, transparent 75%); box-shadow: inset 0 1px rgba(255,255,255,.08), 0 2px 5px rgba(0,0,0,.25); cursor: ns-resize; }
-.wa-knob-pointer { position: absolute; left: calc(50% - 1px); top: 5px; width: 2px; height: 42%; background: var(--wa-text); border-radius: 2px; transform: rotate(var(--wa-knob-angle)); transform-origin: 50% calc(var(--wa-knob-size) / 2 - 5px); }
-@media (pointer: coarse) { .wa-knob { min-width: 64px; min-height: 68px; padding: 4px; } }
-
-.wa-canvas-roll { border: 1px solid var(--wa-border); background: var(--wa-surface); }
-.wa-roll-tools { display: flex; gap: 4px; padding: 6px; border-bottom: 1px solid var(--wa-border); }
-.wa-roll-tools .active { border-color: var(--wa-accent); color: var(--wa-accent); }
-.wa-roll-viewport { display: grid; grid-template-columns: 54px minmax(0, 1fr); max-height: 520px; overflow: auto; }
-.wa-roll-keys { position: sticky; left: 0; z-index: 3; background: var(--wa-surface-2); }
-.wa-roll-key { display: block; width: 54px; height: 18px; padding: 0 4px; border: 0; border-bottom: 1px solid var(--wa-border); color: var(--wa-text); background: var(--wa-surface-2); font: 9px inherit; text-align: right; }
-.wa-roll-key:nth-child(12n + 1) { border-top: 1px solid var(--wa-accent-dim); }
-.wa-roll-canvases { position: relative; width: max-content; }
-.wa-roll-grid { display: block; }
-.wa-roll-overlay { position: absolute; inset: 0 auto auto 0; pointer-events: none; }
-.wa-roll-velocity { display: block; border-top: 1px solid var(--wa-border); }
-.wa-roll-grid, .wa-roll-velocity { touch-action: pan-x pan-y; }
-.wa-roll-grid:focus-visible { outline: 2px solid var(--wa-accent); outline-offset: -2px; }
-.wa-workarea-single { grid-template-columns: minmax(0, 1fr); }
-.wa-session-top { position: sticky; top: 0; z-index: 8; background: var(--wa-bg); padding-bottom: 4px; }
-.wa-track-tabs { position: sticky; top: 0; z-index: 7; display: flex; gap: 4px; padding: 8px; background: var(--wa-surface); border: 1px solid var(--wa-border); }
-.wa-track-tab.active { border-color: var(--wa-accent); color: var(--wa-accent); }
-.wa-track-panel[hidden] { display: none; }
-.wa-inline-inspector { margin: 10px 0; padding: 10px; border: 1px solid var(--wa-border); background: var(--wa-surface); }
-@media (max-width: 760px) { .wa-session-top .wa-panel { overflow-x: auto; } .wa-session-top .wa-session { min-width: 430px; } }

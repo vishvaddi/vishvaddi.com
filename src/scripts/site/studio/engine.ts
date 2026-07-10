@@ -3,7 +3,7 @@
 // the current node instances.
 
 import {
-  DRUMS, dp, fx, rackState, mixerState, chAudible, mpc, sampleParams, sampleBuffers, sampleData, transport,
+  DRUMS, dp, fx, rackState, mpc, sampleParams, sampleBuffers, sampleData, transport,
 } from "./state";
 import type { SamplerP } from "./state";
 import { dataUrlToBytes } from "./helpers";
@@ -17,8 +17,6 @@ let eqHigh: BiquadFilterNode | null = null;
 let compressor: DynamicsCompressorNode | null = null;
 let limiter: DynamicsCompressorNode | null = null;
 export const trackGain: GainNode[] = [];
-export const channelPan: StereoPannerNode[] = [];
-export let padGain: GainNode | null = null;
 export let synthGain: GainNode | null = null;
 let reverbConv: ConvolverNode | null = null;
 let reverbWetGain: GainNode | null = null;
@@ -30,7 +28,7 @@ export function ac(): AudioContext {
   if (!AC) {
     AC = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     master = AC.createGain();
-    master.gain.value = mixerState.masterGain;
+    master.gain.value = 0.8;
     eqLow = AC.createBiquadFilter(); eqLow.type = "lowshelf"; eqLow.frequency.value = 180;
     eqMid = AC.createBiquadFilter(); eqMid.type = "peaking"; eqMid.frequency.value = 1200; eqMid.Q.value = 0.8;
     eqHigh = AC.createBiquadFilter(); eqHigh.type = "highshelf"; eqHigh.frequency.value = 6500;
@@ -46,19 +44,11 @@ export function ensureNodes(): void {
   const a = ac();
   if (trackGain.length) return;
   for (let i = 0; i < 8; i++) {
-    const g = a.createGain(), pan = a.createStereoPanner(); g.connect(pan); pan.connect(master!); trackGain.push(g); channelPan.push(pan);
+    const g = a.createGain(); g.gain.value = 0.8; g.connect(master!); trackGain.push(g);
   }
-  padGain = a.createGain(); const padPan = a.createStereoPanner(); padGain.connect(padPan); padPan.connect(master!); channelPan.push(padPan);
-  synthGain = a.createGain(); const synthPan = a.createStereoPanner(); synthGain.connect(synthPan); synthPan.connect(master!); channelPan.push(synthPan);
-  applyMixerState();
-}
-export function applyMixerState(): void {
-  if (master) master.gain.value = mixerState.masterGain;
-  const gains = [...trackGain, padGain, synthGain];
-  mixerState.channels.forEach((channel, index) => {
-    const gain = gains[index]; if (gain) gain.gain.value = chAudible(index) ? channel.gain : 0;
-    const pan = channelPan[index]; if (pan) pan.pan.value = channel.pan;
-  });
+  // VV-1 voices carry their own per-note filters — the synth bus is just a fader.
+  synthGain = a.createGain(); synthGain.gain.value = 0.7;
+  synthGain.connect(master!);
 }
 export function initReverb(wet: number): void {
   const a = ac();
@@ -127,7 +117,8 @@ function dTone(a: BaseAudioContext, out: AudioNode, vol: number, f0: number, f1:
 export function metroClick(a: BaseAudioContext, out: AudioNode, when: number, accent: boolean): void {
   const o = a.createOscillator(); const g = a.createGain();
   o.frequency.value = accent ? 1600 : 1000;
-  g.gain.setValueAtTime(0.0001, when); g.gain.exponentialRampToValueAtTime(accent ? 0.5 : 0.3, when + 0.001); g.gain.exponentialRampToValueAtTime(0.0001, when + 0.04);
+  const peak = (accent ? 0.5 : 0.3) * transport.metroVolume;
+  g.gain.setValueAtTime(0.0001, when); g.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), when + 0.001); g.gain.exponentialRampToValueAtTime(0.0001, when + 0.04);
   o.connect(g); g.connect(out); o.start(when); o.stop(when + 0.05);
 }
 
@@ -230,7 +221,7 @@ export function playPad(
 ): void {
   const anySolo = mpc.padSolo.some(Boolean);
   if (mpc.padMute[pad] || (anySolo && !mpc.padSolo[pad])) return;
-  const out = output ?? padGain ?? master!;
+  const out = output ?? trackGain[pad % trackGain.length] ?? master!;
   const mode = mpc.sixteenLevels ? mpc.levelMode : null;
   const scaled = Math.max(0, Math.min(1, velocity / 127));
   const tune = mode === "pitch" ? variation * 2 : sampleParams[pad].tune;

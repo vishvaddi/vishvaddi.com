@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build && node scripts/optimize-og.mjs && node scripts/generate-sw.mjs",
+    "check": "astro check",
     "preview": "astro preview",
     "astro": "astro"
   },

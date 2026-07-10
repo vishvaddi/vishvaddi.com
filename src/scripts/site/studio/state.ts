@@ -59,10 +59,9 @@ export interface RackState {
   grooveRandom: number;
   noteEcho: number;
   echoDecay: number;
+  macros: number[];
   devices: Record<string, boolean>;
 }
-export interface ChannelState { gain: number; pan: number; mute: boolean; solo: boolean }
-export interface MixerState { channels: ChannelState[]; masterGain: number }
 export interface VNote {
   note: string;   // e.g. "D#4"
   step: number;   // 0–15 start step
@@ -77,10 +76,10 @@ export interface HistoryState {
   sampleParams: SamplerP[];
   sampleData: Array<string | null>;
   songChain: number[];
+  arrangement: Record<TrackId, ArrangeBlock[]>;
   fx: FxState;
   rackState: RackState;
-  mixer?: MixerState;
-  clipLens?: Array<Record<TrackId, number>>;
+  vsynth: VPatch;
 }
 export interface FxState {
   low: number;
@@ -97,8 +96,6 @@ export interface FxState {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 export const STEPS = 16;
-export const MAX_STEPS = 64;
-export const BAR_CHOICES = [16, 32, 64] as const;
 export const SCENES = 8;
 export const SCENE_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 export const SONG_SLOTS = 8;
@@ -153,7 +150,12 @@ export const DP_SPECS: ParamSpec[][] = [
 ];
 
 // ─── Transport ───────────────────────────────────────────────────────────────
-export const transport = { bpm: 120, swing: 0, metro: false, songMode: false };
+export const transport = {
+  bpm: 120, swing: 0, metro: false, metroVolume: 1, songMode: false,
+  // Snap/grid resolution shared by the drum, pad-event and piano-roll
+  // editors — 4/8/16 subdivisions per 16-step bar (16 = every step, finest).
+  quantizeGrid: 4,
+};
 export const stepDur = (): number => 60 / transport.bpm / 4;
 
 // ─── Session clips ───────────────────────────────────────────────────────────
@@ -168,11 +170,21 @@ export const clip = {
   play: { drums: 0, pads: 0, synth: 0 } as Record<TrackId, number | null>,
   queued: { drums: undefined, pads: undefined, synth: undefined } as Record<TrackId, number | null | undefined>,
 };
-export const clipLen: Array<Record<TrackId, number>> = Array.from({ length: SCENES }, () => ({ drums: STEPS, pads: STEPS, synth: STEPS }));
+
+// ─── Arrangement ─────────────────────────────────────────────────────────────
+// Each track gets its own ordered list of blocks (scene + bar-length), so
+// e.g. drums can loop scene A for 4 bars while synth plays 1 bar of A then 3
+// of C — real per-track independence, unlike the old shared songChain below.
+export interface ArrangeBlock { scene: number; bars: number; }
+export const arrangement: Record<TrackId, ArrangeBlock[]> = { drums: [], pads: [], synth: [] };
+// Per-track playhead while transport.songMode drives the arrangement.
+export const arrangePos: Record<TrackId, { block: number; barInBlock: number }> = {
+  drums: { block: 0, barInBlock: 0 }, pads: { block: 0, barInBlock: 0 }, synth: { block: 0, barInBlock: 0 },
+};
 
 // ─── Pattern data ────────────────────────────────────────────────────────────
-export const allPats: boolean[][][] = Array.from({ length: SCENES }, () => DRUMS.map(() => new Array(MAX_STEPS).fill(false)));
-export const allVels: number[][][] = Array.from({ length: SCENES }, () => DRUMS.map(() => new Array(MAX_STEPS).fill(100)));
+export const allPats: boolean[][][] = Array.from({ length: SCENES }, () => DRUMS.map(() => new Array(STEPS).fill(false)));
+export const allVels: number[][][] = Array.from({ length: SCENES }, () => DRUMS.map(() => new Array(STEPS).fill(100)));
 export const synthNotes: VNote[][] = Array.from({ length: SCENES }, () => []);
 export const songChain = Array.from({ length: SONG_SLOTS }, (_, i) => i % 4);
 export const padEvents: PadEvent[][] = Array.from({ length: SCENES }, () => []);
@@ -195,8 +207,8 @@ export const mpc: MpcState = {
 };
 export const rackState: RackState = {
   grooveTiming: 0, grooveVelocity: 0, grooveRandom: 0,
-  noteEcho: 0, echoDecay: 0.65,
-  devices: { eq: true, compressor: true, delay: true, reverb: true, limiter: true },
+  noteEcho: 0, echoDecay: 0.65, macros: [0, 0, 0, 0],
+  devices: { player: true, eq: true, compressor: true, delay: true, reverb: true, limiter: true },
 };
 export const fx: FxState = {
   low: 0, mid: 0, high: 0,
@@ -209,12 +221,6 @@ export const fx: FxState = {
 export const vsynthPatch: VPatch = initPatch();
 
 // ─── Mixer ───────────────────────────────────────────────────────────────────
-export const mixerState: MixerState = {
-  channels: Array.from({ length: 10 }, (_, index) => ({ gain: index < 8 ? 0.8 : 0.7, pan: 0, mute: false, solo: false })),
-  masterGain: 0.8,
-};
-export function chAudible(index: number): boolean {
-  const anySolo = mixerState.channels.some((channel) => channel.solo);
-  const channel = mixerState.channels[index];
-  return !channel.mute && (!anySolo || channel.solo);
-}
+export const mute = new Array(8).fill(false);
+export const solo = new Array(8).fill(false);
+export function audible(r: number): boolean { const s = solo.some(Boolean); return !mute[r] && (!s || solo[r]); }
