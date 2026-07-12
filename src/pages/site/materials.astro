@@ -11,9 +11,12 @@ import "../../styles/site.css";
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Materials</p>
     <h1>Material Calculators</h1>
-    <p>Quick quantities for common trades. Everything updates as you type and stays in your browser. Save the page to PDF below.</p>
+    <p>Quick quantities by trade. Everything updates as you type and stays in your browser. Save the page to PDF below.</p>
 
-    <div id="calcs"></div>
+    <div class="mat-layout">
+      <nav class="mat-tabs no-print" id="mat-tabs" role="tablist" aria-label="Trades"></nav>
+      <div id="calcs" class="mat-content"></div>
+    </div>
 
     <div class="btn-row no-print">
       <button type="button" class="btn" id="print">Save as PDF</button>
@@ -93,6 +96,90 @@ import "../../styles/site.css";
               return { rows: [[f0(up((v.area * v.akg) / v.bag)), "× adhesive bags"], [f2(v.area * v.gkg) + " kg", "grout"]] };
             },
           },
+          {
+            id: "waterproof", title: "Waterproofing membrane",
+            blurb: "Two coats over floor + walls to code height. Typical coverage ~1 L/m² for two coats.",
+            fields: [
+              { id: "area", label: "Area incl. walls (m²)", def: "8", min: "0", step: "0.1" },
+              { id: "rate", label: "L per m² (2 coats)", def: "1", min: "0.1", step: "0.1" },
+              { id: "pail", label: "Pail size (L)", def: "15", min: "1", step: "1" },
+            ],
+            compute: (v) => {
+              if (v.area <= 0 || v.pail <= 0) return null;
+              const litres = v.area * v.rate;
+              return { rows: [[f1(litres) + " L", "membrane"], [f0(up(litres / v.pail)), "pails"]] };
+            },
+          },
+        ],
+      },
+      {
+        trade: "Joinery & shopfitting",
+        specs: [
+          {
+            id: "board", title: "Board sheets",
+            blurb: "Melamine/MDF/ply sheets from total panel area. Standard sheet 2400 × 1200 mm (2.88 m²).",
+            fields: [
+              { id: "area", label: "Total panel area (m²)", def: "8", min: "0", step: "0.1" },
+              { id: "w", label: "Sheet width (mm)", def: "1200", min: "1", step: "1" },
+              { id: "h", label: "Sheet length (mm)", def: "2400", min: "1", step: "1" },
+              { id: "waste", label: "Cutting wastage (%)", def: "20", min: "0", step: "1" },
+            ],
+            compute: (v) => {
+              const sheetArea = (v.w / 1000) * (v.h / 1000);
+              if (sheetArea <= 0 || v.area <= 0) return null;
+              return {
+                rows: [[f0(up((v.area * pct(v.waste)) / sheetArea)), "sheets"], [f2(sheetArea) + " m²", "per sheet"]],
+                warn: "Board wastage runs high — nested cutting rarely beats 20% on mixed panel sizes. Use the Cut List tool for the real layout.",
+              };
+            },
+          },
+          {
+            id: "edging", title: "Edge banding",
+            blurb: "Lineal metres of edging with an application wastage allowance.",
+            fields: [
+              { id: "lm", label: "Edges to band (m)", def: "24", min: "0", step: "0.5" },
+              { id: "roll", label: "Roll length (m)", def: "50", min: "1", step: "1" },
+              { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
+            ],
+            compute: (v) => {
+              if (v.lm <= 0 || v.roll <= 0) return null;
+              const need = v.lm * pct(v.waste);
+              return { rows: [[f2(need) + " m", "banding needed"], [f0(up(need / v.roll)), "rolls"]] };
+            },
+          },
+          {
+            id: "silicone", title: "Sealant / silicone",
+            blurb: "Cartridges from joint length and bead size. 300 mL cartridge.",
+            fields: [
+              { id: "lm", label: "Joint length (m)", def: "12", min: "0", step: "0.5" },
+              { id: "bead", label: "Bead width (mm)", def: "6", min: "1", step: "1" },
+              { id: "depth", label: "Bead depth (mm)", def: "6", min: "1", step: "1" },
+            ],
+            compute: (v) => {
+              if (v.lm <= 0) return null;
+              const mlPerM = v.bead * v.depth; // mm² section ≈ mL per metre
+              const metresPerCart = 300 / mlPerM;
+              return { rows: [[f0(up(v.lm / metresPerCart)), "× 300 mL cartridges"], [f1(metresPerCart) + " m", "per cartridge at this bead"]] };
+            },
+          },
+          {
+            id: "glass", title: "Glass weight",
+            blurb: "Glass ≈ 2.5 kg per m² per mm of thickness — check your lifting plan.",
+            fields: [
+              { id: "w", label: "Width (mm)", def: "2000", min: "1", step: "1" },
+              { id: "h", label: "Height (mm)", def: "2100", min: "1", step: "1" },
+              { id: "t", label: "Thickness (mm)", def: "10", min: "1", step: "1" },
+            ],
+            compute: (v) => {
+              const area = (v.w / 1000) * (v.h / 1000);
+              if (area <= 0 || v.t <= 0) return null;
+              const kg = area * v.t * 2.5;
+              return {
+                rows: [[f1(kg) + " kg", "panel weight"], [f2(area) + " m²", "area"]],
+                warn: kg > 60 ? "Over 60 kg — two-person or mechanical lift territory." : undefined,
+              };
+            },
+          },
         ],
       },
       {
@@ -137,6 +224,43 @@ import "../../styles/site.css";
             ],
             compute: (v) => (v.area <= 0 || v.rate <= 0 ? null : { rows: [[f0(up(v.area / v.rate)), "× 20 kg bags"]] }),
           },
+          {
+            id: "steelstud", title: "Steel stud & track",
+            blurb: "Partition framing: studs at spacing plus top and bottom track.",
+            fields: [
+              { id: "len", label: "Wall length (m)", def: "6", min: "0", step: "0.1" },
+              { id: "spc", label: "Stud spacing (mm)", def: "600", min: "100", step: "50" },
+              { id: "ht", label: "Wall height (m)", def: "2.7", min: "0.1", step: "0.1" },
+              { id: "stock", label: "Track stock length (m)", def: "3", min: "0.5", step: "0.5" },
+            ],
+            compute: (v) => {
+              if (v.len <= 0 || v.spc <= 0 || v.stock <= 0) return null;
+              const studs = up((v.len * 1000) / v.spc) + 1;
+              const trackM = v.len * 2;
+              return {
+                rows: [
+                  [f0(studs), "studs @ " + f0(v.spc) + " mm"],
+                  [f2(studs * v.ht) + " m", "stud lineal metres"],
+                  [f2(trackM) + " m", "track (top + bottom)"],
+                  [f0(up(trackM / v.stock)), "track lengths to buy"],
+                ],
+              };
+            },
+          },
+          {
+            id: "screws", title: "Board screws",
+            blurb: "Rough guide ≈ 15 screws per m² on walls (300 mm centres in the field).",
+            fields: [
+              { id: "area", label: "Board area (m²)", def: "60", min: "0", step: "1" },
+              { id: "rate", label: "Screws / m²", def: "15", min: "1", step: "1" },
+              { id: "box", label: "Screws per box", def: "1000", min: "1", step: "100" },
+            ],
+            compute: (v) => {
+              if (v.area <= 0 || v.box <= 0) return null;
+              const n = v.area * v.rate;
+              return { rows: [[f0(n), "screws"], [f0(up(n / v.box)), "boxes"]] };
+            },
+          },
         ],
       },
       {
@@ -177,6 +301,101 @@ import "../../styles/site.css";
               { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
             ],
             compute: (v) => (v.area <= 0 ? null : { rows: [[f0(up((v.area * pct(v.waste)) / 2.16)), "× form ply sheets"]] }),
+          },
+          {
+            id: "piers", title: "Footings / piers",
+            blurb: "Cylindrical pier volume × count — for post footings and bored piers.",
+            fields: [
+              { id: "dia", label: "Diameter (mm)", def: "450", min: "1", step: "10" },
+              { id: "depth", label: "Depth (mm)", def: "900", min: "1", step: "10" },
+              { id: "n", label: "Number of piers", def: "6", min: "1", step: "1" },
+            ],
+            compute: (v) => {
+              const r = v.dia / 2000;
+              const vol = Math.PI * r * r * (v.depth / 1000) * v.n;
+              if (vol <= 0) return null;
+              return {
+                rows: [[f2(vol) + " m³", "total concrete"], [f0(up(vol / 0.0108)), "× 20 kg bags"]],
+                warn: vol > 1.5 ? "Over ~1.5 m³ — pre-mixed delivery is usually cheaper than bags." : undefined,
+              };
+            },
+          },
+        ],
+      },
+      {
+        trade: "Roofing",
+        specs: [
+          {
+            id: "roofsheets", title: "Roof sheets",
+            blurb: "Sheet count from roof width and sheet cover (corrugated 762 mm, Trimdek 762, Klip-Lok 700).",
+            fields: [
+              { id: "w", label: "Roof width (m)", def: "12", min: "0", step: "0.1" },
+              { id: "cover", label: "Sheet cover (mm)", def: "762", min: "100", step: "1" },
+            ],
+            compute: (v) => (v.w <= 0 || v.cover <= 0 ? null : { rows: [[f0(up((v.w * 1000) / v.cover)), "sheets across"]] }),
+          },
+          {
+            id: "battens", title: "Battens / purlins",
+            blurb: "Rows of battens up the rafter length at a given spacing, × roof width.",
+            fields: [
+              { id: "rafter", label: "Rafter length (m)", def: "5", min: "0", step: "0.1" },
+              { id: "spc", label: "Batten spacing (mm)", def: "900", min: "100", step: "50" },
+              { id: "w", label: "Roof width (m)", def: "12", min: "0", step: "0.1" },
+            ],
+            compute: (v) => {
+              if (v.rafter <= 0 || v.spc <= 0 || v.w <= 0) return null;
+              const rows = up((v.rafter * 1000) / v.spc) + 1;
+              return { rows: [[f0(rows), "batten rows"], [f2(rows * v.w) + " m", "total batten length"]] };
+            },
+          },
+        ],
+      },
+      {
+        trade: "Landscaping",
+        specs: [
+          {
+            id: "soil", title: "Soil / mulch / gravel volume",
+            blurb: "Volume from area and depth; tonnage at a bulk density (soil ~1.2, gravel ~1.5 t/m³).",
+            fields: [
+              { id: "area", label: "Area (m²)", def: "20", min: "0", step: "0.1" },
+              { id: "depth", label: "Depth (mm)", def: "100", min: "1", step: "5" },
+              { id: "dens", label: "Density (t/m³)", def: "1.2", min: "0.1", step: "0.1" },
+            ],
+            compute: (v) => {
+              const vol = v.area * (v.depth / 1000);
+              if (vol <= 0) return null;
+              return { rows: [[f2(vol) + " m³", "volume"], [f2(vol * v.dens) + " t", "approx. tonnage"]] };
+            },
+          },
+          {
+            id: "turf", title: "Turf",
+            blurb: "Rolls or slabs for a lawn area. Standard roll ≈ 1 m² (2.4 × 0.42 m).",
+            fields: [
+              { id: "area", label: "Lawn area (m²)", def: "40", min: "0", step: "0.5" },
+              { id: "per", label: "Coverage per roll (m²)", def: "1", min: "0.1", step: "0.1" },
+              { id: "waste", label: "Wastage (%)", def: "5", min: "0", step: "1" },
+            ],
+            compute: (v) => (v.area <= 0 || v.per <= 0 ? null : { rows: [[f0(up((v.area * pct(v.waste)) / v.per)), "rolls"]] }),
+          },
+          {
+            id: "pavers", title: "Pavers + bedding sand",
+            blurb: "Paver count for an area plus a 30 mm bedding sand layer.",
+            fields: [
+              { id: "area", label: "Area (m²)", def: "12", min: "0", step: "0.1" },
+              { id: "w", label: "Paver width (mm)", def: "230", min: "1", step: "1" },
+              { id: "h", label: "Paver length (mm)", def: "190", min: "1", step: "1" },
+              { id: "waste", label: "Wastage (%)", def: "5", min: "0", step: "1" },
+            ],
+            compute: (v) => {
+              const pArea = (v.w / 1000) * (v.h / 1000);
+              if (pArea <= 0 || v.area <= 0) return null;
+              return {
+                rows: [
+                  [f0(up((v.area * pct(v.waste)) / pArea)), "pavers"],
+                  [f2(v.area * 0.03) + " m³", "bedding sand (30 mm)"],
+                ],
+              };
+            },
           },
         ],
       },
@@ -270,6 +489,20 @@ import "../../styles/site.css";
             ],
             compute: (v) => (v.area <= 0 ? null : { rows: [[f0(up(v.area * v.rate)), "× 20 kg bags"]] }),
           },
+          {
+            id: "render", title: "Render",
+            blurb: "Bagged render at a coat thickness. ~1.7 kg/m² per mm of thickness.",
+            fields: [
+              { id: "area", label: "Wall area (m²)", def: "15", min: "0", step: "0.1" },
+              { id: "t", label: "Thickness (mm)", def: "10", min: "1", step: "1" },
+              { id: "bag", label: "Bag size (kg)", def: "20", min: "1", step: "1" },
+            ],
+            compute: (v) => {
+              if (v.area <= 0 || v.bag <= 0) return null;
+              const kg = v.area * v.t * 1.7;
+              return { rows: [[f0(kg) + " kg", "render"], [f0(up(kg / v.bag)), "bags"]] };
+            },
+          },
         ],
       },
       {
@@ -290,28 +523,55 @@ import "../../styles/site.css";
     ];
 
     const root = document.getElementById("calcs")!;
-    for (const g of groups) {
-      const h = document.createElement("h2");
-      h.className = "trade-section";
-      h.textContent = g.trade;
-      root.append(h);
-      const box = document.createElement("div");
-      root.append(box);
-      mountCalcs(box, g.specs);
-    }
+    const tabBar = document.getElementById("mat-tabs")!;
+    const slug = (s: string) => s.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
+    const panels: HTMLElement[] = [];
+    const buttons: HTMLButtonElement[] = [];
+
+    groups.forEach((g, i) => {
+      const panel = document.createElement("div");
+      panel.className = "mat-panel";
+      panel.hidden = i !== 0;
+      panel.dataset.panel = slug(g.trade);
+      mountCalcs(panel, g.specs);
+      root.append(panel);
+      panels.push(panel);
+
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "mat-tab" + (i === 0 ? " active" : "");
+      b.textContent = g.trade;
+      b.addEventListener("click", () => {
+        panels.forEach((p, j) => (p.hidden = j !== i));
+        buttons.forEach((btn, j) => btn.classList.toggle("active", j === i));
+        history.replaceState(null, "", "#" + slug(g.trade));
+      });
+      tabBar.append(b);
+      buttons.push(b);
+    });
+
+    const want = location.hash.slice(1);
+    const idx = groups.findIndex((g) => slug(g.trade) === want);
+    if (idx > 0) buttons[idx].click();
+
     wireActions(root, "Material calculators");
   </script>
 
   <style>
-    .trade-section {
-      margin: 2.25rem 0 0.5rem;
-      padding-bottom: 0.35rem;
-      border-bottom: 2px solid var(--site-accent, #2c63d6);
-      font-size: 0.78rem;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      color: var(--site-accent, #2c63d6);
+    .mat-layout { display: grid; grid-template-columns: 12rem 1fr; gap: 1.5rem; align-items: start; margin-top: 0.5rem; }
+    .mat-tabs { display: flex; flex-direction: column; gap: 0.25rem; position: sticky; top: 5rem; }
+    .mat-tab {
+      padding: 0.5rem 0.9rem; font-size: 0.9rem; font-family: var(--font-sans); cursor: pointer; text-align: left;
+      color: var(--muted); background: transparent; border: 1px solid transparent; border-left: 2px solid var(--rule); border-radius: 0;
     }
-    .trade-section:first-child { margin-top: 0.5rem; }
+    .mat-tab:hover { color: var(--fg); }
+    .mat-tab.active { color: var(--fg); font-weight: 600; border-left-color: var(--fg); }
+    .mat-panel[hidden] { display: none; }
+    @media (max-width: 720px) {
+      .mat-layout { display: block; }
+      .mat-tabs { flex-direction: row; flex-wrap: wrap; gap: 0.4rem; position: static; margin-bottom: 1.25rem; }
+      .mat-tab { border: 1px solid var(--rule); border-radius: 999px; padding: 0.45rem 1rem; text-align: center; }
+      .mat-tab.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+    }
   </style>
 </Base>
