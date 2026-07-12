@@ -601,8 +601,21 @@ function startDrone() { startAmbient(); }
 function updateDrone() { updateAmbient(); }
 
 // --- Resize ---
-function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-window.addEventListener('resize', resize); resize();
+// visualViewport is the truth on mobile — innerHeight lies while the URL bar
+// animates, which cut the HUD's bottom off on phones.
+function resize() {
+    const vv = window.visualViewport;
+    canvas.width = Math.round(vv ? vv.width : window.innerWidth);
+    canvas.height = Math.round(vv ? vv.height : window.innerHeight);
+}
+window.addEventListener('resize', resize);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
+resize();
+
+// Installable app shell — https only (file:// runs skip it untouched)
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
 
 // =====================================================================
 // SVG SPRITE SYSTEM — inline vector art, no external deps
@@ -5841,12 +5854,16 @@ function draw() {
 
     // --- CIRCULAR VIEWPORT — centered, with room for rim arcs + labels + NEREID below ---
     // Rim arcs extend to vpR + 22 (labels). NEREID needs ~70px gap below that.
-    const NEREID_GAP = 130;
-    const TOP_GAP    = 50;     // also leaves room for top XP arc labels
+    // Small screens: the old 200px radius floor + 60px side margins guaranteed
+    // the rim spilled off phone edges — margins, gaps and floor now adapt.
+    const small = w < 520 || h < 560;
+    const NEREID_GAP = small ? Math.max(84, Math.round(h * 0.16)) : 130;
+    const TOP_GAP    = small ? 36 : 50;
+    const sideMargin = small ? 34 : 60;
     const vpCx = w / 2;
     const vpCy = h / 2;
-    const vpRadius = Math.max(200, Math.min(
-        w / 2 - 60,                           // horizontal margin (room for left/right arc labels)
+    const vpRadius = Math.max(small ? 120 : 200, Math.min(
+        w / 2 - sideMargin,                   // horizontal margin (room for left/right arc labels)
         h / 2 - Math.max(TOP_GAP, NEREID_GAP)
     ));
     g._vpCx = vpCx; g._vpCy = vpCy; g._vpR = vpRadius;
@@ -7988,21 +8005,8 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     drawArc(Math.PI / 6,   sanity / 100, MIND_COLOR, 'MIND', `${Math.floor(sanity)}%`);
     drawArc(5 * Math.PI / 6, hpPct, HULL_COLOR, 'HULL', `${Math.max(0, Math.floor(p.hp))}/${p.maxHp}`);
 
-    // MIND eye (Dredge) — the lids part as the deep gets in; readable at a glance
-    {
-        const corr = (p.corruption || 0) / 100;
-        const ex = vpCx + Math.cos(Math.PI / 6) * (vpR - 30);
-        const ey = vpCy + Math.sin(Math.PI / 6) * (vpR - 30);
-        const open = 1.5 + corr * 9;
-        ctx.strokeStyle = hexA(corr > 0.6 ? '#DA4060' : '#A060D0', 0.45 + corr * 0.55);
-        ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.ellipse(ex, ey, 13, open, 0, 0, PI2); ctx.stroke();
-        if (corr > 0.05) {
-            const pupil = Math.min(open - 1, 1 + corr * 4);
-            ctx.fillStyle = hexA('#DA4060', 0.25 + corr * 0.75);
-            ctx.beginPath(); ctx.arc(ex, ey, Math.max(0.5, pupil), 0, PI2); ctx.fill();
-        }
-    }
+    // (MIND eye removed 12/07 — at low corruption it read as a stray purple
+    // glitch by the MIND arc, and the arc already tells the number.)
 
     // BATTERY (small inline indicator below depth, not an arc)
     const bat = p.battery != null ? p.battery : 100;
