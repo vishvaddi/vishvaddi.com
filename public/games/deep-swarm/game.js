@@ -50,13 +50,12 @@ function initPostFX() {
             'vec3 samp(vec2 c){ return texture2D(tex, c).rgb; }',
             'void main(){',
             '  vec2 c = uv;',
-            // The water itself moves: a slow large sway everyone sees, plus the
-            // fine ripple, plus the corruption warp on top. (Vish: "bring back
-            // the wavyness" — the old look was corruption-driven and vanished
-            // on a fresh save.)
-            '  float warp = 0.0026 + depth*0.0012 + corrupt*0.004;',
-            '  c.x += sin(uv.y*6.0 + time*0.45)*0.0035 + sin(uv.y*40.0 + time*1.3)*warp;',
-            '  c.y += cos(uv.x*5.0 + time*0.38)*0.0028 + cos(uv.x*36.0 + time*1.1)*warp*0.6;',
+            // The water breathes, barely — a whisper of sway at baseline, and the
+            // warp belongs to corruption (tuned 12/07: "barely noticeable until
+            // corruption gets worse").
+            '  float warp = 0.0012 + depth*0.0005 + corrupt*0.005;',
+            '  c.x += sin(uv.y*6.0 + time*0.45)*0.0012 + sin(uv.y*40.0 + time*1.3)*warp;',
+            '  c.y += cos(uv.x*5.0 + time*0.38)*0.0009 + cos(uv.x*36.0 + time*1.1)*warp*0.6;',
             '  vec2 dir = uv - 0.5;',
             '  float ca = (0.0015 + corrupt*0.006) * (0.3 + dot(dir,dir)*2.5);',
             '  vec3 col; col.r = samp(c + dir*ca).r; col.g = samp(c).g; col.b = samp(c - dir*ca).b;',
