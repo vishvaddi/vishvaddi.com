@@ -824,7 +824,13 @@ if (!meta.observeSec) meta.observeSec = {};
 function researchTier(typeId) { return meta.research[typeId] || 0; }
 
 // Readability settings + staged-onboarding memory
-if (!meta.uiScale || meta.uiScale === 1) meta.uiScale = 1.15;   // readable default; [T] cycles 1.15→1.3→1
+// Readable defaults; [T] in pause still cycles and its choice sticks after this
+// one-time migration. Desktop reads from further away than a hand-held phone —
+// it gets the larger default (Vish, 12/07).
+if (!meta._uiScaleV2) {
+    meta._uiScaleV2 = true;
+    meta.uiScale = (('ontouchstart' in window) || navigator.maxTouchPoints > 0) ? 1.15 : 1.3;
+}
 if (meta.hudContrast === undefined) meta.hudContrast = false;
 if (!meta.hintsSeen) meta.hintsSeen = [];
 UI_SCALE = meta.uiScale;
@@ -3771,6 +3777,7 @@ function updateApexPatrol(g, dt) {
 
 function update(dt) {
     // Frozen phases — game does not advance
+    if (isPortraitPhone()) return;   // rotate-to-landscape gate; soft pause
     if (phase === 'paused') return;
     if (phase === 'inventory') return;
     if (phase === 'runshop') return;
@@ -5829,10 +5836,27 @@ function onDeath(g) {
 }
 
 // --- Drawing ---
+function isPortraitPhone() { return canvas.width < 560 && canvas.height > canvas.width; }
 function draw() {
     const w = canvas.width, h = canvas.height;
     ctx.clearRect(0, 0, w, h);
     tapZones.length = 0;   // rebuilt each frame by whichever screen draws
+
+    // LANDSCAPE ONLY on phones (Vish's call, 12/07) — the trench is wide.
+    if (isPortraitPhone()) {
+        ctx.fillStyle = '#010208'; ctx.fillRect(0, 0, w, h);
+        const t = performance.now() * 0.001;
+        ctx.save(); ctx.translate(w / 2, h / 2 - 30); ctx.rotate(Math.PI / 2 * (0.5 + Math.sin(t * 2) * 0.5));
+        ctx.strokeStyle = '#5ADFCF'; ctx.lineWidth = 3;
+        ctx.strokeRect(-22, -40, 44, 80);
+        ctx.fillStyle = '#5ADFCF'; ctx.beginPath(); ctx.arc(0, 30, 3, 0, PI2); ctx.fill();
+        ctx.restore();
+        ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+        ctx.fillText('ROTATE TO LANDSCAPE', w / 2, h / 2 + 70);
+        ctx.fillStyle = '#5A6A7A'; ctx.font = '11px monospace';
+        ctx.fillText('the trench is wide', w / 2, h / 2 + 90);
+        return;
+    }
 
     // Full-screen menus were laid out for a desktop canvas — on narrow screens
     // render them into a 720-wide virtual space scaled to fit. Tap zones are
@@ -5866,13 +5890,15 @@ function draw() {
     // half the pixels and squashed the game into a small circle). Full-bleed
     // keeps all the porthole math but the circle covers every corner.
     const small = w < 520 || h < 560;
-    const NEREID_GAP = 130;
-    const TOP_GAP    = 50;
+    // Desktop porthole enlarged 12/07 (Vish: "make viewport bigger") — tighter
+    // margins; NEREID panel still clears below.
+    const NEREID_GAP = 96;
+    const TOP_GAP    = 40;
     const vpCx = w / 2;
     const vpCy = h / 2;
     const vpRadius = small
         ? Math.hypot(w, h) / 2 + 12
-        : Math.max(200, Math.min(w / 2 - 60, h / 2 - Math.max(TOP_GAP, NEREID_GAP)));
+        : Math.max(200, Math.min(w / 2 - 44, h / 2 - Math.max(TOP_GAP, NEREID_GAP)));
     g._vpCx = vpCx; g._vpCy = vpCy; g._vpR = vpRadius;
     g._fullBleed = small;
 
@@ -7752,12 +7778,13 @@ function drawNereidSpeech(w, h, g, pal, vpCx, vpCy, vpR) {
         lines[maxLines - 1] = lines[maxLines - 1].slice(0, maxChars - 3) + '...';
     }
     // Anchor BELOW the rim arcs (which extend to vpR + 22 for labels). No overlap with vitals.
-    // Full-bleed (phone): no rim to clear — pin under the top HUD bars instead.
-    const panelW = g._fullBleed ? Math.min(640, w - 16) : Math.min(640, w * 0.7);
+    // Full-bleed (landscape phone): bottom-centre, narrow — clear of the top
+    // bars, the sonar (bottom-left) and the contracts list (bottom-right).
+    const panelW = g._fullBleed ? Math.min(430, w * 0.5) : Math.min(640, w * 0.7);
     const lineH = 14;
     const panelH = 22 + lines.length * lineH;
     const panelX = vpCx - panelW / 2;
-    const minY = g._fullBleed ? 30 : vpCy + vpR + 44;
+    const minY = g._fullBleed ? h - panelH - 8 : vpCy + vpR + 44;
     const maxY = h - panelH - 6;
     const panelY = Math.max(6, Math.min(maxY, minY));
 
@@ -8018,22 +8045,20 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     }
 
     if (g._fullBleed) {
-        // Phone HUD: slim bars pinned to the top edge — XP full-width hairline,
-        // HULL left / MIND right beneath it. No rim, no arcs.
+        // Phone HUD (landscape): XP hairline across the top, then compact
+        // fixed-width HULL and MIND bars grouped LEFT with inline labels —
+        // clear of the loadout icons (top-right) and everything below.
         const bar = (x, y, bw, bh, pct, color) => {
             ctx.fillStyle = 'rgba(8,12,20,0.8)'; ctx.fillRect(x, y, bw, bh);
             ctx.fillStyle = color; ctx.fillRect(x, y, bw * Math.max(0, Math.min(1, pct)), bh);
         };
-        bar(0, 0, w, 4, xpPct, XP_COLOR);
-        bar(8, 8, w * 0.42 - 8, 5, hpPct, HULL_COLOR);
-        bar(w * 0.58, 8, w * 0.42 - 8, 5, sanity / 100, MIND_COLOR);
-        ctx.font = 'bold 9px monospace';
-        ctx.textAlign = 'left'; ctx.fillStyle = HULL_COLOR;
-        ctx.fillText(`HULL ${Math.max(0, Math.floor(p.hp))}`, 8, 24);
-        ctx.textAlign = 'right'; ctx.fillStyle = MIND_COLOR;
-        ctx.fillText(`MIND ${Math.floor(sanity)}%`, w - 8, 24);
-        ctx.textAlign = 'center'; ctx.fillStyle = XP_COLOR;
-        ctx.fillText(`LV ${p.level}`, w / 2, 24);
+        bar(0, 0, w, 3, xpPct, XP_COLOR);
+        bar(8, 8, 140, 5, hpPct, HULL_COLOR);
+        bar(8, 22, 140, 5, sanity / 100, MIND_COLOR);
+        ctx.font = 'bold 9px monospace'; ctx.textAlign = 'left';
+        ctx.fillStyle = HULL_COLOR; ctx.fillText(`HULL ${Math.max(0, Math.floor(p.hp))}`, 154, 15);
+        ctx.fillStyle = MIND_COLOR; ctx.fillText(`MIND ${Math.floor(sanity)}%`, 154, 29);
+        ctx.fillStyle = XP_COLOR;   ctx.fillText(`LV ${p.level}`, 230, 15);
     } else {
         drawArc(-Math.PI / 2,  xpPct, XP_COLOR,   `LV ${p.level}`, `${p.xp}/${xpForLevel(p.level)}`);
         drawArc(Math.PI / 6,   sanity / 100, MIND_COLOR, 'MIND', `${Math.floor(sanity)}%`);
