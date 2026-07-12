@@ -11,7 +11,7 @@ const keys = {};
 
 // HUD TEXT SCALE — intercept every ctx.font assignment and scale the px size.
 // One knob (pause menu) instead of two hundred font-string edits.
-let UI_SCALE = 1;
+let UI_SCALE = 1.15;   // readable default (Vish: "text is still kinda small"); [T] in pause still adjusts
 {
     const fontDesc = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'font');
     Object.defineProperty(ctx, 'font', {
@@ -50,9 +50,13 @@ function initPostFX() {
             'vec3 samp(vec2 c){ return texture2D(tex, c).rgb; }',
             'void main(){',
             '  vec2 c = uv;',
-            '  float warp = 0.0010 + corrupt*0.004;',
-            '  c.x += sin(uv.y*40.0 + time*1.3)*warp;',
-            '  c.y += cos(uv.x*36.0 + time*1.1)*warp*0.6;',
+            // The water itself moves: a slow large sway everyone sees, plus the
+            // fine ripple, plus the corruption warp on top. (Vish: "bring back
+            // the wavyness" — the old look was corruption-driven and vanished
+            // on a fresh save.)
+            '  float warp = 0.0026 + depth*0.0012 + corrupt*0.004;',
+            '  c.x += sin(uv.y*6.0 + time*0.45)*0.0035 + sin(uv.y*40.0 + time*1.3)*warp;',
+            '  c.y += cos(uv.x*5.0 + time*0.38)*0.0028 + cos(uv.x*36.0 + time*1.1)*warp*0.6;',
             '  vec2 dir = uv - 0.5;',
             '  float ca = (0.0015 + corrupt*0.006) * (0.3 + dot(dir,dir)*2.5);',
             '  vec3 col; col.r = samp(c + dir*ca).r; col.g = samp(c).g; col.b = samp(c - dir*ca).b;',
@@ -808,7 +812,7 @@ if (!meta.observeSec) meta.observeSec = {};
 function researchTier(typeId) { return meta.research[typeId] || 0; }
 
 // Readability settings + staged-onboarding memory
-if (!meta.uiScale) meta.uiScale = 1;
+if (!meta.uiScale || meta.uiScale === 1) meta.uiScale = 1.15;   // readable default; [T] cycles 1.15→1.3→1
 if (meta.hudContrast === undefined) meta.hudContrast = false;
 if (!meta.hintsSeen) meta.hintsSeen = [];
 UI_SCALE = meta.uiScale;
