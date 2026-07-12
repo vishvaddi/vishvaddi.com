@@ -28,8 +28,10 @@ import "../../styles/prepping.css";
       (affects the BMR and body-fat formulas).
     </p>
 
-    <div class="fit-tabs no-print" id="fit-tabs" role="tablist"></div>
-    <div id="calcs"></div>
+    <div class="fit-layout">
+      <nav class="fit-tabs no-print" id="fit-tabs" role="tablist" aria-label="Calculator sections"></nav>
+      <div id="calcs" class="fit-content"></div>
+    </div>
 
     <div class="btn-row no-print">
       <button type="button" class="btn" id="print">Save as PDF</button>
@@ -39,14 +41,23 @@ import "../../styles/prepping.css";
   </div>
 
   <style>
-    .fit-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 1.25rem; }
+    /* Sidebar section nav, same idea as the /site tools rail; collapses to
+       horizontal chips on small screens. */
+    .fit-layout { display: grid; grid-template-columns: 11rem 1fr; gap: 1.5rem; align-items: start; margin-top: 0.5rem; }
+    .fit-tabs { display: flex; flex-direction: column; gap: 0.25rem; position: sticky; top: 5rem; }
     .fit-tab {
-      padding: 0.45rem 1rem; font-size: 0.9rem; font-family: var(--font-sans); cursor: pointer;
-      color: var(--muted); background: var(--bg); border: 1px solid var(--rule); border-radius: 999px;
+      padding: 0.5rem 0.9rem; font-size: 0.9rem; font-family: var(--font-sans); cursor: pointer; text-align: left;
+      color: var(--muted); background: transparent; border: 1px solid transparent; border-left: 2px solid var(--rule); border-radius: 0;
     }
     .fit-tab:hover { color: var(--fg); }
-    .fit-tab.active { background: var(--fg); color: var(--bg); font-weight: 600; border-color: var(--fg); }
+    .fit-tab.active { color: var(--fg); font-weight: 600; border-left-color: var(--fg); }
     .fit-panel[hidden] { display: none; }
+    @media (max-width: 720px) {
+      .fit-layout { display: block; }
+      .fit-tabs { flex-direction: row; flex-wrap: wrap; gap: 0.4rem; position: static; margin-bottom: 1.25rem; }
+      .fit-tab { border: 1px solid var(--rule); border-radius: 999px; padding: 0.45rem 1rem; }
+      .fit-tab.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+    }
   </style>
 
   <script>
@@ -173,12 +184,117 @@ import "../../styles/prepping.css";
           };
         },
       },
+      plates: {
+        id: "plates", title: "Plate loading",
+        blurb: "Which plates go on each side of the bar. Standard pairs: 25, 20, 15, 10, 5, 2.5, 1.25 kg.",
+        fields: [
+          { id: "target", label: "Target weight (kg)", def: "100", min: "0", step: "0.5" },
+          { id: "bar", label: "Bar weight (kg)", def: "20", min: "0", step: "0.5" },
+        ],
+        compute: (v) => {
+          let side = (v.target - v.bar) / 2;
+          if (side < 0) return { rows: [["—", "target is lighter than the bar"]] };
+          const out: string[] = [];
+          for (const p of [25, 20, 15, 10, 5, 2.5, 1.25]) {
+            let n = 0;
+            while (side >= p - 1e-9) { side -= p; n++; }
+            if (n) out.push(`${n}× ${p}`);
+          }
+          const loaded = v.target - side * 2;
+          return {
+            rows: [
+              [out.join(", ") || "empty bar", "per side"],
+              [f1(loaded) + " kg", "actual loaded weight"],
+            ],
+            warn: side > 0.01 ? `Short by ${f1(side * 2)} kg — smallest pair is 1.25 kg.` : undefined,
+          };
+        },
+      },
+      standards: {
+        id: "standards", title: "Strength standards",
+        blurb: "Your lift relative to bodyweight, rated. Lift: 1 = squat, 2 = bench, 3 = deadlift, 4 = overhead press.",
+        fields: [
+          { id: "lift", label: "Lift (1–4)", def: "1", min: "1", step: "1" },
+          { id: "bw", label: "Bodyweight (kg)", def: "80", min: "1", step: "0.5" },
+          { id: "orm", label: "1RM (kg)", def: "100", min: "0", step: "0.5" },
+        ],
+        compute: (v) => {
+          // xBW thresholds: [novice, intermediate, advanced, elite]
+          const bands: Record<number, { name: string; t: number[] }> = {
+            1: { name: "Squat", t: [1.0, 1.5, 2.0, 2.5] },
+            2: { name: "Bench", t: [0.75, 1.0, 1.5, 2.0] },
+            3: { name: "Deadlift", t: [1.25, 1.75, 2.5, 3.0] },
+            4: { name: "OHP", t: [0.5, 0.75, 1.0, 1.25] },
+          };
+          const b = bands[Math.round(v.lift)];
+          if (!b || v.bw <= 0) return null;
+          const ratio = v.orm / v.bw;
+          const names = ["untrained", "novice", "intermediate", "advanced", "elite"];
+          let level = 0;
+          b.t.forEach((t) => { if (ratio >= t) level++; });
+          const next = level < 4 ? `${f1(b.t[level] * v.bw)} kg (${names[level + 1]})` : "—";
+          return {
+            rows: [
+              [f1(ratio) + "× BW", b.name + " ratio"],
+              [names[level], "level"],
+              [next, "next milestone"],
+            ],
+            warn: "Rough male barbell standards; adjust expectations for age, sex and history.",
+          };
+        },
+      },
+      pace: {
+        id: "pace", title: "Running pace",
+        blurb: "Pace and speed from distance and time.",
+        fields: [
+          { id: "km", label: "Distance (km)", def: "5", min: "0.1", step: "0.1" },
+          { id: "min", label: "Time (minutes)", def: "27", min: "0.1", step: "0.5" },
+        ],
+        compute: (v) => {
+          if (v.km <= 0 || v.min <= 0) return null;
+          const paceMin = v.min / v.km;
+          const mm = Math.floor(paceMin);
+          const ss = Math.round((paceMin - mm) * 60);
+          return {
+            rows: [
+              [`${mm}:${String(ss).padStart(2, "0")} /km`, "pace"],
+              [f1((v.km / v.min) * 60) + " km/h", "speed"],
+              [`${Math.floor((paceMin * 10) / 60)}:${String(Math.round((paceMin * 10) % 60)).padStart(2, "0")}`, "10 km at this pace (h:mm)"],
+            ],
+          };
+        },
+      },
+      hrzones: {
+        id: "hrzones", title: "Heart-rate zones (Karvonen)",
+        blurb: "Training zones from heart-rate reserve. Max HR estimated as 208 − 0.7 × age (Tanaka) if unknown.",
+        fields: [
+          { id: "age", label: "Age (years)", def: "34", min: "1", step: "1" },
+          { id: "rhr", label: "Resting HR (bpm)", def: "60", min: "20", step: "1" },
+        ],
+        compute: (v) => {
+          const max = 208 - 0.7 * v.age;
+          const hrr = max - v.rhr;
+          if (hrr <= 0) return null;
+          const z = (lo: number, hi: number) => `${f0(v.rhr + hrr * lo)}–${f0(v.rhr + hrr * hi)} bpm`;
+          return {
+            rows: [
+              [f0(max) + " bpm", "est. max HR"],
+              [z(0.5, 0.6), "Z1 recovery"],
+              [z(0.6, 0.7), "Z2 endurance (most volume here)"],
+              [z(0.7, 0.8), "Z3 tempo"],
+              [z(0.8, 0.9), "Z4 threshold"],
+              [z(0.9, 1.0), "Z5 max"],
+            ],
+          };
+        },
+      },
     };
 
     const tabs: { name: string; ids: string[] }[] = [
       { name: "Body", ids: ["bmi", "bf"] },
       { name: "Energy & food", ids: ["tdee", "macros", "water"] },
-      { name: "Strength", ids: ["orm"] },
+      { name: "Strength", ids: ["orm", "plates", "standards"] },
+      { name: "Cardio", ids: ["pace", "hrzones"] },
     ];
 
     const root = document.getElementById("calcs")!;

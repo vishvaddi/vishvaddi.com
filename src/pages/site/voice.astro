@@ -25,6 +25,10 @@ import "../../styles/site.css";
       <button type="button" class="btn btn-ghost" id="stamp">+ Timestamp</button>
       <span id="rec-status" style="color:var(--muted);font-size:0.9rem"></span>
     </div>
+    <label class="no-print" style="display:flex;align-items:center;gap:0.5rem;font-size:0.9rem;color:var(--muted);margin-top:0.5rem">
+      <input type="checkbox" id="keep-audio" />
+      Also keep an audio recording (on many phones this interrupts live transcription — leave off unless you need the audio file)
+    </label>
 
     <p id="no-speech" class="warn" hidden>Live transcription isn't supported in this browser — try Chrome, Edge or Safari. You can still record audio and type notes.</p>
     <div class="interim" id="interim"></div>

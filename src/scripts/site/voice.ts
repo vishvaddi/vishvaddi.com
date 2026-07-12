@@ -15,9 +15,11 @@ export function initVoice() {
 
   let rec: any = null;
   let listening = false;
+  let restarts = 0;
   let mediaRec: MediaRecorder | null = null;
   let chunks: Blob[] = [];
   let stream: MediaStream | null = null;
+  const keepAudio = document.getElementById("keep-audio") as HTMLInputElement | null;
 
   const append = (text: string) => {
     if (!text) return;
@@ -48,16 +50,31 @@ export function initVoice() {
         "no-speech": "No speech detected — keep talking.",
         "audio-capture": "No microphone found.",
         "network": "Speech service unreachable — live transcription needs an internet connection.",
+        "aborted": mediaRec
+          ? "Transcription was cut off by the audio recording — on this device the mic can't do both. Untick 'keep an audio recording' and press Record again."
+          : "Transcription stopped — press Record to restart.",
       };
       if (status) status.textContent = messages[e.error] || ("Speech error: " + e.error);
       // Fatal errors shouldn't silently restart in a loop.
-      if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "audio-capture") {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "audio-capture" || e.error === "aborted") {
         listening = false;
         if (recBtn) recBtn.textContent = "Record";
       }
     };
-    rec.onstart = () => { if (status) status.textContent = "Listening…"; };
-    rec.onend = () => { if (listening) { try { rec.start(); } catch { /* restart race — ignore */ } } };
+    rec.onstart = () => { restarts = 0; if (status) status.textContent = "Listening…"; };
+    rec.onend = () => {
+      // Continuous recognition times out on silence (~60s) — restart while the
+      // user still wants to listen, but back off if it dies instantly in a loop
+      // (mic contention) instead of spinning forever.
+      if (!listening) return;
+      if (++restarts > 30) {
+        listening = false;
+        if (recBtn) recBtn.textContent = "Record";
+        if (status) status.textContent = "Transcription keeps stopping — check mic access, or untick audio recording and try again.";
+        return;
+      }
+      try { rec.start(); } catch { /* restart race — ignore */ }
+    };
     try {
       rec.start();
     } catch (err: any) {
@@ -67,25 +84,32 @@ export function initVoice() {
 
   async function start() {
     listening = true;
+    restarts = 0;
+    mediaRec = null;
     if (recBtn) recBtn.innerHTML = '<span class="rec-dot"></span>Stop';
     if (status) status.textContent = "Listening…";
+    // Audio capture is opt-in: on many phones getUserMedia steals the mic from
+    // SpeechRecognition and live transcription silently dies. Transcription is
+    // the headline feature, so it wins by default.
+    if (keepAudio?.checked) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        chunks = [];
+        mediaRec = new MediaRecorder(stream);
+        mediaRec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+        mediaRec.onstop = () => {
+          const blob = new Blob(chunks, { type: mediaRec?.mimeType || "audio/webm" });
+          const dl = document.getElementById("dl-audio") as HTMLButtonElement | null;
+          if (dl) {
+            dl.hidden = false;
+            dl.onclick = () => download(`voice-${new Date().toISOString().slice(0, 10)}.webm`, URL.createObjectURL(blob));
+          }
+          stream?.getTracks().forEach((t) => t.stop());
+        };
+        mediaRec.start();
+      } catch { /* audio optional — transcription still works */ }
+    }
     startSpeech();
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      chunks = [];
-      mediaRec = new MediaRecorder(stream);
-      mediaRec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-      mediaRec.onstop = () => {
-        const blob = new Blob(chunks, { type: mediaRec?.mimeType || "audio/webm" });
-        const dl = document.getElementById("dl-audio") as HTMLButtonElement | null;
-        if (dl) {
-          dl.hidden = false;
-          dl.onclick = () => download(`voice-${new Date().toISOString().slice(0, 10)}.webm`, URL.createObjectURL(blob));
-        }
-        stream?.getTracks().forEach((t) => t.stop());
-      };
-      mediaRec.start();
-    } catch { /* audio optional — transcription still works */ }
   }
 
   function stop() {
