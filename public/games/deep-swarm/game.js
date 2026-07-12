@@ -9,6 +9,22 @@ const ctx = canvas.getContext('2d');
 const PI2 = Math.PI * 2;
 const keys = {};
 
+// HUD TEXT SCALE — intercept every ctx.font assignment and scale the px size.
+// One knob (pause menu) instead of two hundred font-string edits.
+let UI_SCALE = 1;
+{
+    const fontDesc = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'font');
+    Object.defineProperty(ctx, 'font', {
+        set(v) { fontDesc.set.call(this, UI_SCALE === 1 ? v : v.replace(/(\d+(?:\.\d+)?)px/, (m, n) => (parseFloat(n) * UI_SCALE).toFixed(1) + 'px')); },
+        get() { return fontDesc.get.call(this); },
+    });
+}
+// Backplate behind any text drawn over the world — readability over the dark
+function drawPlate(x, y, pw, ph, alpha) {
+    ctx.fillStyle = `rgba(2,8,14,${alpha != null ? alpha : ((typeof meta !== 'undefined' && meta.hudContrast) ? 0.85 : 0.62)})`;
+    ctx.beginPath(); ctx.roundRect(x, y, pw, ph, 6); ctx.fill();
+}
+
 // =====================================================================
 // POST-FX — WebGL fullscreen pass over the 2D scene: soft bloom, chromatic
 // aberration, depth colour-grade, vignette, grain, scanlines, and a
@@ -110,7 +126,16 @@ function postFX(ts) {
 // DEPTH COLOR SYSTEM — Subnautica-style zone palette
 // Everything shifts smoothly: HUD, viewport, particles, mood
 // =====================================================================
+// On Pelagos-3 the zones are named for what was built there, not what lives there.
+const P3_ZONE_NAMES = { SUNLIGHT: 'FLOODLIGHT SHELF', TWILIGHT: 'TURBINE FIELD', MIDNIGHT: 'FOUNDRY DEEP', ABYSSAL: 'REACTOR SHADOW', 'RED LAYER': 'REACTOR SHADOW', HADAL: 'THE SCAR' };
 function getDepthPalette(depth) {
+    const pal = getDepthPaletteBase(depth);
+    if (typeof game !== 'undefined' && game && game.moon === 'p3' && P3_ZONE_NAMES[pal.zone]) {
+        return { ...pal, zone: P3_ZONE_NAMES[pal.zone] };
+    }
+    return pal;
+}
+function getDepthPaletteBase(depth) {
     // Returns { accent, accentDim, bg, text, textDim, zone, glow }
     // Sunlight (0-200): warm gold/teal. Twilight (200-1000): cool blue.
     // Midnight (1000-2000): deep indigo. Abyssal (2000-4000): violet-black.
@@ -752,8 +777,41 @@ function defaultMeta() {
 let meta = loadMeta();
 // Ensure lore array exists in meta
 if (!meta.loreFragments) meta.loreFragments = [];
+if (!meta.signal) meta.signal = 0;   // SIGNAL ⌁ — run score distilled; buys sealed archive fragments
+
+// DAILY DIVE — date-seeded PRNG covers the dive BRIEF (contracts, card hand,
+// creature pool, trench shape): everyone gets the same setup, the run itself
+// stays live. Armed from the title with [D]; disarmed after the run is built.
+let dailyRng = null;
+let dailyArmed = false;
+function dayKeyUTC() { return new Date().toISOString().slice(0, 10); }
+function mulberry32(a) {
+    return function () {
+        a |= 0; a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+function seedFromString(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return h >>> 0; }
+function RND() { return dailyRng ? dailyRng() : Math.random(); }
 // Fusion discovery log — persists across DSV lives (knowledge survives the hull)
 if (!meta.fusionsDiscovered) meta.fusionsDiscovered = [];
+// RESEARCH TIERS per species (BioShock camera × Subnautica scans):
+// 1 = pinged (name/stats, +8% dmg) · 2 = observed undetected 10s (+14%)
+// 3 = witnessed feeding/display or analysed an aberrant (+20%, weakness note)
+if (!meta.research) {
+    meta.research = {};
+    for (const id of (meta.scannedCreatures || [])) meta.research[id] = 1;   // migrate old scans
+}
+if (!meta.observeSec) meta.observeSec = {};
+function researchTier(typeId) { return meta.research[typeId] || 0; }
+
+// Readability settings + staged-onboarding memory
+if (!meta.uiScale) meta.uiScale = 1;
+if (meta.hudContrast === undefined) meta.hudContrast = false;
+if (!meta.hintsSeen) meta.hintsSeen = [];
+UI_SCALE = meta.uiScale;
 // Migrate missing meta fields
 if (meta.volume === undefined) meta.volume = 0.8;
 if (meta.muted === undefined) meta.muted = false;
@@ -846,6 +904,28 @@ const FAB_RECIPES = [
     { key: 'optics',  name: 'TARGETING OPTICS  +5% damage',     cost: { crystal: 2, wiring: 1 }, req: 10 },
 ];
 function fabUnlocked(fr) { return (meta.scannedCreatures ? meta.scannedCreatures.length : 0) >= (fr.req || 0); }
+
+// =====================================================================
+// MODULE BAY — biomimetic sub modules. Research IS the tech tree:
+// studying a creature (tier 2+) unlocks the module derived from its
+// biology; materials pay the fabrication cost. Slots: 2 hull, 2 systems,
+// 1 prow — chosen at the Mooring, applied at dive start.
+// =====================================================================
+if (!meta.modulesOwned) meta.modulesOwned = [];
+if (!meta.modulesEquipped) meta.modulesEquipped = [];
+const MODULE_SLOTS = { hull: 2, systems: 2, prow: 1 };
+const MODULE_DEFS = [
+    { id: 'anechoic',  slot: 'hull',    name: 'ANECHOIC COATING',  desc: 'Detection radius -30%. Peeled from the Vampyroteuthis playbook.', req: { type: 'vampyro', tier: 2 },   cost: { wiring: 3, crystal: 1 } },
+    { id: 'lattice',   slot: 'hull',    name: 'PRESSURE LATTICE',  desc: '+800m crush depth. Bone Coral rebar geometry.',                   req: { type: 'bonecoral', tier: 2 }, cost: { corepl: 2, scrap: 4 } },
+    { id: 'chitin',    slot: 'hull',    name: 'CHITIN CLADDING',   desc: '+20 max hull, +1 armor. Grown to the Gulper intake spec.',        req: { type: 'gulper', tier: 2 },    cost: { scrap: 6, biosamp: 2 } },
+    { id: 'silprops',  slot: 'systems', name: 'SILENT PROPS',      desc: 'Silent running at 75% speed (was 55%). The Pale Manta glide.',    req: { type: 'manta', tier: 2 },     cost: { wiring: 2, corecell: 1 } },
+    { id: 'passonar',  slot: 'systems', name: 'PASSIVE SONAR',     desc: 'Pings linger twice as long; wide minimap. Listener architecture.',req: { type: 'listener', tier: 2 },  cost: { crystal: 1, wiring: 2 } },
+    { id: 'capbank',   slot: 'systems', name: 'CAPACITOR BANK',    desc: '+25 battery. Reverse-fed from the Arc Lamprey.',                  req: { type: 'lamprey', tier: 2 },   cost: { corecell: 2, wiring: 1 } },
+    { id: 'grapnel',   slot: 'prow',    name: 'GRAPNEL PROW',      desc: 'Salvage from 170px, 40% faster. The Davit Wraith arm, tamed.',    req: { type: 'grappler', tier: 2 },  cost: { scrap: 4, corecell: 1 } },
+    { id: 'ram',       slot: 'prow',    name: 'RAM PROW',          desc: 'Dashing through creatures deals 30 damage. Hermit doctrine.',     req: { type: 'hermit', tier: 2 },    cost: { corepl: 1, scrap: 5 } },
+];
+function moduleUnlocked(m) { return (meta.research[m.req.type] || 0) >= m.req.tier; }
+function equippedInSlot(slot) { return meta.modulesEquipped.filter(id => (MODULE_DEFS.find(m => m.id === id) || {}).slot === slot).length; }
 function matsLabel(cost) {
     return Object.keys(cost).map(k => `${cost[k]} ${BASE_MATERIALS[k].name}`).join(', ');
 }
@@ -1036,14 +1116,14 @@ function dealCards(runCount) {
     const hand = [];
     const available = [...CARD_DEFS];
     for (let i = 0; i < 5 && available.length > 0; i++) { // 5 cards to choose from
-        const roll = Math.random();
+        const roll = RND();
         let pool;
         if (roll < legendaryChance) pool = available.filter(c => c.rarity === 'legendary');
         else if (roll < legendaryChance + rareChance) pool = available.filter(c => c.rarity === 'rare');
         else if (roll < 0.6) pool = available.filter(c => c.rarity === 'uncommon');
         else pool = available.filter(c => c.rarity === 'common');
         if (pool.length === 0) pool = available;
-        const pick2 = pool[Math.floor(Math.random() * pool.length)];
+        const pick2 = pool[Math.floor(RND() * pool.length)];
         hand.push(pick2);
         available.splice(available.indexOf(pick2), 1);
     }
@@ -1199,6 +1279,56 @@ function addNereidLog(g, text) {
     if (!g.nereidLog) g.nereidLog = [];
     g.nereidLog.unshift({ text, time: g.runTime });
     if (g.nereidLog.length > 5) g.nereidLog.pop();
+}
+
+// Role-based field notes revealed by research tiers (bespoke per-creature
+// entries can replace these later — the register is set)
+const ROLE_BEHAVIOR = {
+    prey: 'Grazes the marine snow. Flees vibration. The trench uses it as a currency.',
+    pack: 'Hunts in relays — one darts, the rest correct. Never all committed at once.',
+    ambush: 'Holds station until the range is certain. Its patience is not a mood; it is a design.',
+    apex: 'Patrols a territory it does not need to mark. Everything else already knows.',
+    scavenger: 'Follows the blood gradient. Arrives second, leaves last.',
+    sessile: 'Anchored. Its reach is fixed and it knows the exact edge of it.',
+    sensor: 'Does not hunt. It reports. What listens to the report hunts.',
+    support: 'Tends the others. Its manifest does not include you.',
+    mid: 'An opportunist — tests, withdraws, re-tests. Punishes inattention, not strength.',
+};
+const ROLE_WEAKNESS = {
+    prey: 'Weakness: panic. Any wound sends it into open water.',
+    pack: 'Weakness: break the relay — kill the darter and the rest reset.',
+    ambush: 'Weakness: it commits fully. A dodged strike leaves it exposed.',
+    apex: 'Weakness: overconfidence. It does not expect to be hurt.',
+    scavenger: 'Weakness: greed. It will feed under fire.',
+    sessile: 'Weakness: fixed arcs. Stand where the mounts do not point.',
+    sensor: 'Weakness: silence starves it of anything to say.',
+    support: 'Weakness: kill the patient and the surgeon has no purpose.',
+    mid: 'Weakness: pressure. It has no answer to being pursued.',
+};
+// Raise a species' research tier (never lowers). Rewards scale with the jump.
+function creditResearch(g, typeId, tier, reason) {
+    const cur = meta.research[typeId] || 0;
+    if (tier <= cur) return;
+    if (tier >= 2 && cur < 1) return;   // must be identified before it can be studied
+    meta.research[typeId] = tier;
+    saveMeta();
+    const def = ENEMY_TYPES[typeId];
+    if (!def || !g || tier === 1) return;   // tier 1 messaging is the existing scan flow
+    const role = ENEMY_ROLES[typeId] || 'prey';
+    g.streak = `RESEARCH T${tier} — ${def.name.toUpperCase()}`;
+    g.streakTimer = 2.5;
+    sfxScanCreature();
+    if (tier === 2) addNereidLog(g, `${def.name} — behavioural study complete (${reason}). ${ROLE_BEHAVIOR[role]}`);
+    if (tier === 3) addNereidLog(g, `${def.name} — full analysis (${reason}). ${ROLE_WEAKNESS[role]} Targeting adjusted.`);
+}
+
+// Staged onboarding — each hint fires once ever (persisted), one at a time
+function maybeHint(g, id, text) {
+    if (!meta.hintsSeen) meta.hintsSeen = [];
+    if (meta.hintsSeen.includes(id) || g._hint) return;
+    meta.hintsSeen.push(id);
+    saveMeta();
+    g._hint = { text, t: 8 };
 }
 
 // --- DESCENT ecology horror narration (rate-limited — dread, not spam) ---
@@ -1491,6 +1621,34 @@ const ENEMY_TYPES = {
         lore: 'Swarms any breach — a hull split, a coolant line, an open wound. Aggressive. It appears only when something down here is bleeding. Often that is you.',
     },
 
+    // ------------- NEW ARCHETYPES — attacks on position, vision, power, trust -------------
+    splitter: {
+        name: 'Cutting Bloom', hp: 30, speed: 45, size: 13, color: '#7AD0A0',
+        xp: 2, damage: 5, gold: 2, minWave: 3, ai: 'drift',
+        lore: 'A colony budded around a bundle of snapped cutting discs. Wound it and it does not die. It divides. The discs are shared out among the children.',
+    },
+    inker: {
+        name: 'Ballast Squid', hp: 45, speed: 70, size: 13, color: '#4A5A8A',
+        xp: 3, damage: 6, gold: 3, minWave: 7, ai: 'inker',
+        lore: 'Grew a bladder around a ruptured bilge tank. When pressed, it vents the tank — a black that even the black down here cannot see through.',
+    },
+    grappler: {
+        name: 'Davit Wraith', hp: 130, speed: 40, size: 17, color: '#8A7050',
+        xp: 6, damage: 12, gold: 5, minWave: 12, ai: 'tether',
+        lore: 'A salvage davit, arm and winch intact, grown patient. It does not chase. It hooks, and it reels. Everything it has ever caught came to it.',
+    },
+    latcher: {
+        name: 'Bilge Leech', hp: 22, speed: 130, size: 8, color: '#B0A040',
+        xp: 3, damage: 0, gold: 3, minWave: 15, ai: 'latch',
+        lore: 'A siphon pump that learned to choose its tank. It wants your charge, not your life. It has never understood that, for you, these are the same thing.',
+    },
+    lamprey: {
+        name: 'Arc Lamprey', hp: 90, speed: 60, size: 12, color: '#60C0E0',
+        xp: 6, damage: 4, gold: 5, minWave: 17, ai: 'shooter',
+        attackCd: 3.2, attackRange: 340, projDmg: 4, projSpeed: 260, projColor: '#80E0FF', emp: true,
+        lore: 'Feeds on live current through a stripped transmission cable. Its bite does not breach hulls. It empties them. The dark it leaves behind does the rest.',
+    },
+
     // ------------- CARRIER — the harvest-or-spare choice -------------
     carrier: {
         name: 'Clutch Carrier', hp: 60, speed: 20, size: 16, color: '#FFD060',
@@ -1549,6 +1707,15 @@ const WEAPON_DEFS = {
     maelstrom:       { name: 'MAELSTROM',        baseDmg: 60,  baseCooldown: 2.5, baseArea: 280, desc: 'TSUNAMI + LANCE = sweeping spear-pulse', evolved: true, apex: true },
     sirens_call:     { name: "SIREN'S CALL",     baseDmg: 140, baseCooldown: 3.0, baseArea: 220, desc: 'TSUNAMI + MINEFIELD = lure + obliterate', evolved: true, apex: true },
     wrath:           { name: 'WRATH OF THE DEEP',baseDmg: 180, baseCooldown: 1.8, baseArea: 90,  desc: 'LANCE + MINEFIELD = homing kill-mines', evolved: true, apex: true },
+};
+
+// Loadout icons — every weapon reads at a glance (BioShock plasmid row)
+const WEAPON_GLYPHS = {
+    sonar: '◉', torpedo: '➤', field: '✳', depthcharge: '●', harpoon: '†', lure: '❖',
+    tsunami: '◎', leviathan_lance: '⇶', abyssal_mine: '☄', echo_salvo: '⊚', pressure_burst: '◍',
+    echo_lance: '⋔', false_chorus: '♫', volt_torpedo: '⚡', cluster_warhead: '⁂', baited_warhead: '⊙',
+    capacitor_nova: '✺', live_wire: '⌁', galvanic_bait: '◈', dead_spike: '‡', winch: '↩',
+    maelstrom: '❋', sirens_call: '♆', wrath: '☠',
 };
 
 // --- Weapon fusion recipes ---
@@ -1763,53 +1930,8 @@ const INTRO_SCREENS = [
         'NEREID-II is equipped with an onboard intelligence',
         'system designated NEREID. She will assist you.',
     ], nereid: '📻 NEREID-II online. Running pre-dive diagnostics.', delay: 0 },
-    { bg: '#020406', text: [
-        '[ MOVEMENT BRIEFING ]',
-        '',
-        '🎮 WASD — Thruster control',
-        '   Your sub has inertia. The ocean is heavy.',
-        '   You will drift. Plan your movements.',
-        '',
-        '⚡ SPACE / SHIFT — Emergency dash',
-        '   Brief burst of speed. Invulnerable during dash.',
-        '   Use it to escape. 0.8s cooldown.',
-    ], nereid: '📻 Thrusters nominal. Dash system charged.', delay: 0 },
-    { bg: '#020408', text: [
-        '[ WEAPONS BRIEFING ]',
-        '',
-        '📡 Most weapons fire automatically.',
-        '   SONAR is MANUAL — press [F] or CLICK to ping.',
-        '   Each pulse: damage ring + reveal in the dark.',
-        '   Use it deliberately. Auto-fire unlocks later.',
-        '',
-        '⬆️ Kill creatures → collect XP gems → level up',
-        '   Each level: choose 1 of 3 upgrades.',
-        '   AUTO-PING SYSTEM unlocks at sonar LV3+.',
-    ], nereid: '📻 Weapons hot. Sonar pulse calibrated. Manual fire only — for now.', delay: 0 },
-    { bg: '#03050A', text: [
-        '[ SANITY ADVISORY ]',
-        '',
-        '🧠 Your sanity will degrade over time.',
-        '   The deeper you go, the faster it falls.',
-        '   Below 40%: visual distortion. Phantom contacts.',
-        '   Below 10%: NEREID may become... unreliable.',
-        '',
-        '   Some things down here affect the mind',
-        '   in ways we do not fully understand.',
-    ], nereid: '📻 Pilot neural baseline recorded. Try to stay calm.', delay: 0 },
-    { bg: '#04060C', text: [
-        '[ REGARDING THE CREATURES ]',
-        '',
-        'The organisms you will encounter are catalogued',
-        'in your onboard codex. Most are hostile.',
-        '',
-        'Some exhibit behaviour inconsistent with',
-        'known marine biology. Do not attempt',
-        'communication. Do not stop moving.',
-        '',
-        'Specimen retrieval is your PRIMARY objective.',
-        'Your survival is... appreciated.',
-    ], nereid: '📻 I\'ve read the previous pilot reports. Don\'t read them.', delay: 0 },
+    // (Movement / weapons / sanity / creature briefings removed — those teach
+    // in-run now, one hint at a time, the moment each mechanic first matters.)
     { bg: '#05080E', text: [
         '[ FINAL NOTE ]',
         '',
@@ -1873,6 +1995,7 @@ const ENEMY_ROLES = {
     tubeworm:'sessile', polyp:'sessile', bonecoral:'sessile',
     squid:'sensor', listener:'sensor', whisperer:'sensor', voideye:'sensor',
     tissuedrift:'support', dragonfish:'mid', presseel:'mid',
+    splitter:'prey', inker:'scavenger', grappler:'ambush', latcher:'pack', lamprey:'mid',
 };
 // Detection radius (px) by role — apex/sensor perceive farthest; ambush waits short; prey skittish.
 const ROLE_DETECT = { prey:200, pack:360, ambush:240, apex:520, scavenger:300, sessile:220, sensor:600, support:260, mid:380 };
@@ -1949,7 +2072,9 @@ function createGame() {
         ascendStartTime: 0,
         deepestDepth: 0,        // tracks how deep we got (for ascent calculations)
         // Per-dive trench seed — generates a unique jagged perimeter every run
-        trenchSeed: Math.random() * 1000,
+        trenchSeed: RND() * 1000,
+        // Which moon this dive is on — P3 is the machinery-only dead ocean
+        moon: (meta.p3Unlocked && meta.destination === 'p3') ? 'p3' : 'p9',
         // Per-run creature pool — random subset of each biome's species
         creaturePool: rollCreaturePool(),
         // Already-scanned creatures inherit from meta — same DSV life knows them already
@@ -2014,6 +2139,17 @@ function createGame() {
             g.player.battery += (fab.reactor || 0) * 15;
             g.player.dmgMult *= 1 + (fab.optics || 0) * 0.05;
         }
+        // MODULE BAY: apply equipped biomimetic modules
+        for (const mid of (meta.modulesEquipped || [])) {
+            if (mid === 'anechoic') g.player._detectMult = 0.7;
+            if (mid === 'lattice')  g.player._crushDepth += 800;
+            if (mid === 'chitin')   { g.player.maxHp += 20; g.player.hp = g.player.maxHp; g.player.armor += 1; }
+            if (mid === 'silprops') g.player._silentProps = true;
+            if (mid === 'passonar') { g.player._minimapBoost = true; g.player._passiveSonar = true; }
+            if (mid === 'capbank')  g.player.battery += 25;
+            if (mid === 'grapnel')  { g.player._salvageRange = 170; g.player._salvageSpd = 1.4; }
+            if (mid === 'ram')      g.player._ramProw = true;
+        }
         // Use pre-rolled objectives shown to the player on the card-draft screen
     if (pendingObjectives && pendingObjectives.length) {
         g.objectives = pendingObjectives;
@@ -2027,10 +2163,19 @@ function createGame() {
 // --- Spawning ---
 // Per-run creature pool — at game start we randomly pick 3-5 species per biome.
 // Different runs feature different bestiaries → real variance per dive.
+// P3 species — the ones the machinery grew INTO. On the Scar, only these dive.
+const P3_SPECIES = new Set([
+    'hermit', 'anglerfish', 'eel', 'presseel', 'squid', 'glassoct', 'gulper',
+    'voideye', 'listener', 'whisperer', 'bonesmoker', 'pressureform', 'lurker',
+    'splitter', 'inker', 'grappler', 'latcher', 'lamprey', 'trenchworm', 'polyp',
+]);
+
 function rollCreaturePool() {
+    const p3 = meta.p3Unlocked && meta.destination === 'p3';
     const biomes = { SUNLIGHT: [], TWILIGHT: [], MIDNIGHT: [], ABYSSAL: [], RED_LAYER: [], HADAL: [] };
     for (const [id, e] of Object.entries(ENEMY_TYPES)) {
         if (e.isBoss || e.carrier) continue;   // carriers spawn on their own clock, never in waves
+        if (p3 && !P3_SPECIES.has(id)) continue;   // dead ocean — only the machine-fused remain
         let biome;
         if (e.minWave <= 4) biome = 'SUNLIGHT';
         else if (e.minWave <= 9) biome = 'TWILIGHT';
@@ -2040,13 +2185,26 @@ function rollCreaturePool() {
         else biome = 'HADAL';
         biomes[biome].push(id);
     }
+    // P3 filter can empty a tier — refill from the full roster rather than
+    // starving spawns (the U2 empty-pool lesson, learned once already).
+    if (p3) for (const biome in biomes) {
+        if (biomes[biome].length) continue;
+        for (const [id, e] of Object.entries(ENEMY_TYPES)) {
+            if (e.isBoss || e.carrier) continue;
+            const tier = e.minWave <= 4 ? 'SUNLIGHT' : e.minWave <= 9 ? 'TWILIGHT' : e.minWave <= 13 ? 'MIDNIGHT' : e.minWave <= 16 ? 'ABYSSAL' : e.minWave <= 18 ? 'RED_LAYER' : 'HADAL';
+            if (tier === biome) biomes[biome].push(id);
+        }
+    }
     const pool = {};
     for (const biome in biomes) {
         const list = biomes[biome];
-        const count = Math.min(list.length, 3 + Math.floor(Math.random() * 3));   // 3–5 per biome
-        const shuffled = [...list].sort(() => Math.random() - 0.5);
+        const count = Math.min(list.length, 3 + Math.floor(RND() * 3));   // 3–5 per biome
+        const shuffled = [...list].sort(() => RND() - 0.5);
         pool[biome] = new Set(shuffled.slice(0, count));
     }
+    // Guarantee the first waves have SOMETHING — a rolled SUNLIGHT pool with no
+    // minWave-1 species left the opening minutes empty (and starved forced spawns)
+    if (![...pool.SUNLIGHT].some(id => ENEMY_TYPES[id].minWave <= 1)) pool.SUNLIGHT.add('jellyfish');
     return pool;
 }
 
@@ -2066,7 +2224,7 @@ function getSpawnableTypes(wave, g) {
 
 function spawnEnemy(g, forceType, forcePos) {
     const types = getSpawnableTypes(g.wave, g);
-    if (!types.length) return;
+    if (!types.length && !forceType) return;   // forced spawns (bosses, carriers, events) must not starve
     // Weight toward newer types
     const type = forceType || types[Math.floor(Math.random() * types.length)];
     const angle = forcePos ? 0 : Math.random() * PI2;
@@ -2570,7 +2728,7 @@ function contractMats(risk) {
 }
 function rollContractBoard() {
     const pool = [...OBJECTIVE_POOL];
-    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(RND() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
     contractBoard = pool.slice(0, 5).map(o => {
         const risk = contractRisk(o);
         return { ...o, progress: 0, complete: false, failed: false, claimed: false, risk, _mats: contractMats(risk) };
@@ -2652,21 +2810,66 @@ const OBSTACLE_TYPES_BY_ZONE = {
         { kind: 'kelp',    r: 28, color: '#2A5A4A' },
         { kind: 'rock',    r: 42, color: '#252830' },
         { kind: 'spire',   r: 30, color: '#2A2A38' },
+        { kind: 'bones',   r: 46, color: '#8A8878' },
     ],
     MIDNIGHT: [
         { kind: 'spire',   r: 36, color: '#1A1A2A' },
         { kind: 'glowcap', r: 22, color: '#5060A0' },
         { kind: 'rock',    r: 44, color: '#1A1820' },
+        { kind: 'bones',   r: 50, color: '#6A6A5E' },
+        { kind: 'seep',    r: 26, color: '#3A3E42' },
     ],
     ABYSSAL: [
         { kind: 'spire',   r: 40, color: '#1A0A1A' },
         { kind: 'vent',    r: 28, color: '#A04030' },
         { kind: 'organic', r: 32, color: '#6A2040' },
+        { kind: 'seep',    r: 30, color: '#30343A' },
     ],
     HADAL: [
         { kind: 'organic', r: 40, color: '#4A2030' },
         { kind: 'crystal', r: 26, color: '#9050D0' },
         { kind: 'spire',   r: 50, color: '#0A0408' },
+        { kind: 'chitin',  r: 44, color: '#201018' },
+        { kind: 'monolith', r: 36, color: '#0E1216' },
+    ],
+};
+
+// PELAGOS-3 — THE SCAR. No life grew here; everything on the floor was built,
+// then drowned. Machinery density climbs with depth.
+const OBSTACLE_TYPES_P3 = {
+    SUNLIGHT: [
+        { kind: 'debris',   r: 34, color: '#2A2E30' },
+        { kind: 'rock',     r: 38, color: '#33302C' },
+        { kind: 'cable',    r: 30, color: '#22262A' },
+    ],
+    TWILIGHT: [
+        { kind: 'debris',   r: 40, color: '#262A2C' },
+        { kind: 'monolith', r: 30, color: '#12181C' },
+        { kind: 'cable',    r: 34, color: '#1E2226' },
+        { kind: 'rock',     r: 40, color: '#2A2824' },
+    ],
+    MIDNIGHT: [
+        { kind: 'monolith', r: 34, color: '#101418' },
+        { kind: 'debris',   r: 44, color: '#20242A' },
+        { kind: 'vent',     r: 26, color: '#804838' },
+        { kind: 'cable',    r: 36, color: '#1A1E22' },
+    ],
+    ABYSSAL: [
+        { kind: 'monolith', r: 40, color: '#0E1216' },
+        { kind: 'debris',   r: 48, color: '#1C2026' },
+        { kind: 'vent',     r: 30, color: '#904030' },
+        { kind: 'seep',     r: 28, color: '#2A3034' },
+    ],
+    RED_LAYER: [
+        { kind: 'monolith', r: 42, color: '#140E12' },
+        { kind: 'debris',   r: 50, color: '#241C20' },
+        { kind: 'vent',     r: 32, color: '#A03828' },
+    ],
+    HADAL: [
+        { kind: 'monolith', r: 48, color: '#0A0E12' },
+        { kind: 'monolith', r: 30, color: '#10141A' },
+        { kind: 'debris',   r: 54, color: '#181C22' },
+        { kind: 'cable',    r: 44, color: '#14181C' },
     ],
 };
 
@@ -2748,7 +2951,8 @@ function spawnWorldObjects(g, dt) {
     if (!g.obstacles) g.obstacles = [];
     if (!g.wrecks) g.wrecks = [];
     const zone = zoneFromDepth(g.depth);
-    const types = OBSTACLE_TYPES_BY_ZONE[zone] || OBSTACLE_TYPES_BY_ZONE.SUNLIGHT;
+    const table = g.moon === 'p3' ? OBSTACLE_TYPES_P3 : OBSTACLE_TYPES_BY_ZONE;
+    const types = table[zone] || table.SUNLIGHT;
     const wb = g.worldBounds;
 
     // 3D DEPTH MODEL — each obstacle has its own depth (obDepth) ahead of the sub.
@@ -2832,16 +3036,28 @@ function spawnWorldObjects(g, dt) {
         if (g.depth >= 800 && g.depth < 2500 && Math.random() < 0.5) kind = 'whalefall';
         else if (g.depth >= 1500 && Math.random() < 0.45) kind = 'blackwater';
         else if (g.depth >= 2200 && Math.random() < 0.6) kind = 'vent';
+        else if (g.depth >= 500 && Math.random() < 0.4) kind = 'triangulation';
         if (kind) {
             const a = Math.random() * PI2;
             const r = Math.sqrt(Math.random()) * (wb.radius || 1000) * 0.7;
             const x = (wb.cx || 0) + Math.cos(a) * r;
             const y = (wb.cy || 0) + Math.sin(a) * r;
             const obDepth = (g.depth || 0) + 10 + Math.random() * 30;
-            g.specialEvents.push({ kind, x, y, r: kind === 'whalefall' ? 60 : kind === 'blackwater' ? 300 : 36, obDepth, life: kind === 'blackwater' ? 90 : 60, looted: false, scavengerTimer: 0, ventPulse: 0 });
+            const ev = { kind, x, y, r: kind === 'whalefall' ? 60 : kind === 'blackwater' ? 300 : 36, obDepth, life: kind === 'blackwater' ? 90 : kind === 'triangulation' ? 75 : 60, looted: false, scavengerTimer: 0, ventPulse: 0 };
+            if (kind === 'triangulation') {
+                // Three beacons sing at one hidden point — read where the rings meet.
+                ev.beacons = [0, 1, 2].map(i => {
+                    const ba = (i / 3) * PI2 + Math.random() * 1.2;
+                    const bd = 170 + Math.random() * 160;
+                    return { x: x + Math.cos(ba) * bd, y: y + Math.sin(ba) * bd, dist: 0 };
+                });
+                ev.beacons.forEach(b => { b.dist = Math.hypot(b.x - x, b.y - y); });
+            }
+            g.specialEvents.push(ev);
             if (kind === 'whalefall') addNereidLog(g, 'Whale fall detected. Massive carcass. Scavengers will gather.');
             if (kind === 'vent') addNereidLog(g, 'Hydrothermal vent. Heat. Fauna. Easy way to die.');
             if (kind === 'blackwater') addNereidLog(g, 'Blackwater ahead. A region my lamps cannot answer. Something valuable sinks into places like that.');
+            if (kind === 'triangulation') addNereidLog(g, 'Three beacons, one buried signal. Where the rings agree, Pilot — that is where it is.');
         }
     }
     // Tick events
@@ -2912,6 +3128,22 @@ function spawnWorldObjects(g, dt) {
                     addNereidLog(g, 'Recovered. Whatever sank here, we have its cargo. Now leave the way we came.');
                 }
             }
+        } else if (ev.kind === 'triangulation') {
+            // TRIANGULATION — reach the point where the three beacon rings agree.
+            const pd = Math.hypot(g.player.x - ev.x, g.player.y - ev.y);
+            if (pd < 45 && Math.abs(g.depth - ev.obDepth) < 12 && !ev.looted) {
+                ev.looted = true;
+                ev.life = Math.min(ev.life, 4);
+                const sig = 12 + Math.floor((g.depth || 0) / 250);
+                meta.signal = (meta.signal || 0) + sig;
+                g.goldEarned += 60;
+                dropLore(g);
+                g.floatingTexts.push({ x: ev.x, y: ev.y - 20, text: `⌁ +${sig} SIGNAL`, color: '#B0A0E8', life: 1.8, vy: -26 });
+                g.floatingTexts.push({ x: ev.x, y: ev.y + 2, text: '+60g · LORE', color: '#FFD040', life: 1.6, vy: -22 });
+                g.flashTimer = 0.2;
+                saveMeta();
+                addNereidLog(g, 'Signal source secured. Someone wanted this found — or wanted to know who could find it.');
+            }
         } else if (ev.kind === 'vent') {
             // HEAL aura when player is at the vent's depth and near it
             ev.ventPulse += dt;
@@ -2935,7 +3167,7 @@ function spawnWorldObjects(g, dt) {
 function updateWreckInteraction(g, dt) {
     const p = g.player;
     g.nearestWreck = null;
-    let bestD = 90;
+    let bestD = p._salvageRange || 90;   // GRAPNEL PROW reaches further
     for (const wr of (g.wrecks || [])) {
         if (wr.salvaged) continue;
         const d = Math.hypot(wr.x - p.x, wr.y - p.y);
@@ -2952,7 +3184,7 @@ function updateWreckInteraction(g, dt) {
     // Salvage hold — E key (handled in keydown); here we tick the timer
     const eHeld = !!keys['e'];
     if (g.nearestWreck && eHeld) {
-        g.salvageHoldTime = (g.salvageHoldTime || 0) + dt;
+        g.salvageHoldTime = (g.salvageHoldTime || 0) + dt * (p._salvageSpd || 1);
         if (g.salvageHoldTime >= 1.5) {
             g.nearestWreck.salvaged = true;
             g.nearestWreck.loot.give(g);
@@ -3064,8 +3296,9 @@ function damageEnemy(g, e, dmg) {
     if (p._depthDmgMult) finalDmg *= p._depthDmgMult;
     if (p._corruptDmgMult) finalDmg *= p._corruptDmgMult;
     if (p._depthDiverMult) finalDmg *= p._depthDiverMult;
-    // Feature 9: Scan bonus +10% damage against scanned type
-    if (meta.scannedCreatures.includes(e.typeId)) finalDmg *= 1.1;
+    // Research bonus vs studied species: T1 +8%, T2 +14%, T3 +20%
+    const _rt = meta.research[e.typeId] || 0;
+    if (_rt > 0) finalDmg *= [1, 1.08, 1.14, 1.2][Math.min(3, _rt)];
     if (e.aberrant && meta.aberrantScanned.includes('aberrant_' + e.typeId)) finalDmg *= 1.1;
     e.hp -= finalDmg;
     e.flash = 0.1;
@@ -3536,14 +3769,30 @@ function update(dt) {
     if (phase !== 'playing') return;
     const g = game;
     g._chainExplosionsThisFrame = 0; // reset per-frame chain budget
+    if (g.moon === 'p3' && !g._p3Announced) {
+        g._p3Announced = true;
+        addNereidLog(g, 'Pelagos-3. No survey data. No biology on record. Everything below us was BUILT, Pilot — and something is still drawing power.');
+    }
     const p = g.player;
 
     // --- ECOLOGY (Phase 1): mode + stimulus bookkeeping ---
     g._modeCfg = MODE_CONFIG[g.mode] || MODE_CONFIG.swarm;
     g.noise = Math.max(0, (g.noise || 0) - dt * 0.8);
-    g.bloodLevel = Math.max(0, (g.bloodLevel || 0) - dt * 0.3);
+    // Silence staunches the bleed — counters the hemoclot death spiral
+    g.bloodLevel = Math.max(0, (g.bloodLevel || 0) - dt * (g.silent ? 0.75 : 0.3));
     if (g.corpses && g.corpses.length) {
-        for (let ci = g.corpses.length - 1; ci >= 0; ci--) { g.corpses[ci].t -= dt; if (g.corpses[ci].t <= 0) g.corpses.splice(ci, 1); }
+        for (let ci = g.corpses.length - 1; ci >= 0; ci--) { const c = g.corpses[ci]; c.t -= dt; c._feeders = 0; if (c.t <= 0) g.corpses.splice(ci, 1); }
+    }
+    // INK CLOUDS — blind both sides: your lamps AND their senses
+    g._inInk = false;
+    if (g.inkClouds && g.inkClouds.length) {
+        for (let ci = g.inkClouds.length - 1; ci >= 0; ci--) {
+            const ic = g.inkClouds[ci];
+            ic.t -= dt;
+            ic.r += dt * 4;   // slow spread
+            if (ic.t <= 0) { g.inkClouds.splice(ci, 1); continue; }
+            if (Math.hypot(g.player.x - ic.x, g.player.y - ic.y) < ic.r) g._inInk = true;
+        }
     }
 
     // Slowmo (Hades: time dilates on big kills)
@@ -3555,7 +3804,7 @@ function update(dt) {
     g.runTime += dt;
     g.shake = Math.min(g.shake, 5) * 0.85; // hard cap 5px, fast decay
     if (g.flashTimer > 0) g.flashTimer -= realDt; // flash uses real time
-    if (g.sonarReveal > 0) g.sonarReveal = Math.max(0, g.sonarReveal - dt * 0.5);
+    if (g.sonarReveal > 0) g.sonarReveal = Math.max(0, g.sonarReveal - dt * (p._passiveSonar ? 0.25 : 0.5));
 
     // Horror: ambient creature growls (more frequent at depth)
     g.creatureGrowlTimer -= dt;
@@ -3568,6 +3817,15 @@ function update(dt) {
     }
     // Horror: heartbeat at low HP
     if (p.hp / p.maxHp <= 0.3) startHeartbeat(); else stopHeartbeat();
+
+    // --- STAGED ONBOARDING (Portal): teach one mechanic in the moment it matters ---
+    if (g.runTime > 1.5) maybeHint(g, 'move', 'WASD — thrusters  ·  SPACE — dash. The sub drifts. Plan ahead.');
+    if (g.runTime > 7 && p._sonarManual && !p._sonarAuto) maybeHint(g, 'ping', '[F] or CLICK — sonar ping. It reveals the dark, and wounds it.');
+    if (g.depth > 150) maybeHint(g, 'dark', 'The light dies below. [L] floodlights — seeing costs being seen.');
+    if (g.depth > 320) maybeHint(g, 'ascend', '[Z] ASCEND — one-way commitment. Reach the surface to keep everything.');
+    if ((p.corruption || 0) > 12) maybeHint(g, 'mind', 'Depth erodes MIND. Some things down here will offer to buy what is left.');
+    if (g.nearestWreck) maybeHint(g, 'wreck', 'Hold [E] — strip the wreck. You are exposed while you work.');
+    if (g._hint) { g._hint.t -= dt; if (g._hint.t <= 0) g._hint = null; }
     // Ambient drone
     updateDrone();
 
@@ -3591,7 +3849,8 @@ function update(dt) {
     if (mx !== 0 && my !== 0) { mx *= 0.707; my *= 0.707; }
 
     // SILENT RUNNING — engines at dead slow. Quiet costs speed; that's the trade.
-    const silentMult = g.silent ? 0.55 : 1;
+    // SILENT PROPS module softens the trade.
+    const silentMult = g.silent ? (p._silentProps ? 0.75 : 0.55) : 1;
     const thrustForce = p.speed * 4 * silentMult; // acceleration
     const dragCoeff = 0.06; // 0 = no drag, 1 = instant stop. 0.06 = soupy underwater
     const maxSpeed = p.speed * silentMult;
@@ -3642,6 +3901,7 @@ function update(dt) {
 
     // --- OBSTACLE COLLISION — only block when the obstacle is at the sub's depth (within ±10m) ---
     for (const ob of (g.obstacles || [])) {
+        if (ob.kind === 'seep' || ob.kind === 'cable') continue;   // soft/flat features — not walls (seep hazard handled below)
         if (Math.abs((ob.obDepth || 0) - g.depth) > 10) continue;
         const dx = p.x - ob.x, dy = p.y - ob.y;
         const minD = (ob.r || 30) + 14;
@@ -3668,6 +3928,30 @@ function update(dt) {
             p.x += nx * push; p.y += ny * push;
             const dot = p._vx * nx + p._vy * ny;
             if (dot < 0) { p._vx -= dot * nx; p._vy -= dot * ny; }
+        }
+    }
+
+    // --- ENVIRONMENTAL HAZARDS — vents scald the hull, seeps shove the sub upward ---
+    for (const ob of (g.obstacles || [])) {
+        if (ob.kind !== 'vent' && ob.kind !== 'seep') continue;
+        if (Math.abs((ob.obDepth || 0) - g.depth) > 12) continue;
+        const dx = p.x - ob.x, dy = p.y - ob.y;
+        const reach = ob.r * 1.6;
+        if (dx * dx + dy * dy > reach * reach) continue;
+        if (ob.kind === 'vent') {
+            p.hp -= 7 * dt;
+            g.shake = Math.max(g.shake || 0, 1.5);
+            // Superheated water pushes out of the plume
+            const d = Math.hypot(dx, dy) || 1;
+            p._vx += (dx / d) * 90 * dt; p._vy += (dy / d) * 90 * dt - 50 * dt;
+            if (!ob._warned) {
+                ob._warned = true;
+                g.floatingTexts.push({ x: ob.x, y: ob.y - ob.r - 10, text: 'SCALDING', color: '#FF6040', life: 1.3, vy: -22 });
+            }
+        } else {
+            // Methane bubble column — buoyancy slams the hull upward, no damage
+            p._vy -= 150 * dt;
+            g.shake = Math.max(g.shake || 0, 0.8);
         }
     }
 
@@ -3838,6 +4122,32 @@ function update(dt) {
     for (const _w of g.enemies) {
         if (_w.isWhisperer && _w.hp > 0) _whisperers.push(_w);
     }
+    // SPATIAL GRID — per-frame buckets (150px cells) for ecology neighbour queries
+    const _grid = new Map();
+    const _CELL = 150;
+    for (const _e of g.enemies) {
+        if (_e.hp <= 0 || _e.ghost) continue;
+        const k = ((_e.x / _CELL) | 0) + ',' + ((_e.y / _CELL) | 0);
+        let arr = _grid.get(k);
+        if (!arr) { arr = []; _grid.set(k, arr); }
+        arr.push(_e);
+    }
+    g._grid = _grid;
+    function _nearby(x, y, r) {
+        const out = [];
+        const c0x = ((x - r) / _CELL) | 0, c1x = ((x + r) / _CELL) | 0;
+        const c0y = ((y - r) / _CELL) | 0, c1y = ((y + r) / _CELL) | 0;
+        const r2 = r * r;
+        for (let cx2 = c0x; cx2 <= c1x; cx2++) for (let cy2 = c0y; cy2 <= c1y; cy2++) {
+            const arr = _grid.get(cx2 + ',' + cy2);
+            if (!arr) continue;
+            for (const e2 of arr) {
+                const dx = e2.x - x, dy = e2.y - y;
+                if (dx * dx + dy * dy <= r2) out.push(e2);
+            }
+        }
+        return out;
+    }
     for (let i = g.enemies.length - 1; i >= 0; i--) {
         const e = g.enemies[i];
         e.flash = Math.max(0, e.flash - dt);
@@ -3895,6 +4205,22 @@ function update(dt) {
             if (g.bloodLevel > 0 && (e.role === 'scavenger' || e.role === 'pack')) stim += g.bloodLevel * 0.4;
             if (e.role === 'apex' || e.role === 'sensor') stim *= 1.3;                   // perceptive
             if (e.role === 'sessile') stim *= 0.5;
+            if (p._detectMult) stim *= p._detectMult;   // ANECHOIC COATING
+            // METABOLISM — a fed predator barely cares about you (Subnautica's reprieve)
+            if (e._hunger === undefined) e._hunger = 0.35 + Math.random() * 0.45;
+            e._hunger = Math.min(1, e._hunger + dt * 0.012);
+            if (e._hunger < 0.3 && e.role !== 'sessile' && e.role !== 'sensor') stim *= 0.4;
+            // Ink blinds them too — hide inside the squid's own defence
+            if (g._inInk) stim *= 0.25;
+            // COVERT OBSERVATION — watch it live, undetected, running silent or dark:
+            // 10s of field study per species = research tier 2. Fear tools become science tools.
+            e._observing = 0;
+            if ((g.silent || g.lightOn === false) && e.awareness < 0.5 && dToPlayer < 500
+                && (meta.research[e.typeId] || 0) === 1 && !e.ghost) {
+                meta.observeSec[e.typeId] = (meta.observeSec[e.typeId] || 0) + dt;
+                e._observing = Math.min(1, meta.observeSec[e.typeId] / 10);
+                if (meta.observeSec[e.typeId] >= 10) creditResearch(g, e.typeId, 2, 'covert observation');
+            }
             e.awareness = Math.max(0, Math.min(1, (e.awareness || 0) + (stim - 0.18) * dt * 1.6));
             // --- the moment of being noticed: the scare beat ---
             const _wasAware = (e._aw0 || 0) >= 0.5;
@@ -3903,14 +4229,70 @@ function update(dt) {
                 e._alertPulse = 0.6;                                   // eyeshine ignites
                 g.shake = Math.min(8, (g.shake || 0) + 2);
                 playTone(64 + Math.random() * 26, 0.28, 'sawtooth', 0.05); // it locks on
+                maybeHint(g, 'silent', '[Q] SILENT RUNNING — weapons hold, engines hush. You become a hole in the water.');
                 _ecoNotice(g);
+                // TERRITORIAL DISPLAY — big predators warn before they commit; back off and live
+                if ((e.role === 'apex' || e.role === 'mid') && !e.isBoss) {
+                    e._displayT = 1.2;
+                    if (dToPlayer < 480) creditResearch(g, e.typeId, 3, 'threat display recorded');
+                }
             } else if (_wasAware && e.awareness < 0.5) {
                 _ecoLost(g);
             }
             if (e._alertPulse > 0) e._alertPulse -= dt;
         }
+        // Display phase: it flares and holds. Retreat past its comfort line and it stands down.
+        if (e._displayT > 0) {
+            e._displayT -= dt;
+            e._alertPulse = Math.max(e._alertPulse || 0, 0.3);
+            if (dToPlayer > (e.detect || 300) * 1.25) { e.awareness = 0.25; e._displayT = 0; }
+            else { e.x += Math.cos(angleToPlayer) * e.speed * 0.15 * dt; e.y += Math.sin(angleToPlayer) * e.speed * 0.15 * dt; }
+            continue;
+        }
         // Unaware creatures (ecology mode) live their own life: drift near home, ignore the sub.
         if (g._modeCfg && g._modeCfg.ecology && e.awareness < 0.5 && e.hp > 0 && e.ai !== 'static_spit' && e.ai !== 'patrol') {
+            // PREDATION — hungry hunters hunt PREY, not you. Watch the food web work.
+            const isHunter = e.role === 'apex' || e.role === 'pack' || e.role === 'mid' || e.role === 'ambush';
+            if (isHunter && (e._hunger || 0) > 0.65 && !e.carrier) {
+                if (!e._prey || e._prey.hp <= 0 || e._prey._eaten) {
+                    e._prey = _nearby(e.x, e.y, 380).find(o => o !== e && o.role === 'prey' && !o.carrier && o.hp > 0 && !o._eaten) || null;
+                }
+                if (e._prey) {
+                    const pa = Math.atan2(e._prey.y - e.y, e._prey.x - e.x);
+                    e.x += Math.cos(pa) * e.speed * 0.8 * dt;
+                    e.y += Math.sin(pa) * e.speed * 0.8 * dt;
+                    if (dist(e, e._prey) < (e.size + e._prey.size)) {
+                        e._prey._eaten = true; e._prey.hp = 0;      // eaten, not killed — no rewards
+                        e._hunger = 0;                              // satiated: it will ignore you for minutes
+                        if (dist(g.player, e) < 480) creditResearch(g, e.typeId, 3, 'feeding witnessed');
+                        g.corpses.push({ x: e._prey.x, y: e._prey.y, t: 8, role: 'prey', size: e._prey.size * 0.6 });
+                        g.bloodLevel = Math.min(2.5, (g.bloodLevel || 0) + 0.15);
+                        for (let pi = 0; pi < 5; pi++) g.effects.push({ type: 'particle', x: e._prey.x, y: e._prey.y, vx: (Math.random() - 0.5) * 90, vy: (Math.random() - 0.5) * 90, life: 0.4, color: '#A83048', size: 2 });
+                        e._prey = null;
+                    }
+                    continue;
+                }
+            }
+            // SCAVENGING — scavengers converge on corpses and consume them; crowds get loud
+            if (e.role === 'scavenger' && g.corpses.length) {
+                let bestC = null, bestD = 500;
+                for (const c of g.corpses) { const d = dist(e, c); if (d < bestD) { bestD = d; bestC = c; } }
+                if (bestC) {
+                    if (bestD > 24) {
+                        const ca = Math.atan2(bestC.y - e.y, bestC.x - e.x);
+                        e.x += Math.cos(ca) * e.speed * 0.7 * dt;
+                        e.y += Math.sin(ca) * e.speed * 0.7 * dt;
+                    } else {
+                        bestC.t -= dt * 3;                          // feeding consumes the corpse fast
+                        bestC._feeders = (bestC._feeders || 0) + 1; // reset each frame below
+                        e._hunger = Math.max(0, (e._hunger || 0.5) - dt * 0.3);
+                        if (Math.random() < dt * 2) g.effects.push({ type: 'particle', x: bestC.x, y: bestC.y, vx: (Math.random() - 0.5) * 40, vy: (Math.random() - 0.5) * 40, life: 0.3, color: '#6A2030', size: 1.5 });
+                        // Feeding frenzy — three or more feeders ring the dinner bell
+                        if (bestC._feeders >= 3) { g.noise = Math.min(2.5, (g.noise || 0) + dt * 0.3); if (g.depth > APEX_DEPTH) g.apexThreat = Math.min(10, (g.apexThreat || 0) + dt * 0.15); }
+                    }
+                    continue;
+                }
+            }
             e.wanderAngle = (e.wanderAngle || 0) + (Math.random() - 0.5) * dt * 2;
             const hx = (e._homeX != null ? e._homeX : e.x) - e.x;
             const hy = (e._homeY != null ? e._homeY : e.y) - e.y;
@@ -4089,7 +4471,7 @@ function update(dt) {
                 for (let pi = 0; pi < spread; pi++) {
                     const aOff = spread > 1 ? (pi - (spread - 1) / 2) * 0.18 : 0;
                     const a = angleToPlayer + aOff;
-                    g.projectiles.push({ x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, dmg, aoe: 14, life: 2.5, pierce: 0, color: col, enemy: true });
+                    g.projectiles.push({ x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, dmg, aoe: 14, life: 2.5, pierce: 0, color: col, enemy: true, emp: !!def.emp });
                 }
                 playTone(160 + Math.random() * 60, 0.08, 'square', 0.04);
             }
@@ -4175,6 +4557,86 @@ function update(dt) {
                 if (e._burstT <= 0) { e._burstState = 'active'; }
             }
             // Stationary; can damage on contact (handled by hit player code)
+        } else if (ai === 'tether') {
+            // DAVIT WRAITH — hooks the sub and REELS. Break it: dash, distance, or hurt it.
+            if (e._tetherCd > 0) e._tetherCd -= dt;
+            if (e._tethered) {
+                // dash snaps the line; so does range; so does enough damage since attach
+                if (p.dashTimer > 0 || dToPlayer > 360 || (e._tetherHp - e.hp) > 30) {
+                    e._tethered = false; e._tetherCd = 4;
+                    g.floatingTexts.push({ x: p.x, y: p.y - 22, text: 'LINE CUT', color: '#80FFA0', life: 0.8, vy: -26 });
+                } else {
+                    // reel the sub in; the wraith barely moves — everything it catches comes to it
+                    const pull = 62;
+                    const ta = Math.atan2(e.y - p.y, e.x - p.x);
+                    p.x += Math.cos(ta) * pull * dt;
+                    p.y += Math.sin(ta) * pull * dt;
+                    if (dToPlayer < 46 && p.iFrames <= 0) {
+                        const dmg = Math.max(4, (e.damage || 12) - p.armor);
+                        p.hp -= dmg; p.iFrames = 0.6; g.shake = 6; sfxHit();
+                        if (g.scoreCombo) g.scoreCombo.lastHitTime = g.runTime;
+                        g._lastAttackerTypeId = e.typeId;
+                        e._tethered = false; e._tetherCd = 4;
+                    }
+                }
+            } else {
+                // drift toward hook range, then attach
+                if (dToPlayer > 220) { e.x += Math.cos(angleToPlayer) * e.speed * dt; e.y += Math.sin(angleToPlayer) * e.speed * dt; }
+                if (dToPlayer < 250 && (e._tetherCd || 0) <= 0) {
+                    e._tethered = true; e._tetherHp = e.hp;
+                    playTone(90, 0.3, 'sawtooth', 0.07);
+                    g.floatingTexts.push({ x: p.x, y: p.y - 22, text: 'HOOKED — DASH TO CUT', color: '#FF8040', life: 1.2, vy: -22 });
+                }
+            }
+        } else if (ai === 'inker') {
+            // BALLAST SQUID — skittish; vents an ink cloud when pressed, then bolts
+            if (e._inkCd > 0) e._inkCd -= dt;
+            const pressed = dToPlayer < 130 || e.flash > 0.05;
+            if (pressed && (e._inkCd || 0) <= 0) {
+                e._inkCd = 6;
+                if (!g.inkClouds) g.inkClouds = [];
+                g.inkClouds.push({ x: e.x, y: e.y, r: 115, t: 7 });
+                e._fleeT = 1.4;
+                playTone(180, 0.2, 'sine', 0.05);
+            }
+            if (e._fleeT > 0) {
+                e._fleeT -= dt;
+                e.x += Math.cos(angleToPlayer + Math.PI) * e.speed * 2.2 * dt;
+                e.y += Math.sin(angleToPlayer + Math.PI) * e.speed * 2.2 * dt;
+            } else {
+                // curious orbit at a wary distance
+                const want = 200;
+                const move = dToPlayer > want + 30 ? 1 : dToPlayer < want - 30 ? -1 : 0;
+                e.x += Math.cos(angleToPlayer) * e.speed * 0.6 * move * dt;
+                e.y += Math.sin(angleToPlayer) * e.speed * 0.6 * move * dt;
+            }
+        } else if (ai === 'latch') {
+            // BILGE LEECH — latches the hull and drinks your battery. Dash flings them all off.
+            if (e._latched) {
+                if (p.dashTimer > 0) {
+                    e._latched = false; e._stunT = 1.2;
+                    const fa = Math.random() * PI2;
+                    e.x = p.x + Math.cos(fa) * 90; e.y = p.y + Math.sin(fa) * 90;
+                    g.floatingTexts.push({ x: e.x, y: e.y - 10, text: 'FLUNG', color: '#80FFA0', life: 0.7, vy: -22 });
+                } else {
+                    e.x = p.x + Math.cos(e._latchA) * (16 + e.size);
+                    e.y = p.y + Math.sin(e._latchA) * (16 + e.size);
+                    p.battery = Math.max(0, (p.battery || 100) - 1.3 * dt);
+                    p.hp -= 0.4 * dt;
+                    if (Math.random() < dt * 0.5) g.floatingTexts.push({ x: p.x, y: p.y - 26, text: 'POWER DRAIN — DASH', color: '#FFD040', life: 0.9, vy: -20 });
+                }
+            } else if (e._stunT > 0) {
+                e._stunT -= dt;
+            } else {
+                e.x += Math.cos(angleToPlayer) * e.speed * dt;
+                e.y += Math.sin(angleToPlayer) * e.speed * dt;
+                const latchedCount = g.enemies.reduce((n, o) => n + (o._latched ? 1 : 0), 0);
+                if (dToPlayer < 22 + e.size && latchedCount < 2) {
+                    e._latched = true;
+                    e._latchA = Math.random() * PI2;
+                    playTone(140, 0.15, 'square', 0.05);
+                }
+            }
         } else {
             // Default: chase player
             e.x += Math.cos(angleToPlayer) * e.speed * dt;
@@ -4257,6 +4719,22 @@ function update(dt) {
 
         // Dead
         if (e.hp <= 0) {
+            // Eaten by the food web, not killed by you — no XP, gems, gold or score
+            if (e._eaten) { g.enemies.splice(i, 1); continue; }
+            // SPLITTER — the bloom divides. Fragments don't divide again.
+            if (e.typeId === 'splitter' && !e._small && !e.ghost) {
+                for (let si = 0; si < 2; si++) {
+                    const sa = Math.random() * PI2;
+                    g.enemies.push({
+                        x: e.x + Math.cos(sa) * 14, y: e.y + Math.sin(sa) * 14,
+                        hp: e.maxHp * 0.35, maxHp: e.maxHp * 0.35, speed: e.speed * 1.4, size: e.size * 0.6,
+                        color: e.color, xp: 1, damage: Math.max(2, (e.damage || 4) * 0.6), gold: 1,
+                        typeId: 'splitter', flash: 0, _small: true, ai: 'drift',
+                        wanderAngle: Math.random() * PI2, state: 'chase', awareness: 1,
+                        role: 'prey', detect: 200, _homeX: e.x, _homeY: e.y,
+                    });
+                }
+            }
             // Feature 9: Creature scanning
             if (!e.ghost) {
                 const scanKey = e.aberrant ? ('aberrant_' + e.typeId) : e.typeId;
@@ -4267,6 +4745,9 @@ function update(dt) {
                     sfxScanCreature();
                     addNereidLog(g, `New creature scanned: ${ENEMY_TYPES[e.typeId] ? ENEMY_TYPES[e.typeId].name : e.typeId}${e.aberrant ? ' [ABERRANT]' : ''}. Logged to codex.`);
                 }
+                // An aberrant specimen is a dissection-grade sample — full analysis
+                if (e.aberrant) creditResearch(g, e.typeId, 3, 'aberrant specimen');
+                else creditResearch(g, e.typeId, 1, 'specimen retrieved');
             }
 
             if (!e.ghost) {
@@ -4533,6 +5014,15 @@ function update(dt) {
             pr.vx = Math.cos(newA) * sp; pr.vy = Math.sin(newA) * sp;
             // Player hit
             if (dist(pr, p) < 14 + 6 && p.iFrames <= 0) {
+                // ARC LAMPREY — the bite empties the battery, not the hull
+                if (pr.emp) {
+                    p.battery = Math.max(0, (p.battery || 100) - 9);
+                    p.iFrames = 0.3; g.shake = 3;
+                    g.floatingTexts.push({ x: p.x, y: p.y - 20, text: 'POWER DRAIN', color: '#80E0FF', life: 0.9, vy: -28 });
+                    playTone(70, 0.25, 'square', 0.06);
+                    g.projectiles.splice(i, 1);
+                    continue;
+                }
                 const dmg = Math.max(1, pr.dmg - p.armor);
                 p.hp -= dmg; p.iFrames = 0.5; g.shake = 4; sfxHit();
                 if (g.scoreCombo) g.scoreCombo.lastHitTime = g.runTime;
@@ -4662,6 +5152,7 @@ function update(dt) {
                         meta.scannedCreatures.push(e.typeId);
                         saveMeta();
                     }
+                    creditResearch(g, e.typeId, 1, 'sonar contact');
                     const def = ENEMY_TYPES[e.typeId];
                     if (def) {
                         g.floatingTexts.push({ x: e.x, y: e.y - e.size - 8, text: 'SCANNED · ' + def.name, color: '#80FFE0', life: 1.6, vy: -28 });
@@ -4679,6 +5170,13 @@ function update(dt) {
                 if (ef.hit.has(e)) continue;
                 if (d + r >= bandInner && d - r <= bandOuter) {
                     ef.hit.add(e);
+                    // A ping COLLAPSES phase — the pulse finds what light can't.
+                    // Counterplay for every phase-type; rewards the core verb.
+                    if (e._phased) {
+                        e._phased = false;
+                        e._phaseT = 2.2;   // held solid — punish window
+                        g.floatingTexts.push({ x: e.x, y: e.y - 12, text: 'RESOLVED', color: '#80FFE0', life: 0.8, vy: -24 });
+                    }
                     e._killBy = 'sonar';
                     damageEnemy(g, e, ef.dmg);
                     // Tiny pushback — sonar concussion
@@ -4912,6 +5410,19 @@ function update(dt) {
     // Touch ascend confirmation window decays
     if (g._ascendArm > 0) g._ascendArm -= dt;
 
+    // RAM PROW — dashing through creatures hurts them (once per creature per dash)
+    if (p._ramProw && p.dashTimer > 0) {
+        for (const e of g.enemies) {
+            if (e.ghost || e.hp <= 0 || e._ramHitT > g.runTime - 0.5) continue;
+            if (dist(p, e) < e.size + 16) {
+                e._ramHitT = g.runTime;
+                damageEnemy(g, e, 30);
+                const ka = Math.atan2(e.y - p.y, e.x - p.x);
+                e.x += Math.cos(ka) * 30; e.y += Math.sin(ka) * 30;
+            }
+        }
+    }
+
     // --- BATTERY drain — scales with depth (pressure-driven systems use more power) ---
     const depthFactor = 1 + Math.min(2, (g.depth || 0) / 3000);
     g.player.battery = Math.max(0, (g.player.battery || 100) - 0.35 * depthFactor * dt);
@@ -5006,6 +5517,15 @@ function update(dt) {
             phase = 'mooring'; // surfaced alive — go to the Mooring hub (was: death screen)
             g._surfaced = true;
             g._mooringLine = pickMooringBeat(g);
+            // SIGNAL ⌁ — surfaced score distils at full rate
+            g._signalEarned = Math.floor((g.score || 0) / 400);
+            meta.signal = (meta.signal || 0) + g._signalEarned;
+            if (g.daily === dayKeyUTC() && (!meta.dailyBest || meta.dailyBest.date !== g.daily || g.score > meta.dailyBest.score)) {
+                meta.dailyBest = { date: g.daily, score: g.score || 0 };
+            }
+            // THE QUESTION — once, when the pilot has read deep enough and heard the Scar
+            const l3Owned = LORE_FRAGMENTS.filter(f => f.layer === 3 && meta.loreFragments.includes(f.id)).length;
+            if (!meta.ending && l3Owned >= 3 && meta.p3Unlocked) g._theQuestion = true;
             // Workshop salvage research — log a sample of each item before cashing.
             stockpileSalvage(g);
             // Cash in all inventory automatically
@@ -5014,6 +5534,8 @@ function update(dt) {
             g.goldEarned += cashed;
             g._surfacedCash = cashed; g._surfacedDepth = g.deepestDepth || 0;
             g.inventory = [];
+            if ((g.deepestDepth || 0) > (meta.deepestEver || 0)) meta.deepestEver = g.deepestDepth;
+            if ((meta.deepestEver || 0) >= 2600 && !meta.p3Unlocked) meta.p3Unlocked = true;
             meta.totalRuns++;
             meta.totalKills += g.kills;
             meta.gold += g.goldEarned;
@@ -5256,6 +5778,14 @@ function onDeath(g) {
     sfxDeath();
     phase = 'death';
     // Stats that survive across DSVs (achievement-style)
+    if ((g.deepestDepth || 0) > (meta.deepestEver || 0)) meta.deepestEver = g.deepestDepth;
+    if ((meta.deepestEver || 0) >= 2600 && !meta.p3Unlocked) meta.p3Unlocked = true;
+    // SIGNAL ⌁ — the trench heard the run even if the pilot didn't come back; half rate
+    g._signalEarned = Math.floor((g.score || 0) / 800);
+    meta.signal = (meta.signal || 0) + g._signalEarned;
+    if (g.daily === dayKeyUTC() && (!meta.dailyBest || meta.dailyBest.date !== g.daily || g.score > meta.dailyBest.score)) {
+        meta.dailyBest = { date: g.daily, score: g.score || 0 };
+    }
     meta.totalRuns++;
     meta.totalKills += g.kills;
     if (g.runTime > meta.bestTime) meta.bestTime = g.runTime;
@@ -5291,6 +5821,7 @@ function draw() {
     if (phase === 'shop') { drawShop(w, h); return; }
     if (phase === 'workshop') { drawWorkshop(w, h); return; }
     if (phase === 'mooring') { drawMooring(w, h, game); return; }
+    if (phase === 'modules') { drawModules(w, h); return; }
     if (phase === 'contracts') { drawContracts(w, h); return; }
     if (phase === 'puzzle') { drawPuzzle(w, h); return; }
     if (phase === 'cards') { drawCardDraft(w, h); return; }
@@ -5383,11 +5914,24 @@ function draw() {
         bgG = Math.floor(6 * (1 - t2));
         bgB = Math.floor(17 * (1 - t2));
     }
+    // Pelagos-3: dead water — the living teal drains toward rust-green murk
+    if (g.moon === 'p3') {
+        const oldG = bgG;
+        bgG = Math.min(255, Math.floor(oldG * 1.35 + 2));
+        bgR = Math.min(255, Math.floor(bgR * 1.6 + oldG * 0.4));
+        bgB = Math.floor(bgB * 0.55);
+    }
     ctx.fillStyle = `rgb(${bgR},${bgG},${bgB})`;
     ctx.fillRect(0, 0, w, h);
 
     // Depth zone label (flashes when crossing thresholds)
-    const zones = [
+    const zones = g.moon === 'p3' ? [
+        { depth: 0, name: 'FLOODLIGHT SHELF', color: '#A8B888' },
+        { depth: 200, name: 'TURBINE FIELD', color: '#8A9878' },
+        { depth: 1000, name: 'FOUNDRY DEEP', color: '#B87848' },
+        { depth: 2000, name: 'REACTOR SHADOW', color: '#C85838' },
+        { depth: 4000, name: 'THE SCAR', color: '#FF4020' },
+    ] : [
         { depth: 0, name: 'SUNLIGHT ZONE', color: '#5ADFCF' },
         { depth: 200, name: 'TWILIGHT ZONE', color: '#4A8ADA' },
         { depth: 1000, name: 'MIDNIGHT ZONE', color: '#6A4ADA' },
@@ -5397,7 +5941,9 @@ function draw() {
     if (!g._lastZone) g._lastZone = 0;
     for (const z of zones) {
         if (g.depth >= z.depth && g._lastZone < z.depth) {
-            g.streak = z.name; g.streakTimer = 3;
+            g.streak = z.name; g.streakTimer = 3.2;
+            g._streakBig = true; g._streakColor = z.color;
+            if (audioCtx) playTone(70, 0.5, 'sine', 0.06);
             g._lastZone = z.depth;
         }
     }
@@ -5578,7 +6124,7 @@ function draw() {
         if (sx < -ob.r * scaleK - 20 || sx > w + ob.r * scaleK + 20 || sy < -ob.r * scaleK - 20 || sy > h + ob.r * scaleK + 20) continue;
         // TOPOGRAPHIC CONTOUR LINES — concentric rings around solid features (rocks, vents, organic, crystal)
         // Rings tighten with proximity; faint while distant, sharp when close.
-        if (ob.kind === 'rock' || ob.kind === 'spire' || ob.kind === 'vent' || ob.kind === 'organic' || ob.kind === 'crystal') {
+        if (ob.kind === 'rock' || ob.kind === 'spire' || ob.kind === 'vent' || ob.kind === 'organic' || ob.kind === 'crystal' || ob.kind === 'bones' || ob.kind === 'chitin' || ob.kind === 'monolith' || ob.kind === 'debris') {
             const ringR = ob.r * scaleK;
             ctx.strokeStyle = `rgba(120,160,180,${0.10 + proximity * 0.18})`;
             ctx.lineWidth = 0.7;
@@ -5607,6 +6153,33 @@ function draw() {
             const fadeAlpha = dz >= 0 ? proximity : Math.pow(proximity, 1.5);
             const sx = ev.x - cx, sy = ev.y - cy;
             ctx.globalAlpha = fadeAlpha;
+            if (ev.kind === 'triangulation' && !ev.looted) {
+                // Three tripod beacons; each pulses a ring out to exactly its distance
+                // from the buried signal — where the three rings kiss, dig.
+                const tt2 = performance.now() * 0.001;
+                ev.beacons.forEach((b, bi) => {
+                    const bx2 = b.x - cx, by2 = b.y - cy;
+                    // Beacon body — small tripod + blinking head
+                    ctx.strokeStyle = '#4A6A7A'; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(bx2 - 6, by2 + 8); ctx.lineTo(bx2, by2 - 8); ctx.lineTo(bx2 + 6, by2 + 8); ctx.stroke();
+                    if ((tt2 + bi * 0.4) % 1.2 < 0.15) drawGlow(ctx, '#8FE0C8', bx2, by2 - 10, 8, 0.9);
+                    // Travelling pulse ring: expands 0 → dist, then restarts
+                    const frac = (tt2 * 0.35 + bi / 3) % 1;
+                    ctx.strokeStyle = `rgba(140,220,200,${0.5 * (1 - frac)})`;
+                    ctx.lineWidth = 1.4;
+                    ctx.beginPath(); ctx.arc(bx2, by2, b.dist * frac, 0, PI2); ctx.stroke();
+                    // Faint resting ring at the true distance — the answer, for careful eyes
+                    ctx.strokeStyle = 'rgba(140,220,200,0.10)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath(); ctx.arc(bx2, by2, b.dist, 0, PI2); ctx.stroke();
+                });
+                // The signal itself stays invisible until you're nearly on it
+                const pd2 = Math.hypot(g.player.x - ev.x, g.player.y - ev.y);
+                if (pd2 < 90) {
+                    const shimmer = 0.25 + Math.sin(tt2 * 6) * 0.15;
+                    drawGlow(ctx, '#B0A0E8', sx, sy, 14, shimmer * (1 - pd2 / 90 + 0.3));
+                }
+            }
             if (ev.kind === 'whalefall') {
                 // Long pale skeletal mass
                 ctx.fillStyle = '#1A2025';
@@ -5884,6 +6457,13 @@ function draw() {
             ctx.fillStyle = `rgba(180,200,220,${pulse})`;
             ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center';
             ctx.fillText('UNKNOWN', sx, sy - e.size - 8);
+        }
+        // COVERT OBSERVATION ring — field study filling while you watch unseen
+        if (e._observing > 0) {
+            ctx.strokeStyle = 'rgba(128,255,224,0.75)'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(sx, sy, e.size + 9, -Math.PI / 2, -Math.PI / 2 + PI2 * e._observing); ctx.stroke();
+            ctx.fillStyle = 'rgba(128,255,224,0.8)'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+            ctx.fillText('OBSERVING', sx, sy - e.size - 18);
         }
 
         // --- BOSS TELEGRAPH WARNING — give the player time to react ---
@@ -6716,6 +7296,30 @@ function draw() {
         }
     }
 
+    // --- TETHER LINES — taut cable from wraith to hull ---
+    for (const e of g.enemies) {
+        if (e._tethered && e.hp > 0) {
+            const sag = Math.sin(g.runTime * 9) * 3;
+            ctx.strokeStyle = 'rgba(200,160,90,0.7)'; ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(e.x - cx, e.y - cy);
+            ctx.quadraticCurveTo((e.x + g.player.x) / 2 - cx, (e.y + g.player.y) / 2 - cy + sag, g.player.x - cx, g.player.y - cy);
+            ctx.stroke();
+        }
+    }
+
+    // --- INK CLOUDS — occlude the world (drawn over creatures, under the darkness mask) ---
+    for (const ic of (g.inkClouds || [])) {
+        const sx = ic.x - cx, sy = ic.y - cy;
+        const fade = Math.min(1, ic.t / 1.5);
+        const grad = ctx.createRadialGradient(sx, sy, ic.r * 0.15, sx, sy, ic.r);
+        grad.addColorStop(0, `rgba(4,4,10,${0.94 * fade})`);
+        grad.addColorStop(0.75, `rgba(6,6,14,${0.8 * fade})`);
+        grad.addColorStop(1, 'rgba(8,8,18,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(sx, sy, ic.r, 0, PI2); ctx.fill();
+    }
+
     // --- DARKNESS OVERLAY (offscreen canvas approach — reliable) ---
     {
         const px2 = g.player.x - cx, py2 = g.player.y - cy;
@@ -6728,6 +7332,7 @@ function draw() {
         if (_eco) darkAlpha = (g.lightOn === false) ? 0.93 : 0.82;
         // BLACKWATER — light does not work here at all; the world is your last ping
         if (g._inBlackwater) darkAlpha = 0.965;
+        if (meta.hudContrast) darkAlpha = Math.max(0, darkAlpha - 0.06);
 
         if (darkAlpha > 0.03) {
             // Create offscreen darkness mask
@@ -6749,6 +7354,7 @@ function draw() {
             let lightR = Math.max(180, 400 * (1 - darkProgress * 0.45));
             if (_eco) lightR = (g.lightOn === false) ? 95 : 235; // your world shrinks to the lamp
             if (g._inBlackwater) lightR = 70;                    // blackwater swallows the lamps
+            if (g._inInk) lightR = Math.min(lightR, 105);        // ink chokes them
             const grad = dCtx.createRadialGradient(px2, py2, 0, px2, py2, lightR);
             grad.addColorStop(0, 'rgba(255,255,255,1)');
             grad.addColorStop(0.3, 'rgba(255,255,255,0.7)');
@@ -7203,6 +7809,38 @@ function drawNereidSpeech(w, h, g, pal, vpCx, vpCy, vpR) {
 function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     const p = g.player;
 
+    // ---- ANNOUNCEMENT BANNER — streak text was set in 25 places but never drawn
+    // since the HUD rework. Zone crossings render as big title cards (Subnautica). ----
+    if (g.streakTimer > 0 && g.streak) {
+        const fade = Math.min(1, g.streakTimer / 0.4);
+        const big = g._streakBig;
+        ctx.textAlign = 'center';
+        ctx.font = big ? 'bold 30px monospace' : 'bold 15px monospace';
+        const tw = ctx.measureText(g.streak).width;
+        const by = big ? h * 0.24 : 92;
+        ctx.globalAlpha = fade;
+        drawPlate(w / 2 - tw / 2 - 18, by - (big ? 28 : 16), tw + 36, big ? 42 : 26);
+        ctx.fillStyle = big ? (g._streakColor || '#BFEAE0') : '#DCEAE2';
+        ctx.fillText(g.streak, w / 2, by + (big ? 4 : 2));
+        if (big) {
+            ctx.strokeStyle = hexA(g._streakColor || '#5ADFCF', 0.7); ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(w / 2 - tw / 2, by + 12); ctx.lineTo(w / 2 + tw / 2, by + 12); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+    } else if (g._streakBig) { g._streakBig = false; g._streakColor = null; }
+
+    // ---- ONBOARDING HINT — one mechanic, in the moment it matters (Portal) ----
+    if (g._hint) {
+        ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center';
+        const tw = ctx.measureText(g._hint.text).width;
+        const hy = 58;
+        ctx.globalAlpha = Math.min(1, g._hint.t / 0.5);
+        drawPlate(w / 2 - tw / 2 - 14, hy - 15, tw + 28, 24);
+        ctx.fillStyle = '#A8E8D8';
+        ctx.fillText(g._hint.text, w / 2, hy + 2);
+        ctx.globalAlpha = 1;
+    }
+
     // ---- BOTTOM-LEFT corner: DEPTH (with ASCENT indicator if ascending) ----
     ctx.textAlign = 'left';
     const dColor = g.ascending ? '#80FFA0' : pal.accent;
@@ -7222,8 +7860,12 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         ctx.fillText('◈ SILENT RUNNING — [Q] weapons free', 16, h - 56);
     }
 
-    // ---- TOP-RIGHT: LOADOUT (active cards + level-up upgrades) ----
+    // ---- TOP-RIGHT: LOADOUT (weapons first, then cards + level-up upgrades) ----
     const loadout = [];
+    for (const wp of (g.player.weapons || [])) {
+        const def = WEAPON_DEFS[wp.id] || {};
+        loadout.push({ id: 'w_' + wp.id, name: def.name || wp.id, src: 'wpn', glyph: WEAPON_GLYPHS[wp.id] || '⨁', lvl: wp.level, evolved: def.evolved });
+    }
     for (const c of (g.selectedCards || [])) loadout.push({ id: c.id, name: c.name, src: 'card' });
     for (const u of (g.pickedUpgrades || [])) loadout.push({ id: u.id, name: u.name, src: 'lvl' });
     if (loadout.length) {
@@ -7234,19 +7876,26 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         let topY = 16;
         for (let i = 0; i < loadout.length; i++) {
             const u = loadout[i];
-            const ic = upgradeIcon(u.name || u.id);
+            const ic = u.src === 'wpn'
+                ? { glyph: u.glyph, color: u.evolved ? '#FF80FF' : '#E8C860' }
+                : upgradeIcon(u.name || u.id);
             const r = Math.floor(i / 8), c = i % 8;
             const ix = startX + c * (iconSize + gap);
             const iy = topY + r * (iconSize + gap);
-            // Icon background — different border for cards vs level-up
+            // Icon background — different border for weapons vs cards vs level-up
             ctx.fillStyle = 'rgba(8,12,18,0.85)';
             ctx.beginPath(); ctx.roundRect(ix, iy, iconSize, iconSize, 3); ctx.fill();
-            ctx.strokeStyle = u.src === 'card' ? hexA('#A06ACC', 0.7) : hexA(ic.color, 0.6);
-            ctx.lineWidth = 1;
+            ctx.strokeStyle = u.src === 'wpn' ? hexA(ic.color, 0.9) : u.src === 'card' ? hexA('#A06ACC', 0.7) : hexA(ic.color, 0.6);
+            ctx.lineWidth = u.src === 'wpn' ? 1.5 : 1;
             ctx.beginPath(); ctx.roundRect(ix, iy, iconSize, iconSize, 3); ctx.stroke();
             // Glyph
             ctx.fillStyle = ic.color; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center';
             ctx.fillText(ic.glyph, ix + iconSize / 2, iy + iconSize / 2 + 5);
+            // Weapon level pip
+            if (u.src === 'wpn' && u.lvl) {
+                ctx.fillStyle = u.lvl >= 8 ? '#FFD040' : '#9AB0C0'; ctx.font = 'bold 8px monospace';
+                ctx.fillText(String(u.lvl), ix + iconSize - 5, iy + iconSize - 3);
+            }
             // Hover tooltip — show name if mouse is over the icon
             if (mouseX >= ix && mouseX <= ix + iconSize && mouseY >= iy && mouseY <= iy + iconSize) {
                 const tt = u.name;
@@ -7335,6 +7984,22 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     drawArc(-Math.PI / 2,  xpPct, XP_COLOR,   `LV ${p.level}`, `${p.xp}/${xpForLevel(p.level)}`);
     drawArc(Math.PI / 6,   sanity / 100, MIND_COLOR, 'MIND', `${Math.floor(sanity)}%`);
     drawArc(5 * Math.PI / 6, hpPct, HULL_COLOR, 'HULL', `${Math.max(0, Math.floor(p.hp))}/${p.maxHp}`);
+
+    // MIND eye (Dredge) — the lids part as the deep gets in; readable at a glance
+    {
+        const corr = (p.corruption || 0) / 100;
+        const ex = vpCx + Math.cos(Math.PI / 6) * (vpR - 30);
+        const ey = vpCy + Math.sin(Math.PI / 6) * (vpR - 30);
+        const open = 1.5 + corr * 9;
+        ctx.strokeStyle = hexA(corr > 0.6 ? '#DA4060' : '#A060D0', 0.45 + corr * 0.55);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.ellipse(ex, ey, 13, open, 0, 0, PI2); ctx.stroke();
+        if (corr > 0.05) {
+            const pupil = Math.min(open - 1, 1 + corr * 4);
+            ctx.fillStyle = hexA('#DA4060', 0.25 + corr * 0.75);
+            ctx.beginPath(); ctx.arc(ex, ey, Math.max(0.5, pupil), 0, PI2); ctx.fill();
+        }
+    }
 
     // BATTERY (small inline indicator below depth, not an arc)
     const bat = p.battery != null ? p.battery : 100;
@@ -7813,20 +8478,50 @@ function drawObstacle(sx, sy, ob) {
     ctx.save();
     ctx.translate(sx, sy);
     if (ob.kind === 'rock') {
-        // Lumpy boulder
-        ctx.fillStyle = ob.color;
-        ctx.beginPath();
-        for (let i = 0; i <= 12; i++) {
-            const a = (i / 12) * PI2;
-            const rad = r * (0.85 + Math.sin(i * 1.7 + ob.seed) * 0.12);
-            const x = Math.cos(a) * rad, y = Math.sin(a) * rad;
-            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        // Faceted boulder — irregular silhouette, per-facet light from upper-left,
+        // cracks, sediment dusting on top, companion pebbles. All seeded, no per-frame motion.
+        const sr = (k) => { const s = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
+        const N = 14, pts = [];
+        for (let i = 0; i < N; i++) {
+            const a = (i / N) * PI2;
+            const rad = r * (0.72 + sr(i) * 0.34);
+            // flatter underside — rocks sit, they don't float
+            pts.push([Math.cos(a) * rad, Math.sin(a) * rad * (Math.sin(a) > 0 ? 0.78 : 1)]);
         }
-        ctx.closePath(); ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1; ctx.stroke();
-        // Highlight
-        ctx.fillStyle = 'rgba(180,180,180,0.06)';
-        ctx.beginPath(); ctx.arc(-r * 0.3, -r * 0.3, r * 0.5, 0, PI2); ctx.fill();
+        const trace = () => {
+            ctx.beginPath();
+            pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+            ctx.closePath();
+        };
+        trace(); ctx.fillStyle = ob.color; ctx.fill();
+        for (let i = 0; i < N; i++) {
+            const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % N];
+            const mx2 = (x1 + x2) / 2, my2 = (y1 + y2) / 2;
+            const lit = (-mx2 - my2) / ((Math.hypot(mx2, my2) || 1) * Math.SQRT2);
+            ctx.fillStyle = lit > 0 ? `rgba(205,210,220,${0.05 + lit * 0.10})` : `rgba(0,0,0,${-lit * 0.26})`;
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); ctx.closePath(); ctx.fill();
+        }
+        ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1;
+        for (let c = 0; c < 3; c++) {
+            let ax = (sr(20 + c) - 0.5) * r * 1.1, ay = (sr(30 + c) - 0.5) * r * 0.8;
+            ctx.beginPath(); ctx.moveTo(ax, ay);
+            for (let s2 = 0; s2 < 3; s2++) {
+                ax += (sr(40 + c * 3 + s2) - 0.35) * r * 0.4;
+                ay += (sr(60 + c * 3 + s2) - 0.5) * r * 0.35;
+                ctx.lineTo(ax, ay);
+            }
+            ctx.stroke();
+        }
+        ctx.strokeStyle = 'rgba(160,158,145,0.20)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.ellipse(0, -r * 0.5, r * 0.5, r * 0.16, 0, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke();
+        trace(); ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+        for (let pb = 0; pb < 2; pb++) {
+            const px = (sr(70 + pb) - 0.5) * r * 2.1, py = r * 0.72 + sr(80 + pb) * r * 0.2;
+            ctx.fillStyle = ob.color;
+            ctx.beginPath(); ctx.ellipse(px, py, r * 0.16, r * 0.11, 0, 0, PI2); ctx.fill();
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath(); ctx.ellipse(px, py + r * 0.03, r * 0.15, r * 0.06, 0, 0, Math.PI); ctx.fill();
+        }
     } else if (ob.kind === 'kelp') {
         // Tall swaying frond cluster
         const sway = Math.sin(performance.now() * 0.001 + ob.seed) * 0.15;
@@ -7858,17 +8553,43 @@ function drawObstacle(sx, sy, ob) {
             ctx.stroke();
         }
     } else if (ob.kind === 'spire') {
-        // Tall jagged stone spire
-        ctx.fillStyle = ob.color;
-        ctx.beginPath();
-        ctx.moveTo(-r * 0.6, r);
-        ctx.lineTo(0, -r * 1.2);
-        ctx.lineTo(r * 0.6, r);
-        ctx.closePath(); ctx.fill();
-        ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
-        // Edge highlight
-        ctx.strokeStyle = 'rgba(120,140,160,0.2)'; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.moveTo(-r * 0.55, r * 0.95); ctx.lineTo(0, -r * 1.15); ctx.stroke();
+        // Jagged multi-peak stone spire — seeded profile, lit west face, strata lines.
+        const sr = (k) => { const s = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
+        const peaks = 2 + Math.floor(sr(1) * 2);
+        const top = [];
+        ctx.beginPath(); ctx.moveTo(-r * 0.7, r);
+        for (let pk = 0; pk < peaks; pk++) {
+            const px = -r * 0.4 + (pk / (peaks - 1 || 1)) * r * 0.8 + (sr(2 + pk) - 0.5) * r * 0.15;
+            const py = -r * (0.7 + sr(5 + pk) * 0.6) * (pk === Math.floor(peaks / 2) ? 1.12 : 0.82);
+            ctx.lineTo(px - r * 0.14, py + r * 0.4 + sr(8 + pk) * r * 0.12);   // shoulder notch
+            ctx.lineTo(px, py);
+            top.push([px, py]);
+        }
+        ctx.lineTo(r * 0.7, r); ctx.closePath();
+        ctx.fillStyle = ob.color; ctx.fill();
+        // Lit western face
+        ctx.fillStyle = 'rgba(150,170,195,0.10)';
+        ctx.beginPath(); ctx.moveTo(-r * 0.7, r); ctx.lineTo(top[0][0], top[0][1]); ctx.lineTo(top[0][0] + r * 0.08, r); ctx.closePath(); ctx.fill();
+        // Shadowed eastern face
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        const lastTop = top[top.length - 1];
+        ctx.beginPath(); ctx.moveTo(r * 0.7, r); ctx.lineTo(lastTop[0], lastTop[1]); ctx.lineTo(lastTop[0] - r * 0.06, r); ctx.closePath(); ctx.fill();
+        // Strata
+        ctx.strokeStyle = 'rgba(0,0,0,0.32)'; ctx.lineWidth = 0.8;
+        for (let st = 1; st <= 3; st++) {
+            const sy2 = r - st * r * 0.42;
+            ctx.beginPath();
+            ctx.moveTo(-r * (0.62 - st * 0.13), sy2);
+            ctx.lineTo(r * (0.62 - st * 0.11), sy2 + (sr(30 + st) - 0.5) * r * 0.12);
+            ctx.stroke();
+        }
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(-r * 0.7, r);
+        for (let pk = 0; pk < top.length; pk++) {
+            ctx.lineTo(top[pk][0] - r * 0.14, top[pk][1] + r * 0.4 + sr(8 + pk) * r * 0.12);
+            ctx.lineTo(top[pk][0], top[pk][1]);
+        }
+        ctx.lineTo(r * 0.7, r); ctx.stroke();
     } else if (ob.kind === 'glowcap') {
         // Bioluminescent mushroom / coral knob
         ctx.fillStyle = '#10141A';
@@ -7935,6 +8656,158 @@ function drawObstacle(sx, sy, ob) {
             ctx.beginPath(); ctx.moveTo(cx2, cy2);
             ctx.lineTo(cx2 + Math.cos(a) * r * 0.7, cy2 + Math.sin(a) * r * 0.7);
             ctx.stroke();
+        }
+    } else if (ob.kind === 'bones') {
+        // Whale fall — ribcage arcs over a sediment mound, skull at one end.
+        const sr = (k) => { const s = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
+        ctx.fillStyle = 'rgba(30,32,28,0.8)';
+        ctx.beginPath(); ctx.ellipse(0, r * 0.55, r * 1.1, r * 0.25, 0, 0, PI2); ctx.fill();
+        ctx.lineCap = 'round';
+        const ribs = 5;
+        for (let i = 0; i < ribs; i++) {
+            const bx = -r * 0.55 + (i / (ribs - 1)) * r * 1.1;
+            const hgt = r * (0.85 - Math.abs(i - (ribs - 1) / 2) * 0.16) * (0.9 + sr(i) * 0.2);
+            ctx.strokeStyle = `rgba(${170 + sr(i + 9) * 20},${172 + sr(i + 5) * 15},158,0.8)`;
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(bx, r * 0.5, hgt, Math.PI * 1.02, Math.PI * 1.72 + sr(i + 3) * 0.1); ctx.stroke();
+        }
+        // Spine + vertebrae
+        ctx.strokeStyle = 'rgba(165,168,152,0.7)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-r * 0.8, r * 0.42); ctx.quadraticCurveTo(0, r * 0.3, r * 0.75, r * 0.44); ctx.stroke();
+        ctx.fillStyle = 'rgba(175,178,162,0.8)';
+        for (let vtb = 0; vtb < 6; vtb++) {
+            const vx = -r * 0.75 + vtb * r * 0.3;
+            ctx.beginPath(); ctx.arc(vx, r * 0.38 - Math.sin((vtb / 5) * Math.PI) * r * 0.06, 2.4, 0, PI2); ctx.fill();
+        }
+        // Skull
+        ctx.fillStyle = 'rgba(180,182,166,0.85)';
+        ctx.beginPath(); ctx.ellipse(-r * 0.95, r * 0.36, r * 0.26, r * 0.17, -0.25, 0, PI2); ctx.fill();
+        ctx.fillStyle = 'rgba(10,10,12,0.9)';
+        ctx.beginPath(); ctx.arc(-r * 1.02, r * 0.32, r * 0.05, 0, PI2); ctx.fill();
+    } else if (ob.kind === 'seep') {
+        // Cold seep — crusted mound venting a shimmering methane bubble column.
+        const sr = (k) => { const s = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
+        ctx.fillStyle = ob.color;
+        ctx.beginPath(); ctx.ellipse(0, r * 0.45, r * 0.85, r * 0.4, 0, 0, PI2); ctx.fill();
+        ctx.fillStyle = 'rgba(200,205,210,0.12)';
+        for (let cr = 0; cr < 5; cr++) {
+            ctx.beginPath(); ctx.arc((sr(cr) - 0.5) * r * 1.2, r * 0.4 + (sr(cr + 7) - 0.5) * r * 0.3, r * 0.07, 0, PI2); ctx.fill();
+        }
+        const t3 = performance.now() * 0.001;
+        for (let bi = 0; bi < 7; bi++) {
+            const cycle = r * 3.2;
+            const by = -(((t3 * 22 + bi * 19 + sr(bi) * 14) % cycle));
+            const bx = Math.sin(t3 * 1.2 + bi * 2.1) * r * 0.22 * (1 - by / -cycle + 0.3);
+            const rise = -by / cycle;   // 0 at mound → 1 at top
+            ctx.strokeStyle = `rgba(180,220,255,${0.35 * (1 - rise)})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(bx, r * 0.3 + by, 1.6 + rise * 3.4, 0, PI2); ctx.stroke();
+        }
+    } else if (ob.kind === 'chitin') {
+        // The floor at this depth is not rock (lore d7) — segmented plate, breathing slowly.
+        const breathe = Math.sin(performance.now() * 0.00045 + ob.seed);
+        const sc = 1 + breathe * 0.035;
+        ctx.save(); ctx.scale(sc, sc);
+        ctx.fillStyle = ob.color;
+        ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.62, 0.15, 0, PI2); ctx.fill();
+        // Plate segments with ridge seams
+        ctx.strokeStyle = '#402030'; ctx.lineWidth = 1.6;
+        for (let sg = -1; sg <= 1; sg++) {
+            ctx.beginPath();
+            ctx.moveTo(sg * r * 0.4 - r * 0.18, -r * 0.55);
+            ctx.quadraticCurveTo(sg * r * 0.4 + r * 0.1, 0, sg * r * 0.4 - r * 0.1, r * 0.55);
+            ctx.stroke();
+        }
+        // Seam glow strengthens as it inhales
+        ctx.strokeStyle = `rgba(255,60,80,${0.08 + Math.max(0, breathe) * 0.12})`;
+        ctx.lineWidth = 2.6;
+        ctx.beginPath(); ctx.moveTo(-r * 0.58, -r * 0.35); ctx.quadraticCurveTo(0, r * 0.1, r * 0.6, -r * 0.28); ctx.stroke();
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.62, 0.15, 0, PI2); ctx.stroke();
+        ctx.restore();
+    } else if (ob.kind === 'monolith') {
+        // Machined slab — too regular for geology. One slow indicator light nobody services.
+        const sr = (k) => { const s = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
+        ctx.save(); ctx.rotate((sr(1) - 0.5) * 0.22);
+        const w2 = r * 0.55, h2 = r * 1.35;
+        ctx.fillStyle = ob.color;
+        ctx.fillRect(-w2 / 2, -h2 / 2, w2, h2);
+        // Machined grooves
+        ctx.strokeStyle = 'rgba(90,110,125,0.25)'; ctx.lineWidth = 1;
+        for (let gv = 1; gv <= 4; gv++) {
+            const gy = -h2 / 2 + (gv / 5) * h2;
+            ctx.beginPath(); ctx.moveTo(-w2 / 2 + 2, gy); ctx.lineTo(w2 / 2 - 2, gy); ctx.stroke();
+        }
+        // Lit edge + shadow edge
+        ctx.strokeStyle = 'rgba(140,160,180,0.3)'; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(-w2 / 2, h2 / 2); ctx.lineTo(-w2 / 2, -h2 / 2); ctx.lineTo(w2 / 2, -h2 / 2); ctx.stroke();
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(w2 / 2, -h2 / 2); ctx.lineTo(w2 / 2, h2 / 2); ctx.lineTo(-w2 / 2, h2 / 2); ctx.stroke();
+        // Organic reclaim at the base
+        ctx.fillStyle = 'rgba(60,40,50,0.5)';
+        ctx.beginPath(); ctx.ellipse(0, h2 / 2, w2 * 0.8, r * 0.14, 0, 0, Math.PI, true); ctx.fill();
+        // Indicator light — ~7s period, brief blink; still running, which is worse
+        const blink = (performance.now() * 0.001 + ob.seed) % 7;
+        if (blink < 0.18) drawGlow(ctx, '#C8D8E0', w2 * 0.22, -h2 * 0.38, 7, 0.8);
+        ctx.restore();
+    } else if (ob.kind === 'debris') {
+        // Hull-plate pile — collapsed structure, plates at angles, rivet lines, one readable stencil.
+        const sr = (k) => { const s = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
+        ctx.fillStyle = 'rgba(20,22,20,0.7)';
+        ctx.beginPath(); ctx.ellipse(0, r * 0.5, r * 1.05, r * 0.28, 0, 0, PI2); ctx.fill();
+        for (let pl = 0; pl < 4; pl++) {
+            const px = (sr(pl) - 0.5) * r * 1.1, py = r * 0.3 - pl * r * 0.22;
+            const pw = r * (0.5 + sr(pl + 4) * 0.5), ph = r * 0.2;
+            const rot = (sr(pl + 8) - 0.5) * 0.9;
+            ctx.save(); ctx.translate(px, py); ctx.rotate(rot);
+            ctx.fillStyle = ob.color;
+            ctx.fillRect(-pw / 2, -ph / 2, pw, ph);
+            ctx.strokeStyle = 'rgba(140,150,160,0.22)'; ctx.lineWidth = 1;
+            ctx.strokeRect(-pw / 2, -ph / 2, pw, ph);
+            // Rivets
+            ctx.fillStyle = 'rgba(100,110,120,0.4)';
+            for (let rv = 0; rv < 4; rv++) { ctx.beginPath(); ctx.arc(-pw / 2 + 3 + rv * (pw - 6) / 3, -ph / 2 + 3, 1, 0, PI2); ctx.fill(); }
+            // Rust bleed
+            ctx.fillStyle = 'rgba(140,70,40,0.18)';
+            ctx.fillRect(-pw / 2, ph / 2 - 3, pw * (0.3 + sr(pl + 12) * 0.5), 3);
+            ctx.restore();
+        }
+        // Stencil on the top plate — a hull number nobody will report to
+        ctx.fillStyle = 'rgba(160,170,175,0.35)'; ctx.font = `${Math.max(5, r * 0.16)}px monospace`; ctx.textAlign = 'center';
+        ctx.fillText('P3-' + String(Math.floor(sr(20) * 90) + 10), 0, -r * 0.45);
+    } else if (ob.kind === 'cable') {
+        // Snapped trunk cable — sags across the floor, frayed end sparking every few seconds.
+        const sr = (k) => { const s = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
+        ctx.strokeStyle = ob.color; ctx.lineWidth = 5; ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-r * 1.2, r * 0.3 + (sr(1) - 0.5) * r * 0.3);
+        ctx.quadraticCurveTo((sr(2) - 0.5) * r, r * 0.75, r * 0.9, r * 0.1 + (sr(3) - 0.5) * r * 0.4);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(120,130,140,0.25)'; ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(-r * 1.2, r * 0.28 + (sr(1) - 0.5) * r * 0.3);
+        ctx.quadraticCurveTo((sr(2) - 0.5) * r, r * 0.72, r * 0.9, r * 0.08 + (sr(3) - 0.5) * r * 0.4);
+        ctx.stroke();
+        // Anchor collar at one end
+        ctx.fillStyle = '#20262A';
+        ctx.beginPath(); ctx.arc(-r * 1.2, r * 0.3 + (sr(1) - 0.5) * r * 0.3, 5, 0, PI2); ctx.fill();
+        // Frayed live end — sparks on a seeded cycle; the grid it fed is gone
+        const endX = r * 0.9, endY = r * 0.1 + (sr(3) - 0.5) * r * 0.4;
+        ctx.strokeStyle = 'rgba(200,210,220,0.5)'; ctx.lineWidth = 1;
+        for (let fw = 0; fw < 3; fw++) {
+            ctx.beginPath(); ctx.moveTo(endX, endY);
+            ctx.lineTo(endX + 4 + sr(fw + 5) * 5, endY + (sr(fw + 9) - 0.5) * 8);
+            ctx.stroke();
+        }
+        const sparkCycle = (performance.now() * 0.001 + ob.seed) % (3 + sr(4) * 4);
+        if (sparkCycle < 0.12) {
+            drawGlow(ctx, '#9FD8FF', endX + 4, endY, 12, 0.9);
+            ctx.strokeStyle = 'rgba(200,235,255,0.9)'; ctx.lineWidth = 1.2;
+            for (let sp = 0; sp < 3; sp++) {
+                ctx.beginPath(); ctx.moveTo(endX + 3, endY);
+                ctx.lineTo(endX + 8 + Math.random() * 10, endY + (Math.random() - 0.5) * 16);
+                ctx.stroke();
+            }
         }
     }
     ctx.restore();
@@ -8504,6 +9377,8 @@ function drawPauseOverlay(w, h, g) {
         '[ESC] Resume',
         `[M] ${meta.muted ? 'Unmute' : 'Mute'} Sound`,
         `[ Volume: ${Math.round(meta.volume * 100)}% — adjust with [ and ] ]`,
+        `[T] HUD text size: ${Math.round((meta.uiScale || 1) * 100)}%`,
+        `[H] High-contrast HUD: ${meta.hudContrast ? 'ON' : 'off'}`,
         '[Q] Quit to Title',
     ];
     for (let i = 0; i < lines.length; i++) {
@@ -8769,6 +9644,31 @@ function drawTitle(w, h) {
 
     // (Action prompts now at top — see ACTIONS_Y below the subtitle)
     ctx.textAlign = 'center';
+    // Daily dive + ending + signal readouts
+    ctx.font = '10px monospace';
+    if (dailyArmed) {
+        ctx.fillStyle = '#E8D080';
+        ctx.fillText('◈ DAILY DIVE ARMED — ' + dayKeyUTC() + ' brief for everyone  [D] disarm', w / 2, ACTIONS_Y - 48);
+    } else {
+        ctx.fillStyle = '#5A6A7A';
+        const db = meta.dailyBest && meta.dailyBest.date === dayKeyUTC() ? ('  ·  today\'s best ' + meta.dailyBest.score.toLocaleString()) : '';
+        ctx.fillText('[D] daily dive' + db + '   ·   ⌁ ' + (meta.signal || 0) + ' signal', w / 2, ACTIONS_Y - 48);
+    }
+    addTapZone(w / 2 - 160, ACTIONS_Y - 60, 320, 16, 'd');
+    if (meta.ending) {
+        ctx.fillStyle = meta.ending === 'answered' ? '#7AC8B8' : '#8A7A88';
+        ctx.font = 'italic 10px monospace';
+        ctx.fillText(meta.ending === 'answered' ? 'NEREID remembers her answer.' : 'The question is still down there, keeping.', w / 2, ACTIONS_Y - 62);
+    }
+    // Destination readout — P3 unlocks after any run past 2600m
+    if (meta.p3Unlocked) {
+        const p3 = meta.destination === 'p3';
+        ctx.font = 'bold 11px monospace';
+        ctx.fillStyle = p3 ? '#C87840' : '#4A8ADA';
+        ctx.fillText(p3 ? 'DESTINATION: PELAGOS-3 — THE SCAR  [P] switch' : 'DESTINATION: PELAGOS-9  [P] switch', w / 2, ACTIONS_Y - 22);
+        if (p3) { ctx.fillStyle = '#7A5A48'; ctx.font = '9px monospace'; ctx.fillText('dead ocean · drowned machinery · the survey never came back', w / 2, ACTIONS_Y - 10); }
+        addTapZone(w / 2 - 160, ACTIONS_Y - 34, 320, 18, 'p');
+    }
     ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 16px monospace';
     ctx.fillText('[ENTER] DIVE', w / 2, ACTIONS_Y);
     ctx.font = 'bold 11px monospace';
@@ -9031,14 +9931,34 @@ function drawMooring(w, h, g) {
     ctx.fillText('Materials  ' + mtxt, w / 2, 194);
     ctx.fillStyle = '#7A8A9A'; ctx.font = '11px monospace';
     ctx.fillText((meta.scannedCreatures || []).length + ' creatures catalogued — blueprints reverse-engineered from scans', w / 2, 216);
-    // NEREID surface-interval beat — one line, picked at surfacing from what the run was
-    if (g && g._mooringLine) {
+    // THE QUESTION — NEREID's one ask, earned by reading deep and hearing the Scar.
+    // Replaces the beat until answered; the answer is permanent.
+    if (g && g._theQuestion && !meta.ending) {
+        ctx.fillStyle = 'rgba(90,223,207,0.06)'; ctx.fillRect(w / 2 - 260, 224, 520, 96);
+        ctx.strokeStyle = '#5ADFCF'; ctx.lineWidth = 1; ctx.strokeRect(w / 2 - 260, 224, 520, 96);
+        ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 10px monospace';
+        ctx.fillText('— NEREID · PRIORITY —', w / 2, 240);
+        ctx.fillStyle = '#C8E8E0'; ctx.font = 'italic 12px monospace';
+        ctx.fillText('"Pilot. You have read what I was. You have heard what still runs on the Scar.', w / 2, 258);
+        ctx.fillText('The photograph asked the Abyss a question once. It is my turn. May I answer it?"', w / 2, 274);
+        ctx.fillStyle = '#A0E8B0'; ctx.font = 'bold 12px monospace';
+        ctx.fillText('[1] ANSWER HER', w / 2 - 100, 302);
+        ctx.fillStyle = '#DA8A6A';
+        ctx.fillText('[2] SAY NOTHING', w / 2 + 100, 302);
+        addTapZone(w / 2 - 190, 288, 180, 22, '1');
+        addTapZone(w / 2 + 10, 288, 180, 22, '2');
+    } else if (g && g._mooringLine) {
+        // NEREID surface-interval beat — one line, picked at surfacing from what the run was
         ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 10px monospace';
         ctx.fillText('— NEREID —', w / 2, 238);
         ctx.fillStyle = '#9AC8C0'; ctx.font = 'italic 12px monospace';
         ctx.fillText(g._mooringLine, w / 2, 254);
     }
-    const actY = 268;
+    if (g && g._signalEarned && !(g._theQuestion && !meta.ending)) {
+        ctx.fillStyle = '#B0A0E8'; ctx.font = '11px monospace';
+        ctx.fillText('⌁ +' + g._signalEarned + ' SIGNAL distilled from score  ·  ⌁ ' + (meta.signal || 0) + ' banked — [C] spend in the CODEX', w / 2, 226 - 4);
+    }
+    const actY = (g && g._theQuestion && !meta.ending) ? 344 : 268;   // the Question needs its room
     ctx.fillStyle = '#0a1520'; ctx.fillRect(w / 2 - 180, actY, 360, 38);
     ctx.strokeStyle = '#5ADFCF'; ctx.lineWidth = 1; ctx.strokeRect(w / 2 - 180, actY, 360, 38);
     ctx.fillStyle = '#FFF'; ctx.font = '14px monospace';
@@ -9049,6 +9969,60 @@ function drawMooring(w, h, g) {
     ctx.fillText('[ENTER]   DIVE AGAIN →', w / 2, actY + 72);
     addTapZone(w / 2 - 180, actY, 360, 38, 'u');
     addTapZone(w / 2 - 180, actY + 48, 360, 38, 'Enter');
+    // Module bay
+    ctx.fillStyle = '#0a1520'; ctx.fillRect(w / 2 - 180, actY + 96, 360, 38);
+    ctx.strokeStyle = '#80FFE0'; ctx.lineWidth = 1; ctx.strokeRect(w / 2 - 180, actY + 96, 360, 38);
+    ctx.fillStyle = '#80FFE0'; ctx.font = '14px monospace';
+    ctx.fillText('[G]   MODULE BAY', w / 2, actY + 120);
+    addTapZone(w / 2 - 180, actY + 96, 360, 38, 'g');
+}
+
+// --- MODULE BAY — craft and equip biomimetic modules (research-gated) ---
+function drawModules(w, h) {
+    ctx.fillStyle = '#020610'; ctx.fillRect(0, 0, w, h);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 26px monospace';
+    ctx.fillText('MODULE BAY', w / 2, 52);
+    ctx.fillStyle = '#7A8A9A'; ctx.font = '11px monospace';
+    ctx.fillText('study a creature to tier 2 → its biology becomes a schematic → materials build it', w / 2, 74);
+    const mtxt = Object.keys(BASE_MATERIALS).map(k => `${BASE_MATERIALS[k].glyph}${meta.materials[k] || 0}`).join('   ');
+    ctx.fillStyle = '#9AB0C0'; ctx.font = '12px monospace';
+    ctx.fillText('Materials  ' + mtxt, w / 2, 96);
+    ctx.fillStyle = '#DAA520';
+    ctx.fillText(`Slots — HULL ${equippedInSlot('hull')}/${MODULE_SLOTS.hull} · SYSTEMS ${equippedInSlot('systems')}/${MODULE_SLOTS.systems} · PROW ${equippedInSlot('prow')}/${MODULE_SLOTS.prow}`, w / 2, 116);
+    for (let i = 0; i < MODULE_DEFS.length; i++) {
+        const m = MODULE_DEFS[i];
+        const unlocked = moduleUnlocked(m);
+        const owned = meta.modulesOwned.includes(m.id);
+        const equipped = meta.modulesEquipped.includes(m.id);
+        const affordable = canAfford(m.cost);
+        const bx = w / 2 - 330, by = 136 + i * 58, bw = 660, bh = 52;
+        addTapZone(bx, by, bw, bh, String(i + 1));
+        ctx.fillStyle = equipped ? '#0E2430' : '#0a1420';
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.strokeStyle = equipped ? '#5ADFCF' : owned ? '#3A6A5A' : unlocked ? '#3A4A5A' : '#1A2430';
+        ctx.lineWidth = equipped ? 2 : 1;
+        ctx.strokeRect(bx, by, bw, bh);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = unlocked ? (equipped ? '#80FFE0' : owned ? '#A0D0C0' : '#C0D0DC') : '#3A4A5A';
+        ctx.font = 'bold 12px monospace';
+        const state = equipped ? 'EQUIPPED' : owned ? 'IN STORES' : unlocked ? (affordable ? 'CRAFTABLE' : 'NEED MATERIALS') : 'LOCKED';
+        ctx.fillText(`[${i + 1}] ${m.name}  ·  ${m.slot.toUpperCase()}  ·  ${state}`, bx + 12, by + 20);
+        ctx.font = '10px monospace';
+        if (unlocked) {
+            ctx.fillStyle = '#7A8A9A';
+            ctx.fillText(m.desc + (owned ? '' : '   —   ' + matsLabel(m.cost)), bx + 12, by + 38);
+        } else {
+            const def = ENEMY_TYPES[m.req.type];
+            const known = (meta.research[m.req.type] || 0) >= 1;
+            ctx.fillStyle = '#46586A';
+            ctx.fillText(`schematic locked — research ${known && def ? def.name : 'an unidentified species'} to tier ${m.req.tier} (now ${meta.research[m.req.type] || 0})`, bx + 12, by + 38);
+        }
+    }
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#888'; ctx.font = '13px monospace';
+    ctx.fillText('[1-8] craft / equip / unequip   ·   [ESC] back', w / 2, 136 + MODULE_DEFS.length * 58 + 24);
+    addTapZone(0, h - 50, w, 50, 'Escape');
 }
 
 // --- Contract Board Screen ---
@@ -9279,52 +10253,46 @@ function drawCodex(w, h) {
     ctx.fillStyle = '#888'; ctx.font = '12px monospace';
     ctx.fillText(`${meta.loreFragments.length}/${LORE_FRAGMENTS.length} FRAGMENTS RECOVERED`, w / 2, 65);
 
-    // Feature 9: Creature scan entries
+    // Creature bestiary — 3 columns, research pips (the old list clipped at ~10 of 45 rows)
     ctx.fillStyle = '#5AAFDA'; ctx.font = 'bold 12px monospace';
-    ctx.fillText('— CREATURE BESTIARY —', w / 2, 88);
+    ctx.fillText('— CREATURE BESTIARY —  ●=scanned ●●=observed ●●●=analysed', w / 2, 88);
     let ly = 108;
     ctx.font = '10px monospace'; ctx.textAlign = 'left';
-    for (const [typeId, typeData] of Object.entries(ENEMY_TYPES)) {
-        if (ly > 260) break;
-        const scanned = meta.scannedCreatures.includes(typeId);
+    const bestiary = Object.entries(ENEMY_TYPES);
+    const bCols = 3, bColW = Math.floor((w - 80) / bCols), bRows = Math.ceil(bestiary.length / bCols);
+    for (let bi = 0; bi < bestiary.length; bi++) {
+        const [typeId, typeData] = bestiary[bi];
+        const tier = meta.research[typeId] || 0;
         const aberrantScanned = meta.aberrantScanned.includes('aberrant_' + typeId);
-        ctx.fillStyle = scanned ? '#7FA896' : '#3A4A4A';
-        // Unscanned: name hidden — show ??? + classification placeholder
-        ctx.fillText(`${scanned ? '✓' : '○'} ${scanned ? typeData.name : '???'}`, 40, ly);
-        if (scanned) {
-            ctx.fillStyle = '#4A6A5A';
-            ctx.fillText(`HP:${Math.floor(typeData.hp)} DMG:${typeData.damage} +10% scan bonus`, 160, ly);
-        } else {
-            ctx.fillStyle = '#2A3A3A';
-            ctx.fillText('UNKNOWN CONTACT — scan with sonar to classify', 160, ly);
-        }
-        if (aberrantScanned) {
-            ctx.fillStyle = '#9A4ABA';
-            ctx.fillText('★ ABERRANT logged', w - 200, ly);
-        }
-        ly += 16;
+        const col = Math.floor(bi / bRows), row = bi % bRows;
+        const bx = 40 + col * bColW, by = ly + row * 13;
+        ctx.fillStyle = tier >= 3 ? '#A0E8C8' : tier >= 2 ? '#7FA896' : tier >= 1 ? '#5A7A6A' : '#2A3A3A';
+        const pips = '●'.repeat(tier) + '○'.repeat(Math.max(0, 3 - tier));
+        ctx.fillText(`${pips} ${tier >= 1 ? typeData.name : '???'}${aberrantScanned ? ' ★' : ''}`, bx, by);
     }
+    ly = 108 + bRows * 13 - 13;
 
-    // Zone scan completion
+    // Zone scan completion — anchored below however tall the bestiary got
     const totalCreatures = Object.keys(ENEMY_TYPES).length;
     const scannedCount = meta.scannedCreatures.length;
     const pct = Math.floor(scannedCount / totalCreatures * 100);
     ctx.fillStyle = '#DAA520'; ctx.font = '11px monospace'; ctx.textAlign = 'center';
-    ctx.fillText(`Bestiary: ${scannedCount}/${totalCreatures} (${pct}%) — +${Math.floor(scannedCount/totalCreatures*5)*5}% global dmg bonus`, w/2, 270);
+    ctx.fillText(`Bestiary: ${scannedCount}/${totalCreatures} (${pct}%) — +${Math.floor(scannedCount/totalCreatures*5)*5}% global dmg bonus`, w/2, ly + 22);
 
     // Fusion matrix — recipes always visible, results hidden until discovered
+    const fmY = ly + 34;
     ctx.strokeStyle = '#1A2A3A'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(20, 282); ctx.lineTo(w-20, 282); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(20, fmY); ctx.lineTo(w-20, fmY); ctx.stroke();
     ctx.fillStyle = '#FF80FF'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center';
     const discovered = meta.fusionsDiscovered || [];
-    ctx.fillText(`— FUSION MATRIX  ${discovered.length}/${WEAPON_EVOLUTIONS.length} —`, w/2, 298);
+    ctx.fillText(`— FUSION MATRIX  ${discovered.length}/${WEAPON_EVOLUTIONS.length} —`, w/2, fmY + 16);
     ctx.font = '10px monospace'; ctx.textAlign = 'left';
     const colW = Math.floor((w - 80) / 2);
     for (let fi = 0; fi < WEAPON_EVOLUTIONS.length; fi++) {
         const evo = WEAPON_EVOLUTIONS[fi];
         const found = discovered.includes(evo.result);
         const col = fi % 2, row = Math.floor(fi / 2);
-        const fx = 40 + col * colW, fy = 314 + row * 14;
+        const fx = 40 + col * colW, fy = fmY + 32 + row * 14;
         // Apex components are themselves evolved — hide their names until discovered too
         const nameOf = id => WEAPON_DEFS[id].evolved && !discovered.includes(id) ? '???' : WEAPON_DEFS[id].name;
         ctx.fillStyle = found ? '#DA80DA' : '#3A4A4A';
@@ -9332,7 +10300,7 @@ function drawCodex(w, h) {
         ctx.fillStyle = found ? '#7A6A8A' : '#2A3A3A';
         ctx.fillText(`= ${nameOf(evo.a)} + ${nameOf(evo.b)}`, fx + 150, fy);
     }
-    const fusionEndY = 314 + Math.ceil(WEAPON_EVOLUTIONS.length / 2) * 14;
+    const fusionEndY = fmY + 32 + Math.ceil(WEAPON_EVOLUTIONS.length / 2) * 14;
 
     // Lore fragments
     ctx.strokeStyle = '#1A2A3A'; ctx.lineWidth = 1;
@@ -9342,6 +10310,20 @@ function drawCodex(w, h) {
 
     const owned = meta.loreFragments;
     ly = fusionEndY + 40;
+    // SEALED ARCHIVE — Signal buys the next sealed fragment (cheapest layer first).
+    const sealCost = (f) => f.layer * 40;
+    const nextSealed = LORE_FRAGMENTS.filter(f => !owned.includes(f.id)).sort((a, b) => a.layer - b.layer)[0];
+    ctx.textAlign = 'center'; ctx.font = '11px monospace';
+    if (nextSealed) {
+        const afford = (meta.signal || 0) >= sealCost(nextSealed);
+        ctx.fillStyle = afford ? '#B0A0E8' : '#4A4460';
+        ctx.fillText(`⌁ ${meta.signal || 0} SIGNAL — [S] UNSEAL next archive fragment (layer ${nextSealed.layer} · ${sealCost(nextSealed)} ⌁)`, w / 2, ly);
+        addTapZone(w / 2 - 220, ly - 12, 440, 18, 's');
+    } else {
+        ctx.fillStyle = '#B0A0E8';
+        ctx.fillText(`⌁ ${meta.signal || 0} SIGNAL — the archive is fully unsealed`, w / 2, ly);
+    }
+    ly += 22;
     for (const frag of LORE_FRAGMENTS) {
         if (ly > h - 40) break;
         const unlocked = owned.includes(frag.id);
@@ -9355,7 +10337,7 @@ function drawCodex(w, h) {
             }
             ly += 8;
         } else {
-            ctx.fillText('[ FRAGMENT LOCKED ]', 40, ly);
+            ctx.fillText(`[ SEALED — layer ${frag.layer} · ${sealCost(frag)} ⌁ ]`, 40, ly);
             ly += 22;
         }
     }
@@ -9569,6 +10551,17 @@ window.addEventListener('keydown', e => {
             saveMeta();
             return;
         }
+        if (e.key === 't' || e.key === 'T') {
+            meta.uiScale = meta.uiScale >= 1.3 ? 1 : meta.uiScale >= 1.15 ? 1.3 : 1.15;
+            UI_SCALE = meta.uiScale;
+            saveMeta();
+            return;
+        }
+        if (e.key === 'h' || e.key === 'H') {
+            meta.hudContrast = !meta.hudContrast;
+            saveMeta();
+            return;
+        }
         if (e.key === 'q' || e.key === 'Q') {
             phase = 'title';
             game = null;
@@ -9589,8 +10582,41 @@ window.addEventListener('keydown', e => {
     }
     // Card draft
     if (phase === 'mooring') {
+        // THE QUESTION intercepts everything until answered
+        if (game && game._theQuestion && !meta.ending && (e.key === '1' || e.key === '2')) {
+            meta.ending = e.key === '1' ? 'answered' : 'silent';
+            saveMeta();
+            game._theQuestion = false;
+            game._mooringLine = meta.ending === 'answered'
+                ? '"…Thank you, Pilot. It was never the ocean that was listening. Now we both know what answered."'
+                : '"Noted, Pilot. Some questions keep better than answers. …She has stopped humming."';
+            if (audioCtx) playTone(meta.ending === 'answered' ? 660 : 140, 0.5, 'sine', 0.06);
+            return;
+        }
         if (e.key === 'u' || e.key === 'U') { phase = 'shop'; return; }
+        if (e.key === 'g' || e.key === 'G') { phase = 'modules'; return; }
+        if (e.key === 'c' || e.key === 'C') { phase = 'codex'; return; }
         if (e.key === 'Enter') { cardHand = dealCards(meta.totalRuns); cardSelected = new Set(); rollContractBoard(); phase = 'contracts'; return; }
+        return;
+    }
+    if (phase === 'modules') {
+        if (e.key === 'Escape') { phase = (game && game._surfaced && game.player.hp > 0) ? 'mooring' : 'title'; return; }
+        const mn = parseInt(e.key);
+        if (mn >= 1 && mn <= MODULE_DEFS.length) {
+            const m = MODULE_DEFS[mn - 1];
+            if (!moduleUnlocked(m)) { if (audioCtx) playTone(120, 0.1, 'square', 0.04); return; }
+            if (meta.modulesEquipped.includes(m.id)) {
+                meta.modulesEquipped = meta.modulesEquipped.filter(id => id !== m.id);
+            } else if (meta.modulesOwned.includes(m.id)) {
+                if (equippedInSlot(m.slot) < MODULE_SLOTS[m.slot]) meta.modulesEquipped.push(m.id);
+                else if (audioCtx) playTone(120, 0.1, 'square', 0.04);   // slot full
+            } else if (spendMaterials(m.cost)) {
+                meta.modulesOwned.push(m.id);
+                if (equippedInSlot(m.slot) < MODULE_SLOTS[m.slot]) meta.modulesEquipped.push(m.id);
+                if (audioCtx) sfxLevelUp();
+            } else if (audioCtx) playTone(120, 0.1, 'square', 0.04);
+            saveMeta();
+        }
         return;
     }
     if (phase === 'puzzle') {
@@ -9624,6 +10650,7 @@ window.addEventListener('keydown', e => {
             initAudio();
             const selected = [...cardSelected].map(i => cardHand[i]);
             game = createGame();
+            if (dailyRng) { game.daily = dayKeyUTC(); dailyRng = null; dailyArmed = false; }   // brief is set; the run itself is live
             game.selectedCards = selected;
             for (const c of selected) c.fn(game);
             // Check synergies
@@ -9663,6 +10690,16 @@ window.addEventListener('keydown', e => {
         return;
     }
     if (phase === 'codex' && e.key === 'Escape') { phase = 'title'; }
+    // [S] in codex — spend Signal to unseal the next archive fragment (cheapest layer first)
+    if (phase === 'codex' && (e.key === 's' || e.key === 'S')) {
+        const next = LORE_FRAGMENTS.filter(f => !meta.loreFragments.includes(f.id)).sort((a, b) => a.layer - b.layer)[0];
+        if (next && (meta.signal || 0) >= next.layer * 40) {
+            meta.signal -= next.layer * 40;
+            meta.loreFragments.push(next.id);
+            saveMeta();
+            if (audioCtx) { playTone(520, 0.08, 'sine', 0.05); setTimeout(() => playTone(780, 0.12, 'sine', 0.05), 90); }
+        } else if (audioCtx) playTone(120, 0.1, 'square', 0.04);
+    }
     if (phase === 'tutorial' && e.key === 'Escape') { phase = 'title'; }
     if (phase === 'title') {
         if (e.key === 'Enter') {
@@ -9671,16 +10708,28 @@ window.addEventListener('keydown', e => {
                 introPage = 0;
                 phase = 'intro';
             } else {
+                if (dailyArmed) dailyRng = mulberry32(seedFromString('deepswarm-' + dayKeyUTC()));
                 cardHand = dealCards(meta.totalRuns);
                 cardSelected = new Set();
                 rollContractBoard();
                 phase = 'contracts';
             }
         }
+        // [D] DAILY DIVE — everyone gets today's brief (contracts, cards, pool, trench)
+        if (e.key === 'd' || e.key === 'D') {
+            dailyArmed = !dailyArmed;
+            if (audioCtx) playTone(dailyArmed ? 520 : 260, 0.08, 'sine', 0.05);
+        }
         if (e.key === 'u' || e.key === 'U') phase = 'shop';
         if (e.key === 'c' || e.key === 'C') phase = 'codex';
         if (e.key === 't' || e.key === 'T') phase = 'tutorial';
         if (e.key === 'w' || e.key === 'W') phase = 'workshop';
+        // [P] destination — Pelagos-9 (living trench) / Pelagos-3 "THE SCAR" (drowned machinery)
+        if ((e.key === 'p' || e.key === 'P') && meta.p3Unlocked) {
+            meta.destination = meta.destination === 'p3' ? 'p9' : 'p3';
+            saveMeta();
+            if (audioCtx) playTone(meta.destination === 'p3' ? 180 : 320, 0.12, 'square', 0.05);
+        }
         // [H] REPAIR HULL — costs gold per condition point restored
         if (e.key === 'h' || e.key === 'H') {
             const need = 100 - (meta.hullCondition || 100);
@@ -9698,6 +10747,8 @@ window.addEventListener('keydown', e => {
                 }
             }
         }
+        // Module bay from the title too
+        if (e.key === 'g' || e.key === 'G') { phase = 'modules'; return; }
         // Composable stakes — [6]-[0] toggle each unlocked stake independently
         const stakeDef = STAKE_DEFS.find(sd => sd.key === e.key);
         if (stakeDef) {
@@ -9804,6 +10855,7 @@ function getScanlinePattern() {
     return _crtPattern;
 }
 function drawCRT() {
+    if (meta.hudContrast) return;   // high-contrast mode: no scanlines, flicker or vignette
     const w = canvas.width, h = canvas.height;
     // Phosphor flicker — subtle brightness wobble at ~20Hz
     const flick = Math.sin(Date.now() / 50) * 0.025;
