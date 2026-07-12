@@ -5843,7 +5843,8 @@ function draw() {
         cards: drawCardDraft, codex: drawCodex, tutorial: drawTutorial,
     };
     if (MENU_DRAWS[phase] || phase === 'mooring') {
-        MENU_S = Math.min(1, w / 720);
+        // Width AND height matter: landscape phones are short, not narrow
+        MENU_S = Math.min(1, w / 720, h / 760);
         if (MENU_S < 1) { ctx.save(); ctx.scale(MENU_S, MENU_S); }
         if (phase === 'mooring') drawMooring(w / MENU_S, h / MENU_S, game);
         else MENU_DRAWS[phase](w / MENU_S, h / MENU_S);
@@ -5919,6 +5920,12 @@ function draw() {
     // Clip to circular porthole for all game rendering
     ctx.save();
     ctx.beginPath(); ctx.arc(vpCx, vpCy, vpRadius, 0, PI2); ctx.clip();
+    // PHONE ZOOM — 1:1 world scale is ant-sized on a hand-span screen. Zoom the
+    // world about the view centre; the clip's save/restore pops it with the clip.
+    // (Touch aim is nearest-enemy, so no pointer math needs the inverse.)
+    const WORLD_Z = small ? (Math.min(w, h) < 480 ? 1.35 : 1.2) : 1;
+    g._worldZ = WORLD_Z;
+    if (WORLD_Z !== 1) { ctx.translate(vpCx, vpCy); ctx.scale(WORLD_Z, WORLD_Z); ctx.translate(-vpCx, -vpCy); }
 
     // --- Ocean background (depth-based color shift) ---
     const darkProgress = Math.min(1, g.runTime / 1200);
