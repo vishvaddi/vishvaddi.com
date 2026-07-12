@@ -142,6 +142,15 @@ export async function initStudio(): Promise<void> {
   swingIn.type = "range"; swingIn.min = "0"; swingIn.max = "0.6"; swingIn.step = "0.02"; swingIn.value = "0"; swingIn.className = "wa-swing-in";
   const swingWrap = el("span", "wa-swing"); swingWrap.append(el("span", "wa-lbl", "Swing"), swingIn);
   const metroBtn = btn("Metro", "wa-toggle"), songBtn = btn(transport.songMode ? "Arrange" : "Session", "wa-toggle"), rotBtn = btn("⤢ Flip", "wa-btn-sm");
+  const countBtn = btn("Count-in", "wa-toggle");
+  let countIn = localStorage.getItem("vv_studio_countin") === "1";
+  countBtn.classList.toggle("active", countIn);
+  countBtn.addEventListener("click", () => {
+    countIn = !countIn;
+    countBtn.classList.toggle("active", countIn);
+    localStorage.setItem("vv_studio_countin", countIn ? "1" : "0");
+  });
+  help(countBtn, "One bar of metronome before playback starts while recording is armed (pads or keys) — settle your hands, then play.");
   const metroVolIn = document.createElement("input");
   metroVolIn.type = "range"; metroVolIn.min = "0"; metroVolIn.max = "1"; metroVolIn.step = "0.05"; metroVolIn.value = String(transport.metroVolume); metroVolIn.className = "wa-swing-in";
   help(metroVolIn, "Metronome click volume.");
@@ -164,7 +173,7 @@ export async function initStudio(): Promise<void> {
   songBtn.classList.toggle("active", transport.songMode);
   transportBar.append(
     playBtn, stopBtn, el("span", "wa-sep"), el("span", "wa-lbl", "BPM"), bpmDown, bpmInput, bpmUp, el("span", "wa-sep"),
-    swingWrap, el("span", "wa-lbl", "Grid"), gridSel, metroBtn, metroVolIn, songBtn, el("span", "wa-sep"),
+    swingWrap, el("span", "wa-lbl", "Grid"), gridSel, metroBtn, metroVolIn, countBtn, songBtn, el("span", "wa-sep"),
     undoBtn, redoBtn, tutorialBtn, rotBtn,
   );
   const undoStack: HistoryState[] = [], redoStack: HistoryState[] = [];
@@ -734,7 +743,12 @@ export async function initStudio(): Promise<void> {
   const mpcPadArea = el("div", "wa-mpc-pad-area"); mpcPadArea.append(padBankRow, padGrid);
   const mpcSide = el("div", "wa-mpc-side"); mpcSide.append(mpcToolbar);
   const mpcDeck = el("div", "wa-mpc-deck"); mpcDeck.append(mpcPadArea, mpcSide);
-  mpcPanel.append(mpcDeck, el("div", "wa-lbl", "Pad sequence — current bank"), eventLane, eventEditor);
+  // The pad event lane belongs with the other sequencers on the Sequence tab
+  // (Create stays a performance surface). Assembled into padSeqPanel, mounted
+  // in the workspace section below.
+  mpcPanel.append(mpcDeck);
+  const padSeqPanel = el("div", "wa-panel");
+  padSeqPanel.append(el("div", "wa-lbl", "Pad sequence — current bank"), eventLane, eventEditor);
   paintMpcPads();
 
   // ── Drum rack / sampler ──
@@ -1388,10 +1402,53 @@ export async function initStudio(): Promise<void> {
     octaveLabel.textContent = `OCT ${octaveShift >= 0 ? "+" : ""}${octaveShift}`;
   }
   buildKeys(synthKeys,
-    (note) => { ensureNodes(); liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, midiToNote(noteToMidi(note) + octaveShift * 12)); },
-    (note) => liveKeys.noteOff(ac(), midiToNote(noteToMidi(note) + octaveShift * 12)));
+    (note) => {
+      ensureNodes();
+      const n = midiToNote(noteToMidi(note) + octaveShift * 12);
+      liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, n);
+      recordSynthOn(n);
+    },
+    (note) => {
+      const n = midiToNote(noteToMidi(note) + octaveShift * 12);
+      liveKeys.noteOff(ac(), n);
+      recordSynthOff(n);
+    });
+  // Live key recording — notes land in the playing synth clip's piano roll,
+  // snapped to the nearest step. Same target rule as pad recording.
+  const keysRecBtn = btn("● Rec", "wa-toggle wa-btn-sm");
+  let synthRec = false;
+  const heldRec = new Map<string, number>();   // note -> start step
+  function currentStepFloat(): number {
+    if (!playing || lastHi < 0) return -1;
+    return lastHi + Math.min(1, (performance.now() - lastStepStartedMs) / (stepDur() * 1000));
+  }
+  function synthRecTarget(): number { return (playing ? clip.play.synth : null) ?? clip.sel; }
+  function recordSynthOn(note: string): void {
+    if (!synthRec || !playing) return;
+    const pos = currentStepFloat(); if (pos < 0) return;
+    heldRec.set(note, Math.round(pos) % STEPS);
+  }
+  function recordSynthOff(note: string): void {
+    const start = heldRec.get(note); if (start === undefined) return;
+    heldRec.delete(note);
+    if (!synthRec || !playing) return;
+    const pos = currentStepFloat(); if (pos < 0) return;
+    let len = Math.round(pos) - start;
+    if (len <= 0) len += STEPS;
+    len = Math.max(1, Math.min(STEPS - start, len));
+    const target = synthRecTarget();
+    synthNotes[target].push({ note, step: start, len, vel: 100 });
+    if (target === clip.sel) paintRoll();
+    saveAll();
+  }
+  keysRecBtn.addEventListener("click", () => {
+    synthRec = !synthRec;
+    if (synthRec) checkpoint();
+    keysRecBtn.classList.toggle("active", synthRec);
+  });
+  help(keysRecBtn, "Capture key presses into the playing synth clip's piano roll while playback runs. Arm Count-in in the transport for a 1-bar lead-in.");
   const keysHeader = el("div", "wa-export");
-  keysHeader.append(el("span", "wa-lbl", "KEYS — click, or use A–K (Z/X shift octave)"), octaveLabel);
+  keysHeader.append(el("span", "wa-lbl", "KEYS — click, or Z-row / Q-row on the keyboard (− / = shift octave)"), keysRecBtn, octaveLabel);
   synthPanel.append(
     presetBrowserRow,
     presetRow,
@@ -1731,8 +1788,9 @@ export async function initStudio(): Promise<void> {
     ["Ctrl+Z", "Undo"],
     ["Ctrl+Shift+Z or Ctrl+Y", "Redo"],
     ["1-4, Q-R, A-F, Z-V", "Play MPC pads (Create tab)"],
-    ["A-K row", "Play synth notes C4-C5 (Sequence tab)"],
-    ["Z / X", "Shift synth keyboard octave (Sequence tab)"],
+    ["Z–M row", "Play synth notes C3–B3 (Sequence tab)"],
+    ["Q–P row", "Play synth notes C4–E5 (Sequence tab)"],
+    ["− / =", "Shift synth keyboard octave (Sequence tab)"],
     ["Enter", "Confirm the typed BPM"],
   ] as const).forEach(([key, desc]) => {
     const row = el("div", "wa-help-shortcut-row");
@@ -1855,7 +1913,7 @@ export async function initStudio(): Promise<void> {
   );
   sequenceWorkspace.append(
     hint("Build the loop.", "Drag across the selected-pad lane to paint or erase hits. Right-click drum steps to edit velocity."),
-    section("Drum Sequence", beat), section("Synth + Piano Roll", synthPanel),
+    section("Drum Sequence", beat), section("Pad Sequence", padSeqPanel), section("Synth + Piano Roll", synthPanel),
   );
   arrangeWorkspace.append(
     hint("Turn loops into a track.", "Launch clips per track or whole scenes, then chain scenes and enable Song mode."),
@@ -2107,6 +2165,13 @@ export async function initStudio(): Promise<void> {
     if (transport.songMode) TRACKS.forEach((track) => applyArrangePos(track));
     paintSession();
     nextTime = ac().currentTime + 0.06;
+    // 1-bar count-in when recording is armed: four clicks, then the loop starts.
+    if (countIn && (mpc.recording || synthRec)) {
+      const beat = stepDur() * 4;
+      for (let b = 0; b < 4; b++) metroClick(ac(), engine.master!, nextTime + b * beat, b === 0);
+      nextTime += 4 * beat;
+      lcdState.textContent = "COUNT";
+    }
     schedTimer = window.setInterval(scheduler, 25);
   });
   stopBtn.addEventListener("click", () => {
@@ -2233,9 +2298,14 @@ export async function initStudio(): Promise<void> {
   });
 
   // ── Keyboard ──
+  // Two-row DAW layout (Ableton/FL): Z-row is the lower octave, Q-row the
+  // upper — ~2.5 octaves without shifting. - / = still shift for extremes.
   const keyMap: Record<string, string> = {
-    a:"C4", w:"C#4", s:"D4", e:"D#4", d:"E4", f:"F4", t:"F#4",
-    g:"G4", y:"G#4", h:"A4", u:"A#4", j:"B4", k:"C5",
+    z:"C3", s:"C#3", x:"D3", d:"D#3", c:"E3", v:"F3", g:"F#3",
+    b:"G3", h:"G#3", n:"A3", j:"A#3", m:"B3",
+    q:"C4", "2":"C#4", w:"D4", "3":"D#4", e:"E4", r:"F4", "5":"F#4",
+    t:"G4", "6":"G#4", y:"A4", "7":"A#4", u:"B4",
+    i:"C5", "9":"C#5", o:"D5", "0":"D#5", p:"E5",
   };
   const padKeyMap: Record<string, number> = {
     "1": 12, "2": 13, "3": 14, "4": 15,
@@ -2256,13 +2326,14 @@ export async function initStudio(): Promise<void> {
     if (activeTab !== 1) return;
     const key = ev.key.toLowerCase();
     if (!ev.repeat && !ev.metaKey && !ev.ctrlKey) {
-      if (key === "z") { setOctaveShift(octaveShift - 1); return; }
-      if (key === "x") { setOctaveShift(octaveShift + 1); return; }
+      if (key === "-") { setOctaveShift(octaveShift - 1); return; }
+      if (key === "=") { setOctaveShift(octaveShift + 1); return; }
     }
     const n0 = keyMap[key];
     if (!n0 || downMap.has(key) || ev.metaKey || ev.ctrlKey) return;
     const n = midiToNote(noteToMidi(n0) + octaveShift * 12);
     downMap.set(key, n); ensureNodes(); liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, n); highlightKey(synthKeys, n0, true);
+    recordSynthOn(n);
   });
   window.addEventListener("keyup", (ev) => {
     const localPad = padKeyMap[ev.key.toLowerCase()];
@@ -2271,6 +2342,7 @@ export async function initStudio(): Promise<void> {
     const key = ev.key.toLowerCase();
     const n = downMap.get(key); if (!n) return;
     downMap.delete(key); liveKeys.noteOff(ac(), n); highlightKey(synthKeys, keyMap[key], false);
+    recordSynthOff(n);
   });
 
   // Initial paint reflects loaded project state (scene selection, session grid).
