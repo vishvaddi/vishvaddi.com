@@ -5,39 +5,49 @@ import "../../styles/site.css";
 
 <Base
   title="Geometry & Setout"
-  description="Free on-site setout tools — 3-4-5 square check, stair calculator, fall/gradient, area and roof pitch. Runs entirely in your browser."
+  description="Free on-site setout tools in sections — 3-4-5 square check, triangle solver, trig, circles and arcs, falls and grades, stairs, roof pitch and areas. Runs entirely in your browser."
   siteNav
 >
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Geometry</p>
     <h1>Geometry & Setout</h1>
-    <p>Setting-out maths for the field. Updates as you type; nothing leaves your browser.</p>
+    <p>Setting-out maths for the field, in sections. Updates as you type; nothing leaves your browser.</p>
 
-    <div id="calcs"></div>
-
-    <h2 class="geo-section">Triangle solver</h2>
-    <p>Enter any 3 values (at least one side). Sides <code>a, b, c</code> sit opposite angles <code>A, B, C</code>. Angles in degrees.</p>
-    <div class="tri-grid">
-      <div class="field"><label for="tri-a">side a</label><input type="number" id="tri-a" inputmode="decimal" step="any" /></div>
-      <div class="field"><label for="tri-A">angle A°</label><input type="number" id="tri-A" inputmode="decimal" step="any" /></div>
-      <div class="field"><label for="tri-b">side b</label><input type="number" id="tri-b" inputmode="decimal" step="any" /></div>
-      <div class="field"><label for="tri-B">angle B°</label><input type="number" id="tri-B" inputmode="decimal" step="any" /></div>
-      <div class="field"><label for="tri-c">side c</label><input type="number" id="tri-c" inputmode="decimal" step="any" /></div>
-      <div class="field"><label for="tri-C">angle C°</label><input type="number" id="tri-C" inputmode="decimal" step="any" /></div>
+    <div class="geo-layout">
+      <nav class="geo-tabs no-print" id="geo-tabs" role="tablist" aria-label="Geometry sections"></nav>
+      <div class="geo-content">
+        <div class="geo-panel" data-panel="setout"><div id="calcs-setout"></div></div>
+        <div class="geo-panel" data-panel="triangles" hidden>
+          <p>Enter any 3 values (at least one side). Sides <code>a, b, c</code> sit opposite angles <code>A, B, C</code>. Angles in degrees.</p>
+          <div class="tri-grid">
+            <div class="field"><label for="tri-a">side a</label><input type="number" id="tri-a" inputmode="decimal" step="any" /></div>
+            <div class="field"><label for="tri-A">angle A°</label><input type="number" id="tri-A" inputmode="decimal" step="any" /></div>
+            <div class="field"><label for="tri-b">side b</label><input type="number" id="tri-b" inputmode="decimal" step="any" /></div>
+            <div class="field"><label for="tri-B">angle B°</label><input type="number" id="tri-B" inputmode="decimal" step="any" /></div>
+            <div class="field"><label for="tri-c">side c</label><input type="number" id="tri-c" inputmode="decimal" step="any" /></div>
+            <div class="field"><label for="tri-C">angle C°</label><input type="number" id="tri-C" inputmode="decimal" step="any" /></div>
+          </div>
+          <div class="btn-row no-print">
+            <button type="button" id="tri-solve" class="btn">Solve</button>
+            <button type="button" id="tri-clear" class="btn btn-ghost">Clear</button>
+          </div>
+          <div id="tri-out" class="result" aria-live="polite"></div>
+        </div>
+        <div class="geo-panel" data-panel="trig" hidden>
+          <p>Quick sine, cosine, tangent and reciprocals for any angle.</p>
+          <div class="trig-bar">
+            <div class="field"><label for="trig-angle">angle</label><input type="number" id="trig-angle" value="30" inputmode="decimal" step="any" /></div>
+            <button type="button" id="trig-mode" class="btn btn-ghost" title="Toggle degrees / radians">DEG</button>
+          </div>
+          <div id="trig-out" class="result" aria-live="polite"></div>
+        </div>
+        <div class="geo-panel" data-panel="circles" hidden><div id="calcs-circles"></div></div>
+        <div class="geo-panel" data-panel="falls" hidden><div id="calcs-falls"></div></div>
+        <div class="geo-panel" data-panel="stairs" hidden><div id="calcs-stairs"></div></div>
+        <div class="geo-panel" data-panel="roof" hidden><div id="calcs-roof"></div></div>
+        <div class="geo-panel" data-panel="areas" hidden><div id="calcs-areas"></div></div>
+      </div>
     </div>
-    <div class="btn-row no-print">
-      <button type="button" id="tri-solve" class="btn">Solve</button>
-      <button type="button" id="tri-clear" class="btn btn-ghost">Clear</button>
-    </div>
-    <div id="tri-out" class="result" aria-live="polite"></div>
-
-    <h2 class="geo-section">Trig calculator</h2>
-    <p>Quick sine, cosine, tangent and reciprocals for any angle.</p>
-    <div class="trig-bar">
-      <div class="field"><label for="trig-angle">angle</label><input type="number" id="trig-angle" value="30" inputmode="decimal" step="any" /></div>
-      <button type="button" id="trig-mode" class="btn btn-ghost" title="Toggle degrees / radians">DEG</button>
-    </div>
-    <div id="trig-out" class="result" aria-live="polite"></div>
 
     <div class="btn-row no-print">
       <button type="button" class="btn" id="print">Save as PDF</button>
@@ -54,7 +64,7 @@ import "../../styles/site.css";
     const f0 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 0 });
     const f1 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 1 });
 
-    const specs: CalcSpec[] = [
+    const setout: CalcSpec[] = [
       {
         id: "square",
         title: "Square it (3-4-5)",
@@ -69,32 +79,87 @@ import "../../styles/site.css";
         },
       },
       {
-        id: "stairs",
-        title: "Stairs",
-        blurb: "Comfort range (AS1657): riser 115–190 mm, going 240–355 mm.",
+        id: "offset",
+        title: "Setout offset (right-angle)",
+        blurb: "Run and offset from a baseline to a point — distance and angle from the start peg.",
         fields: [
-          { id: "rise", label: "Total rise (mm)", def: "1000", min: "1", step: "1" },
-          { id: "going", label: "Going / tread (mm)", def: "250", min: "1", step: "1" },
-          { id: "maxr", label: "Max riser (mm)", def: "190", min: "1", step: "1" },
+          { id: "run", label: "Along baseline (mm)", def: "2400", min: "0", step: "1" },
+          { id: "off", label: "Offset out (mm)", def: "900", min: "0", step: "1" },
         ],
         compute: (v) => {
-          if (v.rise <= 0 || v.maxr <= 0) return null;
-          const risers = Math.max(1, Math.ceil(v.rise / v.maxr));
-          const riserH = v.rise / risers;
-          const treads = risers - 1;
-          const run = treads * v.going;
-          const ok = riserH >= 115 && riserH <= 190 && v.going >= 240 && v.going <= 355;
+          if (v.run < 0 || v.off < 0 || (v.run === 0 && v.off === 0)) return null;
+          const dist = Math.hypot(v.run, v.off);
+          const ang = (Math.atan2(v.off, v.run) * 180) / Math.PI;
           return {
             rows: [
-              [String(risers), "risers"],
-              [f1(riserH) + " mm", "riser height"],
-              [String(treads), "treads"],
-              [f0(run) + " mm", "total run"],
+              [f0(dist) + " mm", "direct distance from start peg"],
+              [f1(ang) + "°", "angle off the baseline"],
             ],
-            warn: ok ? undefined : "Outside the AS1657 comfort range — adjust riser or going.",
           };
         },
       },
+      {
+        id: "diag",
+        title: "Rectangle check (both diagonals)",
+        blurb: "A rectangle is true when both diagonals match. Tells you the target and how far out you are.",
+        fields: [
+          { id: "l", label: "Length (mm)", def: "3600", min: "0", step: "1" },
+          { id: "w", label: "Width (mm)", def: "2400", min: "0", step: "1" },
+          { id: "meas", label: "Measured diagonal (mm)", def: "0", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          if (v.l <= 0 || v.w <= 0) return null;
+          const d = Math.hypot(v.l, v.w);
+          const rows: [string, string][] = [[f0(d) + " mm", "target diagonal"]];
+          if (v.meas > 0) rows.push([f0(Math.abs(v.meas - d)) + " mm", v.meas > d ? "too long — pull corner in" : "too short — push corner out"]);
+          return { rows };
+        },
+      },
+    ];
+
+    const circles: CalcSpec[] = [
+      {
+        id: "circle",
+        title: "Circle",
+        blurb: "Circumference and area from diameter.",
+        fields: [{ id: "d", label: "Diameter (mm)", def: "900", min: "0", step: "1" }],
+        compute: (v) => {
+          if (v.d <= 0) return null;
+          const r = v.d / 2;
+          return {
+            rows: [
+              [f0(Math.PI * v.d) + " mm", "circumference"],
+              [f2((Math.PI * r * r) / 1e6) + " m²", "area"],
+            ],
+          };
+        },
+      },
+      {
+        id: "arc",
+        title: "Radius from chord & rise",
+        blurb: "Spring a curve on site: measure the chord and the rise at its midpoint — get the radius to swing.",
+        fields: [
+          { id: "c", label: "Chord (mm)", def: "2400", min: "0", step: "1" },
+          { id: "h", label: "Rise at midpoint (mm)", def: "150", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          if (v.c <= 0 || v.h <= 0) return null;
+          const r = (v.c * v.c) / (8 * v.h) + v.h / 2;
+          const theta = 2 * Math.asin(Math.min(1, v.c / (2 * r)));
+          const arc = r * theta;
+          const segArea = (r * r * (theta - Math.sin(theta))) / 2;
+          return {
+            rows: [
+              [f0(r) + " mm", "radius"],
+              [f0(arc) + " mm", "arc length"],
+              [f2(segArea / 1e6) + " m²", "segment area"],
+            ],
+          };
+        },
+      },
+    ];
+
+    const falls: CalcSpec[] = [
       {
         id: "fall",
         title: "Fall / gradient",
@@ -115,23 +180,77 @@ import "../../styles/site.css";
         },
       },
       {
-        id: "area",
-        title: "Room area",
-        blurb: "Rectangle area and perimeter — feed into the material calcs.",
-        fields: [
-          { id: "l", label: "Length (m)", def: "4", min: "0", step: "0.1" },
-          { id: "w", label: "Width (m)", def: "3", min: "0", step: "0.1" },
-        ],
+        id: "gradeconv",
+        title: "Grade converter",
+        blurb: "Ratio ↔ percent ↔ degrees ↔ mm per metre, from a 1:x ratio.",
+        fields: [{ id: "ratio", label: "Gradient 1 : ", def: "14", min: "0.1", step: "0.5" }],
         compute: (v) => {
-          if (v.l <= 0 || v.w <= 0) return null;
+          if (v.ratio <= 0) return null;
           return {
             rows: [
-              [f2(v.l * v.w) + " m²", "area"],
-              [f2(2 * (v.l + v.w)) + " m", "perimeter"],
+              [f2(100 / v.ratio) + " %", "percent"],
+              [f2((Math.atan(1 / v.ratio) * 180) / Math.PI) + "°", "degrees"],
+              [f1(1000 / v.ratio) + " mm/m", "fall per metre"],
             ],
           };
         },
       },
+      {
+        id: "ramp",
+        title: "Accessible ramp (AS 1428.1)",
+        blurb: "Ramps max 1:14 (landings every 9 m); walkways to 1:20 need no landings; kerb ramps 1:8 over ≤1.52 m.",
+        fields: [
+          { id: "rise", label: "Rise to cover (mm)", def: "500", min: "1", step: "1" },
+        ],
+        compute: (v) => {
+          if (v.rise <= 0) return null;
+          const len14 = (v.rise * 14) / 1000;
+          const landings = Math.max(0, Math.ceil(len14 / 9) - 1);
+          return {
+            rows: [
+              [f2(len14) + " m", "min length at 1:14"],
+              [String(landings), "landings (every 9 m)"],
+              [f2((v.rise * 20) / 1000) + " m", "length at 1:20 (no landings)"],
+            ],
+            warn: v.rise > 3600 ? "Rise over 3.6 m — consider a lift; check AS 1428.1 limits." : undefined,
+          };
+        },
+      },
+    ];
+
+    const stairs: CalcSpec[] = [
+      {
+        id: "stairs",
+        title: "Stairs",
+        blurb: "Comfort range (AS1657): riser 115–190 mm, going 240–355 mm.",
+        fields: [
+          { id: "rise", label: "Total rise (mm)", def: "1000", min: "1", step: "1" },
+          { id: "going", label: "Going / tread (mm)", def: "250", min: "1", step: "1" },
+          { id: "maxr", label: "Max riser (mm)", def: "190", min: "1", step: "1" },
+        ],
+        compute: (v) => {
+          if (v.rise <= 0 || v.maxr <= 0) return null;
+          const risers = Math.max(1, Math.ceil(v.rise / v.maxr));
+          const riserH = v.rise / risers;
+          const treads = risers - 1;
+          const run = treads * v.going;
+          const twoRG = 2 * riserH + v.going;
+          const ok = riserH >= 115 && riserH <= 190 && v.going >= 240 && v.going <= 355;
+          return {
+            rows: [
+              [String(risers), "risers"],
+              [f1(riserH) + " mm", "riser height"],
+              [String(treads), "treads"],
+              [f0(run) + " mm", "total run"],
+              [f0(twoRG) + " mm", "2R+G (comfort 550–700)"],
+            ],
+            warn: ok ? undefined : "Outside the AS1657 comfort range — adjust riser or going.",
+          };
+        },
+      },
+    ];
+
+    const roof: CalcSpec[] = [
       {
         id: "roof",
         title: "Roof pitch",
@@ -152,19 +271,142 @@ import "../../styles/site.css";
           };
         },
       },
+      {
+        id: "pitchconv",
+        title: "Pitch converter",
+        blurb: "Degrees ↔ rise-per-run. Common: 15° ≈ 268/1000, 22.5° ≈ 414/1000.",
+        fields: [{ id: "deg", label: "Pitch (degrees)", def: "22.5", min: "0", step: "0.5" }],
+        compute: (v) => {
+          if (v.deg <= 0 || v.deg >= 90) return null;
+          const rad = (v.deg * Math.PI) / 180;
+          return {
+            rows: [
+              [f0(Math.tan(rad) * 1000) + " / 1000", "rise per 1000 run"],
+              [f2(Math.tan(rad) * 100) + " %", "grade"],
+            ],
+          };
+        },
+      },
     ];
 
-    const root = document.getElementById("calcs")!;
-    mountCalcs(root, specs);
-    wireActions(root, "Geometry & setout");
+    const areas: CalcSpec[] = [
+      {
+        id: "area",
+        title: "Room area",
+        blurb: "Rectangle area and perimeter — feed into the material calcs.",
+        fields: [
+          { id: "l", label: "Length (m)", def: "4", min: "0", step: "0.1" },
+          { id: "w", label: "Width (m)", def: "3", min: "0", step: "0.1" },
+        ],
+        compute: (v) => {
+          if (v.l <= 0 || v.w <= 0) return null;
+          return {
+            rows: [
+              [f2(v.l * v.w) + " m²", "area"],
+              [f2(2 * (v.l + v.w)) + " m", "perimeter"],
+            ],
+          };
+        },
+      },
+      {
+        id: "heron",
+        title: "Triangle area (three sides)",
+        blurb: "Heron's formula — area from tape measurements alone, no angles needed.",
+        fields: [
+          { id: "a", label: "Side a (m)", def: "3", min: "0", step: "0.01" },
+          { id: "b", label: "Side b (m)", def: "4", min: "0", step: "0.01" },
+          { id: "c", label: "Side c (m)", def: "5", min: "0", step: "0.01" },
+        ],
+        compute: (v) => {
+          const s = (v.a + v.b + v.c) / 2;
+          const under = s * (s - v.a) * (s - v.b) * (s - v.c);
+          if (v.a <= 0 || v.b <= 0 || v.c <= 0) return null;
+          if (under <= 0) return { rows: [["—", "those sides don't form a triangle"]] };
+          return { rows: [[f2(Math.sqrt(under)) + " m²", "area"]] };
+        },
+      },
+      {
+        id: "polygon",
+        title: "Regular polygon",
+        blurb: "Area and across-flats/corners from number of sides and side length.",
+        fields: [
+          { id: "n", label: "Sides", def: "6", min: "3", step: "1" },
+          { id: "s", label: "Side length (mm)", def: "600", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          const n = Math.round(v.n);
+          if (n < 3 || v.s <= 0) return null;
+          const area = (n * v.s * v.s) / (4 * Math.tan(Math.PI / n));
+          const rc = v.s / (2 * Math.sin(Math.PI / n));
+          const ri = v.s / (2 * Math.tan(Math.PI / n));
+          return {
+            rows: [
+              [f2(area / 1e6) + " m²", "area"],
+              [f0(rc * 2) + " mm", "across corners"],
+              [f0(ri * 2) + " mm", "across flats"],
+            ],
+          };
+        },
+      },
+    ];
 
+    const sections: { name: string; panel: string; specs?: CalcSpec[] }[] = [
+      { name: "Setout", panel: "setout", specs: setout },
+      { name: "Triangles", panel: "triangles" },
+      { name: "Trig", panel: "trig" },
+      { name: "Circles & arcs", panel: "circles", specs: circles },
+      { name: "Falls & grades", panel: "falls", specs: falls },
+      { name: "Stairs", panel: "stairs", specs: stairs },
+      { name: "Roof", panel: "roof", specs: roof },
+      { name: "Areas", panel: "areas", specs: areas },
+    ];
+
+    const tabBar = document.getElementById("geo-tabs")!;
+    const panels = Array.from(document.querySelectorAll<HTMLElement>(".geo-panel"));
+    const buttons: HTMLButtonElement[] = [];
+
+    sections.forEach((sec, i) => {
+      if (sec.specs) mountCalcs(document.getElementById("calcs-" + sec.panel)!, sec.specs);
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "geo-tab" + (i === 0 ? " active" : "");
+      b.textContent = sec.name;
+      b.addEventListener("click", () => {
+        panels.forEach((p) => (p.hidden = p.dataset.panel !== sec.panel));
+        buttons.forEach((btn) => btn.classList.toggle("active", btn === b));
+        history.replaceState(null, "", "#" + sec.panel);
+      });
+      tabBar.append(b);
+      buttons.push(b);
+    });
+
+    // Deep-link: /site/geometry#trig opens that section
+    const want = location.hash.slice(1);
+    const idx = sections.findIndex((s) => s.panel === want);
+    if (idx > 0) buttons[idx].click();
+
+    wireActions(document.querySelector(".geo-content")!, "Geometry & setout");
     initTriangle();
   </script>
 
   <style>
-    .geo-section { margin-top: 2rem; }
+    .geo-layout { display: grid; grid-template-columns: 11rem 1fr; gap: 1.5rem; align-items: start; margin-top: 0.5rem; }
+    .geo-tabs { display: flex; flex-direction: column; gap: 0.25rem; position: sticky; top: 5rem; }
+    .geo-tab {
+      padding: 0.5rem 0.9rem; font-size: 0.9rem; font-family: var(--font-sans); cursor: pointer; text-align: left;
+      color: var(--muted); background: transparent; border: 1px solid transparent; border-left: 2px solid var(--rule); border-radius: 0;
+    }
+    .geo-tab:hover { color: var(--fg); }
+    .geo-tab.active { color: var(--fg); font-weight: 600; border-left-color: var(--fg); }
+    .geo-panel[hidden] { display: none; }
     .tri-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem 1rem; margin: 1rem 0; }
     .trig-bar { display: flex; gap: 0.75rem; align-items: flex-end; margin: 0.75rem 0; }
     .trig-bar .field { flex: 1; max-width: 12rem; }
+    @media (max-width: 720px) {
+      .geo-layout { display: block; }
+      .geo-tabs { flex-direction: row; flex-wrap: wrap; gap: 0.4rem; position: static; margin-bottom: 1.25rem; }
+      .geo-tab { border: 1px solid var(--rule); border-radius: 999px; padding: 0.45rem 1rem; text-align: center; }
+      .geo-tab.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+    }
   </style>
 </Base>
