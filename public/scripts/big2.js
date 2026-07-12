@@ -1,10 +1,56 @@
-// Big 2 (Big Two): single player vs three local AI opponents.
+// Big 2 roguelike: single player vs three local AI opponents.
 (function () {
   var SUITS = ["♦", "♣", "♥", "♠"];
   var RANK_LABEL = { 11: "J", 12: "Q", 13: "K", 14: "A", 15: "2" };
   var AI_NAMES = ["", "Auntie", "Uncle", "Cousin"];
+  var MODE_LABELS = {
+    standard: ["Standard Big 2", "A clean single-deal game against three AI opponents."],
+    roguelike: ["Roguelike Big 2", "A 12-table run with targets, wagers, Charms, Mastery and Markets."],
+    daily: ["Daily Roguelike", "Same seeded roguelike run for everyone today."]
+  };
+  var TABLES_PER_RUN = 12;
+  var MAX_CHARMS = 5;
+  var COMBO_SCORE = {
+    "Single": 5,
+    "Pair": 16,
+    "Triple": 30,
+    "Straight": 58,
+    "Flush": 68,
+    "Full house": 88,
+    "Four of a kind": 120,
+    "Straight flush": 180
+  };
+  var COMBO_TYPES = Object.keys(COMBO_SCORE);
   var $ = function (id) { return document.getElementById(id); };
   if (!$("b2-hand")) return;
+
+  var CHARM_LIBRARY = [
+    { id: "dragonPair", name: "Dragon Pair", kind: "Charm", price: 7, text: "Pairs score +40%.", build: "Pair" },
+    { id: "redEnvelope", name: "Red Envelope", kind: "Charm", price: 6, text: "Each diamond you play adds +6 score.", build: "Suit" },
+    { id: "auntieLedger", name: "Auntie's Ledger", kind: "Charm", price: 8, text: "If you pass at least twice and clear the table, gain +3 coins.", build: "Economy" },
+    { id: "luckyTwo", name: "Lucky Two", kind: "Charm", price: 8, text: "Each 2 you play adds +20 score and +1 coin.", build: "High card" },
+    { id: "straightRoad", name: "Straight Road", kind: "Charm", price: 7, text: "Straights score +35.", build: "Five-card" },
+    { id: "jadeFan", name: "Jade Fan", kind: "Charm", price: 9, text: "Flushes and straight flushes score +45%.", build: "Flush" },
+    { id: "houseBlessing", name: "House Blessing", kind: "Charm", price: 9, text: "Full houses score +45.", build: "Full house" },
+    { id: "monkeyKing", name: "Monkey King", kind: "Charm", price: 11, text: "Four-of-a-kind and straight flushes score +80.", build: "Rare hand" },
+    { id: "Street Hawker", name: "Street Hawker", kind: "Charm", price: 6, text: "Playing 4+ singles in a table adds +50 score.", build: "Single" },
+    { id: "Gambler Bell", name: "Gambler Bell", kind: "Charm", price: 10, text: "Wager rewards are 25% stronger.", build: "Wager" }
+  ];
+
+  var BOSS_RULES = [
+    { id: "house", name: "House table", text: "Beat the target to reach the Market." },
+    { id: "pairLock", name: "Pair Lock", text: "Pairs cannot be played at this Boss table." },
+    { id: "twoTax", name: "Two Tax", text: "Playing a 2 adds score, but raises this table target." },
+    { id: "fiveCardFestival", name: "Five-Card Festival", text: "Five-card hands score double. Singles score half." },
+    { id: "lastTrick", name: "Last Trick", text: "Final table: only a clear win beats the run target." }
+  ];
+
+  var WAGERS = [
+    { id: "safe", name: "Safe table", text: "No extra risk.", target: 1, reward: 1, rare: 0 },
+    { id: "double", name: "Double Pot", text: "+35% target. +50% table score and +3 coins if cleared.", target: 1.35, reward: 1.5, coins: 3, rare: 0 },
+    { id: "showdown", name: "Showdown", text: "+25% target. Five-card hands score double.", target: 1.25, reward: 1.15, rare: 0.08 },
+    { id: "marketHeat", name: "Market Heat", text: "+20% target. Next Market has better rare odds.", target: 1.2, reward: 1, rare: 0.16 }
+  ];
 
   var hands;
   var pile;
@@ -17,6 +63,42 @@
   var gameId = 0;
   var aiTimer = null;
   var stats = loadStats();
+  var mode = "standard";
+  var seededState = 1;
+  var run;
+  var tableStats;
+  var marketItems = [];
+  var marketRerolls = 0;
+
+  function freshRun(daily) {
+    return {
+      table: 1,
+      score: 0,
+      coins: 6,
+      charms: [],
+      mastery: COMBO_TYPES.reduce(function (map, type) { map[type] = 0; return map; }, {}),
+      activeWager: "safe",
+      rareBonus: 0,
+      state: "playing",
+      daily: Boolean(daily),
+      seed: daily ? dailySeed() : Math.floor(Math.random() * 2147483647),
+      bestScore: loadBestScore()
+    };
+  }
+
+  function freshTableStats() {
+    return {
+      started: false,
+      playerPlays: [],
+      comboCounts: {},
+      diamondCards: 0,
+      twosPlayed: 0,
+      playerPasses: 0,
+      tricksWon: 0,
+      score: 0,
+      coins: 0
+    };
+  }
 
   function loadStats() {
     try {
@@ -31,11 +113,45 @@
     try { localStorage.setItem("vv_big2_record", JSON.stringify(stats)); } catch (_) {}
   }
 
+  function loadBestScore() {
+    try { return Number(localStorage.getItem("vv_big2_best_run")) || 0; } catch (_) { return 0; }
+  }
+
+  function saveBestScore() {
+    if (run.score <= run.bestScore) return;
+    run.bestScore = run.score;
+    try { localStorage.setItem("vv_big2_best_run", String(run.bestScore)); } catch (_) {}
+  }
+
+  function isRogueMode() {
+    return mode === "roguelike" || mode === "daily";
+  }
+
+  function dailySeed() {
+    var key = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+    return Number(key) || 1;
+  }
+
+  function seededRandom() {
+    seededState |= 0;
+    seededState = (seededState + 0x6D2B79F5) | 0;
+    var value = seededState;
+    value = Math.imul(value ^ value >>> 15, value | 1);
+    value ^= value + Math.imul(value ^ value >>> 7, value | 61);
+    return ((value ^ value >>> 14) >>> 0) / 4294967296;
+  }
+
+  function rand() {
+    return isRogueMode() ? seededRandom() : Math.random();
+  }
+
   function label(rank) { return RANK_LABEL[rank] || String(rank); }
   function cardName(card) { return label(card.r) + SUITS[card.s]; }
   function cardValue(card) { return card.r * 4 + card.s; }
   function isRed(card) { return card.s === 0 || card.s === 2; }
   function playerName(player) { return player === 0 ? "You" : AI_NAMES[player]; }
+  function hasCharm(id) { return run.charms.indexOf(id) >= 0; }
+  function wager() { return WAGERS.filter(function (item) { return item.id === run.activeWager; })[0] || WAGERS[0]; }
 
   function newDeck() {
     var deck = [];
@@ -45,7 +161,7 @@
       for (suit = 0; suit < 4; suit++) deck.push({ r: rank, s: suit });
     }
     for (var i = deck.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
+      var j = Math.floor(rand() * (i + 1));
       var temp = deck[i];
       deck[i] = deck[j];
       deck[j] = temp;
@@ -111,6 +227,30 @@
     return hands.reduce(function (total, hand) { return total + hand.length; }, 0) === 52;
   }
 
+  function bossRule() {
+    if (!isRogueMode()) return BOSS_RULES[0];
+    if (run.table === TABLES_PER_RUN) return BOSS_RULES[4];
+    if (run.table % 3 !== 0) return BOSS_RULES[0];
+    return BOSS_RULES[((run.table / 3 - 1) % 3) + 1];
+  }
+
+  function baseTarget() {
+    return Math.round((105 + run.table * 35 + Math.pow(run.table, 1.32) * 16) / 5) * 5;
+  }
+
+  function tableTarget() {
+    var target = baseTarget() * wager().target;
+    if (bossRule().id === "twoTax") target += tableStats.twosPlayed * 18;
+    if (bossRule().id === "lastTrick") target *= 1.2;
+    return Math.round(target / 5) * 5;
+  }
+
+  function tableAllows(combo) {
+    if (!combo) return false;
+    if (isRogueMode() && bossRule().id === "pairLock" && combo.name === "Pair") return false;
+    return true;
+  }
+
   function combos(hand) {
     var output = [];
     var i;
@@ -157,6 +297,8 @@
   function candidatePlays(hand) {
     return combos(hand).map(function (set) {
       return { set: set, combo: classify(set) };
+    }).filter(function (candidate) {
+      return tableAllows(candidate.combo);
     });
   }
 
@@ -185,28 +327,44 @@
     }).slice(0, 6);
   }
 
-  function chooseLead(candidates) {
+  function containsTwo(set) {
+    return set.some(function (card) { return card.r === 15; });
+  }
+
+  function chooseLead(candidates, player) {
     var pool = candidates.slice();
     if (isFirstTrick()) pool = pool.filter(function (candidate) { return hasStartCard(candidate.set); });
+    if (!pool.length) return null;
+
     pool.sort(function (a, b) {
-      return b.combo.count - a.combo.count ||
+      return a.combo.count - b.combo.count ||
         a.combo.cat - b.combo.cat ||
         a.combo.key - b.combo.key;
     });
-    return pool[0] || null;
+
+    if (player === 1 && hands[player].length > 4) {
+      var withoutTwos = pool.filter(function (candidate) { return !containsTwo(candidate.set); });
+      if (withoutTwos.length) return withoutTwos[0];
+    }
+    if (player === 2 && hands[player].length <= 5) return pool[pool.length - 1];
+    if (player === 3 && pool.length > 2 && rand() < 0.35) return pool[Math.floor(rand() * Math.min(3, pool.length))];
+    return pool[0];
   }
 
   function chooseResponse(candidates, player) {
-    var beating = candidates.filter(function (candidate) { return beats(candidate.combo, pile.combo); });
+    var beating = candidates.filter(function (candidate) { return pile && beats(candidate.combo, pile.combo); });
     beating.sort(function (a, b) {
       return a.combo.cat - b.combo.cat || a.combo.key - b.combo.key;
     });
     if (!beating.length) return null;
 
-    // Uncle presses harder near the finish; Cousin is intentionally less predictable.
+    if (player === 1 && hands[player].length > 4) {
+      var cheap = beating.filter(function (candidate) { return !containsTwo(candidate.set); });
+      if (cheap.length) return cheap[0];
+    }
     if (player === 2 && hands[player].length <= 5) return beating[beating.length - 1];
-    if (player === 3 && beating.length > 1 && Math.random() < 0.3) {
-      return beating[Math.floor(Math.random() * Math.min(3, beating.length))];
+    if (player === 3 && beating.length > 1 && rand() < 0.3) {
+      return beating[Math.floor(rand() * Math.min(3, beating.length))];
     }
     return beating[0];
   }
@@ -216,6 +374,7 @@
     var combo = classify(cards);
     if (!cards.length) return { valid: false, text: hands[0].length + " cards remaining" };
     if (!combo) return { valid: false, text: "Not a legal combination" };
+    if (!tableAllows(combo)) return { valid: false, text: combo.name + " blocked by " + bossRule().name };
     if (isFirstTrick() && !hasStartCard(cards)) {
       return { valid: false, text: combo.name + " · must include 3♦" };
     }
@@ -226,12 +385,34 @@
   }
 
   function render() {
-    $("b2-round").textContent = "Round " + round;
+    $("big2").dataset.mode = mode === "standard" ? "standard" : "roguelike";
+    $("b2-mode-title").textContent = MODE_LABELS[mode][0];
+    $("b2-mode-copy").textContent = MODE_LABELS[mode][1];
+    document.querySelectorAll("[data-b2-mode]").forEach(function (button) {
+      button.classList.toggle("active", button.dataset.b2Mode === mode);
+    });
+    $("b2-round").textContent = isRogueMode()
+      ? "Deal " + round + " · Best run " + run.bestScore + (mode === "daily" ? " · Daily " + run.seed : "")
+      : "Round " + round;
     $("b2-record").textContent = stats.wins + " wins · " + stats.losses + " losses";
-    $("b2-turn").textContent = over ? "Round finished" : playerName(current);
+    $("b2-turn").textContent = over ? (isRogueMode() ? "Table finished" : "Round finished") : playerName(current);
     $("b2-target").textContent = pile
       ? pile.combo.name + " · " + pile.cards.map(cardName).join(" ")
       : "Open lead";
+
+    if (isRogueMode()) {
+      $("b2-run-score").textContent = run.score.toLocaleString();
+      $("b2-table-target").textContent = tableTarget().toLocaleString();
+      $("b2-coins").textContent = run.coins;
+      $("b2-table-no").textContent = Math.min(run.table, TABLES_PER_RUN) + " / " + TABLES_PER_RUN;
+      $("b2-table-rule").textContent = bossRule().name;
+      $("b2-table-rule-copy").textContent = bossRule().text;
+      $("b2-wager-name").textContent = wager().name;
+      $("b2-wager-copy").textContent = wager().text;
+      renderWagers();
+      renderCharms();
+    }
+    $("b2-new").textContent = isRogueMode() ? "New run" : "New deal";
 
     var opponents = $("b2-opponents");
     opponents.textContent = "";
@@ -301,13 +482,52 @@
     renderQuickMoves();
   }
 
+  function renderWagers() {
+    var root = $("b2-wagers");
+    root.textContent = "";
+    var wagerLocked = tableStats.playerPlays.length > 0 || tableStats.playerPasses > 0 || over;
+    WAGERS.forEach(function (item) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "b2-wager" + (run.activeWager === item.id ? " active" : "");
+      button.textContent = item.name;
+      button.disabled = wagerLocked;
+      button.addEventListener("click", function () {
+        if (wagerLocked) return;
+        run.activeWager = item.id;
+        render();
+        message(item.name + " selected.");
+      });
+      root.appendChild(button);
+    });
+  }
+
+  function renderCharms() {
+    var root = $("b2-charms");
+    root.textContent = "";
+    if (!run.charms.length) {
+      var empty = document.createElement("span");
+      empty.className = "b2-charm-chip";
+      empty.textContent = "No charms yet. Clear a table to visit the Market.";
+      root.appendChild(empty);
+      return;
+    }
+    run.charms.forEach(function (id) {
+      var charm = CHARM_LIBRARY.filter(function (item) { return item.id === id; })[0];
+      var chip = document.createElement("span");
+      chip.className = "b2-charm-chip";
+      chip.textContent = charm ? charm.name : id;
+      root.appendChild(chip);
+    });
+  }
+
   function renderQuickMoves() {
     var target = $("b2-quick");
     target.textContent = "";
     if (over) {
       var finished = document.createElement("span");
       finished.className = "b2-quick-empty";
-      finished.textContent = "Start a new deal to play again.";
+      finished.textContent = isRogueMode() ? "Resolve the table to continue the run." : "Start a new deal to play again.";
       target.appendChild(finished);
       return;
     }
@@ -376,25 +596,109 @@
     }, delay || 650);
   }
 
+  function scoreCombo(combo, cards) {
+    var value = COMBO_SCORE[combo.name] || 0;
+    value *= 1 + (run.mastery[combo.name] || 0) * 0.18;
+    if (combo.name === "Pair" && hasCharm("dragonPair")) value *= 1.4;
+    if ((combo.name === "Flush" || combo.name === "Straight flush") && hasCharm("jadeFan")) value *= 1.45;
+    if (combo.name === "Straight" && hasCharm("straightRoad")) value += 35;
+    if (combo.name === "Full house" && hasCharm("houseBlessing")) value += 45;
+    if ((combo.name === "Four of a kind" || combo.name === "Straight flush") && hasCharm("monkeyKing")) value += 80;
+    if (bossRule().id === "fiveCardFestival") value *= combo.count === 5 ? 2 : combo.name === "Single" ? 0.5 : 1;
+    if (wager().id === "showdown" && combo.count === 5) value *= 2;
+    if (bossRule().id === "twoTax" && cards.some(function (card) { return card.r === 15; })) value += 24;
+    return value;
+  }
+
+  function scoreTable(winner) {
+    if (winner !== 0) return { score: 0, coins: 0, passed: false };
+    var score = 50;
+    var coins = 3;
+    var opponentCards = hands.slice(1).reduce(function (total, hand) { return total + hand.length; }, 0);
+    score += opponentCards * 18;
+    if (opponentCards >= 12) coins += 2;
+    else if (opponentCards >= 7) coins += 1;
+
+    tableStats.playerPlays.forEach(function (entry) {
+      score += scoreCombo(entry.combo, entry.cards);
+    });
+    if (hasCharm("redEnvelope")) score += tableStats.diamondCards * 6;
+    if (hasCharm("luckyTwo")) {
+      score += tableStats.twosPlayed * 20;
+      coins += tableStats.twosPlayed;
+    }
+    if (hasCharm("Street Hawker") && (tableStats.comboCounts.Single || 0) >= 4) score += 50;
+    if (hasCharm("auntieLedger") && tableStats.playerPasses >= 2) coins += 3;
+
+    score *= wager().reward;
+    if (hasCharm("Gambler Bell") && wager().id !== "safe") {
+      score *= 1.25;
+      coins += 1;
+    }
+    coins += wager().coins || 0;
+    score = Math.round(score);
+    return { score: score, coins: coins, passed: score >= tableTarget() };
+  }
+
   function finish(player) {
     over = true;
     clearAITimer();
     if (player === 0) stats.wins++;
     else stats.losses++;
     saveStats();
+
+    if (!isRogueMode()) {
+      render();
+      message(player === 0
+        ? "You win with " + hands.slice(1).reduce(function (total, hand) { return total + hand.length; }, 0) + " opponent cards left."
+        : AI_NAMES[player] + " wins. You had " + hands[0].length + " cards left.");
+      return;
+    }
+
+    var result = scoreTable(player);
+    tableStats.score = result.score;
+    tableStats.coins = result.coins;
     render();
-    message(player === 0
-      ? "You win with " + hands.slice(1).reduce(function (total, hand) { return total + hand.length; }, 0) + " opponent cards left."
-      : AI_NAMES[player] + " wins. You had " + hands[0].length + " cards left.");
+
+    if (!result.passed) {
+      message((player === 0 ? "You cleared the hand" : AI_NAMES[player] + " went out") + ", but the table target held. Run ended at " + run.score.toLocaleString() + ".");
+      showRunOver(result);
+      return;
+    }
+
+    run.score += result.score;
+    run.coins += result.coins;
+    run.rareBonus += wager().rare || 0;
+    saveBestScore();
+
+    if (run.table >= TABLES_PER_RUN) {
+      message("Run cleared. Final score " + run.score.toLocaleString() + ".");
+      showRunWin(result);
+      return;
+    }
+
+    message("Table cleared for " + result.score.toLocaleString() + " score and " + result.coins + " coins.");
+    showMarket(result);
   }
 
   function play(player, cards) {
+    tableStats.started = true;
     var combo = classify(cards);
     var hand = hands[player];
     cards.forEach(function (card) { hand.splice(hand.indexOf(card), 1); });
     pile = { cards: cards, combo: combo, player: player };
     lastPlayer = player;
     passes = 0;
+
+    if (player === 0) {
+      tableStats.playerPlays.push({ combo: combo, cards: cards.slice() });
+      tableStats.comboCounts[combo.name] = (tableStats.comboCounts[combo.name] || 0) + 1;
+      cards.forEach(function (card) {
+        if (card.s === 0) tableStats.diamondCards++;
+        if (card.r === 15) tableStats.twosPlayed++;
+      });
+    }
+
     if (!hand.length) {
       finish(player);
       return;
@@ -403,13 +707,16 @@
   }
 
   function pass(player) {
+    tableStats.started = true;
+    if (player === 0) tableStats.playerPasses++;
     passes++;
     if (passes >= 3) {
+      if (lastPlayer === 0) tableStats.tricksWon++;
       pile = null;
       passes = 0;
       current = lastPlayer;
       selected = [];
-      message(playerName(current) + " take the trick and lead again.");
+      message(playerName(current) + " takes the trick and leads again.");
       render();
       if (current !== 0) scheduleAI(700);
       return;
@@ -431,8 +738,8 @@
 
   function aiTurn() {
     var player = current;
-    var candidates = candidatePlays(hands[player]);
-    var choice = pile ? chooseResponse(candidates, player) : chooseLead(candidates);
+    var candidates = legalPlays(hands[player]);
+    var choice = pile ? chooseResponse(candidates, player) : chooseLead(candidates, player);
     if (choice) play(player, choice.set);
     else pass(player);
   }
@@ -456,7 +763,7 @@
   function showHint() {
     if (current !== 0 || over) return;
     var options = legalPlays(hands[0]);
-    var choice = pile ? chooseResponse(options, 1) : chooseLead(options);
+    var choice = pile ? chooseResponse(options, 1) : chooseLead(options, 0);
     if (!choice) {
       selected = [];
       render();
@@ -472,6 +779,8 @@
     gameId++;
     clearAITimer();
     round++;
+    if (isRogueMode()) seededState = (run.seed + run.table * 1009 + round * 9176) | 0;
+    tableStats = freshTableStats();
 
     var deck = newDeck();
     hands = [[], [], [], []];
@@ -497,6 +806,177 @@
     }
   }
 
+  function nextTable() {
+    hideMarket();
+    run.table++;
+    run.activeWager = "safe";
+    deal();
+  }
+
+  function startMode(nextMode) {
+    hideMarket();
+    mode = nextMode || mode || "standard";
+    run = freshRun(mode === "daily");
+    round = 0;
+    deal();
+  }
+
+  function newRun() {
+    startMode(mode);
+  }
+
+  function newDeal() {
+    if (isRogueMode()) newRun();
+    else {
+      hideMarket();
+      deal();
+    }
+  }
+
+  function charmById(id) {
+    return CHARM_LIBRARY.filter(function (item) { return item.id === id; })[0];
+  }
+
+  function marketPool() {
+    var pool = CHARM_LIBRARY.filter(function (item) { return run.charms.indexOf(item.id) < 0; });
+    var focus = [];
+    Object.keys(tableStats.comboCounts).forEach(function (combo) {
+      focus = focus.concat(pool.filter(function (item) { return item.build.toLowerCase().indexOf(combo.toLowerCase().split(" ")[0]) >= 0; }));
+    });
+    return focus.concat(pool);
+  }
+
+  function rollMarket() {
+    var items = [];
+    var pool = marketPool();
+    while (items.length < 3 && pool.length) {
+      var rareBoost = run.rareBonus + marketRerolls * 0.02;
+      var index = Math.floor(rand() * pool.length);
+      if (rand() < rareBoost) {
+        var expensive = pool.slice().sort(function (a, b) { return b.price - a.price; })[0];
+        index = pool.indexOf(expensive);
+      }
+      var charm = pool.splice(index, 1)[0];
+      if (!items.some(function (item) { return item.type === "charm" && item.id === charm.id; })) {
+        items.push({ type: "charm", id: charm.id, name: charm.name, kind: charm.kind, text: charm.text, price: charm.price });
+      }
+    }
+    var mastery = COMBO_TYPES.slice().sort(function (a, b) {
+      var aSeen = tableStats.comboCounts[a] || 0;
+      var bSeen = tableStats.comboCounts[b] || 0;
+      return bSeen - aSeen || (run.mastery[a] || 0) - (run.mastery[b] || 0) || rand() - 0.5;
+    })[0];
+    items.push({ type: "mastery", id: mastery, name: mastery + " Mastery", kind: "Training", text: "Raise " + mastery + " scoring from level " + run.mastery[mastery] + " to " + (run.mastery[mastery] + 1) + ".", price: 5 + run.mastery[mastery] * 3 });
+    marketItems = items;
+  }
+
+  function showMarket(result) {
+    marketRerolls = 0;
+    rollMarket();
+    $("b2-market-kicker").textContent = "Table " + run.table + " cleared";
+    $("b2-market-title").textContent = "Market";
+    $("b2-market-copy").textContent = "+" + result.score.toLocaleString() + " score · +" + result.coins + " coins. Spend coins, then face table " + (run.table + 1) + ".";
+    $("b2-continue").textContent = "Next table";
+    $("b2-reroll").classList.remove("hidden");
+    renderMarket();
+    $("b2-market").classList.remove("hidden");
+  }
+
+  function showRunOver(result) {
+    saveBestScore();
+    var gap = Math.max(0, tableTarget() - result.score);
+    var played = tableStats.playerPlays.map(function (entry) { return entry.combo.name; }).join(", ") || "no scoring plays";
+    $("b2-market-kicker").textContent = "Run ended";
+    $("b2-market-title").textContent = "Target missed";
+    $("b2-market-copy").textContent = "This table scored " + result.score.toLocaleString() + " against a target of " + tableTarget().toLocaleString() + ". Short by " + gap.toLocaleString() + ". You played: " + played + ". Final run score: " + run.score.toLocaleString() + ".";
+    $("b2-market-grid").textContent = "";
+    $("b2-reroll").classList.add("hidden");
+    $("b2-continue").textContent = "New run";
+    $("b2-market").classList.remove("hidden");
+  }
+
+  function showRunWin(result) {
+    saveBestScore();
+    $("b2-market-kicker").textContent = "Run cleared";
+    $("b2-market-title").textContent = "You beat the house";
+    $("b2-market-copy").textContent = "Final table scored " + result.score.toLocaleString() + ". Final run score: " + run.score.toLocaleString() + ". Charms: " + (run.charms.map(function (id) { return charmById(id)?.name || id; }).join(", ") || "none") + ".";
+    $("b2-market-grid").textContent = "";
+    $("b2-reroll").classList.add("hidden");
+    $("b2-continue").textContent = "New run";
+    $("b2-market").classList.remove("hidden");
+  }
+
+  function hideMarket() {
+    $("b2-market").classList.add("hidden");
+  }
+
+  function renderMarket() {
+    var grid = $("b2-market-grid");
+    grid.textContent = "";
+    marketItems.forEach(function (item) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "b2-shop-card";
+      button.disabled = item.bought || run.coins < item.price || (item.type === "charm" && run.charms.length >= MAX_CHARMS);
+      button.innerHTML = "<span>" + item.kind + "</span><strong>" + item.name + "</strong><p>" + item.text + "</p><b>" + item.price + " coins</b>";
+      button.addEventListener("click", function () {
+        buyMarketItem(item);
+      });
+      grid.appendChild(button);
+    });
+    $("b2-reroll").textContent = "Reroll market · " + (2 + marketRerolls) + " coins";
+    $("b2-reroll").disabled = run.coins < 2 + marketRerolls;
+  }
+
+  function buyMarketItem(item) {
+    if (item.bought || run.coins < item.price) return;
+    if (item.type === "charm" && run.charms.length >= MAX_CHARMS) return;
+    run.coins -= item.price;
+    item.bought = true;
+    if (item.type === "charm") run.charms.push(item.id);
+    if (item.type === "mastery") run.mastery[item.id]++;
+    $("b2-market-copy").textContent = item.name + " bought. " + run.coins + " coins left.";
+    render();
+    renderMarket();
+  }
+
+  function feedbackPacket() {
+    return JSON.stringify({
+      game: "Big 2",
+      mode: mode,
+      round: round,
+      record: stats,
+      run: isRogueMode() ? {
+        table: run.table,
+        score: run.score,
+        coins: run.coins,
+        target: tableTarget(),
+        rule: bossRule().name,
+        wager: wager().name,
+        seed: run.seed,
+        charms: run.charms.map(function (id) { return charmById(id)?.name || id; }),
+        mastery: run.mastery
+      } : null,
+      turn: playerName(current),
+      pile: pile ? { player: playerName(pile.player), combo: pile.combo.name, cards: pile.cards.map(cardName) } : null,
+      playerHand: hands && hands[0] ? hands[0].map(cardName) : [],
+      opponents: hands ? hands.slice(1).map(function (hand, index) { return { name: AI_NAMES[index + 1], cards: hand.length }; }) : [],
+      message: $("b2-msg").textContent,
+      url: location.href,
+      userAgent: navigator.userAgent,
+      generatedAt: new Date().toISOString()
+    }, null, 2);
+  }
+
+  function showFeedback() {
+    var panel = $("b2-feedback-panel");
+    var text = feedbackPacket();
+    $("b2-feedback-text").value = text;
+    $("b2-mail-feedback").href = "mailto:vishvaddi@gmail.com?subject=Big%202%20feedback&body=" + encodeURIComponent(text);
+    panel.classList.remove("hidden");
+    panel.open = true;
+  }
+
   $("b2-play").addEventListener("click", playSelection);
   $("b2-pass").addEventListener("click", function () {
     if (current !== 0 || over || !pile) return;
@@ -516,17 +996,52 @@
     selected = [];
     render();
   });
-  $("b2-new").addEventListener("click", deal);
+  document.querySelectorAll("[data-b2-mode]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      startMode(button.dataset.b2Mode || "standard");
+    });
+  });
+  $("b2-new").addEventListener("click", newDeal);
+  $("b2-feedback").addEventListener("click", showFeedback);
+  $("b2-copy-feedback").addEventListener("click", function () {
+    var text = $("b2-feedback-text").value || feedbackPacket();
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        message("Feedback packet copied.");
+      }).catch(function () {
+        message("Could not copy automatically. Select the packet and copy it manually.");
+      });
+    } else {
+      message("Select the packet and copy it manually.");
+    }
+  });
+  $("b2-reroll").addEventListener("click", function () {
+    var cost = 2 + marketRerolls;
+    if (run.coins < cost) return;
+    run.coins -= cost;
+    marketRerolls++;
+    rollMarket();
+    render();
+    renderMarket();
+  });
+  $("b2-continue").addEventListener("click", function () {
+    if (run.table >= TABLES_PER_RUN || over && !$("b2-market-grid").children.length) newRun();
+    else nextTable();
+  });
 
   document.addEventListener("keydown", function (event) {
     var tag = event.target && event.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (!$("b2-market").classList.contains("hidden")) {
+      if (event.key === "Enter") $("b2-continue").click();
+      return;
+    }
     if (event.key === "Enter") playSelection();
     else if (event.key.toLowerCase() === "p" && !$("b2-pass").disabled) $("b2-pass").click();
     else if (event.key.toLowerCase() === "h") showHint();
     else if (event.key.toLowerCase() === "s") $("b2-sort").click();
-    else if (event.key.toLowerCase() === "n") deal();
+    else if (event.key.toLowerCase() === "n") newDeal();
   });
 
-  deal();
+  startMode("standard");
 })();

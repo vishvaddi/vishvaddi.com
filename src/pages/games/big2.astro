@@ -12,10 +12,58 @@ import Base from "../../layouts/Base.astro";
   </p>
 
   <div id="big2">
+    <div class="b2-mode-panel">
+      <div>
+        <span class="b2-kicker">Mode</span>
+        <strong id="b2-mode-title">Standard Big 2</strong>
+        <p id="b2-mode-copy">A clean single-deal game against three AI opponents.</p>
+      </div>
+      <div class="b2-mode-actions" role="group" aria-label="Choose Big 2 mode">
+        <button type="button" class="active" data-b2-mode="standard">Standard</button>
+        <button type="button" data-b2-mode="roguelike">Roguelike</button>
+        <button type="button" data-b2-mode="daily">Daily run</button>
+      </div>
+    </div>
+
     <div class="b2-meta">
       <span id="b2-round">Round 1</span>
       <span id="b2-record">0 wins · 0 losses</span>
     </div>
+
+    <div class="b2-run-panel b2-rogue-only">
+      <div>
+        <span class="b2-kicker">Run score</span>
+        <strong id="b2-run-score">0</strong>
+      </div>
+      <div>
+        <span class="b2-kicker">Table target</span>
+        <strong id="b2-table-target">0</strong>
+      </div>
+      <div>
+        <span class="b2-kicker">Coins</span>
+        <strong id="b2-coins">0</strong>
+      </div>
+      <div>
+        <span class="b2-kicker">Table</span>
+        <strong id="b2-table-no">1 / 12</strong>
+      </div>
+    </div>
+
+    <div class="b2-rule-panel b2-rogue-only">
+      <div>
+        <span class="b2-kicker">Table rule</span>
+        <strong id="b2-table-rule">House table</strong>
+        <p id="b2-table-rule-copy">Beat the target to reach the Market.</p>
+      </div>
+      <div>
+        <span class="b2-kicker">Wager</span>
+        <strong id="b2-wager-name">Safe table</strong>
+        <p id="b2-wager-copy">No extra risk.</p>
+      </div>
+    </div>
+
+    <div class="b2-wagers b2-rogue-only" id="b2-wagers"></div>
+    <div class="b2-charms b2-rogue-only" id="b2-charms"></div>
 
     <div class="b2-turn-panel">
       <div>
@@ -56,7 +104,31 @@ import Base from "../../layouts/Base.astro";
       <button class="btn btn-ghost" id="b2-hint">Suggest move</button>
       <button class="btn btn-ghost" id="b2-clear">Clear</button>
       <button class="btn btn-ghost" id="b2-sort">Sort hand</button>
+      <button class="btn btn-ghost" id="b2-feedback">Feedback packet</button>
       <button class="btn btn-ghost" id="b2-new">New deal</button>
+    </div>
+  </div>
+
+  <details class="b2-feedback hidden" id="b2-feedback-panel">
+    <summary>Feedback packet</summary>
+    <p>Use this when a rule feels wrong, the AI behaves strangely, or the roguelike balance feels off.</p>
+    <textarea id="b2-feedback-text" rows="9" readonly></textarea>
+    <div class="b2-controls">
+      <button class="btn btn-ghost" id="b2-copy-feedback" type="button">Copy packet</button>
+      <a class="btn btn-ghost" id="b2-mail-feedback" href="mailto:vishvaddi@gmail.com?subject=Big%202%20feedback">Email feedback</a>
+    </div>
+  </details>
+
+  <div class="b2-market hidden" id="b2-market" aria-live="polite">
+    <div class="b2-market-card">
+      <p class="b2-kicker" id="b2-market-kicker">Market</p>
+      <h2 id="b2-market-title">Table cleared</h2>
+      <p id="b2-market-copy"></p>
+      <div class="b2-market-grid" id="b2-market-grid"></div>
+      <div class="b2-market-actions">
+        <button class="btn btn-ghost" id="b2-reroll">Reroll market</button>
+        <button class="btn" id="b2-continue">Next table</button>
+      </div>
     </div>
   </div>
 
@@ -83,6 +155,41 @@ import Base from "../../layouts/Base.astro";
     }
     .b2-meta, .b2-hand-meta { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; color: var(--muted); font-size: 0.82rem; }
     .b2-hand-meta strong { color: var(--fg); font-size: 0.9rem; }
+    .b2-mode-panel {
+      display: grid; grid-template-columns: 1fr auto; gap: 0.8rem; align-items: center;
+      margin-bottom: 0.85rem; padding: 0.8rem; border: 1px solid var(--rule); border-radius: 12px;
+      background: color-mix(in srgb, var(--bg) 89%, var(--accent) 6%);
+    }
+    .b2-mode-panel strong { display: block; font-size: 1rem; }
+    .b2-mode-panel p { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.82rem; }
+    .b2-mode-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: flex-end; }
+    .b2-mode-actions button {
+      border: 1px solid var(--rule); border-radius: 999px; padding: 0.42rem 0.7rem;
+      background: var(--bg); color: var(--fg); cursor: pointer; font-size: 0.8rem;
+    }
+    .b2-mode-actions button.active {
+      border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent);
+    }
+    #big2[data-mode="standard"] .b2-rogue-only { display: none; }
+    .b2-run-panel {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.55rem; margin: 0.75rem 0;
+    }
+    .b2-run-panel > div, .b2-rule-panel > div {
+      padding: 0.7rem 0.75rem; border: 1px solid var(--rule); border-radius: 10px;
+      background: color-mix(in srgb, var(--bg) 90%, var(--accent) 5%);
+    }
+    .b2-run-panel strong { display: block; font-size: 1rem; }
+    .b2-rule-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin-bottom: 0.75rem; }
+    .b2-rule-panel strong { display: block; font-size: 0.94rem; }
+    .b2-rule-panel p { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.78rem; line-height: 1.35; }
+    .b2-wagers, .b2-charms { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.55rem 0; }
+    .b2-wager, .b2-charm-chip {
+      border: 1px solid var(--rule); border-radius: 999px; padding: 0.38rem 0.62rem;
+      background: var(--bg); color: var(--fg); font-size: 0.78rem;
+    }
+    .b2-wager { cursor: pointer; }
+    .b2-wager.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+    .b2-charm-chip { color: var(--muted); }
     .b2-turn-panel {
       display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin: 0.75rem 0;
     }
@@ -148,8 +255,43 @@ import Base from "../../layouts/Base.astro";
     .b2-play-btn { box-shadow: 0 5px 14px color-mix(in srgb, var(--accent) 25%, transparent); }
     .b2-rules { margin-top: 1rem; font-size: 0.9rem; color: var(--muted); }
     .b2-rules summary { cursor: pointer; color: var(--fg); }
+    .b2-feedback { margin-top: 1rem; padding: 0.85rem; border: 1px solid var(--rule); border-radius: 12px; background: color-mix(in srgb, var(--bg) 93%, var(--accent) 4%); }
+    .b2-feedback.hidden { display: none; }
+    .b2-feedback p { color: var(--muted); font-size: 0.86rem; }
+    .b2-feedback textarea {
+      width: 100%; box-sizing: border-box; margin: 0.5rem 0; padding: 0.65rem; border: 1px solid var(--rule);
+      border-radius: 10px; background: var(--code-bg); color: var(--fg); font: 0.76rem var(--font-mono);
+    }
+    .b2-market {
+      position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 1rem;
+      background: rgba(11, 10, 9, 0.78); backdrop-filter: blur(8px);
+    }
+    .b2-market.hidden { display: none; }
+    .b2-market-card {
+      width: min(860px, 100%); max-height: min(760px, calc(100vh - 2rem)); overflow: auto;
+      padding: 1rem; border: 1px solid var(--rule); border-radius: 18px; background: var(--bg);
+      box-shadow: 0 22px 70px rgba(0,0,0,0.28);
+    }
+    .b2-market-card h2 { margin: 0.1rem 0 0.35rem; }
+    .b2-market-card p { color: var(--muted); }
+    .b2-market-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.7rem; margin-top: 0.9rem; }
+    .b2-shop-card {
+      min-height: 168px; padding: 0.85rem; border: 1px solid var(--rule); border-radius: 14px;
+      background: color-mix(in srgb, var(--bg) 88%, var(--accent) 6%); color: var(--fg); text-align: left; cursor: pointer;
+    }
+    .b2-shop-card:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-2px); }
+    .b2-shop-card:disabled { opacity: 0.48; cursor: not-allowed; }
+    .b2-shop-card span { color: var(--muted); font: 0.66rem var(--font-mono); letter-spacing: 0.09em; text-transform: uppercase; }
+    .b2-shop-card strong { display: block; margin: 0.45rem 0 0.3rem; font-size: 1.05rem; }
+    .b2-shop-card p { margin: 0; font-size: 0.82rem; line-height: 1.45; }
+    .b2-shop-card b { display: block; margin-top: 0.8rem; color: var(--accent); font-size: 0.78rem; }
+    .b2-market-actions { display: flex; justify-content: flex-end; gap: 0.55rem; margin-top: 1rem; }
     @media (max-width: 560px) {
       #big2 { padding: 0.7rem; margin-left: -0.35rem; margin-right: -0.35rem; }
+      .b2-mode-panel { grid-template-columns: 1fr; }
+      .b2-mode-actions { justify-content: flex-start; }
+      .b2-run-panel, .b2-rule-panel, .b2-market-grid { grid-template-columns: 1fr 1fr; }
+      .b2-rule-panel { grid-template-columns: 1fr; }
       .b2-card { width: 48px; height: 68px; padding: 4px 5px; }
       .b2-card-suit { font-size: 1.5rem; }
       .b2-opponents { gap: 0.45rem; }
@@ -157,6 +299,8 @@ import Base from "../../layouts/Base.astro";
       .b2-opp-name { font-size: 0.8rem; }
       .b2-card-backs { display: none; }
       .b2-controls-secondary .btn { flex: 1 1 42%; }
+      .b2-market-grid { grid-template-columns: 1fr; }
+      .b2-market-actions { flex-direction: column; }
     }
   </style>
 
