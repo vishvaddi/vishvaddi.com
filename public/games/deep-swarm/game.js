@@ -3505,8 +3505,10 @@ if (isTouchDevice) {
 // mouse click on one dispatches its key. One geometry source: the draw.
 // =====================================================================
 let tapZones = [];
+let MENU_S = 1;   // scale menus render at on narrow screens; taps map back through it
 function addTapZone(x, y, zw, zh, key) { tapZones.push({ x, y, w: zw, h: zh, key }); }
 function hitTapZone(px, py) {
+    px /= MENU_S; py /= MENU_S;
     for (const z of tapZones) if (px >= z.x && px <= z.x + z.w && py >= z.y && py <= z.y + z.h) return z;
     return null;
 }
@@ -5832,17 +5834,23 @@ function draw() {
     ctx.clearRect(0, 0, w, h);
     tapZones.length = 0;   // rebuilt each frame by whichever screen draws
 
-    if (phase === 'title') { drawTitle(w, h); return; }
-    if (phase === 'intro') { drawIntro(w, h); return; }
-    if (phase === 'shop') { drawShop(w, h); return; }
-    if (phase === 'workshop') { drawWorkshop(w, h); return; }
-    if (phase === 'mooring') { drawMooring(w, h, game); return; }
-    if (phase === 'modules') { drawModules(w, h); return; }
-    if (phase === 'contracts') { drawContracts(w, h); return; }
-    if (phase === 'puzzle') { drawPuzzle(w, h); return; }
-    if (phase === 'cards') { drawCardDraft(w, h); return; }
-    if (phase === 'codex') { drawCodex(w, h); return; }
-    if (phase === 'tutorial') { drawTutorial(w, h); return; }
+    // Full-screen menus were laid out for a desktop canvas — on narrow screens
+    // render them into a 720-wide virtual space scaled to fit. Tap zones are
+    // registered in virtual coordinates; hitTapZone divides by MENU_S.
+    const MENU_DRAWS = {
+        title: drawTitle, intro: drawIntro, shop: drawShop, workshop: drawWorkshop,
+        modules: drawModules, contracts: drawContracts, puzzle: drawPuzzle,
+        cards: drawCardDraft, codex: drawCodex, tutorial: drawTutorial,
+    };
+    if (MENU_DRAWS[phase] || phase === 'mooring') {
+        MENU_S = Math.min(1, w / 720);
+        if (MENU_S < 1) { ctx.save(); ctx.scale(MENU_S, MENU_S); }
+        if (phase === 'mooring') drawMooring(w / MENU_S, h / MENU_S, game);
+        else MENU_DRAWS[phase](w / MENU_S, h / MENU_S);
+        if (MENU_S < 1) ctx.restore();
+        return;
+    }
+    MENU_S = 1;
     // Feature 1: Pause screen renders game + overlay
     // (falls through to game rendering below, then overlay added at end)
 
@@ -5852,21 +5860,20 @@ function draw() {
     // Depth palette (used by everything)
     const pal = getDepthPalette(g.depth || 0);
 
-    // --- CIRCULAR VIEWPORT — centered, with room for rim arcs + labels + NEREID below ---
-    // Rim arcs extend to vpR + 22 (labels). NEREID needs ~70px gap below that.
-    // Small screens: the old 200px radius floor + 60px side margins guaranteed
-    // the rim spilled off phone edges — margins, gaps and floor now adapt.
+    // --- VIEWPORT — desktop gets the circular porthole; small screens go
+    // FULL-BLEED (the porthole is a desktop aesthetic — on a phone it wasted
+    // half the pixels and squashed the game into a small circle). Full-bleed
+    // keeps all the porthole math but the circle covers every corner.
     const small = w < 520 || h < 560;
-    const NEREID_GAP = small ? Math.max(84, Math.round(h * 0.16)) : 130;
-    const TOP_GAP    = small ? 36 : 50;
-    const sideMargin = small ? 34 : 60;
+    const NEREID_GAP = 130;
+    const TOP_GAP    = 50;
     const vpCx = w / 2;
     const vpCy = h / 2;
-    const vpRadius = Math.max(small ? 120 : 200, Math.min(
-        w / 2 - sideMargin,                   // horizontal margin (room for left/right arc labels)
-        h / 2 - Math.max(TOP_GAP, NEREID_GAP)
-    ));
+    const vpRadius = small
+        ? Math.hypot(w, h) / 2 + 12
+        : Math.max(200, Math.min(w / 2 - 60, h / 2 - Math.max(TOP_GAP, NEREID_GAP)));
     g._vpCx = vpCx; g._vpCy = vpCy; g._vpR = vpRadius;
+    g._fullBleed = small;
 
     // Camera: center the world on the porthole center
     const cx = g.cam.x - vpCx + (g.shake ? (Math.random() - 0.5) * g.shake : 0);
@@ -5880,29 +5887,31 @@ function draw() {
     ctx.fillStyle = '#060810';
     ctx.fillRect(0, 0, w, h);
 
-    // Porthole bezel — solid metal rim, single inner hairline
-    ctx.strokeStyle = '#101C24'; ctx.lineWidth = 8;
-    ctx.beginPath(); ctx.arc(vpCx, vpCy, vpRadius + 4, 0, PI2); ctx.stroke();
-    ctx.strokeStyle = hexA(pal.accentDim, 0.3); ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(vpCx, vpCy, vpRadius + 1, 0, PI2); ctx.stroke();
+    // Porthole bezel + bolts — desktop only; full-bleed has no rim to decorate
+    if (!small) {
+        ctx.strokeStyle = '#101C24'; ctx.lineWidth = 8;
+        ctx.beginPath(); ctx.arc(vpCx, vpCy, vpRadius + 4, 0, PI2); ctx.stroke();
+        ctx.strokeStyle = hexA(pal.accentDim, 0.3); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(vpCx, vpCy, vpRadius + 1, 0, PI2); ctx.stroke();
 
-    // 12 bolts around the porthole rim — same count as the sub's hull rivets
-    const BOLT_COUNT = 12;
-    const boltR = vpRadius + 4;     // sit on the bezel centerline
-    for (let bi = 0; bi < BOLT_COUNT; bi++) {
-        const ba = (bi / BOLT_COUNT) * PI2 - Math.PI / 2;     // start at top (12 o'clock), go clockwise
-        const bx = vpCx + Math.cos(ba) * boltR;
-        const by = vpCy + Math.sin(ba) * boltR;
-        // Bolt head — dark ring + inner highlight
-        ctx.fillStyle = '#1A2530';
-        ctx.beginPath(); ctx.arc(bx, by, 3.2, 0, PI2); ctx.fill();
-        ctx.fillStyle = '#3A5A6A';
-        ctx.beginPath(); ctx.arc(bx, by, 2.2, 0, PI2); ctx.fill();
-        // Hex slot (two perpendicular notches for that machined look)
-        ctx.strokeStyle = '#0A1018'; ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.moveTo(bx - 1.4, by); ctx.lineTo(bx + 1.4, by);
-        ctx.stroke();
+        // 12 bolts around the porthole rim — same count as the sub's hull rivets
+        const BOLT_COUNT = 12;
+        const boltR = vpRadius + 4;     // sit on the bezel centerline
+        for (let bi = 0; bi < BOLT_COUNT; bi++) {
+            const ba = (bi / BOLT_COUNT) * PI2 - Math.PI / 2;     // start at top (12 o'clock), go clockwise
+            const bx = vpCx + Math.cos(ba) * boltR;
+            const by = vpCy + Math.sin(ba) * boltR;
+            // Bolt head — dark ring + inner highlight
+            ctx.fillStyle = '#1A2530';
+            ctx.beginPath(); ctx.arc(bx, by, 3.2, 0, PI2); ctx.fill();
+            ctx.fillStyle = '#3A5A6A';
+            ctx.beginPath(); ctx.arc(bx, by, 2.2, 0, PI2); ctx.fill();
+            // Hex slot (two perpendicular notches for that machined look)
+            ctx.strokeStyle = '#0A1018'; ctx.lineWidth = 0.6;
+            ctx.beginPath();
+            ctx.moveTo(bx - 1.4, by); ctx.lineTo(bx + 1.4, by);
+            ctx.stroke();
+        }
     }
 
     // (No top bar. Depth and all other readouts handled in drawMinimalHUD.)
@@ -7736,14 +7745,14 @@ function drawNereidSpeech(w, h, g, pal, vpCx, vpCy, vpR) {
         lines[maxLines - 1] = lines[maxLines - 1].slice(0, maxChars - 3) + '...';
     }
     // Anchor BELOW the rim arcs (which extend to vpR + 22 for labels). No overlap with vitals.
-    const panelW = Math.min(640, w * 0.7);
+    // Full-bleed (phone): no rim to clear — pin under the top HUD bars instead.
+    const panelW = g._fullBleed ? Math.min(640, w - 16) : Math.min(640, w * 0.7);
     const lineH = 14;
     const panelH = 22 + lines.length * lineH;
     const panelX = vpCx - panelW / 2;
-    // Far enough below the porthole that the rim arc labels and bolts are clear
-    const minY = vpCy + vpR + 44;
+    const minY = g._fullBleed ? 30 : vpCy + vpR + 44;
     const maxY = h - panelH - 6;
-    const panelY = Math.max(minY, Math.min(maxY, minY));
+    const panelY = Math.max(6, Math.min(maxY, minY));
 
     // Fade
     let alpha = 1;
@@ -8001,9 +8010,28 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         ctx.fillText(valueText, lx, ly + 16);
     }
 
-    drawArc(-Math.PI / 2,  xpPct, XP_COLOR,   `LV ${p.level}`, `${p.xp}/${xpForLevel(p.level)}`);
-    drawArc(Math.PI / 6,   sanity / 100, MIND_COLOR, 'MIND', `${Math.floor(sanity)}%`);
-    drawArc(5 * Math.PI / 6, hpPct, HULL_COLOR, 'HULL', `${Math.max(0, Math.floor(p.hp))}/${p.maxHp}`);
+    if (g._fullBleed) {
+        // Phone HUD: slim bars pinned to the top edge — XP full-width hairline,
+        // HULL left / MIND right beneath it. No rim, no arcs.
+        const bar = (x, y, bw, bh, pct, color) => {
+            ctx.fillStyle = 'rgba(8,12,20,0.8)'; ctx.fillRect(x, y, bw, bh);
+            ctx.fillStyle = color; ctx.fillRect(x, y, bw * Math.max(0, Math.min(1, pct)), bh);
+        };
+        bar(0, 0, w, 4, xpPct, XP_COLOR);
+        bar(8, 8, w * 0.42 - 8, 5, hpPct, HULL_COLOR);
+        bar(w * 0.58, 8, w * 0.42 - 8, 5, sanity / 100, MIND_COLOR);
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'left'; ctx.fillStyle = HULL_COLOR;
+        ctx.fillText(`HULL ${Math.max(0, Math.floor(p.hp))}`, 8, 24);
+        ctx.textAlign = 'right'; ctx.fillStyle = MIND_COLOR;
+        ctx.fillText(`MIND ${Math.floor(sanity)}%`, w - 8, 24);
+        ctx.textAlign = 'center'; ctx.fillStyle = XP_COLOR;
+        ctx.fillText(`LV ${p.level}`, w / 2, 24);
+    } else {
+        drawArc(-Math.PI / 2,  xpPct, XP_COLOR,   `LV ${p.level}`, `${p.xp}/${xpForLevel(p.level)}`);
+        drawArc(Math.PI / 6,   sanity / 100, MIND_COLOR, 'MIND', `${Math.floor(sanity)}%`);
+        drawArc(5 * Math.PI / 6, hpPct, HULL_COLOR, 'HULL', `${Math.max(0, Math.floor(p.hp))}/${p.maxHp}`);
+    }
 
     // (MIND eye removed 12/07 — at low corruption it read as a stray purple
     // glitch by the MIND arc, and the arc already tells the number.)
@@ -9651,30 +9679,30 @@ function drawTitle(w, h) {
 
     // (Action prompts now at top — see ACTIONS_Y below the subtitle)
     ctx.textAlign = 'center';
-    // Daily dive + ending + signal readouts
+    // Daily / destination / signal / ending readouts — bottom strip, clear of
+    // the tagline stack (they used to collide with the subtitle).
     ctx.font = '10px monospace';
     if (dailyArmed) {
         ctx.fillStyle = '#E8D080';
-        ctx.fillText('◈ DAILY DIVE ARMED — ' + dayKeyUTC() + ' brief for everyone  [D] disarm', w / 2, ACTIONS_Y - 48);
+        ctx.fillText('◈ DAILY DIVE ARMED — ' + dayKeyUTC() + ' brief for everyone  [D] disarm', w / 2, h - 26);
     } else {
         ctx.fillStyle = '#5A6A7A';
         const db = meta.dailyBest && meta.dailyBest.date === dayKeyUTC() ? ('  ·  today\'s best ' + meta.dailyBest.score.toLocaleString()) : '';
-        ctx.fillText('[D] daily dive' + db + '   ·   ⌁ ' + (meta.signal || 0) + ' signal', w / 2, ACTIONS_Y - 48);
+        ctx.fillText('[D] daily dive' + db + '   ·   ⌁ ' + (meta.signal || 0) + ' signal', w / 2, h - 26);
     }
-    addTapZone(w / 2 - 160, ACTIONS_Y - 60, 320, 16, 'd');
-    if (meta.ending) {
-        ctx.fillStyle = meta.ending === 'answered' ? '#7AC8B8' : '#8A7A88';
-        ctx.font = 'italic 10px monospace';
-        ctx.fillText(meta.ending === 'answered' ? 'NEREID remembers her answer.' : 'The question is still down there, keeping.', w / 2, ACTIONS_Y - 62);
-    }
-    // Destination readout — P3 unlocks after any run past 2600m
+    addTapZone(w / 2 - 160, h - 38, 320, 16, 'd');
     if (meta.p3Unlocked) {
         const p3 = meta.destination === 'p3';
         ctx.font = 'bold 11px monospace';
         ctx.fillStyle = p3 ? '#C87840' : '#4A8ADA';
-        ctx.fillText(p3 ? 'DESTINATION: PELAGOS-3 — THE SCAR  [P] switch' : 'DESTINATION: PELAGOS-9  [P] switch', w / 2, ACTIONS_Y - 22);
-        if (p3) { ctx.fillStyle = '#7A5A48'; ctx.font = '9px monospace'; ctx.fillText('dead ocean · drowned machinery · the survey never came back', w / 2, ACTIONS_Y - 10); }
-        addTapZone(w / 2 - 160, ACTIONS_Y - 34, 320, 18, 'p');
+        ctx.fillText(p3 ? 'DESTINATION: PELAGOS-3 — THE SCAR  [P] switch' : 'DESTINATION: PELAGOS-9  [P] switch', w / 2, h - 44);
+        if (p3) { ctx.fillStyle = '#7A5A48'; ctx.font = '9px monospace'; ctx.fillText('dead ocean · drowned machinery · the survey never came back', w / 2, h - 12); }
+        addTapZone(w / 2 - 160, h - 56, 320, 18, 'p');
+    }
+    if (meta.ending) {
+        ctx.fillStyle = meta.ending === 'answered' ? '#7AC8B8' : '#8A7A88';
+        ctx.font = 'italic 10px monospace';
+        ctx.fillText(meta.ending === 'answered' ? 'NEREID remembers her answer.' : 'The question is still down there, keeping.', w / 2, h - 62);
     }
     ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 16px monospace';
     ctx.fillText('[ENTER] DIVE', w / 2, ACTIONS_Y);
