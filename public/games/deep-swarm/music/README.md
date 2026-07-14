@@ -6,7 +6,8 @@ a missing file fails silent (game never breaks over audio).
 ## Current sources (owned packs, royalty-free, no attribution required)
 
 - `bed_*` — Shapeforms Audio "Dystopia – Ambience and Drone" free pack (license PDF in the pack folder, Downloads)
-- `beat_*` — Epic Stock Media "Hybrid Game" Music_Loops
+- `amb_*` — **Stellardrone** (Light Years / Invent the Universe, CC-BY 3.0 via archive.org) — the melodic wonder layer. Credit "music: Stellardrone — CC-BY" is on both title screens.
+- `beat_*` — Epic Stock Media "Hybrid Game" Music_Loops (retired from default slots 16/07 — Vish: "glitchy"; files kept as spares)
 - `sfx_glitch*`, `sfx_ui`, `sfx_impact`, `sfx_stinger`, `sfx_tear` — Shapeforms free packs (Glitch and Noise / Future UI / Hit and Punch / Dystopia)
 
 ## Slot map (index.html `MUSIC`)

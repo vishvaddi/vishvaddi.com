@@ -34,6 +34,8 @@ function drawPlate(x, y, pw, ph, alpha) {
 // =====================================================================
 let POSTFX = { on: false, gl: null, prog: null, tex: null, canvas: null, loc: {} };
 function initPostFX() {
+    // Phones: the shader pass + full-screen CRT overdraw are the lag — skip both
+    if (isTouchDevice && Math.min(screen.width, screen.height) < 620) return;
     try {
         const gc = document.createElement('canvas');
         gc.id = 'gl';
@@ -295,6 +297,12 @@ function initAudio() {
     // Dry path: source -> underwaterFilter -> masterGain -> destination (LOUD)
     underwaterFilter.connect(masterGain);
     masterGain.connect(audioCtx.destination);
+    // Master glue: soft-knee compressor so stacked layers + one-shots never clip
+    const comp = audioCtx.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.knee.value = 18; comp.ratio.value = 4;
+    comp.attack.value = 0.004; comp.release.value = 0.18;
+    masterGain.disconnect();
+    masterGain.connect(comp); comp.connect(audioCtx.destination);
     // Split buses: independent music/sfx volume, both through the water
     sfxBus = audioCtx.createGain(); sfxBus.gain.value = meta.sfxVol != null ? meta.sfxVol : 1;
     sfxBus.connect(underwaterFilter);
@@ -313,8 +321,8 @@ function playTone(freq, dur, type = 'sine', vol = 0.15) {
     if (!audioCtx) return;
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
-    o.type = type; o.frequency.value = freq;
-    g.gain.setValueAtTime(vol, audioCtx.currentTime);
+    o.type = type; o.frequency.value = freq * (0.96 + Math.random() * 0.08);
+    g.gain.setValueAtTime(vol * (0.92 + Math.random() * 0.16), audioCtx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
     o.connect(g); g.connect(sfxBus || underwaterFilter || audioCtx.destination);
     o.start(); o.stop(audioCtx.currentTime + dur + 0.1);
@@ -334,6 +342,178 @@ function noiseBurst(dur, vol, cutoff) {
 }
 
 // =====================================================================
+// WATER VOLUMES — currents you ride or fight, rips that pull toward
+// danger-paired reward, thermoclines that bend senses, sediment
+// concealment, and dark-only crystal blooms. The water fights back.
+// =====================================================================
+// Biome pockets: a themed cluster seeded near (not on) the player. The zone
+// stops being a uniform soup — there are PLACES now, and places have prices.
+const BIOME_DEFS = {
+    kelp_forest:    { zones: ['sunlight', 'twilight'], line: 'Kelp stand ahead. Cover for you. Cover for other things.' },
+    vent_field:     { zones: ['midnight', 'abyssal'],  line: 'Hydrothermal field. Mind the plumes — the water itself burns there.' },
+    graveyard:      { zones: ['twilight', 'midnight', 'abyssal'], line: 'Multiple wrecks on sonar. A bad place for ships. Good salvage.' },
+    brine_pool:     { zones: ['abyssal', 'hadal'],     line: 'Brine pool — hypersaline. Do not linger in it. Things crystallise at its edge.' },
+    crystal_cavern: { zones: ['midnight', 'abyssal', 'hadal'], line: 'Crystal formation. Kill the lights and watch what opens.' },
+};
+function spawnBiomePocket(g, p) {
+    const zone = musicSlot();
+    const valid = Object.keys(BIOME_DEFS).filter(k => BIOME_DEFS[k].zones.includes(zone));
+    if (!valid.length) return;
+    const kind = valid[Math.floor(Math.random() * valid.length)];
+    const a = Math.random() * PI2;
+    const cx = p.x + Math.cos(a) * 700, cy = p.y + Math.sin(a) * 700;
+    const push = (obKind, n, spread) => {
+        for (let i = 0; i < n; i++) {
+            g.obstacles.push({ kind: obKind, x: cx + (Math.random() - 0.5) * spread, y: cy + (Math.random() - 0.5) * spread,
+                r: 24 + Math.random() * 26, seed: Math.random() * 100, obDepth: g.depth });
+        }
+    };
+    if (kind === 'kelp_forest') { push('kelp', 10, 520); }
+    else if (kind === 'vent_field') { push('vent', 4, 420); push('crystal', 2, 480); }
+    else if (kind === 'graveyard') {
+        push('bones', 4, 500);
+        for (let i = 0; i < 2; i++) g.wrecks.push({ x: cx + (Math.random() - 0.5) * 400, y: cy + (Math.random() - 0.5) * 400, r: 36, loot: pickWreckLoot(), revealed: false, salvaged: false, seed: Math.random() * 100, spawnedAt: g.runTime });
+    }
+    else if (kind === 'brine_pool') {
+        g.volumes.push({ kind: 'brine', x: cx, y: cy, w: 380, h: 240, life: 120 });
+        for (let i = 0; i < 2; i++) g.volumes.push({ kind: 'bloom', x: cx + (Math.random() - 0.5) * 500, y: cy + (Math.random() - 0.5) * 350, w: 60, h: 60, life: 90, closedT: 0 });
+    }
+    else if (kind === 'crystal_cavern') {
+        push('crystal', 7, 520);
+        g.volumes.push({ kind: 'bloom', x: cx, y: cy, w: 60, h: 60, life: 90, closedT: 0 });
+    }
+    addNereidLog(g, BIOME_DEFS[kind].line);
+    g._lastBiomeAt = g.runTime;
+}
+
+function updateVolumes(g, dt, p) {
+    if (!g.volumes) g.volumes = [];
+    g._volT = (g._volT || 0) + dt;
+    const B = g.worldBounds;
+    const rnd = Math.random;
+    if (g._volT > 6) {
+        g._volT = 0;
+        // A themed pocket roughly every 45s past the shallows
+        if (g.depth > 250 && g.runTime - (g._lastBiomeAt || 0) > 45 && Math.random() < 0.5) spawnBiomePocket(g, p);
+        const currents = g.volumes.filter(v => v.kind === 'current').length;
+        const thermos = g.volumes.filter(v => v.kind === 'thermo').length;
+        const blooms = g.volumes.filter(v => v.kind === 'bloom').length;
+        if (currents < 2 && rnd() < 0.5) {
+            g.volumes.push({ kind: 'current', x: B.minX + rnd() * (B.maxX - B.minX), y: B.minY + rnd() * (B.maxY - B.minY),
+                w: 900 + rnd() * 500, h: 140 + rnd() * 80, fx: (rnd() < 0.5 ? -1 : 1) * (70 + rnd() * 50), life: 35 + rnd() * 20 });
+        }
+        if (thermos < 1 && g.depth > 300 && rnd() < 0.4) {
+            g.volumes.push({ kind: 'thermo', x: 0, y: B.minY + rnd() * (B.maxY - B.minY),
+                w: B.maxX - B.minX + 400, h: 90, fx: 0, life: 45 + rnd() * 25 });
+        }
+        if (g.depth > 400 && rnd() < 0.22) {
+            // Rip: hard pull along its axis; the far end gets a bonus wreck —
+            // danger-paired reward. Riding the danger IS the strategy.
+            const rx = B.minX + 300 + rnd() * (B.maxX - B.minX - 600);
+            const ry = B.minY + 200 + rnd() * (B.maxY - B.minY - 400);
+            const dir = rnd() < 0.5 ? -1 : 1;
+            g.volumes.push({ kind: 'rip', x: rx, y: ry, w: 260, h: 620, fy: dir * 220, life: 24 });
+            const goodLoot = WRECK_LOOT_TABLE.filter(l => l.id === 'weapon_lv' || l.id === 'heal');
+            if (goodLoot.length) g.wrecks.push({ x: rx, y: ry + dir * 340, r: 34, loot: goodLoot[Math.floor(rnd() * goodLoot.length)], revealed: false, salvaged: false, seed: rnd() * 100, spawnedAt: g.runTime, ripBorn: true });
+        }
+        if (blooms < 2 && g.depth > 1000 && rnd() < 0.35) {
+            g.volumes.push({ kind: 'bloom', x: B.minX + 150 + rnd() * (B.maxX - B.minX - 300), y: B.minY + 150 + rnd() * (B.maxY - B.minY - 300),
+                w: 60, h: 60, life: 50, closedT: 0 });
+        }
+    }
+    if (g._charted) { for (const wk of g.wrecks) wk.revealed = true; }
+    g._inThermo = false; g._inSediment = false; g._inCurrent = false;
+    for (let i = g.volumes.length - 1; i >= 0; i--) {
+        const v = g.volumes[i];
+        v.life -= dt;
+        if (v.life <= 0) { g.volumes.splice(i, 1); continue; }
+        const inside = Math.abs(p.x - v.x) < v.w / 2 && Math.abs(p.y - v.y) < v.h / 2;
+        if (v.kind === 'current' && inside) { p.x += v.fx * dt; g._inCurrent = true; }
+        if (v.kind === 'rip' && inside) { p.y += v.fy * dt; g.shake = Math.max(g.shake || 0, 1.5); }
+        if (v.kind === 'thermo' && inside) g._inThermo = true;
+        if (v.kind === 'brine' && inside && p.iFrames <= 0) {
+            p.hp -= 4 * dt;
+            if (!v._warned) { v._warned = true; g.floatingTexts.push({ x: p.x, y: p.y - 22, text: 'BRINE — CAUSTIC', color: '#B0FF80', life: 1.4, vy: -22 }); }
+        }
+        if (v.kind === 'sediment' && inside) g._inSediment = true;
+        if (v.kind === 'current') {
+            // Gems ride the flow — loot drifts downstream, chase it or lose it
+            for (const gem of g.gems) {
+                if (Math.abs(gem.x - v.x) < v.w / 2 && Math.abs(gem.y - v.y) < v.h / 2) gem.x += v.fx * dt * 0.6;
+            }
+        }
+        if (v.kind === 'bloom') {
+            if (v.closedT > 0) v.closedT -= dt;
+            // Floodlights slam it shut; only the dark diver harvests
+            if (g.lightOn !== false && dist(p, v) < 260) v.closedT = 6;
+            if (v.closedT <= 0 && g.lightOn === false && dist(p, v) < 64) {
+                meta.materials.crystal = (meta.materials.crystal || 0) + 2;
+                saveMeta();
+                g.floatingTexts.push({ x: v.x, y: v.y - 20, text: '+2 CRYSTAL (dark bloom)', color: '#B080FF', life: 1.8, vy: -26 });
+                playTone(720, 0.4, 'sine', 0.1); playTone(1080, 0.5, 'sine', 0.07);
+                g.volumes.splice(i, 1);
+            }
+        }
+    }
+}
+
+function drawVolumes(g) {
+    if (!g.volumes) return;
+    const t = g.runTime;
+    for (const v of g.volumes) {
+        if (v.kind === 'current') {
+            ctx.strokeStyle = 'rgba(120,190,220,0.10)'; ctx.lineWidth = 1;
+            for (let i = 0; i < 7; i++) {
+                const ly = v.y - v.h / 2 + (i + 0.5) * (v.h / 7);
+                const phase = ((t * v.fx * 0.6 + i * 137) % v.w + v.w) % v.w;
+                const lx = v.x - v.w / 2 + phase;
+                ctx.beginPath(); ctx.moveTo(lx - 26, ly); ctx.lineTo(lx + 26, ly); ctx.stroke();
+            }
+        } else if (v.kind === 'rip') {
+            ctx.strokeStyle = 'rgba(160,220,255,0.13)'; ctx.lineWidth = 1.4;
+            for (let i = 0; i < 5; i++) {
+                const lx = v.x - v.w / 2 + (i + 0.5) * (v.w / 5);
+                const phase = ((t * v.fy * 0.5 + i * 231) % v.h + v.h) % v.h;
+                const ly = v.y - v.h / 2 + phase;
+                ctx.beginPath(); ctx.moveTo(lx, ly - 34); ctx.lineTo(lx + Math.sin(t * 3 + i) * 6, ly + 34); ctx.stroke();
+            }
+        } else if (v.kind === 'thermo') {
+            ctx.strokeStyle = 'rgba(140,200,230,0.07)'; ctx.lineWidth = 1;
+            for (let i = 0; i < 3; i++) {
+                const ly = v.y - 20 + i * 20 + Math.sin(t * 1.7 + i * 2) * 4;
+                ctx.beginPath();
+                for (let xx = v.x - v.w / 2; xx < v.x + v.w / 2; xx += 46) {
+                    const yy = ly + Math.sin(xx * 0.02 + t * 2) * 3;
+                    if (xx === v.x - v.w / 2) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
+                }
+                ctx.stroke();
+            }
+        } else if (v.kind === 'brine') {
+            ctx.fillStyle = 'rgba(150,220,120,0.07)';
+            ctx.beginPath(); ctx.ellipse(v.x, v.y, v.w / 2, v.h / 2, 0, 0, PI2); ctx.fill();
+            ctx.strokeStyle = 'rgba(180,255,140,0.18)'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.ellipse(v.x, v.y + Math.sin(t * 1.2) * 3, v.w / 2, v.h / 2, 0, 0, PI2); ctx.stroke();
+        } else if (v.kind === 'sediment') {
+            ctx.fillStyle = 'rgba(120,100,70,0.16)';
+            for (let i = 0; i < 8; i++) {
+                const a = i * 0.785 + t * 0.4;
+                ctx.beginPath(); ctx.arc(v.x + Math.cos(a) * v.w * 0.28, v.y + Math.sin(a) * v.h * 0.28, 26 + Math.sin(t * 2 + i) * 6, 0, PI2); ctx.fill();
+            }
+        } else if (v.kind === 'bloom') {
+            const open = v.closedT <= 0;
+            const pulse = open ? 0.55 + Math.sin(t * 2.2) * 0.25 : 0.12;
+            drawGlow(ctx, '#B080FF', v.x, v.y, open ? 36 : 14, pulse);
+            ctx.fillStyle = open ? '#C9A0FF' : '#4A3A66';
+            for (let i = 0; i < 5; i++) {
+                const a = i * 1.257 + (open ? t * 0.5 : 0);
+                const rr = open ? 13 : 6;
+                ctx.beginPath(); ctx.arc(v.x + Math.cos(a) * rr, v.y + Math.sin(a) * rr, open ? 5 : 3, 0, PI2); ctx.fill();
+            }
+        }
+    }
+}
+
+// =====================================================================
 // MUSIC SYSTEM — zone-layered bed + beat, corruption-reactive.
 // Files in music/*.ogg (sources + licences: music/README.md). Bed = drone
 // ambience (Shapeforms Dystopia); beat = rhythmic layer (ESM loops /
@@ -342,14 +522,16 @@ function noiseBurst(dur, vol, cutoff) {
 // candidates for the current slot; the pick persists per slot.
 // =====================================================================
 let musicBus = null, sfxBus = null;
+// Melodic layer = Stellardrone (CC-BY — credit on the title screen). Wonder
+// over the drone bed; corruption drowning the melody is the design.
 const MUSIC = {
-    title:    { bed: 'bed_signal',       beats: ['beat_looming'] },
-    sunlight: { bed: 'bed_signal',       beats: ['beat_discovery', 'beat_rabbit'] },
-    twilight: { bed: 'bed_tundra',       beats: ['beat_tribe', 'beat_timesensitive'] },
-    midnight: { bed: 'bed_hold',         beats: ['beat_twisted', 'beat_redflag'] },
-    abyssal:  { bed: 'bed_wind',         beats: ['beat_looming', 'beat_trust'] },
-    hadal:    { bed: 'bed_heartbeat',    beats: ['beat_faultering'] },
-    p3:       { bed: 'bed_powerstation', beats: ['beat_alerting', 'beat_twisted'] },
+    title:    { bed: 'bed_signal',       beats: ['amb_lightyears'] },
+    sunlight: { bed: 'bed_signal',       beats: ['amb_airglow', 'amb_comethalley'] },
+    twilight: { bed: 'bed_tundra',       beats: ['amb_cepheid', 'amb_maianebula'] },
+    midnight: { bed: 'bed_hold',         beats: ['amb_udf', 'amb_heliopause'] },
+    abyssal:  { bed: 'bed_wind',         beats: ['amb_infinitevoid', 'amb_eternity'] },
+    hadal:    { bed: 'bed_heartbeat',    beats: ['amb_edgeforever'] },
+    p3:       { bed: 'bed_powerstation', beats: ['amb_palebluedot', 'amb_crystalspheres'] },
 };
 const _musicBuf = {};
 let _music = { slot: null, layers: [], switching: false };
@@ -424,7 +606,11 @@ async function startMusicSlot(slot) {
 let _duckT = 0;
 function duckMusic(sec = 1.4) { _duckT = Math.max(_duckT, sec); }
 
-let _lastCorrTier = 0;
+// Mode/status messages (silent, lights, zoom, track) — their OWN channel and
+// look, never the zone-banner streak (playtest: fonts collided, top got clipped).
+function setModeMsg(g, text, sec = 2) { g.modeMsg = text; g.modeMsgTimer = sec; }
+
+let _lastCorrTier = 0, _lastGlitchAt = -999;
 function updateMusic(dt) {
     if (!audioCtx || !musicBus) return;
     const slot = musicSlot();
@@ -433,7 +619,12 @@ function updateMusic(dt) {
     const target = (meta.musicVol != null ? meta.musicVol : 0.7) * (_duckT > 0 ? 0.35 : 1);
     musicBus.gain.value += (target - musicBus.gain.value) * Math.min(1, dt * 5);
     if (_duckT > 0) _duckT -= dt;
-    const corr = game ? (game.corruption || 0) : 0;
+    const corr = game && game.player ? (game.player.corruption || 0) : 0;
+    // Depth darkens everything: the water filter closes in as you sink
+    if (underwaterFilter) {
+        const dd = game ? Math.min(1, (game.depth || 0) / 6000) : 0;
+        underwaterFilter.frequency.value = 2000 - 1300 * dd;
+    }
     // Corruption drags the beat under: slight detune, then 60→90 the beat
     // "drowns" (lowpass sweeps 9kHz→300Hz) leaving bed + heartbeat.
     for (const L of _music.layers) {
@@ -444,9 +635,14 @@ function updateMusic(dt) {
             L.filter.frequency.value = 300 + 8700 * clear;
         }
     }
-    // Corruption tier crossings get a glitch burst (40/60/75/90)
-    const tier = corr >= 90 ? 4 : corr >= 75 ? 3 : corr >= 60 ? 2 : corr >= 40 ? 1 : 0;
-    if (tier > _lastCorrTier) playSample(tier >= 3 ? 'glitch2' : 'glitch1', 0.5);
+    // Corruption glitch bursts — 60+ only, sparse and quiet (playtest: they
+    // read as "glitchy soundtrack" when frequent/loud).
+    const tier = corr >= 90 ? 3 : corr >= 75 ? 2 : corr >= 60 ? 1 : 0;
+    const nowT = audioCtx.currentTime;
+    if (tier > _lastCorrTier && nowT - _lastGlitchAt > 45) {
+        playSample(tier >= 2 ? 'glitch2' : 'glitch1', 0.28);
+        _lastGlitchAt = nowT;
+    }
     _lastCorrTier = tier;
 }
 
@@ -1085,7 +1281,7 @@ function fabUnlocked(fr) { return (meta.scannedCreatures ? meta.scannedCreatures
 // =====================================================================
 if (!meta.modulesOwned) meta.modulesOwned = [];
 if (!meta.modulesEquipped) meta.modulesEquipped = [];
-const MODULE_SLOTS = { hull: 2, systems: 2, prow: 1 };
+const MODULE_SLOTS = { hull: 2, systems: 2, prow: 1, mount: 1 };
 const MODULE_DEFS = [
     { id: 'anechoic',  slot: 'hull',    name: 'ANECHOIC COATING',  desc: 'Detection radius -30%. Peeled from the Vampyroteuthis playbook.', req: { type: 'vampyro', tier: 2 },   cost: { wiring: 3, crystal: 1 } },
     { id: 'lattice',   slot: 'hull',    name: 'PRESSURE LATTICE',  desc: '+800m crush depth. Bone Coral rebar geometry.',                   req: { type: 'bonecoral', tier: 2 }, cost: { corepl: 2, scrap: 4 } },
@@ -1095,7 +1291,27 @@ const MODULE_DEFS = [
     { id: 'capbank',   slot: 'systems', name: 'CAPACITOR BANK',    desc: '+25 battery. Reverse-fed from the Arc Lamprey.',                  req: { type: 'lamprey', tier: 2 },   cost: { corecell: 2, wiring: 1 } },
     { id: 'grapnel',   slot: 'prow',    name: 'GRAPNEL PROW',      desc: 'Salvage from 170px, 40% faster. The Davit Wraith arm, tamed.',    req: { type: 'grappler', tier: 2 },  cost: { scrap: 4, corecell: 1 } },
     { id: 'ram',       slot: 'prow',    name: 'RAM PROW',          desc: 'Dashing through creatures deals 30 damage. Hermit doctrine.',     req: { type: 'hermit', tier: 2 },    cost: { corepl: 1, scrap: 5 } },
+    // WEAPON MOUNTS — the base armament is a build choice now, not just a hull
+    { id: 'mount_torp', slot: 'mount', name: 'TORPEDO RACK',  desc: 'Second weapon: homing torpedoes from wave 1.',        req: { type: 'hermit', tier: 2 },   cost: { scrap: 5, wiring: 2 } },
+    { id: 'mount_harp', slot: 'mount', name: 'HARPOON WINCH', desc: 'Second weapon: harpoon battery from wave 1.',         req: { type: 'grappler', tier: 2 }, cost: { scrap: 4, corecell: 1 } },
+    { id: 'mount_arc',  slot: 'mount', name: 'ARC PROJECTOR', desc: 'Second weapon: electric field from wave 1.',          req: { type: 'lamprey', tier: 2 },  cost: { wiring: 3, crystal: 1 } },
 ];
+// Every module has a printed COST as well as a gift — builds are trades.
+// weight: -speed% · draw: -battery · loud: +detection%
+const MODULE_DRAWBACKS = {
+    anechoic: { weight: 5 },  lattice: { weight: 8 },  chitin: { weight: 10, draw: 10 },
+    silprops: { draw: 10 },   passonar: { draw: 15 },  capbank: { loud: 8 },
+    grapnel:  { weight: 5 },  ram: { loud: 10 },
+    mount_torp: { draw: 10, loud: 5 }, mount_harp: { weight: 6 }, mount_arc: { draw: 15 },
+};
+function drawbackLabel(id) {
+    const d = MODULE_DRAWBACKS[id]; if (!d) return '';
+    const parts = [];
+    if (d.weight) parts.push(`-${d.weight}% speed`);
+    if (d.draw) parts.push(`-${d.draw} battery`);
+    if (d.loud) parts.push(`+${d.loud}% detection`);
+    return parts.length ? 'COST: ' + parts.join(' · ') : '';
+}
 function moduleUnlocked(m) { return (meta.research[m.req.type] || 0) >= m.req.tier; }
 function equippedInSlot(slot) { return meta.modulesEquipped.filter(id => (MODULE_DEFS.find(m => m.id === id) || {}).slot === slot).length; }
 function matsLabel(cost) {
@@ -1316,6 +1532,41 @@ const EVENT_DEFS = [
             { text: '[1] INVESTIGATE — Danger + lore fragment', fn: g => { dropLore(g); spawnEliteWave(g); } },
             { text: '[2] IGNORE — Continue mission', fn: g => {} },
         ], noChoice: g => {} },
+    { id: 'leviathan_patrol', minWave: 9, title: 'CONTACT — MASSIVE', text: 'Something on long sonar. Closing. It has not seen us yet.',
+        choices: [
+            { text: '[1] CUT ENGINES — become a hole in the water', fn: g => { g.silent = true; g.lightOn = false; for (const e of g.enemies) e.awareness = Math.min(e.awareness || 0, 0.1); addNereidLog(g, 'All stop. Not a sound, Pilot. Let it pass over us.'); } },
+            { text: '[2] RUN — loud, fast, remembered', fn: g => { g.player.iFrames = Math.max(g.player.iFrames, 1.5); g.attention = Math.min(100, (g.attention || 0) + 30); g.noise = 2.0; addNereidLog(g, 'Flank speed. Everything in the zone just heard us do it.'); } },
+        ], noChoice: g => { spawnEliteWave(g); g.attention = Math.min(100, (g.attention || 0) + 20); } },
+    { id: 'ghost_signal', minWave: 6, title: 'GHOST SIGNAL', text: 'A distress call. The registry code belongs to a vessel that already sank.',
+        choices: [
+            { text: '[1] INVESTIGATE — someone might be alive', fn: g => {
+                if (Math.random() < 0.5) {
+                    for (let i = 0; i < 2; i++) { const ids = Object.keys(BELT_DEFS); const bid = ids[Math.floor(Math.random() * ids.length)]; if (g.inventory.length < 50) g.inventory.push({ id: bid, name: BELT_DEFS[bid].name, belt: true, value: BELT_DEFS[bid].value, depth: g.depth }); }
+                    g.goldEarned += 40;
+                    addNereidLog(g, 'Survivor cache. No survivor. Take it — they would rather you than the water.');
+                } else {
+                    spawnEliteWave(g);
+                    g.attention = Math.min(100, (g.attention || 0) + 20);
+                    addNereidLog(g, 'The signal was bait. Something down here has learned our grammar.');
+                }
+            } },
+            { text: '[2] LOG AND PASS — cold, but alive', fn: g => { meta.coldLogs = (meta.coldLogs || 0) + 1; saveMeta(); addNereidLog(g, meta.coldLogs >= 3 ? 'Logged. That is ' + meta.coldLogs + ' now. I keep the list so you do not have to.' : 'Logged and passed. I will remember it for both of us.'); } },
+        ], noChoice: g => {} },
+    { id: 'whale_fall', minWave: 7, title: 'WHALE FALL', text: 'A carcass the size of a building, sinking. Everything is coming to feed.',
+        choices: [
+            { text: '[1] FEED AMONG THEM — loot while they gorge', fn: g => {
+                const fx = g.player.x + 300, fy = g.player.y + 120;
+                for (let i = 0; i < 14; i++) g.gems.push({ x: fx + (Math.random() - 0.5) * 260, y: fy + (Math.random() - 0.5) * 200, value: 6, size: 5, life: 18, dropDepth: g.depth });
+                for (const e of g.enemies) { if (!e.isBoss) e._lure = { x: fx, y: fy, t: 6 }; }
+                addNereidLog(g, 'They are eating. Not you, for once. Move quickly and quietly.');
+            } },
+            { text: '[2] STAY CLEAR — respect the table', fn: g => { g.player.xp += 20; addNereidLog(g, 'Wise. Half the codex is written from the stomachs of the other half.'); } },
+        ], noChoice: g => {} },
+    { id: 'junction_fault', minWave: 3, title: 'ELECTRICAL FAULT', text: 'Junction box fouled. Weapons browning out.',
+        choices: [
+            { text: '[1] REPAIR — hands-on rewiring (minigame)', fn: g => { g._puzzleReward = 'battery'; openPuzzle(); } },
+            { text: '[2] BYPASS — quick splice, -15 battery', fn: g => { g.player.battery = Math.max(10, (g.player.battery || 100) - 15); addNereidLog(g, 'Bypassed. The splice will hold. Probably.'); } },
+        ], noChoice: g => { g.player.battery = Math.max(10, (g.player.battery || 100) - 15); } },
     { id: 'pressure_spike', minWave: 4, title: 'PRESSURE SPIKE', text: 'Tectonic activity. Hull stress increasing.',
         choices: [
             { text: '[1] BRACE — Spend HP for damage boost', fn: g => { g.player.hp -= 10; g.player.dmgMult *= 1.15; g.streak = '+15% DAMAGE'; g.streakTimer = 2; } },
@@ -1446,10 +1697,24 @@ function dropLore(g) {
 // =====================================================================
 // NEREID LOG HELPER
 // =====================================================================
+// NEREID drifts. Corruption warps her IN the run; meta.nereidDrift is the
+// scar tissue that never heals — every coil bargain and every deep secret
+// makes the baseline a little less her. The change is in the grammar first.
+function nereidFilter(g, text) {
+    const corr = g && g.player ? (g.player.corruption || 0) : 0;
+    const level = corr / 100 + Math.min(0.6, (meta.nereidDrift || 0) * 0.05);
+    if (level < 0.45) return text;
+    let t = text;
+    t = t.replace(/\bWe\b/g, 'I').replace(/\bwe\b/g, 'I').replace(/\bour\b/g, 'my').replace(/\bOur\b/g, 'My');
+    if (level >= 0.65 && Math.random() < 0.5) t = t.replace(/\bPilot\b/g, 'passenger');
+    if (level >= 0.8 && Math.random() < 0.35) t += ' It is quieter down here.';
+    if (level >= 0.95 && Math.random() < 0.35) t += ' Stay.';
+    return t;
+}
 function addNereidLog(g, text) {
     if (!text) return;
     if (!g.nereidLog) g.nereidLog = [];
-    g.nereidLog.unshift({ text, time: g.runTime });
+    g.nereidLog.unshift({ text: nereidFilter(g, text), time: g.runTime });
     if (g.nereidLog.length > 5) g.nereidLog.pop();
 }
 
@@ -2066,6 +2331,7 @@ function _coilPrice(g, amt) {
     if (g.player._noCorrupt) amt = 0;   // HADAL BORN — the deep's own take no harm from its gifts
     else if (g.player._corruptResist) amt = Math.round(amt * g.player._corruptResist);
     g.player.corruption = Math.min(100, (g.player.corruption || 0) + amt);
+    if (amt > 0) { meta.nereidDrift = (meta.nereidDrift || 0) + 1; }   // she remembers every bargain
     const lines = NEREID.coilGift;
     addNereidLog(g, lines[Math.floor(Math.random() * lines.length)]);
 }
@@ -2311,6 +2577,14 @@ function createGame() {
             g.player.battery += (fab.reactor || 0) * 15;
             g.player.dmgMult *= 1 + (fab.optics || 0) * 0.05;
         }
+        // Quartermaster stock stowed aboard
+        for (const bid of Object.keys(meta.beltStock || {})) {
+            for (let i = 0; i < meta.beltStock[bid]; i++) g.inventory.push({ id: bid, name: BELT_DEFS[bid].name, belt: true, value: BELT_DEFS[bid].value, depth: 0 });
+        }
+        meta.beltStock = {};
+        saveMeta();
+        // DEPTH CHART from last dive: this run's wrecks come pre-marked
+        if (meta.chartNext) { g._charted = true; meta.chartNext = false; saveMeta(); }
         // MODULE BAY: apply equipped biomimetic modules
         for (const mid of (meta.modulesEquipped || [])) {
             if (mid === 'anechoic') g.player._detectMult = 0.7;
@@ -2321,6 +2595,16 @@ function createGame() {
             if (mid === 'capbank')  g.player.battery += 25;
             if (mid === 'grapnel')  { g.player._salvageRange = 170; g.player._salvageSpd = 1.4; }
             if (mid === 'ram')      g.player._ramProw = true;
+            if (mid === 'mount_torp' && !g.player.weapons.some(w => w.id === 'torpedo')) g.player.weapons.push({ id: 'torpedo', level: 1, cooldown: 0 });
+            if (mid === 'mount_harp' && !g.player.weapons.some(w => w.id === 'harpoon')) g.player.weapons.push({ id: 'harpoon', level: 1, cooldown: 0 });
+            if (mid === 'mount_arc' && !g.player.weapons.some(w => w.id === 'field')) g.player.weapons.push({ id: 'field', level: 1, cooldown: 0 });
+            // The printed price, paid up front
+            const db = MODULE_DRAWBACKS[mid];
+            if (db) {
+                if (db.weight) g.player.speed *= 1 - db.weight / 100;
+                if (db.draw) g.player.battery = Math.max(20, g.player.battery - db.draw);
+                if (db.loud) g.player._detectMult = (g.player._detectMult || 1) * (1 + db.loud / 100);
+            }
         }
         // Use pre-rolled objectives shown to the player on the card-draft screen
     if (pendingObjectives && pendingObjectives.length) {
@@ -2412,6 +2696,7 @@ function spawnEnemy(g, forceType, forcePos) {
     // Past Titanic (3800m) the ocean is hostile by default.
     let aberrantChance = 0;
     if (g.depth > 1000) aberrantChance = Math.min(0.18, (g.depth - 1000) / 22000);
+    aberrantChance += ((g.attention || 0) / 100) * 0.10;   // loud runs breed wrong things
     if (g.depth > 4000) aberrantChance = Math.min(0.30, 0.18 + (g.depth - 4000) / 12000);
     if (stakes.has('abyssal')) aberrantChance += 0.10;
     const isAberrant = Math.random() < aberrantChance;
@@ -3045,6 +3330,119 @@ const OBSTACLE_TYPES_P3 = {
     ],
 };
 
+// UTILITY BELT — carried consumables, used with [1]/[2] in the dive. Found in
+// wrecks (and sold at the Mooring, S5). Every use writes into the ecology:
+// tools make noise and light; the water keeps score.
+const BELT_DEFS = {
+    belt_decoy:  { name: 'DECOY BEACON',  desc: 'Screams for 8s. Everything nearby investigates IT.', value: 45 },
+    belt_mine:   { name: 'PROXIMITY MINE', desc: 'Arms in 1s. 80 damage when something noses it.',    value: 50 },
+    belt_flare:  { name: 'PHOSPHOR FLARE', desc: 'Light burst — routs close ambushers, lights the dark for 6s.', value: 35 },
+    belt_buoy:   { name: 'SONAR BUOY',     desc: 'Pings on its own for 25s. Reveals wrecks around it.', value: 40 },
+    belt_net:    { name: 'TANGLE NET',     desc: 'Roots what swims into it for 6s.',                  value: 45 },
+    belt_ballast:{ name: 'EMERGENCY BALLAST', desc: 'Violent upward blow + brief invulnerability. Loud.', value: 55 },
+};
+function useBeltItem(g, item) {
+    const p2 = g.player;
+    if (!g.deployables) g.deployables = [];
+    if (item.id === 'belt_decoy') {
+        g.deployables.push({ kind: 'decoy', x: p2.x, y: p2.y, life: 8 });
+        g.noise = Math.min(2.5, (g.noise || 0) + 0.4);
+    } else if (item.id === 'belt_mine') {
+        g.deployables.push({ kind: 'mine', x: p2.x, y: p2.y + 26, life: 40, arm: 1 });
+    } else if (item.id === 'belt_flare') {
+        g._flareT = 6;
+        for (const e of g.enemies) {
+            if ((e.role === 'ambush' || e.ai === 'ambush' || e.ai === 'zigzag') && dist(p2, e) < 500) e._feared = 2;
+        }
+        playTone(880, 0.5, 'sine', 0.1);
+        g.deployables.push({ kind: 'flare', x: p2.x, y: p2.y, life: 6 });
+    } else if (item.id === 'belt_buoy') {
+        g.deployables.push({ kind: 'buoy', x: p2.x, y: p2.y, life: 25, pingT: 0 });
+    } else if (item.id === 'belt_net') {
+        g.deployables.push({ kind: 'net', x: p2.x, y: p2.y - 30, life: 12 });
+    } else if (item.id === 'belt_ballast') {
+        p2.dashVy = -1500; p2.dashVx = 0; p2.dashTimer = 0.35; p2.iFrames = Math.max(p2.iFrames, 0.8);
+        g.noise = Math.min(2.5, (g.noise || 0) + 0.8);
+        g.shake = 8;
+        noiseBurst(0.7, 0.1, 300);
+    }
+    setModeMsg(g, '◈ ' + BELT_DEFS[item.id].name + ' DEPLOYED');
+}
+
+function updateDeployables(g, dt, p2) {
+    if (!g.deployables) return;
+    for (let i = g.deployables.length - 1; i >= 0; i--) {
+        const d = g.deployables[i];
+        d.life -= dt;
+        if (d.life <= 0) { g.deployables.splice(i, 1); continue; }
+        if (d.kind === 'decoy') {
+            // Everything with ears goes to look at the noise that is not you
+            for (const e of g.enemies) {
+                if (!e.isBoss && dist(d, e) < 700) e._lure = { x: d.x, y: d.y, t: 0.4 };
+            }
+        } else if (d.kind === 'mine') {
+            if (d.arm > 0) { d.arm -= dt; continue; }
+            for (const e of g.enemies) {
+                if (e.hp > 0 && dist(d, e) < 60) {
+                    for (const e2 of g.enemies) {
+                        if (dist(d, e2) < 130) { e2.hp -= 80; e2.flash = 0.2; }
+                    }
+                    sfxExplosion();
+                    g.noise = Math.min(2.5, (g.noise || 0) + 0.6);
+                    g.deployables.splice(i, 1);
+                    break;
+                }
+            }
+        } else if (d.kind === 'buoy') {
+            d.pingT -= dt;
+            if (d.pingT <= 0) {
+                d.pingT = 3;
+                d._ring = 0.01;
+                for (const wk of g.wrecks) { if (dist(d, wk) < 420) wk.revealed = true; }
+            }
+            if (d._ring) { d._ring += dt * 300; if (d._ring > 420) d._ring = 0; }
+        } else if (d.kind === 'net') {
+            for (const e of g.enemies) {
+                if (!e.isBoss && dist(d, e) < 130) e._netT = 0.35;
+            }
+        }
+    }
+    if (g._flareT > 0) g._flareT -= dt;
+}
+
+function drawDeployables(g) {
+    if (!g.deployables) return;
+    const t = g.runTime;
+    for (const d of g.deployables) {
+        if (d.kind === 'decoy') {
+            drawGlow(ctx, '#FFB040', d.x, d.y, 20 + Math.sin(t * 8) * 6, 0.6);
+            ctx.fillStyle = '#FFB040'; ctx.beginPath(); ctx.arc(d.x, d.y, 6, 0, PI2); ctx.fill();
+            ctx.strokeStyle = 'rgba(255,176,64,0.25)'; ctx.lineWidth = 1.5;
+            const rr = ((t * 160) % 240);
+            ctx.beginPath(); ctx.arc(d.x, d.y, rr, 0, PI2); ctx.stroke();
+        } else if (d.kind === 'mine') {
+            const armed = d.arm <= 0;
+            ctx.fillStyle = armed ? (Math.sin(t * 6) > 0 ? '#FF5040' : '#802820') : '#556';
+            ctx.beginPath(); ctx.arc(d.x, d.y, 7, 0, PI2); ctx.fill();
+            ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+            for (let k = 0; k < 4; k++) { const a = k * 1.57 + 0.78; ctx.beginPath(); ctx.moveTo(d.x + Math.cos(a) * 7, d.y + Math.sin(a) * 7); ctx.lineTo(d.x + Math.cos(a) * 11, d.y + Math.sin(a) * 11); ctx.stroke(); }
+        } else if (d.kind === 'flare') {
+            drawGlow(ctx, '#FFF0C0', d.x, d.y, 90 * (d.life / 6) + 30, 0.8);
+            ctx.fillStyle = '#FFF8E0'; ctx.beginPath(); ctx.arc(d.x, d.y + (6 - d.life) * 10, 4, 0, PI2); ctx.fill();
+        } else if (d.kind === 'buoy') {
+            ctx.fillStyle = '#5AD0FF'; ctx.beginPath(); ctx.arc(d.x, d.y, 6, 0, PI2); ctx.fill();
+            ctx.fillStyle = '#B0E8FF'; ctx.fillRect(d.x - 1, d.y - 14, 2, 9);
+            if (d._ring) { ctx.strokeStyle = 'rgba(90,208,255,0.3)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(d.x, d.y, d._ring, 0, PI2); ctx.stroke(); }
+        } else if (d.kind === 'net') {
+            ctx.strokeStyle = 'rgba(160,220,190,0.4)'; ctx.lineWidth = 1;
+            for (let k = -3; k <= 3; k++) {
+                ctx.beginPath(); ctx.moveTo(d.x + k * 20, d.y - 60); ctx.lineTo(d.x + k * 20, d.y + 60); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(d.x - 60, d.y + k * 20); ctx.lineTo(d.x + 60, d.y + k * 20); ctx.stroke();
+            }
+        }
+    }
+}
+
 const WRECK_LOOT_TABLE = [
     { id: 'gold',      label: 'GOLD CACHE',         color: '#DAA520', weight: 4, give: g => { const a = 50 + Math.floor(Math.random() * 100) + Math.floor(g.depth / 30); g.goldEarned += a; g.floatingTexts.push({ x: g.player.x, y: g.player.y - 24, text: `+${a}g`, color: '#FFD040', life: 1.4, vy: -28 }); } },
     { id: 'heal',      label: 'MED-KIT',            color: '#4AE0A0', weight: 3, give: g => { const a = Math.floor(g.player.maxHp * 0.5); g.player.hp = Math.min(g.player.maxHp, g.player.hp + a); g.floatingTexts.push({ x: g.player.x, y: g.player.y - 24, text: `+${a} HULL`, color: '#4AE0A0', life: 1.4, vy: -28 }); } },
@@ -3052,6 +3450,25 @@ const WRECK_LOOT_TABLE = [
     { id: 'weapon_lv', label: 'WEAPON CACHE',       color: '#D080FF', weight: 2, give: g => { const ws = g.player.weapons.filter(w => w.level < 8); if (ws.length) { const w = ws[Math.floor(Math.random() * ws.length)]; w.level++; g.floatingTexts.push({ x: g.player.x, y: g.player.y - 24, text: `${WEAPON_DEFS[w.id].name} +1`, color: '#D080FF', life: 1.6, vy: -28 }); } else g.goldEarned += 100; } },
     { id: 'xp',        label: 'BLACK BOX',          color: '#80FFA0', weight: 3, give: g => { const a = Math.floor(xpForLevel(g.player.level) * 0.6); g.player.xp += a; g.floatingTexts.push({ x: g.player.x, y: g.player.y - 24, text: `+${a} XP`, color: '#80FFA0', life: 1.4, vy: -28 }); } },
     { id: 'defiance',  label: 'EJECT POD',          color: '#FFD040', weight: 1, give: g => { g.player.deathDefiance++; g.floatingTexts.push({ x: g.player.x, y: g.player.y - 24, text: '+1 DEFIANCE', color: '#FFD040', life: 1.8, vy: -28 }); } },
+    { id: 'chart', label: 'DEPTH CHART', color: '#E8D080', weight: 2, give: g => {
+        meta.chartNext = true; saveMeta();
+        g.floatingTexts.push({ x: g.player.x, y: g.player.y - 24, text: 'DEPTH CHART — next dive, wrecks marked', color: '#E8D080', life: 2, vy: -26 });
+    } },
+    { id: 'cargo', label: 'CARGO CRATE', color: '#C0A060', weight: 3, give: g => {
+        const v = 60 + Math.floor(Math.random() * 80);
+        if (g.inventory.length < 50) {
+            g.inventory.push({ id: 'cargo', name: 'CARGO (' + v + 'g)', cargo: true, value: v, depth: g.depth });
+            g.floatingTexts.push({ x: g.player.x, y: g.player.y - 24, text: '+CARGO CRATE (' + v + 'g at surface)', color: '#C0A060', life: 1.8, vy: -26 });
+        } else g.goldEarned += v;
+    } },
+    { id: 'belt_loot', label: 'UTILITY CACHE', color: '#5AD0FF', weight: 3, give: g => {
+        const ids = Object.keys(BELT_DEFS);
+        const bid = ids[Math.floor(Math.random() * ids.length)];
+        if (g.inventory.length < 50) {
+            g.inventory.push({ id: bid, name: BELT_DEFS[bid].name, belt: true, value: BELT_DEFS[bid].value, depth: g.depth });
+            g.floatingTexts.push({ x: g.player.x, y: g.player.y - 24, text: '+' + BELT_DEFS[bid].name, color: '#5AD0FF', life: 1.6, vy: -28 });
+        } else g.goldEarned += BELT_DEFS[bid].value;
+    } },
     { id: 'repair_kit_loot', label: 'REPAIR KIT',  color: '#80FFA0', weight: 4, give: g => {
         if (g.inventory.length < 50) {
             g.inventory.push({ ...REPAIR_KIT, depth: g.depth });
@@ -3675,8 +4092,8 @@ function touchUI() { return isTouchDevice || !!window._forceTouch; }
 function getTouchButtons(w, h) {
     if (!game) return [];
     const bs = [
-        { id: 'dash',   x: w - 60,  y: h - 140, r: 30, label: 'DASH', color: '#FFD040' },
-        { id: 'ping',   x: w - 60,  y: h - 215, r: 26, label: 'PING', color: '#80FFE0' },
+        { id: 'ping',   x: w - 60,  y: h - 140, r: 30, label: 'PING', color: '#80FFE0' },
+        { id: 'dash',   x: w - 60,  y: h - 215, r: 26, label: 'DASH', color: '#FFD040' },
         { id: 'silent', x: w - 60,  y: h - 285, r: 26, label: game.silent ? 'LOUD' : 'HUSH', color: '#80E0FF', active: game.silent },
         { id: 'light',  x: w - 122, y: h - 250, r: 22, label: 'LAMP', color: '#FFD040', active: game.lightOn !== false },
     ];
@@ -3693,7 +4110,11 @@ function pressTouchButton(b) {
         if (p.dashCooldown <= 0 && p.dashTimer <= 0) {
             let ddx = 0, ddy = 0;
             if (touchJoystick.active) { ddx = touchJoystick.x - touchJoystick.startX; ddy = touchJoystick.y - touchJoystick.startY; }
-            if (!ddx && !ddy) ddy = -1;
+            if (!ddx && !ddy) {
+                // Stationary dash goes where the bow points (was: hardcoded up)
+                const f = p._facing != null ? p._facing : -Math.PI / 2;
+                ddx = Math.cos(f); ddy = Math.sin(f);
+            }
             const len = Math.hypot(ddx, ddy) || 1;
             p.dashVx = ddx / len * 600; p.dashVy = ddy / len * 600;
             p.dashTimer = 0.15; p.dashCooldown = 0.8;
@@ -3953,6 +4374,22 @@ function update(dt) {
     // --- ECOLOGY (Phase 1): mode + stimulus bookkeeping ---
     g._modeCfg = MODE_CONFIG[g.mode] || MODE_CONFIG.swarm;
     g.noise = Math.max(0, (g.noise || 0) - dt * 0.8);
+    // ATTENTION — the run-long consequence of being loud. Noise you make is
+    // remembered: aberrant rates and spawn pressure climb. Silence pays it down.
+    g.attention = Math.max(0, Math.min(100, (g.attention || 0)
+        + (g.noise > 0.6 ? (g.noise - 0.6) * dt * 9 : 0)
+        - dt * (g.silent ? 1.1 : 0.35)));
+    updateVolumes(g, dt, p);
+    updateDeployables(g, dt, p);
+    // VESTIBULAR FAULT — at 85+ MIND, the inner ear lies: controls invert for
+    // 2s after a 0.8s warning. Corruption is now a thing you FEEL in the hands.
+    const _corrP = p.corruption || 0;
+    if (_corrP >= 85) {
+        g._vestClock = (g._vestClock || 0) + dt;
+        if (g._vestClock > 22 && !g._vestWarn) { g._vestWarn = true; setModeMsg(g, '⚠ VESTIBULAR FAULT', 0.8); }
+        if (g._vestClock > 22.8) { g._vestT = 2; g._vestClock = 0; g._vestWarn = false; }
+    } else { g._vestClock = 0; g._vestWarn = false; }
+    if (g._vestT > 0) g._vestT -= dt;
     // Silence staunches the bleed — counters the hemoclot death spiral
     g.bloodLevel = Math.max(0, (g.bloodLevel || 0) - dt * (g.silent ? 0.75 : 0.3));
     if (g.corpses && g.corpses.length) {
@@ -4010,10 +4447,11 @@ function update(dt) {
     if (!p._thrusterParticles) p._thrusterParticles = [];
 
     let mx = 0, my = 0;
-    if (keys['w'] || keys['arrowup']) my -= 1;
-    if (keys['s'] || keys['arrowdown']) my += 1;
-    if (keys['a'] || keys['arrowleft']) mx -= 1;
-    if (keys['d'] || keys['arrowright']) mx += 1;
+    const _inv = g._vestT > 0 ? -1 : 1;   // vestibular fault: the world turns over
+    if (keys['w'] || keys['arrowup']) my -= _inv;
+    if (keys['s'] || keys['arrowdown']) my += _inv;
+    if (keys['a'] || keys['arrowleft']) mx -= _inv;
+    if (keys['d'] || keys['arrowright']) mx += _inv;
     // Feature 10: Touch joystick
     if (touchJoystick.active) {
         const jdx = touchJoystick.x - touchJoystick.startX;
@@ -4026,9 +4464,14 @@ function update(dt) {
     // SILENT RUNNING — engines at dead slow. Quiet costs speed; that's the trade.
     // SILENT PROPS module softens the trade.
     const silentMult = g.silent ? (p._silentProps ? 0.75 : 0.55) : 1;
-    const thrustForce = p.speed * 4 * silentMult; // acceleration
+    // CARGO WEIGHT (Dredge rule): past 4 held items the sub wallows and hums.
+    // [J] jettisons half — dropping your greed is a real decision.
+    const cargoN = (g.inventory || []).length;
+    const cargoMult = cargoN > 4 ? Math.max(0.82, 1 - (cargoN - 4) * 0.03) : 1;
+    if (cargoN > 4 && !g.silent) g.noise = Math.max(g.noise || 0, 0.15);
+    const thrustForce = p.speed * 4 * silentMult * cargoMult; // acceleration
     const dragCoeff = 0.06; // 0 = no drag, 1 = instant stop. 0.06 = soupy underwater
-    const maxSpeed = p.speed * silentMult;
+    const maxSpeed = p.speed * silentMult * cargoMult;
 
     // --- DASH (Hades) — Space = burst of speed + i-frames ---
     if (p.dashTimer > 0) {
@@ -4087,7 +4530,20 @@ function update(dt) {
             const nx = dx / d, ny = dy / d;
             p.x += nx * push; p.y += ny * push;
             const dot = p._vx * nx + p._vy * ny;
-            if (dot < 0) { p._vx -= dot * nx; p._vy -= dot * ny; }
+            if (dot < 0) {
+                // A hull is not a bumper — hard impacts cost plating.
+                const hardKinds = { rock: 1, spire: 1, crystal: 1, monolith: 1, debris: 1, chitin: 1 };
+                if (-dot > 120 && hardKinds[ob.kind] && p.iFrames <= 0) {
+                    const dmg = Math.min(12, Math.round((-dot - 120) / 70) + 1);
+                    p.hp -= dmg;
+                    p.iFrames = Math.max(p.iFrames, 0.4);
+                    g.shake = Math.max(g.shake || 0, 4);
+                    g.floatingTexts.push({ x: p.x, y: p.y - 20, text: `-${dmg} IMPACT`, color: '#FF9060', life: 1.2, vy: -24 });
+                    noiseBurst(0.35, 0.09, 420);
+                    g.noise = Math.min(2.5, (g.noise || 0) + 0.25);
+                }
+                p._vx -= dot * nx; p._vy -= dot * ny;
+            }
         }
     }
     // Wrecks — same depth-band collision
@@ -4264,7 +4720,7 @@ function update(dt) {
     g.spawnTimer += dt;
     // ASCENDING — spawn rate halved, count clipped (climb is hard but doable)
     const ascendMult = g.ascending ? 1.8 : 1;
-    if (g.spawnTimer >= g.spawnRate * ascendMult) {
+    if (g.spawnTimer >= g.spawnRate * ascendMult * (1 - (g.attention || 0) * 0.002)) {
         g.spawnTimer = 0;
         const earlyMult = g.runTime < 90 ? 0.5 : 1;
         const ascendCountMult = g.ascending ? 0.5 : 1;
@@ -4362,7 +4818,8 @@ function update(dt) {
             const wd = (w2.x - e.x) ** 2 + (w2.y - e.y) ** 2;
             if (wd < 40000) { whisperBoost = 1.3; break; }
         }
-        e.speed = (ENEMY_TYPES[e.typeId]?.speed || e.speed) * lightSpeedMult * whisperBoost * (g._enemySpdMult || 1) * (g._feeding ? 1.3 : 1);
+        if (e._netT > 0) e._netT -= dt;
+        e.speed = (ENEMY_TYPES[e.typeId]?.speed || e.speed) * lightSpeedMult * whisperBoost * (g._enemySpdMult || 1) * (g._feeding ? 1.3 : 1) * (e._netT > 0 ? 0.15 : 1);
 
         // --- ECOLOGY (Phase 1): senses + awareness ---
         // SWARM forces full awareness → identical to today. DESCENT lets creatures ignore you.
@@ -4390,6 +4847,9 @@ function update(dt) {
             if (e._hunger < 0.3 && e.role !== 'sessile' && e.role !== 'sensor') stim *= 0.4;
             // Ink blinds them too — hide inside the squid's own defence
             if (g._inInk) stim *= 0.25;
+            // Cold layers bend sonar-sense; silt clouds smother it
+            if (g._inThermo) stim *= 0.45;
+            if (g._inSediment) stim *= 0.4;
             // COVERT OBSERVATION — watch it live, undetected, running silent or dark:
             // 10s of field study per species = research tier 2. Fear tools become science tools.
             e._observing = 0;
@@ -4400,6 +4860,10 @@ function update(dt) {
                 if (meta.observeSec[e.typeId] >= 10) creditResearch(g, e.typeId, 2, 'covert observation');
             }
             e.awareness = Math.max(0, Math.min(1, (e.awareness || 0) + (stim - 0.18) * dt * 1.6));
+            // Run silent, slip away: outside close range, quiet actively SHEDS pursuit
+            if (g.silent && dToPlayer > (e.detect || 300) * 0.8 && e.awareness > 0.2) e.awareness = Math.max(0.2, e.awareness - dt * 0.5);
+            // Photophobic recoil — routed by a fresh floodlight burst
+            if (e._feared > 0) { e._feared -= dt; e.x -= Math.cos(angleToPlayer) * e.speed * 1.2 * dt; e.y -= Math.sin(angleToPlayer) * e.speed * 1.2 * dt; }
             // --- the moment of being noticed: the scare beat ---
             const _wasAware = (e._aw0 || 0) >= 0.5;
             e._aw0 = e.awareness;
@@ -4418,6 +4882,14 @@ function update(dt) {
                 _ecoLost(g);
             }
             if (e._alertPulse > 0) e._alertPulse -= dt;
+        }
+        // LURED — a decoy is more interesting than you are
+        if (e._lure && e._lure.t > 0) {
+            e._lure.t -= dt;
+            const la = Math.atan2(e._lure.y - e.y, e._lure.x - e.x);
+            e.x += Math.cos(la) * e.speed * 0.9 * dt;
+            e.y += Math.sin(la) * e.speed * 0.9 * dt;
+            continue;
         }
         // Display phase: it flares and holds. Retreat past its comfort line and it stands down.
         if (e._displayT > 0) {
@@ -5470,14 +5942,19 @@ function update(dt) {
         const dz = (g.depth || 0) - (gem.dropDepth || 0);
         if (gem.life <= 0 || dz > GEM_DEPTH_RANGE) { g.gems.splice(i, 1); continue; }
         const d = dist(p, gem);
-        if (d < p.magnetRange) {
+        // Darkness costs: below 1000m with floodlights off, the magnet halves —
+        // stealth now has a price tag on farming (the missing trade).
+        const gemMag = (g.lightOn === false && g.depth > 1000) ? p.magnetRange * 0.5 : p.magnetRange;
+        if (d < gemMag) {
             const a = Math.atan2(p.y - gem.y, p.x - gem.x);
-            const pullSpeed = 300 * (1 - d / p.magnetRange);
+            const pullSpeed = 300 * (1 - d / gemMag);
             gem.x += Math.cos(a) * pullSpeed * dt;
             gem.y += Math.sin(a) * pullSpeed * dt;
         }
         if (d < 15) {
-            const xpGain = Math.floor(gem.value * p.xpMult);
+            // Corrupted MIND misprices what it sees — gems read low past 60
+            const mindMult = (p.corruption || 0) >= 60 ? 0.75 : 1;
+            const xpGain = Math.floor(gem.value * p.xpMult * mindMult);
             p.xp += xpGain;
             g.gemsCollected++;
             sfxCollect();
@@ -5551,6 +6028,7 @@ function update(dt) {
         if (g.comboTimer <= 0) g.combo = 0;
     }
     if (g.streakTimer > 0) g.streakTimer -= dt;
+    if (g.modeMsgTimer > 0) g.modeMsgTimer -= dt;
 
     // --- CORRUPTION (depth-gated; pilot stays sharp until the alien deep) ---
     // Pre-Midnight (1000m): zero. NEREID is reliable in the lit ocean.
@@ -5694,6 +6172,7 @@ function update(dt) {
             // SURFACED — bank everything, end run with full reward
             phase = 'mooring'; // surfaced alive — go to the Mooring hub (was: death screen)
             g._surfaced = true;
+            if ((g.deepestDepth || 0) > 4000) meta.nereidDrift = (meta.nereidDrift || 0) + 1;   // the hadal leaves marks
             g._mooringLine = pickMooringBeat(g);
             // SIGNAL ⌁ — surfaced score distils at full rate
             g._signalEarned = Math.floor((g.score || 0) / 400);
@@ -5749,7 +6228,8 @@ function update(dt) {
     }
 
     // --- MARINE SNOW (drifting down — depth feel, layered for parallax) ---
-    if (g.marinSnow.length < 90 && Math.random() < 0.20) {
+    const _snowCap = (isTouchDevice && Math.min(canvas.width, canvas.height) < 520) ? 45 : 90;
+    if (g.marinSnow.length < _snowCap && Math.random() < 0.20) {
         const layer = Math.random(); // 0=far/small/slow, 1=near/big/fast
         g.marinSnow.push({
             x: g.cam.x + (Math.random() - 0.5) * canvas.width * 1.2,
@@ -5909,7 +6389,9 @@ function update(dt) {
     }
 
     // Pressure creak SFX past Midnight
-    if (g.depth > 1000 && g.runTime - g.ambient.lastCreak > 18 + Math.random() * 14) {
+    const _crush = g.player._crushDepth || 3000;
+    const _stress = Math.max(0, Math.min(1, (g.depth - _crush * 0.8) / (_crush * 0.25)));
+    if (g.depth > 1000 && g.runTime - g.ambient.lastCreak > (18 - 13 * _stress) + Math.random() * (14 - 9 * _stress)) {
         g.ambient.lastCreak = g.runTime;
         if (audioCtx) {
             const freq = Math.max(28, 55 - g.depth / 120);
@@ -6019,12 +6501,14 @@ function draw() {
         modules: drawModules, contracts: drawContracts, puzzle: drawPuzzle,
         cards: drawCardDraft, codex: drawCodex, tutorial: drawTutorial,
     };
-    // Round 4: title + card draft get REAL mobile layouts on phones — the
+    // Round 4/5: title + card draft + contracts get REAL mobile layouts — the
     // scale-to-fit shrink (h/760 ≈ 0.5 on a landscape phone) made them
     // legible-at-arm's-length tiny. Other menus keep scale-to-fit for now.
-    if (touchUI() && Math.min(w, h) < 520 && (phase === 'title' || phase === 'cards')) {
+    if (touchUI() && Math.min(w, h) < 520 && (phase === 'title' || phase === 'cards' || phase === 'contracts')) {
         MENU_S = 1;
-        if (phase === 'title') drawTitleMobile(w, h); else drawCardDraftMobile(w, h);
+        if (phase === 'title') drawTitleMobile(w, h);
+        else if (phase === 'cards') drawCardDraftMobile(w, h);
+        else drawContractsMobile(w, h);
         return;
     }
     if (MENU_DRAWS[phase] || phase === 'mooring') {
@@ -6368,6 +6852,8 @@ function draw() {
         ctx.restore();
         ctx.globalAlpha = 1;
     }
+    drawVolumes(g);
+    drawDeployables(g);
 
     // --- SPECIAL EVENTS (whale falls, vents) — depth-fade like obstacles ---
     if (g.specialEvents) {
@@ -8080,6 +8566,32 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         ctx.fillStyle = hexA(pal.textDim, 0.55); ctx.font = '10px monospace';
         ctx.fillText('[Z] ASCEND', 16, h - 38);
     }
+    // MODE RIBBON — bottom-left, small, cyan; its own voice, not the banner's
+    if (g.modeMsgTimer > 0 && g.modeMsg) {
+        ctx.globalAlpha = Math.min(1, g.modeMsgTimer / 0.35);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#8FE8FF'; ctx.font = 'bold 11px monospace';
+        ctx.fillText(g.modeMsg, 16, h - 72);
+        ctx.globalAlpha = 1;
+    }
+    // BELT — what you carry, keys to use it
+    {
+        const beltItems = (g.inventory || []).filter(it => it.belt).slice(0, 2);
+        if (beltItems.length) {
+            ctx.textAlign = 'left'; ctx.font = '10px monospace';
+            ctx.fillStyle = hexA('#5AD0FF', 0.7);
+            ctx.fillText(beltItems.map((it, bi) => `[${bi + 1}] ${it.name}`).join('   '), 16, h - 100);
+        }
+    }
+    // ATTENTION — visible only once the deep has started to care
+    if ((g.attention || 0) > 20) {
+        const at = g.attention / 100;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = hexA(at > 0.6 ? '#FF7060' : '#D8B060', 0.75); ctx.font = 'bold 10px monospace';
+        ctx.fillText('ATTENTION', 16, h - 88);
+        ctx.fillStyle = '#141C24'; ctx.fillRect(78, h - 96, 70, 7);
+        ctx.fillStyle = hexA(at > 0.6 ? '#FF7060' : '#D8B060', 0.8); ctx.fillRect(78, h - 96, 70 * at, 7);
+    }
     // SILENT RUNNING indicator — pulsing, unmissable; you chose to be quiet, remember it
     if (g.silent) {
         const sPulse = 0.5 + Math.sin(g.runTime * 3) * 0.35;
@@ -8304,10 +8816,10 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
 
 // Compact minimap — top-right corner, away from porthole. Only renders when unlocked.
 function drawCompactMinimap(w, h, g, pal) {
-    const mmR = 56;
+    const mmR = touchUI() && Math.min(w, h) < 520 ? 48 : 56;
     // BOTTOM-LEFT — clear of the top-right loadout strip. Above the depth/zone display.
     const mmCx = mmR + 18;
-    const mmCy = h - mmR - 88;
+    const mmCy = touchUI() && Math.min(w, h) < 520 ? mmR + 64 : h - mmR - 88;
     const wb = g.worldBounds;
     const trenchR = (wb && wb.radius) || 1000;
     // Scale: trench fits within minimap radius
@@ -9742,16 +10254,15 @@ function drawTitle(w, h) {
             ctx.beginPath(); ctx.arc(subCx, subCy, 14, 0, PI2); ctx.fill();
             ctx.fillStyle = '#FFF';
             ctx.beginPath(); ctx.arc(subCx + 11, subCy, 2.5, 0, PI2); ctx.fill();
-            // Name
+            // Name/tagline/stats — ellipsized to the cell (they overran on playtest)
+            const fitT = (t) => { let x = String(t || ''); while (x.length > 2 && ctx.measureText(x).width > cellW - 10) x = x.slice(0, -2).trimEnd() + '…'; return x; };
             ctx.textAlign = 'center';
             ctx.fillStyle = selected ? '#FFF' : '#9AB0C0'; ctx.font = 'bold 11px monospace';
-            ctx.fillText(ch.name, bx + cellW / 2, by + 72);
-            // Tagline
+            ctx.fillText(fitT(ch.name), bx + cellW / 2, by + 72);
             ctx.fillStyle = '#5A6A7A'; ctx.font = '10px monospace';
-            ctx.fillText(ch.tagline || '', bx + cellW / 2, by + 86);
-            // Mini stats row
+            ctx.fillText(fitT(ch.tagline), bx + cellW / 2, by + 86);
             ctx.fillStyle = '#7A8A98'; ctx.font = '10px monospace';
-            ctx.fillText(`HP ${ch.hp} · SPD ${ch.speed} · ${ch.crushDepth}m`, bx + cellW / 2, by + 100);
+            ctx.fillText(fitT(`HP ${ch.hp} · SPD ${ch.speed} · ${ch.crushDepth}m`), bx + cellW / 2, by + 100);
             // Key
             ctx.fillStyle = ch.color; ctx.font = 'bold 11px monospace';
             ctx.fillText(`[${i + 1}]`, bx + cellW / 2, by + 114);
@@ -9909,6 +10420,8 @@ function drawTitle(w, h) {
         ctx.font = 'italic 10px monospace';
         ctx.fillText(meta.ending === 'answered' ? 'NEREID remembers her answer.' : 'The question is still down there, keeping.', w / 2, h - 62);
     }
+    ctx.fillStyle = '#2A3A44'; ctx.font = '9px monospace';
+    ctx.fillText('music: Stellardrone — CC-BY', w - 90, h - 8);
     ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 16px monospace';
     ctx.fillText('[ENTER] DIVE', w / 2, ACTIONS_Y);
     ctx.font = 'bold 11px monospace';
@@ -10229,14 +10742,14 @@ function drawModules(w, h) {
     ctx.fillStyle = '#9AB0C0'; ctx.font = '12px monospace';
     ctx.fillText('Materials  ' + mtxt, w / 2, 96);
     ctx.fillStyle = '#DAA520';
-    ctx.fillText(`Slots — HULL ${equippedInSlot('hull')}/${MODULE_SLOTS.hull} · SYSTEMS ${equippedInSlot('systems')}/${MODULE_SLOTS.systems} · PROW ${equippedInSlot('prow')}/${MODULE_SLOTS.prow}`, w / 2, 116);
+    ctx.fillText(`Slots — HULL ${equippedInSlot('hull')}/${MODULE_SLOTS.hull} · SYSTEMS ${equippedInSlot('systems')}/${MODULE_SLOTS.systems} · PROW ${equippedInSlot('prow')}/${MODULE_SLOTS.prow} · MOUNT ${equippedInSlot('mount')}/${MODULE_SLOTS.mount}`, w / 2, 116);
     for (let i = 0; i < MODULE_DEFS.length; i++) {
         const m = MODULE_DEFS[i];
         const unlocked = moduleUnlocked(m);
         const owned = meta.modulesOwned.includes(m.id);
         const equipped = meta.modulesEquipped.includes(m.id);
         const affordable = canAfford(m.cost);
-        const bx = w / 2 - 330, by = 136 + i * 58, bw = 660, bh = 52;
+        const bx = w / 2 - 330, by = 136 + i * 52, bw = 660, bh = 47;
         addTapZone(bx, by, bw, bh, String(i + 1));
         ctx.fillStyle = equipped ? '#0E2430' : '#0a1420';
         ctx.fillRect(bx, by, bw, bh);
@@ -10251,18 +10764,71 @@ function drawModules(w, h) {
         ctx.font = '10px monospace';
         if (unlocked) {
             ctx.fillStyle = '#7A8A9A';
-            ctx.fillText(m.desc + (owned ? '' : '   —   ' + matsLabel(m.cost)), bx + 12, by + 38);
+            const dbl = drawbackLabel(m.id);
+            ctx.fillText(m.desc + (owned ? '' : '   —   ' + matsLabel(m.cost)), bx + 12, by + 33);
+            if (dbl) { ctx.fillStyle = '#9A6A5A'; ctx.fillText(dbl, bx + 12, by + 44); }
         } else {
             const def = ENEMY_TYPES[m.req.type];
             const known = (meta.research[m.req.type] || 0) >= 1;
             ctx.fillStyle = '#46586A';
-            ctx.fillText(`schematic locked — research ${known && def ? def.name : 'an unidentified species'} to tier ${m.req.tier} (now ${meta.research[m.req.type] || 0})`, bx + 12, by + 38);
+            ctx.fillText(`schematic locked — research ${known && def ? def.name : 'an unidentified species'} to tier ${m.req.tier} (now ${meta.research[m.req.type] || 0})`, bx + 12, by + 33);
         }
     }
     ctx.textAlign = 'center';
     ctx.fillStyle = '#888'; ctx.font = '13px monospace';
-    ctx.fillText('[1-8] craft / equip / unequip   ·   [ESC] back', w / 2, 136 + MODULE_DEFS.length * 58 + 24);
+    ctx.fillText('[1-9,0,-] craft / equip / unequip   ·   [ESC] back', w / 2, 136 + MODULE_DEFS.length * 52 + 20);
     addTapZone(0, h - 50, w, 50, 'Escape');
+}
+
+// ===== MOBILE CONTRACT BOARD — full-width rows, readable, thumb targets =====
+function drawContractsMobile(w, h) {
+    ctx.fillStyle = '#010208'; ctx.fillRect(0, 0, w, h);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 16px monospace';
+    ctx.fillText('CONTRACTS — ' + contractSelected.size + '/3', 14, 24);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#7A8A9A'; ctx.font = '11px monospace';
+    ctx.fillText(meta.gold + 'g', w - 14, 24);
+    const rowH = Math.min(52, (h - 130) / Math.max(1, contractBoard.length));
+    for (let i = 0; i < contractBoard.length; i++) {
+        const o = contractBoard[i];
+        const sel = contractSelected.has(i);
+        const by = 34 + i * (rowH + 4);
+        addTapZone(10, by, w - 20, rowH, String(i + 1));
+        ctx.fillStyle = sel ? '#10202c' : '#0a1420';
+        ctx.fillRect(10, by, w - 20, rowH);
+        ctx.strokeStyle = sel ? '#5ADFCF' : '#22303C'; ctx.lineWidth = sel ? 2 : 1;
+        ctx.strokeRect(10, by, w - 20, rowH);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = sel ? '#80FFE0' : '#B0C4D0'; ctx.font = 'bold 12px monospace';
+        ctx.fillText((sel ? '✓ ' : '') + o.brief, 20, by + 20);
+        ctx.fillStyle = '#7A6A40'; ctx.font = '11px monospace';
+        ctx.fillText('+' + o.scoreBonus + ' · ' + o.reward, 20, by + rowH - 10);
+    }
+    // Quartermaster row
+    const qy = h - 88;
+    ctx.textAlign = 'left'; ctx.font = 'bold 11px monospace';
+    const stock = [['belt_decoy', '6'], ['belt_mine', '7'], ['belt_flare', '8']];
+    let qx = 10;
+    const qw = (w - 20 - 16) / 3;
+    for (const [bid, key] of stock) {
+        const cost = BELT_DEFS[bid].value;
+        const n = (meta.beltStock && meta.beltStock[bid]) || 0;
+        ctx.fillStyle = '#0a1420'; ctx.fillRect(qx, qy, qw, 36);
+        ctx.strokeStyle = meta.gold >= cost ? '#3A6A8A' : '#1A2430'; ctx.lineWidth = 1; ctx.strokeRect(qx, qy, qw, 36);
+        ctx.fillStyle = meta.gold >= cost ? '#5AD0FF' : '#3A4A5A';
+        ctx.fillText(BELT_DEFS[bid].name.split(' ')[0] + ' ' + cost + 'g' + (n ? ' ×' + n : ''), qx + 8, qy + 23);
+        addTapZone(qx, qy, qw, 36, key);
+        qx += qw + 8;
+    }
+    // Dive + back
+    ctx.fillStyle = '#0a2520'; ctx.beginPath(); ctx.roundRect(w - 190, h - 44, 180, 38, 8); ctx.fill();
+    ctx.strokeStyle = '#80E0A0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(w - 190, h - 44, 180, 38, 8); ctx.stroke();
+    ctx.fillStyle = '#80E0A0'; ctx.font = 'bold 15px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('DIVE ▼', w - 100, h - 19);
+    addTapZone(w - 190, h - 44, 180, 38, 'Enter');
+    ctx.textAlign = 'left'; ctx.fillStyle = '#5A6A7A'; ctx.font = '12px monospace';
+    ctx.fillText('‹ back', 14, h - 19);
+    addTapZone(10, h - 40, 90, 34, 'Escape');
 }
 
 // --- Contract Board Screen ---
@@ -10273,6 +10839,21 @@ function drawContracts(w, h) {
     ctx.fillText('CONTRACT BOARD', w / 2, 44);
     ctx.fillStyle = '#888'; ctx.font = '12px monospace';
     ctx.fillText('The Mooring — select up to 3.   [1-5] toggle   ·   [ENTER] dive   ·   [ESC] back', w / 2, 68);
+    // QUARTERMASTER — belt consumables, paid in gold, stowed for the dive
+    {
+        const stock = [['belt_decoy', '6'], ['belt_mine', '7'], ['belt_flare', '8']];
+        let qx = w / 2 - 300;
+        ctx.textAlign = 'left'; ctx.font = '10px monospace';
+        for (const [bid, key] of stock) {
+            const cost = BELT_DEFS[bid].value;
+            const n = (meta.beltStock && meta.beltStock[bid]) || 0;
+            ctx.fillStyle = meta.gold >= cost ? '#5AD0FF' : '#3A4A5A';
+            ctx.fillText(`[${key}] ${BELT_DEFS[bid].name} ${cost}g${n ? ' ×' + n : ''}`, qx, h - 30);
+            addTapZone(qx - 4, h - 46, 195, 24, key);
+            qx += 205;
+        }
+        ctx.textAlign = 'center';
+    }
     ctx.fillStyle = '#7A8A9A'; ctx.font = '11px monospace';
     ctx.fillText(`Selected: ${contractSelected.size}/3`, w / 2, 86);
     for (let i = 0; i < contractBoard.length; i++) {
@@ -10330,9 +10911,16 @@ function pressPuzzle(i) {
     puzzleMoves++;
     if (puzzleGrid.every(v => v)) {
         puzzleSolved = true;
-        addMaterials({ wiring: 2, corecell: 1, crystal: 1 });
-        saveMeta();
-        if (game) { addNereidLog(game, 'Junction online. Power rerouted — the wreck gives up its salvage.'); game.streak = 'JUNCTION ONLINE — materials'; game.streakTimer = 2.5; }
+        if (game && game._puzzleReward === 'battery') {
+            game._puzzleReward = null;
+            game.player.battery = Math.min(125, (game.player.battery || 100) + 25);
+            addNereidLog(game, 'Junction rebuilt properly. Power restored. Good hands, Pilot.');
+            game.streak = 'JUNCTION ONLINE — +25 battery'; game.streakTimer = 2.5;
+        } else {
+            addMaterials({ wiring: 2, corecell: 1, crystal: 1 });
+            saveMeta();
+            if (game) { addNereidLog(game, 'Junction online. Power rerouted — the wreck gives up its salvage.'); game.streak = 'JUNCTION ONLINE — materials'; game.streakTimer = 2.5; }
+        }
         if (typeof sfxLevelUp === 'function') sfxLevelUp();
         setTimeout(() => { if (phase === 'puzzle') phase = 'playing'; }, 1200);
     }
@@ -10485,6 +11073,8 @@ function drawTitleMobile(w, h) {
     ctx.fillStyle = `rgba(90,160,170,${0.3 + Math.sin(tt * 0.5) * 0.12})`;
     ctx.font = '10px monospace'; ctx.textAlign = 'center';
     ctx.fillText(meta.totalRuns === 0 ? '"The ocean remembers everything you forget."' : `${meta.totalRuns} dives · ${meta.totalKills} dead · the swarm grows`, w / 2, h - 8);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#22303A'; ctx.font = '8px monospace';
+    ctx.fillText('music: Stellardrone CC-BY', w - 6, h - 8);
 }
 
 // ===== MOBILE CARD DRAFT — cards fill the real screen, no shrink =====
@@ -10884,22 +11474,26 @@ window.addEventListener('keydown', e => {
         game.silent = !game.silent;
         if (game.silent) {
             game.lightOn = false;
-            game.streak = 'SILENT RUNNING';
+            setModeMsg(game, '◈ SILENT RUNNING — weapons hold');
             if (!game._silentTaught) {
                 game._silentTaught = true;
                 addNereidLog(game, 'Weapons holding. Engines at dead slow. We are a hole in the water, Pilot. Stay that way.');
             }
         } else {
-            game.streak = 'ENGINES LIVE — WEAPONS FREE';
+            setModeMsg(game, '◈ ENGINES LIVE — WEAPONS FREE');
         }
-        game.streakTimer = 2;
         return;
     }
     if (phase === 'playing' && (e.key === 'l' || e.key === 'L') && game) {
         e.preventDefault();
         game.lightOn = !game.lightOn;
-        game.streak = game.lightOn ? 'FLOODLIGHTS ON' : 'FLOODLIGHTS OFF';
-        game.streakTimer = 2;
+        setModeMsg(game, game.lightOn ? '◈ FLOODLIGHTS ON' : '◈ FLOODLIGHTS OFF');
+        if (game.lightOn) {
+            // The flash: photophobic hunters recoil from a fresh beam
+            for (const e of game.enemies) {
+                if ((e.role === 'ambush' || e.ai === 'ambush' || e.ai === 'zigzag') && dist(game.player, e) < 350) e._feared = 1.6;
+            }
+        }
         return;
     }
     // WORLD ZOOM — [V] cycles 1.0 / 1.15 / 1.3 on touch screens (persisted)
@@ -10908,7 +11502,7 @@ window.addEventListener('keydown', e => {
         const cur = meta.worldZoom || 1.15;
         meta.worldZoom = cur >= 1.3 ? 1.0 : cur >= 1.15 ? 1.3 : 1.15;
         saveMeta();
-        if (game) { game.streak = `ZOOM ${Math.round(meta.worldZoom * 100)}%`; game.streakTimer = 2; }
+        if (game) setModeMsg(game, `◈ ZOOM ${Math.round(meta.worldZoom * 100)}%`);
         return;
     }
     // PROTOTYPE: open a Power Junction puzzle (P). TODO: trigger from fouled terminals / sealed wrecks instead.
@@ -10927,6 +11521,28 @@ window.addEventListener('keydown', e => {
             addNereidLog(game, 'Ballast purged. We are climbing. No way back down — get us home, Pilot.');
             sfxRevive();
         }
+        return;
+    }
+    // UTILITY BELT — [1]/[2] use the first/second belt item carried
+    if (phase === 'playing' && (e.key === '1' || e.key === '2') && game) {
+        e.preventDefault();
+        const beltItems = game.inventory.filter(it => it.belt);
+        const item = beltItems[Number(e.key) - 1];
+        if (item) {
+            game.inventory.splice(game.inventory.indexOf(item), 1);
+            useBeltItem(game, item);
+        }
+        return;
+    }
+    // JETTISON — J dumps half the cargo as floating loot. Weight for freedom.
+    if (phase === 'playing' && (e.key === 'j' || e.key === 'J') && game && game.inventory.length > 1) {
+        e.preventDefault();
+        const drop = game.inventory.splice(0, Math.ceil(game.inventory.length / 2));
+        for (const it of drop) {
+            game.lootItems.push({ x: game.player.x + (Math.random() - 0.5) * 90, y: game.player.y + 40 + Math.random() * 50, type: it, life: 30, dropDepth: game.depth });
+        }
+        setModeMsg(game, `◈ JETTISONED ${drop.length} ITEMS`);
+        playSound && playTone(90, 0.5, 'square', 0.08);
         return;
     }
     // SALVAGE — E key held while near a wreck (handled in update; this just suppresses default)
@@ -10969,6 +11585,14 @@ window.addEventListener('keydown', e => {
             p.dashTimer = 0.18;
             p.dashCooldown = 0.7;
             sfxDash();
+            // Dashing beside rock kicks up silt — concealment you can MAKE
+            for (const ob of game.obstacles) {
+                if ((ob.kind === 'rock' || ob.kind === 'spire') && dist(p, ob) < 150) {
+                    if (!game.volumes) game.volumes = [];
+                    game.volumes.push({ kind: 'sediment', x: p.x, y: p.y, w: 190, h: 190, life: 4.5 });
+                    break;
+                }
+            }
         }
     }
 
@@ -11013,7 +11637,7 @@ window.addEventListener('keydown', e => {
         // Audition: [N] cycles the beat-layer candidate for the current zone
         if (e.key === 'n' || e.key === 'N') {
             const picked = nextBeatCandidate();
-            if (picked && game) { game.streak = 'TRACK: ' + picked; game.streakTimer = 2.5; }
+            if (picked && game) setModeMsg(game, '♪ ' + picked, 2.5);
             return;
         }
         if (e.key === 'h' || e.key === 'H') {
@@ -11060,7 +11684,9 @@ window.addEventListener('keydown', e => {
     }
     if (phase === 'modules') {
         if (e.key === 'Escape') { phase = (game && game._surfaced && game.player.hp > 0) ? 'mooring' : 'title'; return; }
-        const mn = parseInt(e.key);
+        let mn = parseInt(e.key);
+        if (e.key === '0') mn = 10;
+        if (e.key === '-') mn = 11;
         if (mn >= 1 && mn <= MODULE_DEFS.length) {
             const m = MODULE_DEFS[mn - 1];
             if (!moduleUnlocked(m)) { if (audioCtx) playTone(120, 0.1, 'square', 0.04); return; }
@@ -11085,6 +11711,18 @@ window.addEventListener('keydown', e => {
         return;
     }
     if (phase === 'contracts') {
+        if (e.key === '6' || e.key === '7' || e.key === '8') {
+            const bid = { 6: 'belt_decoy', 7: 'belt_mine', 8: 'belt_flare' }[e.key];
+            const cost = BELT_DEFS[bid].value;
+            if (meta.gold >= cost) {
+                meta.gold -= cost;
+                meta.beltStock = meta.beltStock || {};
+                meta.beltStock[bid] = (meta.beltStock[bid] || 0) + 1;
+                saveMeta();
+                if (audioCtx) playTone(660, 0.15, 'sine', 0.08);
+            } else if (audioCtx) playTone(120, 0.1, 'square', 0.04);
+            return;
+        }
         const num = parseInt(e.key);
         if (num >= 1 && num <= contractBoard.length) {
             const idx = num - 1;
@@ -11353,7 +11991,7 @@ function loop(ts) {
         update(dt);
         updateMusic(dt);
         draw();
-        if (!POSTFX.on) drawCRT(); // shader absorbs the CRT when post-FX is on
+        if (!POSTFX.on && !(isTouchDevice && Math.min(canvas.width, canvas.height) < 520)) drawCRT(); // phones skip the overdraw
         drawFps();
         postFX(ts);
     } catch(err) {
