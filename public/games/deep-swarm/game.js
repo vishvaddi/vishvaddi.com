@@ -416,12 +416,47 @@ function updateVolumes(g, dt, p) {
             const goodLoot = WRECK_LOOT_TABLE.filter(l => l.id === 'weapon_lv' || l.id === 'heal');
             if (goodLoot.length) g.wrecks.push({ x: rx, y: ry + dir * 340, r: 34, loot: goodLoot[Math.floor(rnd() * goodLoot.length)], revealed: false, salvaged: false, seed: rnd() * 100, spawnedAt: g.runTime, ripBorn: true });
         }
+        // ORE FALL — a rock sheds off the trench wall above and sinks past.
+        // The seam GLINTS in its ore colour. Dash through it to crack it open.
+        if (g.depth > 150 && (g.fallers || []).length < 2 && rnd() < 0.35) {
+            const ORES = [['crystal', '#B080FF'], ['scrap', '#C0A060'], ['wiring', '#60C0E0'], ['corepl', '#FF8060']];
+            const pick = ORES[Math.floor(rnd() * ORES.length)];
+            if (!g.fallers) g.fallers = [];
+            g.fallers.push({ x: p.x + (rnd() - 0.5) * 1300, y: p.y - 650, vy: 42 + rnd() * 34, vx: (rnd() - 0.5) * 14,
+                r: 15 + rnd() * 13, ore: pick[0], col: pick[1], seed: rnd() * 100, ang: 0, spin: (rnd() - 0.5) * 0.7 });
+            maybeHint(g, 'orefall', 'ORE FALL on sonar — DASH through the glinting rock to crack the seam.');
+        }
         if (blooms < 2 && g.depth > 1000 && rnd() < 0.35) {
             g.volumes.push({ kind: 'bloom', x: B.minX + 150 + rnd() * (B.maxX - B.minX - 300), y: B.minY + 150 + rnd() * (B.maxY - B.minY - 300),
                 w: 60, h: 60, life: 50, closedT: 0 });
         }
     }
     if (g._charted) { for (const wk of g.wrecks) wk.revealed = true; }
+    // Ore falls: sink, spin, crack under a dash
+    if (g.fallers) {
+        for (let i = g.fallers.length - 1; i >= 0; i--) {
+            const f = g.fallers[i];
+            f.y += f.vy * dt; f.x += f.vx * dt; f.ang += f.spin * dt;
+            if (f.y > p.y + 900) { g.fallers.splice(i, 1); continue; }
+            const d = dist(p, f);
+            if (d < f.r + 16) {
+                if (p.dashTimer > 0) {
+                    const amt = 1 + (f.r > 22 ? 1 : 0);
+                    addMaterials({ [f.ore]: amt });
+                    saveMeta();
+                    for (let gI = 0; gI < 3; gI++) g.gems.push({ x: f.x + (Math.random() - 0.5) * 40, y: f.y + (Math.random() - 0.5) * 40, value: 4, size: 4, life: 14, dropDepth: g.depth });
+                    g.floatingTexts.push({ x: f.x, y: f.y - 18, text: `+${amt} ${f.ore.toUpperCase()}`, color: f.col, life: 1.8, vy: -26 });
+                    playSample('clank', 0.4, 1.1); playTone(950, 0.3, 'sine', 0.09);
+                    g.shake = Math.max(g.shake || 0, 3);
+                    g.fallers.splice(i, 1);
+                } else {
+                    // Nudged aside — it takes a dash to break rock
+                    const a = Math.atan2(p.y - f.y, p.x - f.x);
+                    p.x += Math.cos(a) * (f.r + 16 - d); p.y += Math.sin(a) * (f.r + 16 - d);
+                }
+            }
+        }
+    }
     g._inThermo = false; g._inSediment = false; g._inCurrent = false;
     for (let i = g.volumes.length - 1; i >= 0; i--) {
         const v = g.volumes[i];
@@ -458,8 +493,34 @@ function updateVolumes(g, dt, p) {
 }
 
 function drawVolumes(g) {
-    if (!g.volumes) return;
     const t = g.runTime;
+    // Ore falls — tumbling rock, seam glinting in its mineral colour
+    if (g.fallers) {
+        for (const f of g.fallers) {
+            ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.ang);
+            const fr = (k) => { const v = Math.sin((f.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return v - Math.floor(v); };
+            ctx.fillStyle = '#3A3F45';
+            ctx.beginPath();
+            for (let i = 0; i < 7; i++) {
+                const a = (i / 7) * PI2;
+                const rr = f.r * (0.75 + fr(i) * 0.4);
+                if (i === 0) ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); else ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+            }
+            ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = '#22262B'; ctx.lineWidth = 1.2; ctx.stroke();
+            // The seam — jagged vein + a travelling glint you can SEE
+            const glint = 0.45 + Math.sin(t * 4 + f.seed * 9) * 0.4;
+            ctx.strokeStyle = f.col; ctx.globalAlpha = glint; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(-f.r * 0.6, -f.r * 0.15);
+            ctx.lineTo(-f.r * 0.15, f.r * 0.1); ctx.lineTo(f.r * 0.2, -f.r * 0.2); ctx.lineTo(f.r * 0.62, f.r * 0.08);
+            ctx.stroke();
+            ctx.globalAlpha = Math.min(1, glint + 0.2);
+            drawGlow(ctx, f.col, 0, 0, f.r * 1.5, glint * 0.35);
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        }
+    }
+    if (!g.volumes) return;
     for (const v of g.volumes) {
         if (v.kind === 'current') {
             // Faint lane edges so the flow reads as a PLACE, not stray lines
@@ -8564,8 +8625,7 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         ctx.textAlign = 'center';
         ctx.font = big ? 'bold 30px monospace' : 'bold 15px monospace';
         const tw = ctx.measureText(g.streak).width;
-        const small2 = Math.min(w, h) < 520;
-        const by = big ? Math.max(h * 0.24, 130) : (small2 ? 128 : 92);
+        const by = big ? Math.max(h * 0.3, 150) : Math.max(h * 0.22, 132);
         ctx.globalAlpha = fade;
         drawPlate(w / 2 - tw / 2 - 18, by - (big ? 28 : 16), tw + 36, big ? 42 : 26);
         ctx.fillStyle = big ? (g._streakColor || '#BFEAE0') : '#DCEAE2';
@@ -8601,37 +8661,44 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         ctx.fillStyle = hexA(pal.textDim, 0.55); ctx.font = '10px monospace';
         ctx.fillText('[Z] ASCEND', 16, h - 38);
     }
-    // MODE RIBBON — bottom-left, small, cyan; its own voice, not the banner's
-    if (g.modeMsgTimer > 0 && g.modeMsg) {
-        ctx.globalAlpha = Math.min(1, g.modeMsgTimer / 0.35);
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#8FE8FF'; ctx.font = 'bold 11px monospace';
-        ctx.fillText(g.modeMsg, 16, h - 72);
-        ctx.globalAlpha = 1;
-    }
-    // BELT — what you carry, keys to use it
+    // LEFT-EDGE STATUS STACK — lives under the radar in the porthole's dead
+    // margin; the bottom-left corner keeps only depth + ascend.
     {
+        const _mmr = touchUI() && Math.min(w, h) < 520 ? 48 : 52;
+        let sy = _mmr * 2 + 64 + 26;   // just below the (now top-left) radar
+        ctx.textAlign = 'left';
+        if (g.silent) {
+            const sPulse = 0.5 + Math.sin(g.runTime * 3) * 0.35;
+            ctx.fillStyle = hexA('#80E0FF', sPulse); ctx.font = 'bold 12px monospace';
+            ctx.fillText('◈ SILENT RUNNING', 16, sy);
+            ctx.fillStyle = hexA('#80E0FF', 0.45); ctx.font = '9px monospace';
+            ctx.fillText('[Q] weapons free', 16, sy + 12);
+            sy += 30;
+        }
+        if (g.modeMsgTimer > 0 && g.modeMsg) {
+            ctx.globalAlpha = Math.min(1, g.modeMsgTimer / 0.35);
+            ctx.fillStyle = '#8FE8FF'; ctx.font = 'bold 11px monospace';
+            ctx.fillText(g.modeMsg, 16, sy);
+            ctx.globalAlpha = 1;
+            sy += 18;
+        }
+        if ((g.attention || 0) > 20) {
+            const at = g.attention / 100;
+            ctx.fillStyle = hexA(at > 0.6 ? '#FF7060' : '#D8B060', 0.75); ctx.font = 'bold 10px monospace';
+            ctx.fillText('ATTENTION', 16, sy);
+            ctx.fillStyle = '#141C24'; ctx.fillRect(80, sy - 8, 70, 7);
+            ctx.fillStyle = hexA(at > 0.6 ? '#FF7060' : '#D8B060', 0.8); ctx.fillRect(80, sy - 8, 70 * at, 7);
+            sy += 18;
+        }
         const beltItems = (g.inventory || []).filter(it => it.belt).slice(0, 2);
         if (beltItems.length) {
-            ctx.textAlign = 'left'; ctx.font = '10px monospace';
+            ctx.font = '10px monospace';
             ctx.fillStyle = hexA('#5AD0FF', 0.7);
-            ctx.fillText(beltItems.map((it, bi) => `[${bi + 1}] ${it.name}`).join('   '), 16, h - 100);
+            for (let bi = 0; bi < beltItems.length; bi++) {
+                ctx.fillText(`[${bi + 1}] ${beltItems[bi].name}`, 16, sy);
+                sy += 14;
+            }
         }
-    }
-    // ATTENTION — visible only once the deep has started to care
-    if ((g.attention || 0) > 20) {
-        const at = g.attention / 100;
-        ctx.textAlign = 'left';
-        ctx.fillStyle = hexA(at > 0.6 ? '#FF7060' : '#D8B060', 0.75); ctx.font = 'bold 10px monospace';
-        ctx.fillText('ATTENTION', 16, h - 88);
-        ctx.fillStyle = '#141C24'; ctx.fillRect(78, h - 96, 70, 7);
-        ctx.fillStyle = hexA(at > 0.6 ? '#FF7060' : '#D8B060', 0.8); ctx.fillRect(78, h - 96, 70 * at, 7);
-    }
-    // SILENT RUNNING indicator — pulsing, unmissable; you chose to be quiet, remember it
-    if (g.silent) {
-        const sPulse = 0.5 + Math.sin(g.runTime * 3) * 0.35;
-        ctx.fillStyle = hexA('#80E0FF', sPulse); ctx.font = 'bold 12px monospace';
-        ctx.fillText('◈ SILENT RUNNING — [Q] weapons free', 16, h - 56);
     }
 
     // ---- TOP-RIGHT: LOADOUT (weapons first, then cards + level-up upgrades) ----
@@ -8851,10 +8918,12 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
 
 // Compact minimap — top-right corner, away from porthole. Only renders when unlocked.
 function drawCompactMinimap(w, h, g, pal) {
-    const mmR = touchUI() && Math.min(w, h) < 520 ? 48 : 56;
+    const mmR = touchUI() && Math.min(w, h) < 520 ? 48 : 52;
     // BOTTOM-LEFT — clear of the top-right loadout strip. Above the depth/zone display.
+    // Top-left on every platform — the bottom-left corner was a traffic jam
+    // (radar + silent + attention + belt + depth all stacked there).
     const mmCx = mmR + 18;
-    const mmCy = touchUI() && Math.min(w, h) < 520 ? mmR + 64 : h - mmR - 88;
+    const mmCy = mmR + 64;
     const wb = g.worldBounds;
     const trenchR = (wb && wb.radius) || 1000;
     // Scale: trench fits within minimap radius
@@ -11397,22 +11466,40 @@ function drawEventOverlay(w, h, g) {
     if (!g.activeEvent) return;
     const e = g.activeEvent;
     ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(0, 0, w, h);
-    // Event box
-    const bw = 420, bh = 200;
+    // Event box — text WRAPS and the box grows to hold it (long lore lines
+    // were overrunning the fixed 420px box)
+    const bw = Math.min(480, w - 40);
+    const wrap = (text, font, maxW) => {
+        ctx.font = font;
+        const words = String(text).split(' ');
+        const lines = []; let line = '';
+        for (const word of words) {
+            const tst = line + word + ' ';
+            if (ctx.measureText(tst).width > maxW && line) { lines.push(line.trim()); line = word + ' '; }
+            else line = tst;
+        }
+        if (line.trim()) lines.push(line.trim());
+        return lines;
+    };
+    const textLines = wrap(e.text, '11px monospace', bw - 36);
+    const choiceLines = e.choices.map(c => wrap(c.text, '12px monospace', bw - 36));
+    const choicesH = choiceLines.reduce((a, ls) => a + ls.length * 15 + 13, 0);
+    const bh = 66 + textLines.length * 14 + 12 + choicesH + 26;
     const bx = (w - bw) / 2, by = (h - bh) / 2;
     ctx.fillStyle = '#0a1520'; ctx.fillRect(bx, by, bw, bh);
     ctx.strokeStyle = '#C47840'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, bh);
-    // Title
     ctx.fillStyle = '#C47840'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
-    ctx.fillText(e.title, w / 2, by + 30);
-    // Text
-    ctx.fillStyle = '#AAA'; ctx.font = '11px monospace';
-    ctx.fillText(e.text, w / 2, by + 55);
-    // Choices
+    ctx.fillText(e.title, w / 2, by + 28);
+    ctx.fillStyle = '#AAB8C2'; ctx.font = '11px monospace';
+    let ty = by + 50;
+    for (const ln of textLines) { ctx.fillText(ln, w / 2, ty); ty += 14; }
+    ty += 12;
     for (let i = 0; i < e.choices.length; i++) {
+        const zoneTop = ty - 13;
         ctx.fillStyle = '#DDD'; ctx.font = '12px monospace';
-        ctx.fillText(e.choices[i].text, w / 2, by + 85 + i * 28);
-        addTapZone(bx + 10, by + 85 + i * 28 - 16, bw - 20, 26, String(i + 1));
+        for (const ln of choiceLines[i]) { ctx.fillText(ln, w / 2, ty); ty += 15; }
+        addTapZone(bx + 10, zoneTop, bw - 20, ty - zoneTop + 4, String(i + 1));
+        ty += 13;
     }
     // Timer bar
     const timerPct = e.timer / 8;
