@@ -55,9 +55,9 @@ function initPostFX() {
             // The water breathes, barely — a whisper of sway at baseline, and the
             // warp belongs to corruption (tuned 12/07: "barely noticeable until
             // corruption gets worse").
-            '  float warp = 0.0012 + depth*0.0005 + corrupt*0.005;',
-            '  c.x += sin(uv.y*6.0 + time*0.45)*0.0012 + sin(uv.y*40.0 + time*1.3)*warp;',
-            '  c.y += cos(uv.x*5.0 + time*0.38)*0.0009 + cos(uv.x*36.0 + time*1.1)*warp*0.6;',
+            '  float warp = 0.0004 + corrupt*0.0065;',   // MIND is the only dial
+            '  c.x += sin(uv.y*6.0 + time*0.45)*0.0004 + sin(uv.y*40.0 + time*1.3)*warp;',
+            '  c.y += cos(uv.x*5.0 + time*0.38)*0.0003 + cos(uv.x*36.0 + time*1.1)*warp*0.6;',
             '  vec2 dir = uv - 0.5;',
             '  float ca = (0.0015 + corrupt*0.006) * (0.3 + dot(dir,dir)*2.5);',
             '  vec3 col; col.r = samp(c + dir*ca).r; col.g = samp(c).g; col.b = samp(c - dir*ca).b;',
@@ -843,9 +843,13 @@ function sfxTsunami() {
 }
 
 // Torpedo launch: compressed air burst + whine
+let _lastTorpSfx = 0;
 function sfxTorpedo() {
     if (!audioCtx) return;
-    sampleOr('torpedo', 0.3, 0.85 + Math.random() * 0.2, _sfxTorpedoProc);
+    // Throttle — high-level torpedo racks fire in flurries
+    if (audioCtx.currentTime - _lastTorpSfx < 0.3) return;
+    _lastTorpSfx = audioCtx.currentTime;
+    sampleOr('torpedo', 0.26, 0.85 + Math.random() * 0.2, _sfxTorpedoProc);
 }
 function _sfxTorpedoProc() {
     noiseBurst(0.08, 0.07, 800); // air burst
@@ -2963,7 +2967,6 @@ function fireWeapons(g, dt) {
         // ECOLOGY: firing makes noise the deep can hear. Sonar loud, harpoon near-silent.
         if (g._modeCfg && g._modeCfg.ecology) g.noise = Math.min(2.5, (g.noise || 0) + (WEAPON_NOISE[w.id] ?? 0.4));
         if (w.id === 'harpoon') sampleOr('harpoon', 0.22, 0.9 + Math.random() * 0.2);
-        else if (w.id === 'field' && Math.random() < 0.25) sampleOr('zap', 0.14, 0.8 + Math.random() * 0.4);
         const dmg = def.baseDmg * g.player.dmgMult * (1 + (w.level - 1) * 0.25);
         const area = def.baseArea * g.player.areaMult * (1 + (w.level - 1) * 0.1);
 
