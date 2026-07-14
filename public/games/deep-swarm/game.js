@@ -2994,7 +2994,7 @@ function spawnEnemy(g, forceType, forcePos) {
         size: type.size * vscale * (isAberrant ? 1.2 : 1),
         color: baseColor,
         xp: Math.max(1, Math.round(type.xp * vscale)),
-        damage: type.damage * (0.8 + vscale * 0.25) * (isAberrant ? 1.5 : 1),
+        damage: Math.max(1, Math.round(type.damage * (0.8 + vscale * 0.25) * (isAberrant ? 1.5 : 1))),
         gold: Math.max(1, Math.round(type.gold * vscale)) * (isAberrant ? 3 : 1),
         vseed: Math.random() * 100, phase: Math.random() * PI2,
         typeId: type.id, flash: 0,
@@ -8701,7 +8701,7 @@ function draw() {
     // (Minimap removed — viewport itself is the radar; THREAT count on right rail handles awareness)
 
     // Feature 5: Chain counter HUD
-    if ((phase === 'playing' || phase === 'paused') && g.chainDisplayTimer > 0) {
+    if ((phase === 'playing' || phase === 'paused') && g.chainDisplayTimer > 0 && g.cascadeCount >= 2) {
         const alpha = Math.min(1, g.chainDisplayTimer);
         ctx.globalAlpha = alpha;
         ctx.textAlign = 'center';
@@ -12452,7 +12452,9 @@ window.addEventListener('keydown', e => {
         if (num >= 1 && num <= game.activeEvent.choices.length) {
             game.activeEvent.choices[num - 1].fn(game);
             game.activeEvent = null;
-            phase = 'playing';
+            // A choice may have opened a minigame (junction/patch) — only
+            // resume play if the choice didn't take us somewhere else
+            if (phase === 'event') phase = 'playing';
         }
     }
     // Card draft
