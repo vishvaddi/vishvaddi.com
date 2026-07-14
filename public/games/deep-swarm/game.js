@@ -598,9 +598,9 @@ const MUSIC_ENABLED = true;
 const MUSIC = {
     title:    { bed: null,               beats: ['pc_drifting'] },
     sunlight: { bed: null,               beats: ['pc_lowtide', 'pc_seashells'] },
-    twilight: { bed: 'bed_tundra',       beats: ['pc_heartocean', 'pc_discovery'] },
+    twilight: { bed: null,               beats: ['pc_heartocean', 'pc_discovery'] },
     midnight: { bed: 'bed_hold',         beats: ['pc_cavern', 'pc_darkforest'] },
-    abyssal:  { bed: 'bed_wind',         beats: ['pc_hide', 'pc_ghosttown'] },
+    abyssal:  { bed: 'bed_heartbeat',    beats: ['pc_hide', 'pc_ghosttown'] },
     hadal:    { bed: 'bed_heartbeat',    beats: ['pc_stranded', 'pc_silentwood'] },
     p3:       { bed: 'bed_powerstation', beats: ['pc_mystic', 'pc_ghosttown'] },
 };
@@ -731,7 +731,7 @@ function nextBeatCandidate() {
 const SFX_SAMPLES = {
     glitch1: 'sfx_glitch1', glitch2: 'sfx_glitch2', ui: 'sfx_ui', impact: 'sfx_impact',
     stinger: 'sfx_stinger', tear: 'sfx_tear', salvage: 'sfx_salvage',
-    squelch1: 'sfx_squelch1', squelch2: 'sfx_squelch2', clank: 'sfx_clank',
+    clank: 'sfx_clank',
     ping: 'sfx_ping', torpedo: 'sfx_torpedo', explode: 'sfx_explode', implode: 'sfx_implode',
     dash: 'sfx_dash', levelup: 'sfx_levelup', growl1: 'sfx_growl1', growl2: 'sfx_growl2',
     killconfirm: 'sfx_killconfirm', harpoon: 'sfx_harpoon', zap: 'sfx_zap', alert: 'sfx_alert',
@@ -950,7 +950,6 @@ function sfxEnemyDeath(typeId) {
     if (!isBig && now - _lastDeathSfx < 0.05) return;
     _lastDeathSfx = now;
     if (isBig) { sampleOr('implode', 0.5, 0.95); setTimeout(() => playSample('tear', 0.4, 0.9 + Math.random() * 0.2), 250); }
-    else if (Math.random() < 0.35) playSample(Math.random() < 0.5 ? 'squelch1' : 'squelch2', 0.16, 0.8 + Math.random() * 0.5);
     if (typeId === 'jellyfish') { playTone(400, 0.08, 'sine', 0.04); }
     else if (typeId === 'piranha') { noiseBurst(0.04, 0.05, 1500); }
     else if (typeId === 'squid') { playTone(150, 0.15, 'sine', 0.05); }
