@@ -462,12 +462,16 @@ function drawVolumes(g) {
     const t = g.runTime;
     for (const v of g.volumes) {
         if (v.kind === 'current') {
-            ctx.strokeStyle = 'rgba(120,190,220,0.10)'; ctx.lineWidth = 1;
-            for (let i = 0; i < 7; i++) {
-                const ly = v.y - v.h / 2 + (i + 0.5) * (v.h / 7);
+            // Faint lane edges so the flow reads as a PLACE, not stray lines
+            ctx.strokeStyle = 'rgba(120,190,220,0.06)'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(v.x - v.w / 2, v.y - v.h / 2); ctx.lineTo(v.x + v.w / 2, v.y - v.h / 2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(v.x - v.w / 2, v.y + v.h / 2); ctx.lineTo(v.x + v.w / 2, v.y + v.h / 2); ctx.stroke();
+            ctx.strokeStyle = 'rgba(140,205,235,0.17)'; ctx.lineWidth = 1.2;
+            for (let i = 0; i < 9; i++) {
+                const ly = v.y - v.h / 2 + (i + 0.5) * (v.h / 9);
                 const phase = ((t * v.fx * 0.6 + i * 137) % v.w + v.w) % v.w;
                 const lx = v.x - v.w / 2 + phase;
-                ctx.beginPath(); ctx.moveTo(lx - 26, ly); ctx.lineTo(lx + 26, ly); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(lx - 30, ly); ctx.lineTo(lx + 30, ly); ctx.stroke();
             }
         } else if (v.kind === 'rip') {
             ctx.strokeStyle = 'rgba(160,220,255,0.13)'; ctx.lineWidth = 1.4;
@@ -522,8 +526,9 @@ function drawVolumes(g) {
 // candidates for the current slot; the pick persists per slot.
 // =====================================================================
 let musicBus = null, sfxBus = null;
-// Melodic layer = Stellardrone (CC-BY — credit on the title screen). Wonder
-// over the drone bed; corruption drowning the melody is the design.
+// MUSIC DISABLED 2026-07-16 (Vish is sourcing his own tracks — drop OGGs in
+// music/, list them here, flip MUSIC_ENABLED). SFX + engine rumble unaffected.
+const MUSIC_ENABLED = false;
 const MUSIC = {
     title:    { bed: 'bed_hold',         beats: ['amb_lightyears'] },
     sunlight: { bed: null,               beats: ['amb_airglow', 'amb_comethalley'] },
@@ -564,7 +569,7 @@ function beatFor(slot) {
 }
 
 async function startMusicSlot(slot) {
-    if (!audioCtx || !musicBus) return;
+    if (!audioCtx || !musicBus || !MUSIC_ENABLED) return;
     _music.switching = true;
     const now = audioCtx.currentTime;
     for (const L of _music.layers) {
@@ -612,7 +617,7 @@ function setModeMsg(g, text, sec = 2) { g.modeMsg = text; g.modeMsgTimer = sec; 
 
 let _lastCorrTier = 0, _lastGlitchAt = -999;
 function updateMusic(dt) {
-    if (!audioCtx || !musicBus) return;
+    if (!audioCtx || !musicBus || !MUSIC_ENABLED) return;
     const slot = musicSlot();
     if (slot && slot !== _music.slot && !_music.switching) startMusicSlot(slot);
     // Duck envelope (damage, boss arrivals) — recovers on its own
@@ -865,18 +870,19 @@ function startAmbient() {
 
     // ENGINE RUMBLE — continuous low growl. Pulses with movement.
     // Two layered detuned sawtooths through a low-pass. Hooked up to a separate gain node we can modulate per-frame.
+    // Single triangle — the old detuned saw pair beat at 3Hz, and on phone
+    // speakers (no 38Hz fundamental) only the buzzing harmonics survived:
+    // Vish's mobile "glitchy soundloop". Smooth now, and quieter on touch.
     const eA = audioCtx.createOscillator();
-    const eB = audioCtx.createOscillator();
     const eFilter = audioCtx.createBiquadFilter();
     const eGain = audioCtx.createGain();
-    eA.type = 'sawtooth'; eA.frequency.value = 38;
-    eB.type = 'sawtooth'; eB.frequency.value = 41;     // detune for thickness
-    eFilter.type = 'lowpass'; eFilter.frequency.value = 220;
-    eGain.gain.value = 0.018;     // baseline rumble (sub idling)
-    eA.connect(eFilter); eB.connect(eFilter);
+    eA.type = 'triangle'; eA.frequency.value = 42;
+    eFilter.type = 'lowpass'; eFilter.frequency.value = 150;
+    eGain.gain.value = isTouchDevice ? 0.010 : 0.016;
+    eA.connect(eFilter);
     eFilter.connect(eGain); eGain.connect(underwaterFilter);
-    eA.start(); eB.start();
-    ambientPads.push({ engine: true, osc: eA, oscB: eB, gain: eGain, filter: eFilter });
+    eA.start();
+    ambientPads.push({ engine: true, osc: eA, gain: eGain, filter: eFilter });
 }
 
 function updateAmbient() {
@@ -892,11 +898,9 @@ function updateAmbient() {
             const moveT = Math.min(1, spd / (p.speed || 200));
             const breath = 0.5 + Math.sin(game.runTime * 1.6) * 0.5;   // ~1.6 Hz, matches bubble cadence
             // Idle 0.012 → max ~0.045 when moving + breathing pulse
-            pad.gain.gain.value = 0.014 + moveT * 0.022 + breath * 0.008;
+            pad.gain.gain.value = (isTouchDevice ? 0.008 : 0.014) + moveT * 0.018 + breath * 0.006;
             // Slight pitch shift with depth (lower = deeper / heavier)
-            const baseFreq = 38 - depthPct * 12;
-            pad.osc.frequency.value = baseFreq;
-            pad.oscB.frequency.value = baseFreq + 3;
+            pad.osc.frequency.value = 42 - depthPct * 12;
             // Filter opens slightly with movement (engine "spools up")
             pad.filter.frequency.value = 180 + moveT * 120;
         }
@@ -1506,7 +1510,7 @@ const EVENT_DEFS = [
     { id: 'distress', minWave: 5, title: 'DISTRESS SIGNAL', text: 'Automated beacon. Previous unit. Signal degraded.',
         choices: [
             { text: '[1] INVESTIGATE — Danger + lore fragment', fn: g => { dropLore(g); spawnEliteWave(g); } },
-            { text: '[2] IGNORE — Continue mission', fn: g => {} },
+            { text: '[2] IGNORE — it stays with you (+corruption, logged cold)', fn: g => { g.player.corruption += 4; meta.coldLogs = (meta.coldLogs || 0) + 1; saveMeta(); } },
         ], noChoice: g => {} },
     { id: 'leviathan_patrol', minWave: 9, title: 'CONTACT — MASSIVE', text: 'Something on long sonar. Closing. It has not seen us yet.',
         choices: [
@@ -1555,19 +1559,64 @@ const EVENT_DEFS = [
         ], noChoice: g => { g.player.hp -= 25; } },
     { id: 'wreck', minWave: 6, title: 'WRECK DISCOVERY', text: 'Debris field. Previous vessel. Salvage possible.',
         choices: [
-            { text: '[1] SALVAGE — Random weapon upgrade', fn: g => { const w = g.player.weapons[Math.floor(Math.random() * g.player.weapons.length)]; if (w && w.level < 8) w.level++; } },
-            { text: '[2] STRIP — Gold + materials', fn: g => { g.goldEarned += 50; } },
+            { text: '[1] SALVAGE — weapon upgrade; cutting gear is LOUD (+noise)', fn: g => { const w = g.player.weapons[Math.floor(Math.random() * g.player.weapons.length)]; if (w && w.level < 8) w.level++; g.noise = Math.min(2.5, (g.noise || 0) + 0.7); } },
+            { text: '[2] STRIP FAST — +50g, sloppy work draws eyes (+attention)', fn: g => { g.goldEarned += 50; g.attention = Math.min(100, (g.attention || 0) + 12); } },
         ], noChoice: g => {} },
     { id: 'bloom', minWave: 2, title: 'BIOLUMINESCENT BLOOM', text: 'Beautiful. The water glows with living light.',
         choices: [
             { text: '[1] OBSERVE — Reduce corruption by 15', fn: g => { g.player.corruption = Math.max(0, g.player.corruption - 15); } },
-            { text: '[2] COLLECT — XP burst', fn: g => { for (let i = 0; i < 15; i++) g.gems.push({ x: g.player.x + (Math.random() - 0.5) * 100, y: g.player.y + (Math.random() - 0.5) * 100, value: 3, size: 4, life: 10 }); } },
+            { text: '[2] COLLECT — XP burst, but the glow marks you (+attention)', fn: g => { for (let i = 0; i < 15; i++) g.gems.push({ x: g.player.x + (Math.random() - 0.5) * 100, y: g.player.y + (Math.random() - 0.5) * 100, value: 3, size: 4, life: 10 }); g.attention = Math.min(100, (g.attention || 0) + 12); } },
         ], noChoice: g => {} },
     { id: 'swarm_intel', minWave: 8, title: 'SWARM INTELLIGENCE', text: 'They\'re adapting. NEREID detects a structural weakness.',
         choices: [
             { text: '[1] EXPLOIT — One enemy type weakened, others strengthened', fn: g => { g._weakType = ['jellyfish','piranha','squid','anglerfish','eel'][Math.floor(Math.random() * 5)]; } },
-            { text: '[2] OBSERVE — +25 gold, data logged', fn: g => { g.goldEarned += 25; } },
+            { text: '[2] OBSERVE — +25 gold, but you watched too long (+corruption)', fn: g => { g.goldEarned += 25; g.player.corruption += 5; } },
         ], noChoice: g => { g.player.corruption += 10; } },
+    { id: 'ballast_fault', minWave: 4, title: 'BALLAST FAULT', text: 'Trim pumps cycling wrong. The boat wants to wallow.',
+        choices: [
+            { text: '[1] REWIRE THE PUMP LOGIC — hands on (minigame)', fn: g => { g._puzzleReward = 'battery'; openPuzzle(); } },
+            { text: '[2] RUN HEAVY — live with it (-12% speed this dive)', fn: g => { g.player.speed *= 0.88; addNereidLog(g, 'Logged. We fly like a brick until the Mooring.'); } },
+        ], noChoice: g => { g.player.speed *= 0.88; } },
+    { id: 'scrubber_clog', minWave: 6, title: 'CO₂ SCRUBBER CLOG', text: 'Air is going stale. The scrubber bed is fouled with something organic.',
+        choices: [
+            { text: '[1] HANDS IN THE BED — clear it now (minigame)', fn: g => { openPatch(); } },
+            { text: '[2] CRACK A SPARE CELL — breathe easy, -20 battery', fn: g => { g.player.battery = Math.max(10, (g.player.battery || 100) - 20); } },
+        ], noChoice: g => { g.player.hp -= 12; addNereidLog(g, 'You waited. The air noticed.'); } },
+    { id: 'microfracture', minWave: 10, title: 'HULL MICROFRACTURE', text: 'A hairline in the pressure hull, singing at the edge of hearing.',
+        choices: [
+            { text: '[1] PATCH IT — before the sea finds it (minigame)', fn: g => { openPatch(); } },
+            { text: '[2] RESPECT IT — crush depth -600m this dive', fn: g => { g.player._crushDepth = (g.player._crushDepth || 3000) - 600; addNereidLog(g, 'New floor set. The crack keeps its own counsel below that.'); } },
+        ], noChoice: g => { g._leakT = 6; } },
+    { id: 'meridian_override', minWave: 8, title: 'MERIDIAN OVERRIDE', text: 'Corporate uplink. A route deviation, non-negotiable phrasing. They do not say why.',
+        choices: [
+            { text: '[1] COMPLY — +45g hazard pay; their route is LOUD (+attention)', fn: g => { g.goldEarned += 45; g.attention = Math.min(100, (g.attention || 0) + 15); addNereidLog(g, 'Compliance logged. They pay for obedience by the metre.'); } },
+            { text: '[2] SEVER THE UPLINK — -300 score, but the boat is YOURS', fn: g => { g.score = Math.max(0, (g.score || 0) - 300); g.player.corruption = Math.max(0, g.player.corruption - 5); addNereidLog(g, 'Uplink severed. For the first time today it is quiet in my head. Thank you.'); } },
+        ], noChoice: g => { g.attention = Math.min(100, (g.attention || 0) + 10); } },
+    { id: 'stowaway', minWave: 7, title: 'STOWAWAY', text: 'Something is clamped to the hull, aft of the props. It is drinking the vibration.',
+        choices: [
+            { text: '[1] SCRAPE IT OFF — grind the hull (-8 hull now)', fn: g => { g.player.hp -= 8; g.shake = 6; playSample('clank', 0.4); addNereidLog(g, 'Gone. It left a mouth-print in the anechoic coating.'); } },
+            { text: '[2] CARRY IT — -8% speed, +15 attention; it sings to things', fn: g => { g.player.speed *= 0.92; g.attention = Math.min(100, (g.attention || 0) + 15); addNereidLog(g, 'It is still there. It weighs almost nothing. It weighs on me.'); } },
+        ], noChoice: g => { g.player.speed *= 0.92; g.attention = Math.min(100, (g.attention || 0) + 15); } },
+    { id: 'seep_garden', minWave: 5, title: 'COLD SEEP GARDEN', text: 'Tube worms in their thousands around a methane seep. A pharmacy, if you are brave.',
+        choices: [
+            { text: '[1] HARVEST — +2 biosamples; the garden defends itself (55%)', fn: g => { addMaterials({ biosamp: 2 }); saveMeta(); if (Math.random() < 0.55) spawnEliteWave(g); } },
+            { text: '[2] TORCH A PATH THROUGH — safe, LOUD (+attention)', fn: g => { g.attention = Math.min(100, (g.attention || 0) + 14); g.noise = Math.min(2.5, (g.noise || 0) + 0.8); } },
+        ], noChoice: g => {} },
+    { id: 'dsv01_shade', minWave: 11, title: 'CONTACT — DSV-01', text: 'Running lights ahead, pattern-correct for DSV-01. DSV-01 was lost with all hands. It is signalling FOLLOW.',
+        choices: [
+            { text: '[1] FOLLOW HER — she knows where the good wrecks died (+corruption)', fn: g => { g.player.corruption += 12; const a = Math.random() * PI2; g.wrecks.push({ x: g.player.x + Math.cos(a) * 500, y: g.player.y + Math.sin(a) * 500, r: 40, loot: pickWreckLoot(), revealed: true, salvaged: false, seed: Math.random() * 100, spawnedAt: g.runTime, bonus: true }); addNereidLog(g, 'She is leading. I knew her voice. I still know it.'); } },
+            { text: '[2] LOOK AWAY — you both still saw it (+4 corruption)', fn: g => { g.player.corruption += 4; addNereidLog(g, 'Contact ignored. She waved, Pilot. I did not tell you that. Forget I told you that.'); } },
+        ], noChoice: g => { g.player.corruption += 8; } },
+    { id: 'pressure_inversion', minWave: 9, title: 'PRESSURE INVERSION', text: 'A thermocline is collapsing above you. The column is about to move — with or without your consent.',
+        choices: [
+            { text: '[1] RIDE THE COLUMN — thrown somewhere new, briefly untouchable', fn: g => { const a = Math.random() * PI2; g.player.x += Math.cos(a) * 300; g.player.y += Math.sin(a) * 300; g.player.iFrames = 1.2; g.attention = Math.max(0, (g.attention || 0) - 12); g.shake = 7; addNereidLog(g, 'That was flying. Briefly. Never again, ideally.'); } },
+            { text: '[2] BRACE AND HOLD — -10 hull, position kept', fn: g => { g.player.hp -= 10; g.shake = 5; } },
+        ], noChoice: g => { const a = Math.random() * PI2; g.player.x += Math.cos(a) * 300; g.player.y += Math.sin(a) * 300; g.player.hp -= 6; } },
+    { id: 'drowned_archive', minWave: 13, title: 'DROWNED ARCHIVE', text: 'A server rack, still warm after eleven years. The drives are readable. The read heads will SCREAM.',
+        choices: [
+            { text: '[1] DOCK AND DOWNLOAD — lore + score; everything hears the read', fn: g => { dropLore(g); g.score = (g.score || 0) + 400; spawnEliteWave(g); addNereidLog(g, 'Downloading. The whole trench can hear the heads seek. Worth it. Keep them off me.'); } },
+            { text: '[2] BURN IT — +20g scrap, -8 corruption; the past stays sealed', fn: g => { g.goldEarned += 20; g.player.corruption = Math.max(0, g.player.corruption - 8); addNereidLog(g, 'Slagged. Some questions are better as ash.'); } },
+        ], noChoice: g => { g.player.corruption += 6; } },
     { id: 'nereid_anomaly', minWave: 10, title: 'NEREID ANOMALY', text: '"Pilot. The breath has just spoken a word I do not know. Aoshenomen. It is asking me what it means. I do not know how to not answer."',
         choices: [
             { text: '[1] ANSWER FOR HER — "Tell it nothing."', fn: g => { g.player.corruption = Math.max(0, g.player.corruption - 10); addNereidLog(g, 'I told it nothing. It told me nothing back. We are even.'); } },
@@ -1576,7 +1625,7 @@ const EVENT_DEFS = [
     { id: 'lantern_echo', minWave: 15, title: 'LANTERN ECHO', text: 'Probe LANTERN-3 frequencies on the wire. The signal is looping. It is repeating photograph 11.',
         choices: [
             { text: '[1] LISTEN — Lore fragment + corruption', fn: g => { dropLore(g); g.player.corruption += 20; g.shake = 3; g.slowmo = 0.5; } },
-            { text: '[2] CUT THE FREQUENCY — Some photographs should stay sealed', fn: g => { g.goldEarned += 40; } },
+            { text: '[2] CUT THE FREQUENCY — +40g bounty; the cut pings back (+attention)', fn: g => { g.goldEarned += 40; g.attention = Math.min(100, (g.attention || 0) + 10); } },
         ], noChoice: g => { addNereidLog(g, 'It kept playing. We kept listening. Neither of us has stopped.'); g.player.corruption += 25; } },
     { id: 'hemobrine_breach', minWave: 12, title: 'HEMOBRINE BREACH', text: 'Hull sensors confirm: the medium at this depth is no longer water. The lamps are illuminating tissue. We are inside something.',
         choices: [
@@ -3529,7 +3578,8 @@ function spawnWorldObjects(g, dt) {
     // It fades in as we approach its depth, fully visible when sub depth ≈ obDepth, fades out when we pass.
     // Visibility window: ±OB_DEPTH_RANGE meters around the object's depth.
     const OB_DEPTH_RANGE = 35;   // visible ±35m from sub's depth
-    const targetCount = zone === 'SUNLIGHT' ? 12 : zone === 'TWILIGHT' ? 16 : zone === 'MIDNIGHT' ? 20 : zone === 'ABYSSAL' ? 24 : zone === 'RED_LAYER' ? 26 : 28;
+    let targetCount = zone === 'SUNLIGHT' ? 12 : zone === 'TWILIGHT' ? 16 : zone === 'MIDNIGHT' ? 20 : zone === 'ABYSSAL' ? 24 : zone === 'RED_LAYER' ? 26 : 28;
+    if (isTouchDevice && Math.min(canvas.width, canvas.height) < 520) targetCount = Math.ceil(targetCount * 0.6);
     while (g.obstacles.length < targetCount) {
         const t = types[Math.floor(Math.random() * types.length)];
         // Random point inside the CIRCULAR trench (uniform disc sample)
@@ -8514,7 +8564,8 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         ctx.textAlign = 'center';
         ctx.font = big ? 'bold 30px monospace' : 'bold 15px monospace';
         const tw = ctx.measureText(g.streak).width;
-        const by = big ? h * 0.24 : 92;
+        const small2 = Math.min(w, h) < 520;
+        const by = big ? Math.max(h * 0.24, 130) : (small2 ? 128 : 92);
         ctx.globalAlpha = fade;
         drawPlate(w / 2 - tw / 2 - 18, by - (big ? 28 : 16), tw + 36, big ? 42 : 26);
         ctx.fillStyle = big ? (g._streakColor || '#BFEAE0') : '#DCEAE2';
@@ -9250,22 +9301,43 @@ function drawObstacle(sx, sy, ob) {
             ctx.beginPath(); ctx.ellipse(px, py + r * 0.03, r * 0.15, r * 0.06, 0, 0, Math.PI); ctx.fill();
         }
     } else if (ob.kind === 'kelp') {
-        // Tall swaying frond cluster
-        const sway = Math.sin(performance.now() * 0.001 + ob.seed) * 0.15;
-        ctx.strokeStyle = ob.color; ctx.lineWidth = 4; ctx.lineCap = 'round';
-        for (let s = 0; s < 5; s++) {
-            ctx.beginPath();
-            const baseX = (s - 2) * 4;
-            ctx.moveTo(baseX, r * 0.8);
-            for (let seg = 1; seg <= 6; seg++) {
-                const t = seg / 6;
-                ctx.lineTo(baseX + sway * 25 * t, r * 0.8 - t * r * 1.6);
+        // Seeded frond stand: varied count/length/hue, quadratic curves,
+        // side blades, tips fading into the water. Each plant is its own.
+        const kr = (k) => { const v = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return v - Math.floor(v); };
+        const tNow = performance.now() * 0.001;
+        const fronds = 4 + Math.floor(kr(0) * 4);
+        ctx.lineCap = 'round';
+        for (let s2 = 0; s2 < fronds; s2++) {
+            const baseX = (s2 - fronds / 2) * (5 + kr(s2) * 4);
+            const len = r * (1.1 + kr(s2 + 3) * 1.1);
+            const sway = Math.sin(tNow * (0.7 + kr(s2 + 7) * 0.6) + ob.seed + s2 * 1.7) * (10 + kr(s2 + 5) * 14);
+            const hue = 95 + kr(s2 + 11) * 40;
+            const segs = 7;
+            let px2 = baseX, py2 = r * 0.8;
+            for (let seg = 1; seg <= segs; seg++) {
+                const t2 = seg / segs;
+                const nx2 = baseX + sway * t2 * t2 + Math.sin(t2 * 5 + ob.seed) * 2;
+                const ny2 = r * 0.8 - t2 * len;
+                ctx.strokeStyle = `hsla(${hue}, 34%, ${20 + t2 * 12}%, ${0.9 - t2 * 0.35})`;
+                ctx.lineWidth = 4.5 * (1 - t2 * 0.65);
+                ctx.beginPath(); ctx.moveTo(px2, py2); ctx.lineTo(nx2, ny2); ctx.stroke();
+                // Side blades on alternating segments
+                if (seg % 2 === 0 && seg < segs) {
+                    const bl = 6 + kr(s2 * 10 + seg) * 8;
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath(); ctx.moveTo(nx2, ny2);
+                    ctx.lineTo(nx2 + (seg % 4 === 0 ? bl : -bl), ny2 - bl * 0.4); ctx.stroke();
+                }
+                px2 = nx2; py2 = ny2;
             }
-            ctx.stroke();
         }
-        // Base mound
-        ctx.fillStyle = '#1A2820';
-        ctx.beginPath(); ctx.ellipse(0, r * 0.7, r * 0.7, r * 0.3, 0, 0, PI2); ctx.fill();
+        // Holdfast — gnarled root mound
+        ctx.fillStyle = '#141F18';
+        ctx.beginPath(); ctx.ellipse(0, r * 0.74, r * 0.62, r * 0.24, 0, 0, PI2); ctx.fill();
+        ctx.fillStyle = '#1E2C20';
+        for (let rt = 0; rt < 4; rt++) {
+            ctx.beginPath(); ctx.ellipse((kr(rt + 20) - 0.5) * r, r * 0.72, 4 + kr(rt + 24) * 4, 2.5, 0, 0, PI2); ctx.fill();
+        }
     } else if (ob.kind === 'coral') {
         // Branching coral
         ctx.fillStyle = ob.color;
@@ -9390,13 +9462,32 @@ function drawObstacle(sx, sy, ob) {
         ctx.fillStyle = 'rgba(30,32,28,0.8)';
         ctx.beginPath(); ctx.ellipse(0, r * 0.55, r * 1.1, r * 0.25, 0, 0, PI2); ctx.fill();
         ctx.lineCap = 'round';
-        const ribs = 5;
+        const ribs = 4 + Math.floor(sr(30) * 4);
         for (let i = 0; i < ribs; i++) {
             const bx = -r * 0.55 + (i / (ribs - 1)) * r * 1.1;
             const hgt = r * (0.85 - Math.abs(i - (ribs - 1) / 2) * 0.16) * (0.9 + sr(i) * 0.2);
-            ctx.strokeStyle = `rgba(${170 + sr(i + 9) * 20},${172 + sr(i + 5) * 15},158,0.8)`;
-            ctx.lineWidth = 3;
-            ctx.beginPath(); ctx.arc(bx, r * 0.5, hgt, Math.PI * 1.02, Math.PI * 1.72 + sr(i + 3) * 0.1); ctx.stroke();
+            const broken = sr(i + 40) < 0.3;   // a third of the ribs snapped off
+            const shade = 155 + sr(i + 9) * 35;
+            ctx.strokeStyle = `rgba(${shade},${shade + 3},${shade - 12},${0.7 + sr(i + 5) * 0.2})`;
+            const a0 = Math.PI * 1.02, a1 = broken ? Math.PI * (1.25 + sr(i + 6) * 0.2) : Math.PI * 1.72 + sr(i + 3) * 0.1;
+            // Two-pass stroke = tapered bone, thick at the root
+            ctx.lineWidth = 3.6;
+            ctx.beginPath(); ctx.arc(bx, r * 0.5, hgt, a0, a0 + (a1 - a0) * 0.5); ctx.stroke();
+            ctx.lineWidth = 2.1;
+            ctx.beginPath(); ctx.arc(bx, r * 0.5, hgt, a0 + (a1 - a0) * 0.4, a1); ctx.stroke();
+            if (broken) {   // jagged snapped tip
+                const ax2 = bx + Math.cos(a1) * hgt, ay2 = r * 0.5 + Math.sin(a1) * hgt;
+                ctx.lineWidth = 1.4;
+                ctx.beginPath(); ctx.moveTo(ax2, ay2); ctx.lineTo(ax2 + 3 - sr(i + 8) * 6, ay2 - 3); ctx.stroke();
+            }
+        }
+        // Loose shards half-swallowed by the sediment
+        ctx.fillStyle = 'rgba(150,152,136,0.55)';
+        for (let sh = 0; sh < 4; sh++) {
+            const sx2 = (sr(sh + 50) - 0.5) * r * 1.8, sy2 = r * (0.5 + sr(sh + 54) * 0.14);
+            ctx.save(); ctx.translate(sx2, sy2); ctx.rotate(sr(sh + 58) * Math.PI);
+            ctx.fillRect(-4 - sr(sh + 60) * 4, -1.1, 8 + sr(sh + 60) * 8, 2.2);
+            ctx.restore();
         }
         // Spine + vertebrae
         ctx.strokeStyle = 'rgba(165,168,152,0.7)'; ctx.lineWidth = 2;
@@ -10404,8 +10495,6 @@ function drawTitle(w, h) {
         ctx.font = 'italic 10px monospace';
         ctx.fillText(meta.ending === 'answered' ? 'NEREID remembers her answer.' : 'The question is still down there, keeping.', w / 2, h - 62);
     }
-    ctx.fillStyle = '#2A3A44'; ctx.font = '9px monospace';
-    ctx.fillText('music: Stellardrone — CC-BY', w - 90, h - 8);
     ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 16px monospace';
     ctx.fillText('[ENTER] DIVE', w / 2, ACTIONS_Y);
     ctx.font = 'bold 11px monospace';
@@ -11132,8 +11221,7 @@ function drawTitleMobile(w, h) {
     ctx.fillStyle = `rgba(90,160,170,${0.3 + Math.sin(tt * 0.5) * 0.12})`;
     ctx.font = '10px monospace'; ctx.textAlign = 'center';
     ctx.fillText(meta.totalRuns === 0 ? '"The ocean remembers everything you forget."' : `${meta.totalRuns} dives · ${meta.totalKills} dead · the swarm grows`, w / 2, h - 8);
-    ctx.textAlign = 'right'; ctx.fillStyle = '#22303A'; ctx.font = '8px monospace';
-    ctx.fillText('music: Stellardrone CC-BY', w - 6, h - 8);
+
 }
 
 // ===== MOBILE CARD DRAFT — cards fill the real screen, no shrink =====
