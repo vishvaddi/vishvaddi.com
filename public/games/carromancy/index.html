@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#11100e" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><circle cx=%2232%22 cy=%2232%22 r=%2227%22 fill=%22%23d5b783%22/><circle cx=%2232%22 cy=%2232%22 r=%2211%22 fill=%22none%22 stroke=%22%237d3c2e%22 stroke-width=%224%22/></svg>" />
+    <title>Carromancy</title>
+    <script type="module" crossorigin src="./assets/index-Nj8ZZ8B8.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-PAbGqvGM.css">
+  </head>
+  <body>
+    <div id="app">
+      <header class="masthead">
+        <div>
+          <h1>CARROMANCY</h1>
+        </div>
+        <div class="masthead-actions">
+          <div class="audio-mix" aria-label="Audio levels">
+            <label title="Background music volume"><span>BGM</span><input id="bgm-volume" type="range" min="0" max="100" value="14" aria-label="Background music volume"><b id="bgm-value">14</b></label>
+            <label title="Sound effects volume"><span>SFX</span><input id="sfx-volume" type="range" min="0" max="100" value="78" aria-label="Sound effects volume"><b id="sfx-value">78</b></label>
+          </div>
+          <button class="help-button" id="help-button" type="button">? HOW TO PLAY</button>
+          <div class="run-id" id="run-id">RUN —</div>
+        </div>
+      </header>
+
+      <main class="game-shell">
+        <section class="board-column">
+          <section class="match-hud" aria-label="Current match">
+            <div class="match-heading">
+              <div>
+                <div class="panel-label">ENCOUNTER</div>
+                <div class="encounter-name" id="encounter-name">THE OPENING</div>
+              </div>
+              <div class="turn-badge" id="turn-badge">YOUR TURN</div>
+            </div>
+            <div class="score-race">
+              <div class="score-side player-row"><span>YOU</span><strong id="score">0</strong></div>
+              <div class="race-track">
+                <div class="meter"><div id="score-meter"></div></div>
+                <div class="race-target">FIRST TO <strong id="target">650</strong></div>
+                <div class="meter rival-meter"><div id="rival-score-meter"></div></div>
+              </div>
+              <div class="score-side rival-row"><span id="rival-score-name">RIVAL</span><strong id="rival-score">0</strong></div>
+            </div>
+            <div class="match-meta">
+              <div><span>SHOTS</span><strong id="shots">6</strong></div>
+              <div><span>GOLD</span><strong id="shards">0</strong></div>
+              <div class="rival-compact">
+                <span class="rival-portrait" id="rival-portrait">M</span>
+                <span><b id="rival-name">MARA</b><small id="rival-intent">Watching the board</small></span>
+              </div>
+            </div>
+          </section>
+
+          <section class="charm-rack" aria-label="Charm engine">
+            <div class="charm-rack-head"><span>YOUR CHARMS</span><strong id="charm-slots">0/5</strong></div>
+            <div id="relic-list" class="relic-list"></div>
+            <div class="mantra-belt hidden" id="mantra-belt"><span>MANTRAS</span><div id="mantra-list"></div></div>
+          </section>
+          <div class="board-frame">
+            <canvas id="board" width="720" height="720" aria-label="Carrom board"></canvas>
+            <div class="ambient-scene" aria-hidden="true"><i class="canopy-shadow"></i><i class="air-motes"></i><i class="cooking-smoke"></i><i class="fireflies"></i><i class="lamp-glow"></i></div>
+            <div class="shot-callout" id="shot-callout"></div>
+            <div class="soul-tooltip hidden" id="gem-tooltip"></div>
+          </div>
+          <div class="ambient-note" id="ambient-note" aria-live="polite"></div>
+          <div class="instruction" id="instruction">
+            Click the baseline to place. Pull backwards from the striker and release.
+          </div>
+          <div class="aim-readout" id="aim-readout" aria-live="polite">Move the aim line over a coin to inspect the first contact.</div>
+          <div class="shot-controls" id="shot-controls">
+            <label>POWER <strong id="power-value">20%</strong></label>
+            <div class="power-track" id="power-track" role="slider" aria-label="Shot power" aria-valuemin="15" aria-valuemax="100" aria-valuenow="65" tabindex="0"><i class="perfect-zone"></i><div id="power-fill"></div><b id="power-handle"></b></div>
+            <label class="spin-label">SPIN <strong id="spin-value">CENTRE</strong></label>
+            <div class="spin-track" id="spin-track" role="slider" aria-label="Striker contact point" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0" tabindex="0"><i></i><b id="spin-handle"></b></div>
+            <button class="control-mode" id="control-mode" type="button">AIM MODE</button>
+            <button id="strike-button" type="button">STRIKE <span>SPACE</span></button>
+          </div>
+          <section class="score-receipt" id="score-receipt" aria-live="polite">
+            <div class="panel-label">LAST SHOT</div>
+            <div class="last-shot" id="last-shot"><span>Your score will be explained here.</span></div>
+          </section>
+
+          <button class="run-inspector" id="details-button" type="button">ⓘ RUN DETAILS</button>
+        </section>
+      </main>
+    </div>
+
+    <div class="details-backdrop hidden" id="details-modal" role="dialog" aria-modal="true" aria-labelledby="details-title">
+      <div class="details-shell">
+        <header><div><p class="eyebrow">CURRENT RUN</p><h2 id="details-title">Run Details</h2></div><button class="tutorial-close" id="details-close" type="button">CLOSE ×</button></header>
+        <div class="inspector-grid">
+              <section class="panel">
+                <div class="panel-label">STRIKER</div>
+                <div id="striker-list" class="striker-list"></div>
+              </section>
+              <section class="panel rival-panel" id="rival-panel">
+                <div class="panel-label">RIVAL RULE</div>
+                <strong id="rival-title">THE NAGA</strong>
+                <p id="rival-trait"></p>
+              </section>
+              <section class="panel mastery-panel">
+                <div class="panel-label">RAGAS</div>
+                <div id="shot-levels" class="shot-levels"></div>
+              </section>
+              <section class="panel strategy-panel">
+                <div class="panel-label">BOARD</div>
+                <div class="colour-line" id="colour-line">YOU · IVORY / RIVAL · ONYX</div>
+                <div class="boss-rule hidden" id="boss-rule"></div>
+                <div class="venue-rule" id="venue-rule"></div>
+                <div class="pressure-line"><span>Marked coins</span><strong id="seasoned">0</strong></div>
+                <div class="pressure-line"><span>Coins remaining</span><strong id="remaining">13</strong></div>
+                <div class="pressure-line"><span>Difficulty</span><strong id="difficulty-readout">Adept</strong></div>
+                <div class="pressure-line"><span>Aim assistance</span><strong id="assistance-readout">Standard</strong></div>
+                <div class="pressure-line"><span>Seeded formation</span><strong id="formation-readout">Mandala</strong></div>
+                <div class="pressure-line"><span>Open Rangolis</span><strong id="rangoli-readout">0</strong></div>
+              </section>
+              <section class="panel legend-panel">
+                <div class="panel-label">COIN MARKS</div>
+                <div><b>○</b><span>Plain — base Power</span></div>
+                <div><b>¤</b><span>Gold — earns Gold</span></div>
+                <div><b>✦</b><span>Spark — rewards chains</span></div>
+                <div><b>◉</b><span>Echo — copies a coin</span></div>
+                <div><b>◆</b><span>Heavy — rewards banks</span></div>
+                <div><b>◇</b><span>Glass — high Power once</span></div>
+                <div><b>♛</b><span>Queen — rewards a Royal</span></div>
+              </section>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="modal">
+      <div class="modal-card">
+        <p class="eyebrow" id="modal-kicker">BEGIN A RUN</p>
+        <h2 id="modal-title">Choose your order</h2>
+        <p id="modal-copy">Your order sets the first rule of your run.</p>
+        <div class="run-options hidden" id="run-options">
+          <div>
+            <span class="card-type">STAKES</span>
+            <button type="button" data-stake="club">APPRENTICE</button>
+            <button type="button" data-stake="district" class="active">ADEPT</button>
+            <button type="button" data-stake="grandmaster">MASTER</button>
+            <button type="button" data-stake="ascetic">ASCETIC</button>
+          </div>
+          <div>
+            <span class="card-type">AIM ASSISTANCE</span>
+            <button type="button" data-assistance="guided">GUIDED</button>
+            <button type="button" data-assistance="standard" class="active">STANDARD</button>
+            <button type="button" data-assistance="raw">UNASSISTED</button>
+          </div>
+          <div>
+            <span class="card-type">SIDE</span>
+            <button type="button" data-suit="ivory" class="active">IVORY</button>
+            <button type="button" data-suit="onyx">ONYX</button>
+          </div>
+          <button type="button" id="daily-button">RANDOM RUN</button>
+          <button type="button" id="starter-help">HOW TO PLAY</button>
+        </div>
+        <div class="shop-guide hidden" id="shop-guide">
+          <strong>BETWEEN ROUNDS</strong>
+          <span>1. Buy Charms and Strikers</span>
+          <span>2. Pick three inner-ring coins</span>
+          <span>3. Start the next round</span>
+        </div>
+        <div class="shop-section-label hidden" id="shop-section-label">BAZAAR · TAP A CARD TO BUY</div>
+        <div class="choice-grid" id="choice-grid"></div>
+        <div class="rack-builder hidden" id="rack-builder">
+          <div class="rack-builder-head">
+            <div>
+              <span class="card-type">NEXT ROUND · INNER RING</span>
+              <p>These coins start closest to the centre. Pick three, or tap Auto.</p>
+            </div>
+            <button class="secondary-button" id="rack-auto" type="button">AUTO</button>
+          </div>
+          <div class="rack-slots" id="rack-slots"></div>
+          <div class="rack-reserve" id="rack-reserve"></div>
+        </div>
+        <div class="shop-inventory hidden" id="shop-inventory"></div>
+        <div class="modal-actions">
+          <button class="secondary-button hidden" id="skip-button">REFUSE RIVAL</button>
+          <button class="secondary-button hidden" id="reroll-button">REROLL · 3 GOLD</button>
+          <button class="primary-button hidden" id="modal-button">BEGIN RUN</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tutorial-backdrop hidden" id="tutorial-modal" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
+      <div class="tutorial-shell">
+        <header class="tutorial-header">
+          <div>
+            <p class="eyebrow">HOW TO PLAY</p>
+            <div class="tutorial-progress" id="tutorial-progress">1 / 7</div>
+          </div>
+          <button class="tutorial-close" id="tutorial-close" type="button" aria-label="Close tutorial">SKIP ×</button>
+        </header>
+        <div class="tutorial-body">
+          <div class="tutorial-visual" id="tutorial-visual"></div>
+          <div class="tutorial-copy">
+            <p class="tutorial-kicker" id="tutorial-kicker"></p>
+            <h2 id="tutorial-title"></h2>
+            <div id="tutorial-content"></div>
+          </div>
+        </div>
+        <footer class="tutorial-footer">
+          <button class="secondary-button" id="tutorial-back" type="button">← BACK</button>
+          <div class="tutorial-dots" id="tutorial-dots"></div>
+          <button class="primary-button" id="tutorial-next" type="button">NEXT →</button>
+        </footer>
+      </div>
+    </div>
+
+  </body>
+</html>

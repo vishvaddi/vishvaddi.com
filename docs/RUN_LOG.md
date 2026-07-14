@@ -1,5 +1,11 @@
 # Run Log
 
+## 2026-07-15 — Carromancy site integration
+
+- Added Carromancy to the public Games index.
+- Embedded its path-portable production build at `/games/carromancy/`.
+- Excluded the large game bundle from the global service-worker precache so it loads on demand.
+
 ## 2026-07-11 — Big 2 mode split and roguelike foundation
 
 - Added Standard, Roguelike and Daily mode selection to Big 2.

@@ -1,9 +1,11 @@
 # Project State
 
-_Last updated: 2026-07-11 — Big 2 now has Standard mode as the default and opt-in Roguelike/Daily modes for ongoing development._
+_Last updated: 2026-07-15 — Carromancy is published as a self-contained game under the main site._
 
 ## Current Position
 
+- `/games/carromancy/` hosts the production Carromancy build and is listed on `/games`.
+- Carromancy remains developed in its own `vishvaddi/carromancy` repository; the site carries a built snapshot under `public/games/carromancy/`.
 - `src/pages/games/big2.astro` hosts the Big 2 UI.
 - `public/scripts/big2.js` contains the full browser game logic.
 - Standard mode is the default: one classic Big 2 deal, win/loss record, no run economy.
@@ -12,6 +14,7 @@ _Last updated: 2026-07-11 — Big 2 now has Standard mode as the default and opt
 
 ## Next Actions
 
+- Playtest Carromancy on the live domain across mouse and landscape touch, then tune cushion restitution and spin against filmed real-board references.
 - Play 5-10 real Roguelike runs and tune target curve, coin rewards and Charm prices.
 - Add a visible post-run summary card once enough balance feedback exists.
 - Decide whether feedback packets should stay copy/email-only or post to a lightweight backend.

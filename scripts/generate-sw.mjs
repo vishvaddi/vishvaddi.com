@@ -13,6 +13,7 @@ const { count, size, warnings } = await generateSW({
     "og/**", // social-card PNGs — only scrapers need them
     "pagefind/**", // future-proof: never precache a search index wholesale
     "games/deep-swarm/**", // ~500 KB game — load on demand, don't bloat the precache
+    "games/carromancy/**", // audio + card art are loaded only when the game opens
   ],
   swDest: "dist/sw.js",
   // Single self-contained file: no separate workbox-*.js runtime chunk, so
