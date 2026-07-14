@@ -525,8 +525,8 @@ let musicBus = null, sfxBus = null;
 // Melodic layer = Stellardrone (CC-BY — credit on the title screen). Wonder
 // over the drone bed; corruption drowning the melody is the design.
 const MUSIC = {
-    title:    { bed: 'bed_signal',       beats: ['amb_lightyears'] },
-    sunlight: { bed: 'bed_signal',       beats: ['amb_airglow', 'amb_comethalley'] },
+    title:    { bed: 'bed_hold',         beats: ['amb_lightyears'] },
+    sunlight: { bed: null,               beats: ['amb_airglow', 'amb_comethalley'] },
     twilight: { bed: 'bed_tundra',       beats: ['amb_cepheid', 'amb_maianebula'] },
     midnight: { bed: 'bed_hold',         beats: ['amb_udf', 'amb_heliopause'] },
     abyssal:  { bed: 'bed_wind',         beats: ['amb_infinitevoid', 'amb_eternity'] },
@@ -579,7 +579,7 @@ async function startMusicSlot(slot) {
     _music.slot = slot;
     const def = MUSIC[slot];
     if (!def) { _music.switching = false; return; }
-    const wanted = [{ name: def.bed, vol: 0.55, kind: 'bed' }];
+    const wanted = def.bed ? [{ name: def.bed, vol: 0.55, kind: 'bed' }] : [];
     const beat = beatFor(slot);
     if (beat) wanted.push({ name: beat, vol: 0.34, kind: 'beat' });
     for (const wtd of wanted) {
@@ -857,30 +857,9 @@ let heartbeatInterval = null;
 
 function startAmbient() {
     if (!audioCtx || ambientPads.length > 0) return;
-    // 3-layer pad: root, fifth, octave — all through underwater filter
-    const notes = [55, 82.5, 110]; // A1, E2, A2 — deep, cavernous
-    for (const freq of notes) {
-        const o = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        const lfo = audioCtx.createOscillator(); // slow tremolo
-        const lfoGain = audioCtx.createGain();
-        o.type = 'sine'; o.frequency.value = freq;
-        g.gain.value = 0.02;
-        lfo.type = 'sine'; lfo.frequency.value = 0.15 + Math.random() * 0.1;
-        lfoGain.gain.value = 0.008;
-        lfo.connect(lfoGain); lfoGain.connect(g.gain);
-        o.connect(g); g.connect(underwaterFilter);
-        o.start(); lfo.start();
-        ambientPads.push({ osc: o, gain: g, lfo, baseFreq: freq });
-    }
-    // Sub bass
-    const sub = audioCtx.createOscillator();
-    const subG = audioCtx.createGain();
-    sub.type = 'triangle'; sub.frequency.value = 27.5; // A0
-    subG.gain.value = 0.015;
-    sub.connect(subG); subG.connect(underwaterFilter);
-    sub.start();
-    ambientPads.push({ osc: sub, gain: subG, baseFreq: 27.5 });
+    // The old 3-note pad chord + sub are GONE (2026-07-16): they pitch-slid
+    // with depth against fixed-key Stellardrone — Vish's "weird glitchy
+    // soundloop". Real music owns the tonal field now; only the engine stays.
 
     // ENGINE RUMBLE — continuous low growl. Pulses with movement.
     // Two layered detuned sawtooths through a low-pass. Hooked up to a separate gain node we can modulate per-frame.
@@ -918,14 +897,9 @@ function updateAmbient() {
             pad.oscB.frequency.value = baseFreq + 3;
             // Filter opens slightly with movement (engine "spools up")
             pad.filter.frequency.value = 180 + moveT * 120;
-        } else {
-            pad.osc.frequency.value = pad.baseFreq * (1 - depthPct * 0.3);
-            pad.gain.gain.value = 0.015 + depthPct * 0.02;
         }
     }
-    if (underwaterFilter) {
-        underwaterFilter.frequency.value = 2000 - depthPct * 1200;
-    }
+    // (underwater filter depth-EQ now owned by updateMusic — one writer)
 }
 
 function startHeartbeat() {
