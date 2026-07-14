@@ -660,6 +660,29 @@ export default {
       }
     }
 
+    // Last Cast's Godot wasm exceeds the 25MiB asset cap raw — stored gzipped,
+    // served with Content-Encoding so the browser inflates it transparently.
+    {
+      const url = new URL(request.url);
+      if (url.pathname === "/games/last-cast/index.wasm") {
+        const gz = await env.ASSETS.fetch(new Request(new URL("/games/last-cast/index.wasm.gz", url).toString(), request));
+        if (gz.ok) {
+          // encodeBody:"manual" — Workers otherwise treats the body as plain
+          // and strips the Content-Encoding, handing the browser raw gzip
+          // bytes (wasm magic 1f 8b error).
+          return new Response(gz.body, {
+            status: 200,
+            encodeBody: "manual",
+            headers: {
+              "Content-Type": "application/wasm",
+              "Content-Encoding": "gzip",
+              "Cache-Control": "public, max-age=3600",
+            },
+          } as ResponseInit);
+        }
+      }
+    }
+
     // Everything else: serve the built site.
     return env.ASSETS.fetch(request);
   },
