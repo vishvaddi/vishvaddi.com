@@ -549,7 +549,7 @@ function musicBuffer(name) {
 function musicSlot() {
     if (phase === 'title' || phase === 'shop' || phase === 'workshop' || phase === 'modules' ||
         phase === 'contracts' || phase === 'codex' || phase === 'cards' || phase === 'mooring' ||
-        phase === 'intro' || phase === 'tutorial' || phase === 'puzzle') return 'title';
+        phase === 'intro' || phase === 'tutorial' || phase === 'puzzle' || phase === 'patch') return 'title';
     if (!game || (phase !== 'playing' && phase !== 'paused' && phase !== 'levelup' && phase !== 'event' && phase !== 'gameover')) return null;
     if (game.moon === 'p3') return 'p3';
     const d = game.depth || 0;
@@ -657,7 +657,7 @@ function nextBeatCandidate() {
 }
 
 // --- Sampled SFX (pack one-shots; the procedural engine stays for the rest) ---
-const SFX_SAMPLES = { glitch1: 'sfx_glitch1', glitch2: 'sfx_glitch2', ui: 'sfx_ui', impact: 'sfx_impact', stinger: 'sfx_stinger', tear: 'sfx_tear' };
+const SFX_SAMPLES = { glitch1: 'sfx_glitch1', glitch2: 'sfx_glitch2', ui: 'sfx_ui', impact: 'sfx_impact', stinger: 'sfx_stinger', tear: 'sfx_tear', salvage: 'sfx_salvage', squelch1: 'sfx_squelch1', squelch2: 'sfx_squelch2', clank: 'sfx_clank' };
 function playSample(key, vol = 0.5, rate = 1) {
     if (!audioCtx || !SFX_SAMPLES[key]) return;
     musicBuffer(SFX_SAMPLES[key]).then(buf => {
@@ -841,6 +841,8 @@ function sfxEnemyDeath(typeId) {
     const isBig = (typeId === 'leviathan' || typeId === 'kraken' || typeId === 'dreadnought' || typeId === 'abyssal_maw');
     if (!isBig && now - _lastDeathSfx < 0.05) return;
     _lastDeathSfx = now;
+    if (isBig) playSample('tear', 0.5, 0.9 + Math.random() * 0.2);
+    else if (Math.random() < 0.35) playSample(Math.random() < 0.5 ? 'squelch1' : 'squelch2', 0.16, 0.8 + Math.random() * 0.5);
     if (typeId === 'jellyfish') { playTone(400, 0.08, 'sine', 0.04); }
     else if (typeId === 'piranha') { noiseBurst(0.04, 0.05, 1500); }
     else if (typeId === 'squid') { playTone(150, 0.15, 'sine', 0.05); }
@@ -1536,6 +1538,11 @@ const EVENT_DEFS = [
             } },
             { text: '[2] STAY CLEAR — respect the table', fn: g => { g.player.xp += 20; addNereidLog(g, 'Wise. Half the codex is written from the stomachs of the other half.'); } },
         ], noChoice: g => {} },
+    { id: 'hull_breach', minWave: 5, title: 'HULL BREACH', text: 'Seam failure aft. Water in the hull. Seconds matter.',
+        choices: [
+            { text: '[1] PATCH IT — hands on the plate (minigame)', fn: g => { openPatch(); } },
+            { text: '[2] SEAL THE COMPARTMENT — lose the space', fn: g => { g.player.maxHp = Math.max(40, g.player.maxHp - 12); g.player.hp = Math.min(g.player.hp, g.player.maxHp); addNereidLog(g, 'Compartment sealed. Smaller boat now. Still a boat.'); } },
+        ], noChoice: g => { g._leakT = 8; } },
     { id: 'junction_fault', minWave: 3, title: 'ELECTRICAL FAULT', text: 'Junction box fouled. Weapons browning out.',
         choices: [
             { text: '[1] REPAIR — hands-on rewiring (minigame)', fn: g => { g._puzzleReward = 'battery'; openPuzzle(); } },
@@ -3750,6 +3757,7 @@ function updateWreckInteraction(g, dt) {
         g.salvageHoldTime = (g.salvageHoldTime || 0) + dt * (p._salvageSpd || 1);
         if (g.salvageHoldTime >= 1.5) {
             g.nearestWreck.salvaged = true;
+            playSample('salvage', 0.5, 0.95 + Math.random() * 0.1);
             g.nearestWreck.loot.give(g);
             g._salvageCompleted = (g._salvageCompleted || 0) + 1;
             const wr = g.nearestWreck;
@@ -4355,6 +4363,7 @@ function update(dt) {
         - dt * (g.silent ? 1.1 : 0.35)));
     updateVolumes(g, dt, p);
     updateDeployables(g, dt, p);
+    if (g._leakT > 0) { g._leakT -= dt; p.hp -= 2.2 * dt; if (Math.random() < dt * 3) g.floatingTexts.push({ x: p.x + (Math.random() - 0.5) * 30, y: p.y - 14, text: '≈', color: '#5AB0DA', life: 0.8, vy: -34 }); }
     // VESTIBULAR FAULT — at 85+ MIND, the inner ear lies: controls invert for
     // 2s after a 0.8s warning. Corruption is now a thing you FEEL in the hands.
     const _corrP = p.corruption || 0;
@@ -4513,6 +4522,7 @@ function update(dt) {
                     p.iFrames = Math.max(p.iFrames, 0.4);
                     g.shake = Math.max(g.shake || 0, 4);
                     g.floatingTexts.push({ x: p.x, y: p.y - 20, text: `-${dmg} IMPACT`, color: '#FF9060', life: 1.2, vy: -24 });
+                    playSample('clank', Math.min(0.5, 0.2 + dmg * 0.04), 0.85 + Math.random() * 0.3);
                     noiseBurst(0.35, 0.09, 420);
                     g.noise = Math.min(2.5, (g.noise || 0) + 0.25);
                 }
@@ -6472,7 +6482,7 @@ function draw() {
     // registered in virtual coordinates; hitTapZone divides by MENU_S.
     const MENU_DRAWS = {
         title: drawTitle, intro: drawIntro, shop: drawShop, workshop: drawWorkshop,
-        modules: drawModules, contracts: drawContracts, puzzle: drawPuzzle,
+        modules: drawModules, contracts: drawContracts, puzzle: drawPuzzle, patch: drawPatch,
         cards: drawCardDraft, codex: drawCodex, tutorial: drawTutorial,
     };
     // Round 4/5: title + card draft + contracts get REAL mobile layouts — the
@@ -10871,6 +10881,81 @@ function _puzzleToggle(grid, i) {
     if (c < 2) idxs.push(i + 1);
     for (const j of idxs) grid[j] = !grid[j];
 }
+// HULL BREACH — the second minigame: a timed patch sequence. Realistic sub
+// failure, hands-on fix: hit the shown thruster keys before the water wins.
+let patchState = null;
+function openPatch() {
+    const keys4 = ['w', 'a', 's', 'd'];
+    patchState = {
+        seq: Array.from({ length: 5 }, () => keys4[Math.floor(Math.random() * 4)]),
+        idx: 0, deadline: Date.now() + 1600, window: 1600, failed: false, done: false,
+    };
+    phase = 'patch';
+}
+function pressPatch(k) {
+    if (!patchState || patchState.done || patchState.failed) return;
+    if (k === patchState.seq[patchState.idx]) {
+        patchState.idx++;
+        playTone(500 + patchState.idx * 90, 0.08, 'sine', 0.09);
+        if (patchState.idx >= patchState.seq.length) {
+            patchState.done = true;
+            if (game) { addNereidLog(game, 'Patch holding. Textbook hands, Pilot.'); game.streak = 'BREACH SEALED'; game.streakTimer = 2; }
+            playSample('salvage', 0.5);
+            setTimeout(() => { if (phase === 'patch') phase = 'playing'; }, 900);
+        } else {
+            patchState.deadline = Date.now() + patchState.window;
+        }
+    } else {
+        failPatch();
+    }
+}
+function failPatch() {
+    if (!patchState || patchState.done || patchState.failed) return;
+    patchState.failed = true;
+    if (game) {
+        game._leakT = 8;   // water keeps coming until it equalises
+        addNereidLog(game, 'Patch slipped. We are taking water — ride it out or surface.');
+        game.streak = 'BREACH — TAKING WATER'; game.streakTimer = 2.5;
+    }
+    noiseBurst(0.8, 0.1, 250);
+    setTimeout(() => { if (phase === 'patch') phase = 'playing'; }, 900);
+}
+function drawPatch(w, h) {
+    if (!patchState) { phase = 'playing'; return; }
+    // Timeout check lives here — the draw loop always runs, update() doesn't in menus
+    if (!patchState.done && !patchState.failed && Date.now() > patchState.deadline) failPatch();
+    ctx.fillStyle = 'rgba(2,6,14,0.9)'; ctx.fillRect(0, 0, w, h);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#FF7060'; ctx.font = 'bold 22px monospace';
+    ctx.fillText('HULL BREACH', w / 2, h / 2 - 110);
+    ctx.fillStyle = '#9AB0C0'; ctx.font = '12px monospace';
+    ctx.fillText('Brace the patch — hit the thruster keys IN ORDER before the water wins.', w / 2, h / 2 - 86);
+    const KEY_LABEL = { w: '▲ W', a: '◀ A', s: '▼ S', d: '▶ D' };
+    const cellW2 = 64, gap2 = 14;
+    const totalW2 = patchState.seq.length * (cellW2 + gap2) - gap2;
+    let kx = w / 2 - totalW2 / 2;
+    for (let i = 0; i < patchState.seq.length; i++) {
+        const done = i < patchState.idx;
+        const cur = i === patchState.idx && !patchState.done && !patchState.failed;
+        ctx.fillStyle = done ? '#0E3020' : cur ? '#1A2A3A' : '#0A121C';
+        ctx.beginPath(); ctx.roundRect(kx, h / 2 - 50, cellW2, 64, 8); ctx.fill();
+        ctx.strokeStyle = done ? '#4AE0A0' : cur ? '#5ADFCF' : '#22303C'; ctx.lineWidth = cur ? 2.5 : 1;
+        ctx.beginPath(); ctx.roundRect(kx, h / 2 - 50, cellW2, 64, 8); ctx.stroke();
+        ctx.fillStyle = done ? '#4AE0A0' : cur ? '#FFF' : '#46586A'; ctx.font = 'bold 18px monospace';
+        ctx.fillText(KEY_LABEL[patchState.seq[i]], kx + cellW2 / 2, h / 2 - 12);
+        if (cur) addTapZone(kx, h / 2 - 50, cellW2, 64, patchState.seq[i]);   // tap the lit key on touch
+        kx += cellW2 + gap2;
+    }
+    if (!patchState.done && !patchState.failed) {
+        const frac = Math.max(0, (patchState.deadline - Date.now()) / patchState.window);
+        ctx.fillStyle = '#141C24'; ctx.fillRect(w / 2 - 150, h / 2 + 38, 300, 10);
+        ctx.fillStyle = frac > 0.4 ? '#5ADFCF' : '#FF7060'; ctx.fillRect(w / 2 - 150, h / 2 + 38, 300 * frac, 10);
+    } else {
+        ctx.fillStyle = patchState.done ? '#4AE0A0' : '#FF7060'; ctx.font = 'bold 16px monospace';
+        ctx.fillText(patchState.done ? 'SEALED' : 'TAKING WATER', w / 2, h / 2 + 52);
+    }
+}
+
 function openPuzzle() {
     puzzleGrid = new Array(9).fill(true);
     let n = 4 + Math.floor(Math.random() * 4);
@@ -11676,6 +11761,11 @@ window.addEventListener('keydown', e => {
             } else if (audioCtx) playTone(120, 0.1, 'square', 0.04);
             saveMeta();
         }
+        return;
+    }
+    if (phase === 'patch') {
+        const k = e.key.toLowerCase();
+        if (k === 'w' || k === 'a' || k === 's' || k === 'd') pressPatch(k);
         return;
     }
     if (phase === 'puzzle') {
