@@ -900,6 +900,7 @@ window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 // Mouse click — menu tap zones on UI screens; manual ping during play
 canvas.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
+    initAudio();   // desktop mouse is a valid first gesture — music from the title, not from [Enter]
     if (phase !== 'playing') {
         const rect = canvas.getBoundingClientRect();
         const z = hitTapZone(e.clientX - rect.left, e.clientY - rect.top);
