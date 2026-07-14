@@ -4388,7 +4388,7 @@ function getTouchButtons(w, h) {
         { id: 'light',  x: w - 122, y: h - 250, r: 22, label: 'LAMP', color: '#FFD040', active: game.lightOn !== false },
     ];
     if (game.nearestWreck) bs.push({ id: 'salvage', x: w - 122, y: h - 180, r: 26, label: 'GRAB', color: '#80FFA0', hold: true });
-    if (!game.ascending && game.depth > 200) bs.push({ id: 'ascend', x: 60, y: h - 215, r: 24, label: (game._ascendArm || 0) > 0 ? 'SURE?' : 'RISE', color: '#80FFA0', active: (game._ascendArm || 0) > 0 });
+    if (!game.ascending && game.depth > 200) bs.push({ id: 'ascend', x: w - 185, y: h - 245, r: 24, label: (game._ascendArm || 0) > 0 ? 'SURE?' : 'RISE', color: '#80FFA0', active: (game._ascendArm || 0) > 0 });
     return bs;
 }
 let touchSalvageId = -1;   // touch identifier currently holding GRAB
@@ -10735,10 +10735,10 @@ function drawDeathScreen(w, h, g) {
         ctx.fillText('HULL BREACH — DSV NEREID-II LOST', w / 2, h / 2 - 72);
     }
 
-    // Stats (compact, two columns)
+    // Stats (compact, two columns; larger on phones)
     const mins = Math.floor(g.runTime / 60);
     const secs = Math.floor(g.runTime % 60);
-    ctx.font = '11px monospace';
+    ctx.font = (touchUI() && Math.min(w, h) < 520 ? '13px' : '11px') + ' monospace';
     const leftStats = [
         { label: 'TIME', value: `${mins}:${secs.toString().padStart(2, '0')}` },
         { label: 'WAVE', value: g.wave },
@@ -10778,24 +10778,37 @@ function drawDeathScreen(w, h, g) {
         ctx.fillText(`${100 - pct}m to ${getDepthPalette(nextZone).zone} ZONE`, w / 2, h / 2 + 50);
     }
 
-    // Buttons
-    ctx.fillStyle = '#1a2a3a';
-    ctx.fillRect(w / 2 - 100, h / 2 + 100, 200, 40);
-    ctx.strokeStyle = '#5ADFCF';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(w / 2 - 100, h / 2 + 100, 200, 40);
-    ctx.fillStyle = '#FFF';
-    ctx.font = 'bold 14px monospace';
-    ctx.fillText('RETURN TO BASE [Enter]', w / 2, h / 2 + 125);
-
-    ctx.fillStyle = '#1a2a3a';
-    ctx.fillRect(w / 2 - 100, h / 2 + 150, 200, 40);
-    ctx.strokeStyle = '#DAA520';
-    ctx.strokeRect(w / 2 - 100, h / 2 + 150, 200, 40);
-    ctx.fillStyle = '#DAA520';
-    ctx.fillText('UPGRADES [U]', w / 2, h / 2 + 175);
-    addTapZone(w / 2 - 100, h / 2 + 100, 200, 40, 'Enter');
-    addTapZone(w / 2 - 100, h / 2 + 150, 200, 40, 'u');
+    // Buttons — on phones: side by side, big thumb targets, safely on-screen
+    const mob = touchUI() && Math.min(w, h) < 520;
+    if (mob) {
+        const bw2 = Math.min(240, w / 2 - 30), bh2 = 52, byM = h - bh2 - 14;
+        ctx.font = 'bold 16px monospace';
+        ctx.fillStyle = '#1a2a3a'; ctx.fillRect(w / 2 - bw2 - 8, byM, bw2, bh2);
+        ctx.strokeStyle = '#5ADFCF'; ctx.lineWidth = 2; ctx.strokeRect(w / 2 - bw2 - 8, byM, bw2, bh2);
+        ctx.fillStyle = '#FFF'; ctx.fillText('RETURN TO BASE', w / 2 - bw2 / 2 - 8, byM + 33);
+        ctx.fillStyle = '#1a2a3a'; ctx.fillRect(w / 2 + 8, byM, bw2, bh2);
+        ctx.strokeStyle = '#DAA520'; ctx.strokeRect(w / 2 + 8, byM, bw2, bh2);
+        ctx.fillStyle = '#DAA520'; ctx.fillText('UPGRADES', w / 2 + bw2 / 2 + 8, byM + 33);
+        addTapZone(w / 2 - bw2 - 8, byM, bw2, bh2, 'Enter');
+        addTapZone(w / 2 + 8, byM, bw2, bh2, 'u');
+    } else {
+        ctx.fillStyle = '#1a2a3a';
+        ctx.fillRect(w / 2 - 100, h / 2 + 100, 200, 40);
+        ctx.strokeStyle = '#5ADFCF';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(w / 2 - 100, h / 2 + 100, 200, 40);
+        ctx.fillStyle = '#FFF';
+        ctx.font = 'bold 14px monospace';
+        ctx.fillText('RETURN TO BASE [Enter]', w / 2, h / 2 + 125);
+        ctx.fillStyle = '#1a2a3a';
+        ctx.fillRect(w / 2 - 100, h / 2 + 150, 200, 40);
+        ctx.strokeStyle = '#DAA520';
+        ctx.strokeRect(w / 2 - 100, h / 2 + 150, 200, 40);
+        ctx.fillStyle = '#DAA520';
+        ctx.fillText('UPGRADES [U]', w / 2, h / 2 + 175);
+        addTapZone(w / 2 - 100, h / 2 + 100, 200, 40, 'Enter');
+        addTapZone(w / 2 - 100, h / 2 + 150, 200, 40, 'u');
+    }
 }
 
 // =====================================================================
