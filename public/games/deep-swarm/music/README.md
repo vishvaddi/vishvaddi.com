@@ -6,7 +6,9 @@ a missing file fails silent (game never breaks over audio).
 ## Current sources (owned packs, royalty-free, no attribution required)
 
 - `bed_*` — Shapeforms Audio "Dystopia – Ambience and Drone" free pack (license PDF in the pack folder, Downloads)
-- `amb_*` — **Stellardrone** (Light Years / Invent the Universe, CC-BY 3.0 via archive.org) — the melodic wonder layer. Credit "music: Stellardrone — CC-BY" is on both title screens.
+- `pc_*` — **Purrple Cat** via Pixabay (Vish's pick, 16/07) — Pixabay Content Licence: commercial OK, NO attribution needed. Ocean EP (low tide/seashells/heart of the ocean/underwater cavern/drifting) + dark set (dark forest/ghost town/stranded/silent wood/a place to hide/mystic mountain/discovery).
+- `sfx_ping/torpedo/explode/implode/dash/levelup/growl*/killconfirm/harpoon/zap/alert` — Shapeforms Sci Fi Weapons + Future UI + Fly By + Arcane packs (sci-fi SFX pass, 16/07). All play via sampleOr() with procedural fallback.
+- (Stellardrone amb_* removed 16/07 — re-downloadable from archive.org if ever wanted.)
 - `beat_*` — Epic Stock Media "Hybrid Game" Music_Loops (retired from default slots 16/07 — Vish: "glitchy"; files kept as spares)
 - `sfx_glitch*`, `sfx_ui`, `sfx_impact`, `sfx_stinger`, `sfx_tear` — Shapeforms free packs (Glitch and Noise / Future UI / Hit and Punch / Dystopia)
 

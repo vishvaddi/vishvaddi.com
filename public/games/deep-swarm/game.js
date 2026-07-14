@@ -310,11 +310,15 @@ function initAudio() {
     musicBus.connect(underwaterFilter);
     // Wet path: source -> underwaterFilter -> reverbNode -> wetGain -> destination (QUIET)
     const wetGain = audioCtx.createGain();
-    wetGain.gain.value = 0.12; // only 12% wet — subtle tail, not cathedral
+    wetGain.gain.value = 0.2;  // deeper wet mix — the room is an ocean
     underwaterFilter.connect(reverbNode);
     reverbNode.connect(wetGain);
     wetGain.connect(audioCtx.destination);
     applyVolume(); // Feature 1: apply saved volume on init
+    // Warm the one-shot cache so the first ping/dash isn't silent
+    for (const k of ['ping', 'dash', 'torpedo', 'explode', 'ui', 'impact', 'clank']) {
+        if (SFX_SAMPLES[k]) musicBuffer(SFX_SAMPLES[k]);
+    }
 }
 
 function playTone(freq, dur, type = 'sine', vol = 0.15) {
@@ -587,17 +591,18 @@ function drawVolumes(g) {
 // candidates for the current slot; the pick persists per slot.
 // =====================================================================
 let musicBus = null, sfxBus = null;
-// MUSIC DISABLED 2026-07-16 (Vish is sourcing his own tracks — drop OGGs in
-// music/, list them here, flip MUSIC_ENABLED). SFX + engine rumble unaffected.
-const MUSIC_ENABLED = false;
+// Soundtrack: Purrple Cat via Pixabay (Vish's pick — Pixabay licence, no
+// attribution required). Lo-fi leads; the Dystopia beds seep in underneath
+// as the depth takes over. [N] in pause still auditions per-zone picks.
+const MUSIC_ENABLED = true;
 const MUSIC = {
-    title:    { bed: 'bed_hold',         beats: ['amb_lightyears'] },
-    sunlight: { bed: null,               beats: ['amb_airglow', 'amb_comethalley'] },
-    twilight: { bed: 'bed_tundra',       beats: ['amb_cepheid', 'amb_maianebula'] },
-    midnight: { bed: 'bed_hold',         beats: ['amb_udf', 'amb_heliopause'] },
-    abyssal:  { bed: 'bed_wind',         beats: ['amb_infinitevoid', 'amb_eternity'] },
-    hadal:    { bed: 'bed_heartbeat',    beats: ['amb_edgeforever'] },
-    p3:       { bed: 'bed_powerstation', beats: ['amb_palebluedot', 'amb_crystalspheres'] },
+    title:    { bed: null,               beats: ['pc_drifting'] },
+    sunlight: { bed: null,               beats: ['pc_lowtide', 'pc_seashells'] },
+    twilight: { bed: 'bed_tundra',       beats: ['pc_heartocean', 'pc_discovery'] },
+    midnight: { bed: 'bed_hold',         beats: ['pc_cavern', 'pc_darkforest'] },
+    abyssal:  { bed: 'bed_wind',         beats: ['pc_hide', 'pc_ghosttown'] },
+    hadal:    { bed: 'bed_heartbeat',    beats: ['pc_stranded', 'pc_silentwood'] },
+    p3:       { bed: 'bed_powerstation', beats: ['pc_mystic', 'pc_ghosttown'] },
 };
 const _musicBuf = {};
 let _music = { slot: null, layers: [], switching: false };
@@ -645,9 +650,9 @@ async function startMusicSlot(slot) {
     _music.slot = slot;
     const def = MUSIC[slot];
     if (!def) { _music.switching = false; return; }
-    const wanted = def.bed ? [{ name: def.bed, vol: 0.55, kind: 'bed' }] : [];
+    const wanted = def.bed ? [{ name: def.bed, vol: 0.34, kind: 'bed' }] : [];
     const beat = beatFor(slot);
-    if (beat) wanted.push({ name: beat, vol: 0.34, kind: 'beat' });
+    if (beat) wanted.push({ name: beat, vol: 0.5, kind: 'beat' });
     for (const wtd of wanted) {
         const buf = await musicBuffer(wtd.name);
         if (!buf || _music.slot !== slot) continue;   // file missing, or zone moved on mid-decode
@@ -723,7 +728,24 @@ function nextBeatCandidate() {
 }
 
 // --- Sampled SFX (pack one-shots; the procedural engine stays for the rest) ---
-const SFX_SAMPLES = { glitch1: 'sfx_glitch1', glitch2: 'sfx_glitch2', ui: 'sfx_ui', impact: 'sfx_impact', stinger: 'sfx_stinger', tear: 'sfx_tear', salvage: 'sfx_salvage', squelch1: 'sfx_squelch1', squelch2: 'sfx_squelch2', clank: 'sfx_clank' };
+const SFX_SAMPLES = {
+    glitch1: 'sfx_glitch1', glitch2: 'sfx_glitch2', ui: 'sfx_ui', impact: 'sfx_impact',
+    stinger: 'sfx_stinger', tear: 'sfx_tear', salvage: 'sfx_salvage',
+    squelch1: 'sfx_squelch1', squelch2: 'sfx_squelch2', clank: 'sfx_clank',
+    ping: 'sfx_ping', torpedo: 'sfx_torpedo', explode: 'sfx_explode', implode: 'sfx_implode',
+    dash: 'sfx_dash', levelup: 'sfx_levelup', growl1: 'sfx_growl1', growl2: 'sfx_growl2',
+    killconfirm: 'sfx_killconfirm', harpoon: 'sfx_harpoon', zap: 'sfx_zap', alert: 'sfx_alert',
+};
+// Sample if it's decoded, procedural fallback while it loads (or if missing) —
+// the sci-fi layer upgrades the mix without ever leaving silence.
+function sampleOr(key, vol, rate, fallbackFn) {
+    if (!audioCtx) return;
+    const name = SFX_SAMPLES[key];
+    const buf = name ? _musicBuf[name] : false;
+    if (buf && buf !== true) { playSample(key, vol, rate); return; }
+    if (name && buf === undefined) musicBuffer(name);   // warm for next time
+    if (fallbackFn) fallbackFn();
+}
 function playSample(key, vol = 0.5, rate = 1) {
     if (!audioCtx || !SFX_SAMPLES[key]) return;
     musicBuffer(SFX_SAMPLES[key]).then(buf => {
@@ -764,7 +786,9 @@ function sfxHit() {
 
 // Level up: ascending chime — 4 quick notes, clean
 function sfxLevelUp() {
-    [500, 650, 800, 1100].forEach((f, i) => setTimeout(() => playTone(f, 0.12, 'sine', 0.09), i * 50));
+    sampleOr('levelup', 0.42, 1, () => {
+        [500, 650, 800, 1100].forEach((f, i) => setTimeout(() => playTone(f, 0.12, 'sine', 0.09), i * 50));
+    });
 }
 
 // Death: hull breach — descending groan + metal stress + water rush
@@ -785,6 +809,9 @@ function sfxDeath() {
 // Sonar ping — softer, lower, classic sub-ping warmth instead of piercing whistle
 function sfxSonar() {
     if (!audioCtx) return;
+    sampleOr('ping', 0.32, 0.96 + Math.random() * 0.08, _sfxSonarProc);
+}
+function _sfxSonarProc() {
     const o = audioCtx.createOscillator(); const g2 = audioCtx.createGain();
     o.type = 'sine';
     o.frequency.setValueAtTime(620, audioCtx.currentTime);
@@ -817,8 +844,11 @@ function sfxTsunami() {
 
 // Torpedo launch: compressed air burst + whine
 function sfxTorpedo() {
-    noiseBurst(0.08, 0.07, 800); // air burst
     if (!audioCtx) return;
+    sampleOr('torpedo', 0.3, 0.85 + Math.random() * 0.2, _sfxTorpedoProc);
+}
+function _sfxTorpedoProc() {
+    noiseBurst(0.08, 0.07, 800); // air burst
     const o = audioCtx.createOscillator(); const g2 = audioCtx.createGain();
     o.type = 'sawtooth';
     o.frequency.setValueAtTime(200, audioCtx.currentTime);
@@ -832,15 +862,20 @@ function sfxTorpedo() {
 
 // Explosion: deep underwater boom — muffled, heavy, resonant
 function sfxExplosion() {
-    playTone(40, 0.3, 'sine', 0.1);
-    playTone(55, 0.25, 'square', 0.05);
-    noiseBurst(0.25, 0.07, 250);
+    sampleOr('explode', 0.4, 0.85 + Math.random() * 0.3, () => {
+        playTone(40, 0.3, 'sine', 0.1);
+        playTone(55, 0.25, 'square', 0.05);
+        noiseBurst(0.25, 0.07, 250);
+    });
 }
 
 // Dash: quick water displacement — whoosh
 // Dash — pressurized water release: short whoosh + sub-bass thump + ascending whistle
 function sfxDash() {
     if (!audioCtx) return;
+    sampleOr('dash', 0.34, 0.9 + Math.random() * 0.25, _sfxDashProc);
+}
+function _sfxDashProc() {
     // Whoosh — filtered noise burst, longer + louder
     noiseBurst(0.18, 0.10, 1800);
     // Thump (sub bass kick)
@@ -866,6 +901,8 @@ function sfxChainKill() {
     _lastChainSfx = now;
     // Single tone is enough — used to schedule 3 oscillators
     playTone(900, 0.05, 'sine', 0.06);
+    // Big chains earn the metallic kill-confirm stinger
+    if (game && game.scoreCombo && game.scoreCombo.chainCount >= 6 && Math.random() < 0.5) sampleOr('killconfirm', 0.3, 1);
 }
 
 // Revive (Death Defiance): pressure release + power-up sweep
@@ -885,6 +922,11 @@ function sfxRevive() {
 // Distant creature: low moan from the deep — barely audible, unnerving
 function sfxCreatureGrowl() {
     if (!audioCtx) return;
+    // Real creature vocalisations most of the time; the old synth moan as spice
+    if (Math.random() < 0.65) { sampleOr(Math.random() < 0.6 ? 'growl1' : 'growl2', 0.22, 0.7 + Math.random() * 0.45, _sfxGrowlProc); return; }
+    _sfxGrowlProc();
+}
+function _sfxGrowlProc() {
     const o = audioCtx.createOscillator(); const g2 = audioCtx.createGain();
     o.type = Math.random() < 0.5 ? 'sawtooth' : 'triangle';
     const baseF = 25 + Math.random() * 30;
@@ -907,7 +949,7 @@ function sfxEnemyDeath(typeId) {
     const isBig = (typeId === 'leviathan' || typeId === 'kraken' || typeId === 'dreadnought' || typeId === 'abyssal_maw');
     if (!isBig && now - _lastDeathSfx < 0.05) return;
     _lastDeathSfx = now;
-    if (isBig) playSample('tear', 0.5, 0.9 + Math.random() * 0.2);
+    if (isBig) { sampleOr('implode', 0.5, 0.95); setTimeout(() => playSample('tear', 0.4, 0.9 + Math.random() * 0.2), 250); }
     else if (Math.random() < 0.35) playSample(Math.random() < 0.5 ? 'squelch1' : 'squelch2', 0.16, 0.8 + Math.random() * 0.5);
     if (typeId === 'jellyfish') { playTone(400, 0.08, 'sine', 0.04); }
     else if (typeId === 'piranha') { noiseBurst(0.04, 0.05, 1500); }
@@ -2921,6 +2963,8 @@ function fireWeapons(g, dt) {
         w.cooldown = cd;
         // ECOLOGY: firing makes noise the deep can hear. Sonar loud, harpoon near-silent.
         if (g._modeCfg && g._modeCfg.ecology) g.noise = Math.min(2.5, (g.noise || 0) + (WEAPON_NOISE[w.id] ?? 0.4));
+        if (w.id === 'harpoon') sampleOr('harpoon', 0.22, 0.9 + Math.random() * 0.2);
+        else if (w.id === 'field' && Math.random() < 0.25) sampleOr('zap', 0.14, 0.8 + Math.random() * 0.4);
         const dmg = def.baseDmg * g.player.dmgMult * (1 + (w.level - 1) * 0.25);
         const area = def.baseArea * g.player.areaMult * (1 + (w.level - 1) * 0.1);
 
@@ -4522,7 +4566,10 @@ function update(dt) {
         if (g.depth > 500) playTone(25 + Math.random() * 20, 1.5, 'sawtooth', 0.03);
     }
     // Horror: heartbeat at low HP
-    if (p.hp / p.maxHp <= 0.3) startHeartbeat(); else stopHeartbeat();
+    const _lowHull = p.hp / p.maxHp <= 0.3;
+    if (_lowHull && !g._lowHullWarned) { g._lowHullWarned = true; sampleOr('alert', 0.4, 1); }
+    if (!_lowHull) g._lowHullWarned = false;
+    if (_lowHull) startHeartbeat(); else stopHeartbeat();
 
     // --- STAGED ONBOARDING (Portal): teach one mechanic in the moment it matters ---
     if (g.runTime > 1.5) maybeHint(g, 'move', 'WASD — thrusters  ·  SPACE — dash. The sub drifts. Plan ahead.');
