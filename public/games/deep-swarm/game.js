@@ -390,6 +390,96 @@ function spawnBiomePocket(g, p) {
     g._lastBiomeAt = g.runTime;
 }
 
+// The world that doesn't need you: fry schools that scatter from hunters,
+// migration columns on their own clock, carcasses that fall and draw crowds
+// whether or not anyone is watching.
+function updateFry(g, dt, p) {
+    if (!g.fry) g.fry = [];
+    g._fryT = (g._fryT || 0) + dt;
+    const B = g.worldBounds;
+    // Maintain ~2 resident schools
+    const schools = new Set(g.fry.map(f => f.school));
+    if (g._fryT > 8 && schools.size < 2) {
+        g._fryT = 0;
+        const sid = Math.random();
+        const sx2 = B.minX + Math.random() * (B.maxX - B.minX);
+        const sy2 = B.minY + Math.random() * (B.maxY - B.minY);
+        const hue2 = 160 + Math.random() * 100;
+        for (let i = 0; i < 14; i++) {
+            g.fry.push({ school: sid, x: sx2 + (Math.random() - 0.5) * 120, y: sy2 + (Math.random() - 0.5) * 120,
+                vx: 0, vy: 0, hue: hue2, life: 90 + Math.random() * 60 });
+        }
+    }
+    // Migration pulse — a column crosses the zone regardless of you
+    g._migT = (g._migT || 0) + dt;
+    if (g._migT > 70) {
+        g._migT = 0;
+        if (Math.random() < 0.45) {
+            const dir = Math.random() < 0.5 ? 1 : -1;
+            const my2 = B.minY + Math.random() * (B.maxY - B.minY);
+            for (let i = 0; i < 22; i++) {
+                g.fry.push({ school: 'mig' + g.runTime, x: (dir > 0 ? B.minX - 100 : B.maxX + 100) - dir * i * 26,
+                    y: my2 + (Math.random() - 0.5) * 90, vx: dir * (60 + Math.random() * 20), vy: 0,
+                    hue: 200, life: 80, migrating: true });
+            }
+            addNereidLog(g, 'Migration column on sonar. Thousands of small lives, going somewhere older than the survey.');
+        }
+    }
+    // Natural carcass fall — the world feeds itself
+    g._cfallT = (g._cfallT || 0) + dt;
+    if (g._cfallT > 90) {
+        g._cfallT = 0;
+        if (Math.random() < 0.35 && g.depth > 400) {
+            const cx2 = B.minX + 200 + Math.random() * (B.maxX - B.minX - 400);
+            const cy2 = B.minY + 200 + Math.random() * (B.maxY - B.minY - 400);
+            g.corpses.push({ x: cx2, y: cy2, t: 25, role: 'prey', size: 14 + Math.random() * 8 });
+            g.bloodLevel = Math.min(2.5, (g.bloodLevel || 0) + 0.3);
+            const types4 = getSpawnableTypes(g.wave, g);
+            const scav = types4.find(t4 => enemyRole(t4.id, t4.ai) === 'scavenger') || types4[0];
+            if (scav) for (let i = 0; i < 3; i++) spawnEnemy(g, scav, { x: cx2 + (Math.random() - 0.5) * 500, y: cy2 + (Math.random() - 0.5) * 500 });
+        }
+    }
+    // Boid-ish update: cohesion to school centroid, flee hunters and the sub
+    const cents = {};
+    for (const f of g.fry) {
+        if (!cents[f.school]) cents[f.school] = { x: 0, y: 0, n: 0 };
+        cents[f.school].x += f.x; cents[f.school].y += f.y; cents[f.school].n++;
+    }
+    for (let i = g.fry.length - 1; i >= 0; i--) {
+        const f = g.fry[i];
+        f.life -= dt;
+        if (f.life <= 0) { g.fry.splice(i, 1); continue; }
+        if (!f.migrating) {
+            const c2 = cents[f.school];
+            const cxm = c2.x / c2.n, cym = c2.y / c2.n;
+            f.vx += (cxm - f.x) * 0.35 * dt + (Math.random() - 0.5) * 26 * dt;
+            f.vy += (cym - f.y) * 0.35 * dt + (Math.random() - 0.5) * 26 * dt;
+            // SCATTER — the readable drama: hunters and the sub blow the school apart
+            let threat = null;
+            if (dist(p, f) < 130) threat = p;
+            else { for (const e of g.enemies) { if (e.hp > 0 && (e.role === 'pack' || e.role === 'apex' || e.role === 'mid') && dist(e, f) < 110) { threat = e; break; } } }
+            if (threat) {
+                const fa = Math.atan2(f.y - threat.y, f.x - threat.x);
+                f.vx += Math.cos(fa) * 340 * dt; f.vy += Math.sin(fa) * 340 * dt;
+            }
+            f.vx *= 0.96; f.vy *= 0.96;
+        }
+        f.x += f.vx * dt; f.y += f.vy * dt;
+        if (f.migrating && (f.x < g.worldBounds.minX - 200 || f.x > g.worldBounds.maxX + 200)) g.fry.splice(i, 1);
+    }
+}
+
+function drawFry(g) {
+    if (!g.fry || !g.fry.length) return;
+    for (const f of g.fry) {
+        const spd2 = Math.hypot(f.vx, f.vy) || 1;
+        const ux = (f.vx || 1) / spd2, uy = f.vy / spd2;
+        ctx.strokeStyle = `hsla(${f.hue}, 45%, 62%, 0.5)`;
+        ctx.lineWidth = 1.3;
+        ctx.beginPath(); ctx.moveTo(f.x - ux * 3, f.y - uy * 3); ctx.lineTo(f.x + ux * 3, f.y + uy * 3); ctx.stroke();
+    }
+}
+
 function updateVolumes(g, dt, p) {
     if (!g.volumes) g.volumes = [];
     g._volT = (g._volT || 0) + dt;
@@ -469,7 +559,10 @@ function updateVolumes(g, dt, p) {
         const inside = Math.abs(p.x - v.x) < v.w / 2 && Math.abs(p.y - v.y) < v.h / 2;
         if (v.kind === 'current' && inside) { p.x += v.fx * dt; g._inCurrent = true; }
         if (v.kind === 'rip' && inside) { p.y += v.fy * dt; g.shake = Math.max(g.shake || 0, 1.5); }
-        if (v.kind === 'thermo' && inside) g._inThermo = true;
+        if (v.kind === 'thermo' && inside) {
+            g._inThermo = true;
+            if (!v._crossed) { v._crossed = true; g.attention = (g.attention || 0) * 0.5; }   // the cold layer wipes their fix
+        }
         if (v.kind === 'brine' && inside && p.iFrames <= 0) {
             p.hp -= 4 * dt;
             if (!v._warned) { v._warned = true; g.floatingTexts.push({ x: p.x, y: p.y - 22, text: 'BRINE — CAUSTIC', color: '#B0FF80', life: 1.4, vy: -22 }); }
@@ -1608,22 +1701,22 @@ function dealCards(runCount) {
 // MID-RUN EVENTS — timed choices
 // =====================================================================
 const EVENT_DEFS = [
-    { id: 'thermal_vent', minWave: 3, title: 'THERMAL VENT', text: 'Hydrothermal vent detected. Mineral deposits visible.',
+    { id: 'thermal_vent', minWave: 3, title: 'THERMAL VENT', text: 'Hydrothermal field ahead — the water above it shivers like air over a road. Meridian survey code MB-11 flagged this vent chain as "commercially anomalous" and then never published the assay. The deposits crusting its throat glitter in the lamp. Something already grazes there.',
         choices: [
             { text: '[1] HARVEST — Risk hull for minerals', fn: g => { g.goldEarned += 30; g.player.hp -= 15; g.floatingTexts.push({ x: g.player.x, y: g.player.y - 20, text: '+30g', color: '#DAA520', life: 1, vy: -25 }); } },
             { text: '[2] DIVERT — Safe passage', fn: g => { g.player.hp = Math.min(g.player.maxHp, g.player.hp + 5); } },
         ], noChoice: g => { g.player.hp -= 20; } },
-    { id: 'distress', minWave: 5, title: 'DISTRESS SIGNAL', text: 'Automated beacon. Previous unit. Signal degraded.',
+    { id: 'distress', minWave: 5, title: 'DISTRESS SIGNAL', text: 'An automated beacon, half-buried, still cycling on emergency cells eleven years past its service life. The header decodes as DSV-02 — the boat Meridian\'s incident report called "recovered with honours." There is no recovery on record. The message body has degraded to three words: STILL DOWN HERE.',
         choices: [
             { text: '[1] INVESTIGATE — Danger + lore fragment', fn: g => { dropLore(g); spawnEliteWave(g); } },
             { text: '[2] IGNORE — it stays with you (+corruption, logged cold)', fn: g => { g.player.corruption += 4; meta.coldLogs = (meta.coldLogs || 0) + 1; saveMeta(); } },
         ], noChoice: g => {} },
-    { id: 'leviathan_patrol', minWave: 9, title: 'CONTACT — MASSIVE', text: 'Something on long sonar. Closing. It has not seen us yet.',
+    { id: 'leviathan_patrol', minWave: 9, title: 'CONTACT — MASSIVE', text: 'Long-line sonar contact: displacement in the thousands of tonnes, moving with intent, not current. NEREID has matched the gait to nothing in the codex. It has not seen us — it is following the shelf the way old things follow old roads. The manual says submarines survive these moments by becoming part of the water.',
         choices: [
             { text: '[1] CUT ENGINES — become a hole in the water', fn: g => { g.silent = true; g.lightOn = false; for (const e of g.enemies) e.awareness = Math.min(e.awareness || 0, 0.1); addNereidLog(g, 'All stop. Not a sound, Pilot. Let it pass over us.'); } },
             { text: '[2] RUN — loud, fast, remembered', fn: g => { g.player.iFrames = Math.max(g.player.iFrames, 1.5); g.attention = Math.min(100, (g.attention || 0) + 30); g.noise = 2.0; addNereidLog(g, 'Flank speed. Everything in the zone just heard us do it.'); } },
         ], noChoice: g => { spawnEliteWave(g); g.attention = Math.min(100, (g.attention || 0) + 20); } },
-    { id: 'ghost_signal', minWave: 6, title: 'GHOST SIGNAL', text: 'A distress call. The registry code belongs to a vessel that already sank.',
+    { id: 'ghost_signal', minWave: 6, title: 'GHOST SIGNAL', text: 'A distress call, five-by-five, textbook cadence. The registry resolves to MV Kestrel — struck from the record after she sank with nine souls, two years before this trench was surveyed. Either the archive is wrong, or something down here has learned that a distress call is the one sound every human boat will turn toward.',
         choices: [
             { text: '[1] INVESTIGATE — someone might be alive', fn: g => {
                 if (Math.random() < 0.5) {
@@ -1638,7 +1731,7 @@ const EVENT_DEFS = [
             } },
             { text: '[2] LOG AND PASS — cold, but alive', fn: g => { meta.coldLogs = (meta.coldLogs || 0) + 1; saveMeta(); addNereidLog(g, meta.coldLogs >= 3 ? 'Logged. That is ' + meta.coldLogs + ' now. I keep the list so you do not have to.' : 'Logged and passed. I will remember it for both of us.'); } },
         ], noChoice: g => {} },
-    { id: 'whale_fall', minWave: 7, title: 'WHALE FALL', text: 'A carcass the size of a building, sinking. Everything is coming to feed.',
+    { id: 'whale_fall', minWave: 7, title: 'WHALE FALL', text: 'A whale fall — a carcass the size of an apartment block, dropping through the zones trailing a snow of soft tissue. In an hour it will feed a thousand things; in a decade its bones will be a city. Every predator in the sector is converging, and for one strange window none of them care about you at all.',
         choices: [
             { text: '[1] FEED AMONG THEM — loot while they gorge', fn: g => {
                 const fx = g.player.x + 300, fy = g.player.y + 120;
@@ -1648,62 +1741,62 @@ const EVENT_DEFS = [
             } },
             { text: '[2] STAY CLEAR — respect the table', fn: g => { g.player.xp += 20; addNereidLog(g, 'Wise. Half the codex is written from the stomachs of the other half.'); } },
         ], noChoice: g => {} },
-    { id: 'hull_breach', minWave: 5, title: 'HULL BREACH', text: 'Seam failure aft. Water in the hull. Seconds matter.',
+    { id: 'hull_breach', weight: 2, minWave: 5, title: 'HULL BREACH', text: 'A seam has let go aft of frame nineteen — the same frame the yard flagged on DSV-01\'s last refit, the note Meridian marked "acceptable within audit tolerance." Water is coming in as a flat grey blade. NEREID has already cut power to the aft bus. Seconds matter more than blame does.',
         choices: [
             { text: '[1] PATCH IT — hands on the plate (minigame)', fn: g => { openPatch(); } },
             { text: '[2] SEAL THE COMPARTMENT — lose the space', fn: g => { g.player.maxHp = Math.max(40, g.player.maxHp - 12); g.player.hp = Math.min(g.player.hp, g.player.maxHp); addNereidLog(g, 'Compartment sealed. Smaller boat now. Still a boat.'); } },
         ], noChoice: g => { g._leakT = 8; } },
-    { id: 'junction_fault', minWave: 3, title: 'ELECTRICAL FAULT', text: 'Junction box fouled. Weapons browning out.',
+    { id: 'junction_fault', weight: 2, minWave: 3, title: 'ELECTRICAL FAULT', text: 'Junction box four is fouled — something organic got into the cable run and died there, and the relays are arcing through it. Weapons are browning out mid-cycle. LANTERN-3\'s maintenance log ended with this exact fault signature. Its next entry was never written.',
         choices: [
             { text: '[1] REPAIR — hands-on rewiring (minigame)', fn: g => { g._puzzleReward = 'battery'; openPuzzle(); } },
             { text: '[2] BYPASS — quick splice, -15 battery', fn: g => { g.player.battery = Math.max(10, (g.player.battery || 100) - 15); addNereidLog(g, 'Bypassed. The splice will hold. Probably.'); } },
         ], noChoice: g => { g.player.battery = Math.max(10, (g.player.battery || 100) - 15); } },
-    { id: 'pressure_spike', minWave: 4, title: 'PRESSURE SPIKE', text: 'Tectonic activity. Hull stress increasing.',
+    { id: 'pressure_spike', minWave: 4, title: 'PRESSURE SPIKE', text: 'The trench floor is moving — a slow-motion shrug the seismographs upstairs will file as a "minor event." Down here the pressure wave arrives as a fist. The hull is singing in a key NEREID says she has heard only once before, on a recording she is not supposed to have.',
         choices: [
             { text: '[1] BRACE — Spend HP for damage boost', fn: g => { g.player.hp -= 10; g.player.dmgMult *= 1.15; g.streak = '+15% DAMAGE'; g.streakTimer = 2; } },
             { text: '[2] RIDE IT OUT — Gamble on hull', fn: g => { if (Math.random() < 0.5) { g.player.hp -= 25; } else { g.goldEarned += 20; } } },
         ], noChoice: g => { g.player.hp -= 25; } },
-    { id: 'wreck', minWave: 6, title: 'WRECK DISCOVERY', text: 'Debris field. Previous vessel. Salvage possible.',
+    { id: 'wreck', minWave: 6, title: 'WRECK DISCOVERY', text: 'A debris field scattered across three hundred metres like a sentence interrupted mid-word. Hull plating, a galley chair, a single boot. The stencilled numbers match no manifest Meridian admits to — but the paint scheme is theirs, two liveries ago. Salvage rights, per your contract, belong to whoever is still alive to claim them.',
         choices: [
             { text: '[1] SALVAGE — weapon upgrade; cutting gear is LOUD (+noise)', fn: g => { const w = g.player.weapons[Math.floor(Math.random() * g.player.weapons.length)]; if (w && w.level < 8) w.level++; g.noise = Math.min(2.5, (g.noise || 0) + 0.7); } },
             { text: '[2] STRIP FAST — +50g, sloppy work draws eyes (+attention)', fn: g => { g.goldEarned += 50; g.attention = Math.min(100, (g.attention || 0) + 12); } },
         ], noChoice: g => {} },
-    { id: 'bloom', minWave: 2, title: 'BIOLUMINESCENT BLOOM', text: 'Beautiful. The water glows with living light.',
+    { id: 'bloom', minWave: 2, title: 'BIOLUMINESCENT BLOOM', text: 'The water ahead is burning blue-green — a bloom of billions, each mote flaring once when touched and passing the light along. It is the closest thing the deep has to weather, or to prayer. NEREID has paused mid-diagnostic to watch it. She does not do that.',
         choices: [
             { text: '[1] OBSERVE — Reduce corruption by 15', fn: g => { g.player.corruption = Math.max(0, g.player.corruption - 15); } },
             { text: '[2] COLLECT — XP burst, but the glow marks you (+attention)', fn: g => { for (let i = 0; i < 15; i++) g.gems.push({ x: g.player.x + (Math.random() - 0.5) * 100, y: g.player.y + (Math.random() - 0.5) * 100, value: 3, size: 4, life: 10 }); g.attention = Math.min(100, (g.attention || 0) + 12); } },
         ], noChoice: g => {} },
-    { id: 'swarm_intel', minWave: 8, title: 'SWARM INTELLIGENCE', text: 'They\'re adapting. NEREID detects a structural weakness.',
+    { id: 'swarm_intel', minWave: 8, title: 'SWARM INTELLIGENCE', text: 'They are adapting — attack intervals have shortened four percent since your last dive, and the pattern is not random. It is practice. But learning cuts both ways: NEREID has isolated a structural resonance in one bloodline, a note that unmakes them. The Coil learns you. You learn it back.',
         choices: [
             { text: '[1] EXPLOIT — One enemy type weakened, others strengthened', fn: g => { g._weakType = ['jellyfish','piranha','squid','anglerfish','eel'][Math.floor(Math.random() * 5)]; } },
             { text: '[2] OBSERVE — +25 gold, but you watched too long (+corruption)', fn: g => { g.goldEarned += 25; g.player.corruption += 5; } },
         ], noChoice: g => { g.player.corruption += 10; } },
-    { id: 'ballast_fault', minWave: 4, title: 'BALLAST FAULT', text: 'Trim pumps cycling wrong. The boat wants to wallow.',
+    { id: 'ballast_fault', weight: 2, minWave: 4, title: 'BALLAST FAULT', text: 'The trim pumps are hunting — cycling wrong, chasing a level they cannot find, and the boat wallows like something tired. The fault tree ends at a valve Meridian\'s procurement sheet lists as "equivalent substitute." DSV-01\'s pilot filed a complaint about that exact substitution. It was closed as resolved. Posthumously.',
         choices: [
             { text: '[1] REWIRE THE PUMP LOGIC — hands on (minigame)', fn: g => { g._puzzleReward = 'battery'; openPuzzle(); } },
             { text: '[2] RUN HEAVY — live with it (-12% speed this dive)', fn: g => { g.player.speed *= 0.88; addNereidLog(g, 'Logged. We fly like a brick until the Mooring.'); } },
         ], noChoice: g => { g.player.speed *= 0.88; } },
-    { id: 'scrubber_clog', minWave: 6, title: 'CO₂ SCRUBBER CLOG', text: 'Air is going stale. The scrubber bed is fouled with something organic.',
+    { id: 'scrubber_clog', weight: 2, minWave: 6, title: 'CO₂ SCRUBBER CLOG', text: 'The air is going stale — CO2 creeping, the first copper taste at the back of the throat. The scrubber bed is fouled with something organic that came through the intake screens, and whatever it is, it is still faintly warm. The manual gives you nineteen minutes of margin. The manual has been wrong before.',
         choices: [
             { text: '[1] HANDS IN THE BED — clear it now (minigame)', fn: g => { openPatch(); } },
             { text: '[2] CRACK A SPARE CELL — breathe easy, -20 battery', fn: g => { g.player.battery = Math.max(10, (g.player.battery || 100) - 20); } },
         ], noChoice: g => { g.player.hp -= 12; addNereidLog(g, 'You waited. The air noticed.'); } },
-    { id: 'microfracture', minWave: 10, title: 'HULL MICROFRACTURE', text: 'A hairline in the pressure hull, singing at the edge of hearing.',
+    { id: 'microfracture', weight: 2, minWave: 10, title: 'HULL MICROFRACTURE', text: 'A hairline crack in the pressure hull, too fine to see, singing at the edge of hearing — a wet-glass note that rises as you descend. NEREID is tracking it by ear. At this depth a hairline does not stay a hairline; it matures, like everything else down here, into something with appetite.',
         choices: [
             { text: '[1] PATCH IT — before the sea finds it (minigame)', fn: g => { openPatch(); } },
             { text: '[2] RESPECT IT — crush depth -600m this dive', fn: g => { g.player._crushDepth = (g.player._crushDepth || 3000) - 600; addNereidLog(g, 'New floor set. The crack keeps its own counsel below that.'); } },
         ], noChoice: g => { g._leakT = 6; } },
-    { id: 'meridian_override', minWave: 8, title: 'MERIDIAN OVERRIDE', text: 'Corporate uplink. A route deviation, non-negotiable phrasing. They do not say why.',
+    { id: 'meridian_override', minWave: 8, title: 'MERIDIAN OVERRIDE', text: 'Corporate uplink, priority header, audit code CS-0. A route deviation in non-negotiable phrasing — "proceed to reference, maintain silence regarding cargo observed." They do not say why. They never said why to DSV-01 either, and her final telemetry frame came from a grid square that officially does not exist.',
         choices: [
             { text: '[1] COMPLY — +45g hazard pay; their route is LOUD (+attention)', fn: g => { g.goldEarned += 45; g.attention = Math.min(100, (g.attention || 0) + 15); addNereidLog(g, 'Compliance logged. They pay for obedience by the metre.'); } },
             { text: '[2] SEVER THE UPLINK — -300 score, but the boat is YOURS', fn: g => { g.score = Math.max(0, (g.score || 0) - 300); g.player.corruption = Math.max(0, g.player.corruption - 5); addNereidLog(g, 'Uplink severed. For the first time today it is quiet in my head. Thank you.'); } },
         ], noChoice: g => { g.attention = Math.min(100, (g.attention || 0) + 10); } },
-    { id: 'stowaway', minWave: 7, title: 'STOWAWAY', text: 'Something is clamped to the hull, aft of the props. It is drinking the vibration.',
+    { id: 'stowaway', minWave: 7, title: 'STOWAWAY', text: 'Something has clamped on aft of the props, flush with the hull as if machined for the spot. It is not chewing. It is listening — drinking the drivetrain\'s vibration the way you would drink fresh water. NEREID reports its heartbeat has synchronised with the engine. She says it as a warning. It sounds like envy.',
         choices: [
             { text: '[1] SCRAPE IT OFF — grind the hull (-8 hull now)', fn: g => { g.player.hp -= 8; g.shake = 6; playSample('clank', 0.4); addNereidLog(g, 'Gone. It left a mouth-print in the anechoic coating.'); } },
             { text: '[2] CARRY IT — -8% speed, +15 attention; it sings to things', fn: g => { g.player.speed *= 0.92; g.attention = Math.min(100, (g.attention || 0) + 15); addNereidLog(g, 'It is still there. It weighs almost nothing. It weighs on me.'); } },
         ], noChoice: g => { g.player.speed *= 0.92; g.attention = Math.min(100, (g.attention || 0) + 15); } },
-    { id: 'seep_garden', minWave: 5, title: 'COLD SEEP GARDEN', text: 'Tube worms in their thousands around a methane seep. A pharmacy, if you are brave.',
+    { id: 'seep_garden', minWave: 5, title: 'COLD SEEP GARDEN', text: 'Tube worms in their tens of thousands, crowding a cold methane seep like a congregation. Half the compounds in Meridian\'s bio-catalogue were scraped from beds like this; the other half came from the things that guard them. A pharmacy, if you are brave. A pantry, if you are not fast.',
         choices: [
             { text: '[1] HARVEST — +2 biosamples; the garden defends itself (55%)', fn: g => { addMaterials({ biosamp: 2 }); saveMeta(); if (Math.random() < 0.55) spawnEliteWave(g); } },
             { text: '[2] TORCH A PATH THROUGH — safe, LOUD (+attention)', fn: g => { g.attention = Math.min(100, (g.attention || 0) + 14); g.noise = Math.min(2.5, (g.noise || 0) + 0.8); } },
@@ -1713,7 +1806,7 @@ const EVENT_DEFS = [
             { text: '[1] FOLLOW HER — she knows where the good wrecks died (+corruption)', fn: g => { g.player.corruption += 12; const a = Math.random() * PI2; g.wrecks.push({ x: g.player.x + Math.cos(a) * 500, y: g.player.y + Math.sin(a) * 500, r: 40, loot: pickWreckLoot(), revealed: true, salvaged: false, seed: Math.random() * 100, spawnedAt: g.runTime, bonus: true }); addNereidLog(g, 'She is leading. I knew her voice. I still know it.'); } },
             { text: '[2] LOOK AWAY — you both still saw it (+4 corruption)', fn: g => { g.player.corruption += 4; addNereidLog(g, 'Contact ignored. She waved, Pilot. I did not tell you that. Forget I told you that.'); } },
         ], noChoice: g => { g.player.corruption += 8; } },
-    { id: 'pressure_inversion', minWave: 9, title: 'PRESSURE INVERSION', text: 'A thermocline is collapsing above you. The column is about to move — with or without your consent.',
+    { id: 'pressure_inversion', minWave: 9, title: 'PRESSURE INVERSION', text: 'The thermocline above you is collapsing — a ceiling of cold water letting go all at once. LANTERN-3 recorded one of these before it went dark; the probe\'s final attitude data reads like a leaf in a storm drain. The column is about to move. Your consent was never a factor.',
         choices: [
             { text: '[1] RIDE THE COLUMN — thrown somewhere new, briefly untouchable', fn: g => { const a = Math.random() * PI2; g.player.x += Math.cos(a) * 300; g.player.y += Math.sin(a) * 300; g.player.iFrames = 1.2; g.attention = Math.max(0, (g.attention || 0) - 12); g.shake = 7; addNereidLog(g, 'That was flying. Briefly. Never again, ideally.'); } },
             { text: '[2] BRACE AND HOLD — -10 hull, position kept', fn: g => { g.player.hp -= 10; g.shake = 5; } },
@@ -1745,9 +1838,11 @@ function spawnEliteWave(g) {
         const a = Math.random() * PI2;
         const types = getSpawnableTypes(g.wave, g);
         const type = types[types.length - 1]; // strongest available
+        const vs = 0.85 + Math.random() * 0.5;
         g.enemies.push({ x: g.player.x + Math.cos(a) * 350, y: g.player.y + Math.sin(a) * 350,
-            hp: type.hp * 2, maxHp: type.hp * 2, speed: type.speed * 1.2, size: type.size * 1.2,
-            color: '#FF6060', xp: type.xp * 3, damage: type.damage, gold: type.gold * 3,
+            hp: type.hp * 2 * vs, maxHp: type.hp * 2 * vs, speed: type.speed * 1.2 * (1.1 - vs * 0.15), size: type.size * 1.2 * vs,
+            color: varyColor('#FF6060', (Math.random() - 0.5) * 20), xp: Math.round(type.xp * 3 * vs), damage: type.damage, gold: Math.round(type.gold * 3 * vs),
+            vseed: Math.random() * 100, phase: Math.random() * PI2,
             typeId: type.id, flash: 0 });
     }
 }
@@ -2814,11 +2909,39 @@ function getSpawnableTypes(wave, g) {
     }).map(([id, t]) => ({ id, ...t }));
 }
 
+// INDIVIDUAL VARIANCE — hue-shift a hex colour by degrees (HSL round trip).
+// No two of a species read as the same animal.
+function varyColor(hex, deg) {
+    const n = parseInt(hex.slice(1), 16);
+    let r = (n >> 16) / 255, gC = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, gC, b), mn = Math.min(r, gC, b);
+    let h = 0; const l = (mx + mn) / 2; const d = mx - mn;
+    const sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+    if (d !== 0) {
+        if (mx === r) h = ((gC - b) / d) % 6;
+        else if (mx === gC) h = (b - r) / d + 2;
+        else h = (r - gC) / d + 4;
+        h *= 60; if (h < 0) h += 360;
+    }
+    h = (h + deg + 360) % 360;
+    const c = (1 - Math.abs(2 * l - 1)) * sat, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
+    let r2 = 0, g2 = 0, b2 = 0;
+    if (h < 60) { r2 = c; g2 = x; } else if (h < 120) { r2 = x; g2 = c; }
+    else if (h < 180) { g2 = c; b2 = x; } else if (h < 240) { g2 = x; b2 = c; }
+    else if (h < 300) { r2 = x; b2 = c; } else { r2 = c; b2 = x; }
+    const to = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+    return '#' + to(r2) + to(g2) + to(b2);
+}
+
 function spawnEnemy(g, forceType, forcePos) {
     const types = getSpawnableTypes(g.wave, g);
     if (!types.length && !forceType) return;   // forced spawns (bosses, carriers, events) must not starve
     // Weight toward newer types
     const type = forceType || types[Math.floor(Math.random() * types.length)];
+    if (g._preySuppress > 0) {
+        g._preySuppress = Math.max(0, g._preySuppress - 0.1);
+        if (!forceType && enemyRole(type.id, type.ai) === 'prey' && Math.random() < 0.4) return;
+    }
     const angle = forcePos ? 0 : Math.random() * PI2;
     const spawnDist = 500 + Math.random() * 200;
     const waveMult = 1 + g.wave * 0.08;
@@ -2858,15 +2981,22 @@ function spawnEnemy(g, forceType, forcePos) {
         }
     }
 
+    // No clone armies: every individual gets a size class, its own tint and
+    // its own animation phase. The big one of the pack is worth killing.
+    const vscale = 0.75 + Math.random() * 0.6;
+    const vhue = (Math.random() - 0.5) * 24;
+    const baseColor = isAberrant ? lerpColor(type.color, '#FF00FF', 0.4) : varyColor(type.color, vhue);
     const enemy = {
         x: baseX, y: baseY,
-        hp: type.hp * hpMult * (isAberrant ? 2 : 1),
-        maxHp: type.hp * hpMult * (isAberrant ? 2 : 1),
-        speed: type.speed * speedMult * (isAberrant ? 1.5 : 1),
-        size: type.size * (isAberrant ? 1.2 : 1),
-        color: isAberrant ? lerpColor(type.color, '#FF00FF', 0.4) : type.color,
-        xp: type.xp, damage: type.damage * (isAberrant ? 1.5 : 1),
-        gold: type.gold * (isAberrant ? 3 : 1),
+        hp: type.hp * hpMult * vscale * (isAberrant ? 2 : 1),
+        maxHp: type.hp * hpMult * vscale * (isAberrant ? 2 : 1),
+        speed: type.speed * speedMult * (1.12 - vscale * 0.16) * (isAberrant ? 1.5 : 1),
+        size: type.size * vscale * (isAberrant ? 1.2 : 1),
+        color: baseColor,
+        xp: Math.max(1, Math.round(type.xp * vscale)),
+        damage: type.damage * (0.8 + vscale * 0.25) * (isAberrant ? 1.5 : 1),
+        gold: Math.max(1, Math.round(type.gold * vscale)) * (isAberrant ? 3 : 1),
+        vseed: Math.random() * 100, phase: Math.random() * PI2,
         typeId: type.id, flash: 0,
         aberrant: isAberrant,
         isWhisperer: !!type.isWhisperer,
@@ -2965,7 +3095,10 @@ function fireWeapons(g, dt) {
         const cd = def.baseCooldown * g.player.cdMult;
         w.cooldown = cd;
         // ECOLOGY: firing makes noise the deep can hear. Sonar loud, harpoon near-silent.
-        if (g._modeCfg && g._modeCfg.ecology) g.noise = Math.min(2.5, (g.noise || 0) + (WEAPON_NOISE[w.id] ?? 0.4));
+        if (g._modeCfg && g._modeCfg.ecology) {
+            g.noise = Math.min(2.5, (g.noise || 0) + (WEAPON_NOISE[w.id] ?? 0.4));
+            g.lastNoise = { x: g.player.x, y: g.player.y, t: g.runTime };   // they heard THIS spot
+        }
         if (w.id === 'harpoon') sampleOr('harpoon', 0.22, 0.9 + Math.random() * 0.2);
         const dmg = def.baseDmg * g.player.dmgMult * (1 + (w.level - 1) * 0.25);
         const area = def.baseArea * g.player.areaMult * (1 + (w.level - 1) * 0.1);
@@ -3484,6 +3617,7 @@ function useBeltItem(g, item) {
     if (item.id === 'belt_decoy') {
         g.deployables.push({ kind: 'decoy', x: p2.x, y: p2.y, life: 8 });
         g.noise = Math.min(2.5, (g.noise || 0) + 0.4);
+        g.lastNoise = { x: p2.x, y: p2.y, t: g.runTime };   // and it stays pinned to the decoy
     } else if (item.id === 'belt_mine') {
         g.deployables.push({ kind: 'mine', x: p2.x, y: p2.y + 26, life: 40, arm: 1 });
     } else if (item.id === 'belt_flare') {
@@ -3513,7 +3647,9 @@ function updateDeployables(g, dt, p2) {
         d.life -= dt;
         if (d.life <= 0) { g.deployables.splice(i, 1); continue; }
         if (d.kind === 'decoy') {
-            // Everything with ears goes to look at the noise that is not you
+            // Everything with ears goes to look at the noise that is not you —
+            // and the trench's fix on you TRANSFERS to the screaming beacon
+            g.lastNoise = { x: d.x, y: d.y, t: g.runTime };
             for (const e of g.enemies) {
                 if (!e.isBoss && dist(d, e) < 700) e._lure = { x: d.x, y: d.y, t: 0.4 };
             }
@@ -3741,6 +3877,9 @@ function spawnWorldObjects(g, dt) {
             log: story.log,
             revealed: false,
             salvaged: false,
+            // A third of hulls sank with their bays LOCKED — the junction
+            // minigame is the crowbar, and sealed cargo pays half again more
+            sealed: Math.random() < 0.3,
             seed: Math.random() * 100,
             spawnedAt: g.runTime,
             obDepth,
@@ -3910,12 +4049,24 @@ function updateWreckInteraction(g, dt) {
     }
     // Salvage hold — E key (handled in keydown); here we tick the timer
     const eHeld = !!keys['e'];
-    if (g.nearestWreck && eHeld) {
+    if (g.nearestWreck && eHeld && g.nearestWreck.sealed) {
+        // Fouled terminal — power must be rerouted before the bay will open
+        keys['e'] = false;
+        g._puzzleReward = 'unseal';
+        g._puzzleWreck = g.nearestWreck;
+        addNereidLog(g, `${g.nearestWreck.name || 'Wreck'} — bay terminal fouled. Reroute the junction and it opens. Sealed cargo rides better.`);
+        openPuzzle();
+    } else if (g.nearestWreck && eHeld) {
         g.salvageHoldTime = (g.salvageHoldTime || 0) + dt * (p._salvageSpd || 1);
         if (g.salvageHoldTime >= 1.5) {
             g.nearestWreck.salvaged = true;
             playSample('salvage', 0.5, 0.95 + Math.random() * 0.1);
             g.nearestWreck.loot.give(g);
+            if (g.nearestWreck.sealedBonus) {
+                g.goldEarned += 45;
+                for (let sg = 0; sg < 4; sg++) g.gems.push({ x: g.nearestWreck.x + (Math.random() - 0.5) * 50, y: g.nearestWreck.y + (Math.random() - 0.5) * 50, value: 8, size: 5, life: 20, dropDepth: g.depth });
+                g.floatingTexts.push({ x: g.nearestWreck.x, y: g.nearestWreck.y - 26, text: 'SEALED CARGO +45g', color: '#FFD040', life: 1.8, vy: -24 });
+            }
             g._salvageCompleted = (g._salvageCompleted || 0) + 1;
             const wr = g.nearestWreck;
             addNereidLog(g, `${wr.name} — salvage complete.  ${wr.loot.label} recovered.`);
@@ -4515,11 +4666,36 @@ function update(dt) {
     g.noise = Math.max(0, (g.noise || 0) - dt * 0.8);
     // ATTENTION — the run-long consequence of being loud. Noise you make is
     // remembered: aberrant rates and spawn pressure climb. Silence pays it down.
+    // Distance from the last-known position pays attention down fast — they
+    // are searching where you WERE. Standing on the spot keeps you found.
+    const _lkpFar = g.lastNoise && dist(p, g.lastNoise) > 600;
     g.attention = Math.max(0, Math.min(100, (g.attention || 0)
         + (g.noise > 0.6 ? (g.noise - 0.6) * dt * 9 : 0)
-        - dt * (g.silent ? 1.1 : 0.35)));
+        - dt * (g.silent ? 1.1 : 0.35)
+        - (_lkpFar ? dt * 0.9 : 0)));
+    // THE HUNT — crossing thresholds has faces. Search parties sweep the
+    // last-known position (evadable); at MARKED an apex commits.
+    const attSt = g.attention >= 90 ? 3 : g.attention >= 70 ? 2 : g.attention >= 40 ? 1 : 0;
+    if (attSt > (g._attState || 0)) {
+        const lkp = g.lastNoise || { x: p.x, y: p.y };
+        if (attSt === 1) addNereidLog(g, 'Acoustic profile logged by something out there. We are a known sound now. SUSPECTED.');
+        if (attSt >= 2 && (g._attState || 0) < 2) {
+            addNereidLog(g, 'Search pattern inbound on our last position. They hunt where we WERE, Pilot — so let us be elsewhere.');
+            const types2 = getSpawnableTypes(g.wave, g);
+            const packT = types2.find(t2 => t2.ai === 'pack') || types2[Math.floor(types2.length / 2)];
+            if (packT) for (let si = 0; si < 4; si++) spawnEnemy(g, packT, { x: lkp.x + (Math.random() - 0.5) * 320, y: lkp.y + (Math.random() - 0.5) * 320 });
+        }
+        if (attSt === 3) {
+            addNereidLog(g, 'MARKED. Something large has stopped patrolling and started COMMUTING. Destination: us.');
+            const types3 = getSpawnableTypes(g.wave, g);
+            const apexT = types3[types3.length - 1];
+            if (apexT) spawnEnemy(g, apexT, { x: lkp.x + 200, y: lkp.y });
+        }
+    }
+    g._attState = attSt;
     updateVolumes(g, dt, p);
     updateDeployables(g, dt, p);
+    updateFry(g, dt, p);
     if (g._leakT > 0) { g._leakT -= dt; p.hp -= 2.2 * dt; if (Math.random() < dt * 3) g.floatingTexts.push({ x: p.x + (Math.random() - 0.5) * 30, y: p.y - 14, text: '≈', color: '#5AB0DA', life: 0.8, vy: -34 }); }
     // VESTIBULAR FAULT — at 85+ MIND, the inner ear lies: controls invert for
     // 2s after a 0.8s warning. Corruption is now a thing you FEEL in the hands.
@@ -4684,6 +4860,11 @@ function update(dt) {
                     g.floatingTexts.push({ x: p.x, y: p.y - 20, text: `-${dmg} IMPACT`, color: '#FF9060', life: 1.2, vy: -24 });
                     playSample('clank', Math.min(0.5, 0.2 + dmg * 0.04), 0.85 + Math.random() * 0.3);
                     noiseBurst(0.35, 0.09, 420);
+                    // Deep water forgives nothing: a hard enough hit can start a seam
+                    if (dmg >= 8 && g.depth > 1500 && Math.random() < 0.2 && phase === 'playing') {
+                        addNereidLog(g, 'That one opened a seam. Hands NOW, Pilot.');
+                        openPatch();
+                    }
                     g.noise = Math.min(2.5, (g.noise || 0) + 0.25);
                 }
                 p._vx -= dot * nx; p._vy -= dot * ny;
@@ -5057,10 +5238,13 @@ function update(dt) {
                     e.y += Math.sin(pa) * e.speed * 0.8 * dt;
                     if (dist(e, e._prey) < (e.size + e._prey.size)) {
                         e._prey._eaten = true; e._prey.hp = 0;      // eaten, not killed — no rewards
+                        g._preySuppress = Math.min(30, (g._preySuppress || 0) + 8);   // the local prey learn to hide
                         e._hunger = 0;                              // satiated: it will ignore you for minutes
                         if (dist(g.player, e) < 480) creditResearch(g, e.typeId, 3, 'feeding witnessed');
                         g.corpses.push({ x: e._prey.x, y: e._prey.y, t: 8, role: 'prey', size: e._prey.size * 0.6 });
                         g.bloodLevel = Math.min(2.5, (g.bloodLevel || 0) + 0.15);
+                        const _kd = dist(g.player, e);
+                        if (_kd < 1000 && audioCtx) { const att2 = Math.max(0.02, 0.09 * (1 - _kd / 1000)); playTone(48 + Math.random() * 20, 0.4, 'sine', att2); noiseBurst(0.12, att2 * 0.7, 220); }
                         for (let pi = 0; pi < 5; pi++) g.effects.push({ type: 'particle', x: e._prey.x, y: e._prey.y, vx: (Math.random() - 0.5) * 90, vy: (Math.random() - 0.5) * 90, life: 0.4, color: '#A83048', size: 2 });
                         e._prey = null;
                     }
@@ -6294,7 +6478,10 @@ function update(dt) {
     if (g.eventCooldown <= 0 && !g.activeEvent) {
         const eligible = EVENT_DEFS.filter(e => g.wave >= e.minWave);
         if (eligible.length > 0) {
-            const evt = eligible[Math.floor(Math.random() * eligible.length)];
+            const totW = eligible.reduce((a2, e2) => a2 + (e2.weight || 1), 0);
+            let rw = Math.random() * totW;
+            let evt = eligible[0];
+            for (const e2 of eligible) { rw -= (e2.weight || 1); if (rw <= 0) { evt = e2; break; } }
             g.activeEvent = { ...evt, timer: 8 };
             g.eventCooldown = 80 + Math.random() * 40;
             addNereidLog(g, getNereidLine('event', g));
@@ -6996,6 +7183,7 @@ function draw() {
         ctx.restore();
         ctx.globalAlpha = 1;
     }
+    drawFry(g);
     drawVolumes(g);
     drawDeployables(g);
 
@@ -7810,8 +7998,7 @@ function draw() {
             }
             ctx.globalAlpha = 1;
         } else {
-            ctx.fillStyle = col;
-            ctx.beginPath(); ctx.arc(0, 0, sz, 0, PI2); ctx.fill();
+            drawBodyPlan(e, sz, col, t);
         }
         ctx.restore();
         ctx.globalAlpha = 1;
@@ -8663,6 +8850,312 @@ function drawNereidSpeech(w, h, g, pal, vpCx, vpCy, vpR) {
 //   - NEREID dialog appears in dedicated strip below porthole only when speaking
 //   - Salvage prompt only when near a wreck
 // =====================================================================
+// =====================================================================
+// BODY PLANS — the 27 species that shared a grey circle get real anatomy.
+// Seven parameterised plans; per-species features; per-INDIVIDUAL variation
+// via e.vseed (pattern) and e.phase (motion offset). Drawn facing +x inside
+// the caller's translate/rotate.
+// =====================================================================
+const SPECIES_LOOK = {
+    sunfish:     { plan: 'fish', fat: 1.6, finBig: 1 },
+    wolffish:    { plan: 'fish', teeth: 1, jaw: 1 },
+    lanternfish: { plan: 'fish', lights: 1 },
+    splitter:    { plan: 'fish', twin: 1 },
+    dreadnought: { plan: 'fish', armor: 1, teeth: 1, jaw: 1 },
+    presseel:    { plan: 'worm', lenMult: 1.5 },
+    capillaryworm: { plan: 'worm', thin: 1 },
+    lamprey:     { plan: 'worm', sucker: 1 },
+    latcher:     { plan: 'worm', sucker: 1, hooks: 1 },
+    ghostray:    { plan: 'ray' },
+    glassoct:    { plan: 'ceph', glass: 1 },
+    inker:       { plan: 'ceph' },
+    grappler:    { plan: 'ceph', longArms: 1 },
+    kraken:      { plan: 'ceph', crown: 1 },
+    twicrab:     { plan: 'crab' },
+    polyp:       { plan: 'sessile', crownRing: 1 },
+    bonecoral:   { plan: 'sessile', branches: 1 },
+    listener:    { plan: 'sessile', dish: 1 },
+    bonesmoker:  { plan: 'sessile', smoke: 1 },
+    whisperer:   { plan: 'horror', eyes: 3, halo: 1 },
+    lurker:      { plan: 'horror', eyes: 1 },
+    tendrilmass: { plan: 'horror', tendrils: 9 },
+    pressureform:{ plan: 'horror', facets: 1 },
+    tissuedrift: { plan: 'horror', soft: 1 },
+    hemoclot:    { plan: 'horror', soft: 1, red: 1 },
+    carrier:     { plan: 'horror', pods: 1 },
+    abyssal_maw: { plan: 'horror', maw: 1, eyes: 4 },
+};
+function drawBodyPlan(e, sz, col, t) {
+    const look = SPECIES_LOOK[e.typeId] || { plan: 'fish' };
+    const vr = (k) => { const v = Math.sin(((e.vseed || 1) + 1) * 12.9898 + k * 78.233) * 43758.5453; return v - Math.floor(v); };
+    const ph = (e.phase || 0);
+    const plan = look.plan;
+    if (plan === 'fish') {
+        const fat = look.fat || (0.42 + vr(1) * 0.14);
+        const wag = Math.sin(t * 6 + ph) * 0.22;
+        // Tail fin first (behind body)
+        ctx.fillStyle = hexA(col, 0.65);
+        ctx.beginPath();
+        ctx.moveTo(-sz * 0.85, 0);
+        ctx.lineTo(-sz * (1.3 + vr(2) * 0.25), -sz * 0.42 + wag * sz);
+        ctx.lineTo(-sz * (1.15 + vr(2) * 0.2), wag * sz * 0.5);
+        ctx.lineTo(-sz * (1.3 + vr(2) * 0.25), sz * 0.42 + wag * sz);
+        ctx.closePath(); ctx.fill();
+        // Fusiform body
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.moveTo(sz, 0);
+        ctx.quadraticCurveTo(sz * 0.35, -sz * fat, -sz * 0.55, -sz * fat * 0.62);
+        ctx.quadraticCurveTo(-sz * 0.95, 0, -sz * 0.55, sz * fat * 0.62);
+        ctx.quadraticCurveTo(sz * 0.35, sz * fat, sz, 0);
+        ctx.fill();
+        // Belly counter-shade
+        ctx.fillStyle = 'rgba(255,255,255,0.10)';
+        ctx.beginPath(); ctx.ellipse(0, sz * fat * 0.3, sz * 0.62, sz * fat * 0.3, 0, 0, Math.PI); ctx.fill();
+        // Dorsal fin
+        ctx.fillStyle = hexA(col, 0.8);
+        const dfs = (look.finBig ? 0.9 : 0.5) + vr(3) * 0.2;
+        ctx.beginPath(); ctx.moveTo(-sz * 0.1, -sz * fat * 0.8);
+        ctx.lineTo(-sz * 0.05 - vr(4) * sz * 0.2, -sz * fat * 0.8 - sz * dfs);
+        ctx.lineTo(-sz * 0.45, -sz * fat * 0.55); ctx.closePath(); ctx.fill();
+        if (look.finBig) { // sunfish anal fin mirror
+            ctx.beginPath(); ctx.moveTo(-sz * 0.1, sz * fat * 0.8);
+            ctx.lineTo(-sz * 0.05, sz * fat * 0.8 + sz * dfs);
+            ctx.lineTo(-sz * 0.45, sz * fat * 0.55); ctx.closePath(); ctx.fill();
+        }
+        // Gill line + eye
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(sz * 0.32, 0, sz * 0.3, -1.1, 1.1); ctx.stroke();
+        ctx.fillStyle = '#0A0E12'; ctx.beginPath(); ctx.arc(sz * 0.58, -sz * fat * 0.22, sz * 0.13, 0, PI2); ctx.fill();
+        ctx.fillStyle = '#DFF3FF'; ctx.beginPath(); ctx.arc(sz * 0.61, -sz * fat * 0.25, sz * 0.05, 0, PI2); ctx.fill();
+        if (look.teeth) {
+            ctx.strokeStyle = '#E8E4D8'; ctx.lineWidth = 1.4;
+            for (let i = 0; i < 4; i++) {
+                const tx2 = sz * (0.78 + i * 0.05), open = look.jaw ? Math.abs(Math.sin(t * 3 + ph)) * 0.18 : 0.08;
+                ctx.beginPath(); ctx.moveTo(tx2, -sz * open); ctx.lineTo(tx2 - sz * 0.06, sz * 0.02); ctx.stroke();
+            }
+        }
+        if (look.lights) {
+            ctx.fillStyle = hexA('#9FE8FF', 0.5 + Math.sin(t * 2.4 + ph) * 0.35);
+            for (let i = 0; i < 5; i++) ctx.beginPath(), ctx.arc(-sz * 0.6 + i * sz * 0.3, sz * fat * 0.42, 1.6, 0, PI2), ctx.fill();
+        }
+        if (look.armor) {
+            ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.2;
+            for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(sz * 0.25 - i * sz * 0.3, 0, sz * fat * 0.75, -1.15, 1.15); ctx.stroke(); }
+        }
+        if (look.twin) { // splitter carries its bud
+            ctx.fillStyle = hexA(col, 0.7);
+            ctx.beginPath(); ctx.ellipse(-sz * 0.2, -sz * fat * 1.05, sz * 0.4, sz * 0.2, 0.25, 0, PI2); ctx.fill();
+        }
+    } else if (plan === 'worm') {
+        const segs = look.thin ? 12 : 9;
+        const lenM = look.lenMult || 1.1;
+        const thick = look.thin ? 0.16 : 0.3;
+        for (let i = segs - 1; i >= 0; i--) {
+            const u = i / (segs - 1);
+            const wx = sz * (0.8 - u * 1.9 * lenM);
+            const wy = Math.sin(t * 5 + ph + u * 4.4) * sz * 0.34 * u;
+            const r2 = sz * thick * (1 - u * 0.55) * (0.85 + vr(i) * 0.3);
+            ctx.fillStyle = i % 2 ? col : hexA(col, 0.78);
+            ctx.beginPath(); ctx.arc(wx, wy, Math.max(1, r2), 0, PI2); ctx.fill();
+        }
+        // Head
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.ellipse(sz * 0.85, 0, sz * 0.34, sz * 0.26, 0, 0, PI2); ctx.fill();
+        if (look.sucker) {
+            ctx.strokeStyle = '#E8E4D8'; ctx.lineWidth = 1.2;
+            ctx.beginPath(); ctx.arc(sz * 1.05, 0, sz * 0.16, 0, PI2); ctx.stroke();
+            ctx.fillStyle = '#40080E'; ctx.beginPath(); ctx.arc(sz * 1.05, 0, sz * 0.1, 0, PI2); ctx.fill();
+            if (look.hooks) {
+                ctx.strokeStyle = '#D8D4C8';
+                for (let i = 0; i < 6; i++) { const a2 = (i / 6) * PI2; ctx.beginPath(); ctx.moveTo(sz * 1.05 + Math.cos(a2) * sz * 0.16, Math.sin(a2) * sz * 0.16); ctx.lineTo(sz * 1.05 + Math.cos(a2) * sz * 0.24, Math.sin(a2) * sz * 0.24); ctx.stroke(); }
+            }
+        } else {
+            ctx.fillStyle = '#0A0E12'; ctx.beginPath(); ctx.arc(sz * 0.95, -sz * 0.08, sz * 0.07, 0, PI2); ctx.fill();
+        }
+    } else if (plan === 'ray') {
+        const beat = Math.sin(t * 3 + ph) * 0.3;
+        ctx.fillStyle = hexA(col, 0.85);
+        ctx.beginPath();
+        ctx.moveTo(sz * 0.9, 0);
+        ctx.quadraticCurveTo(0, -sz * (1.15 + beat), -sz * 0.7, -sz * 0.1);
+        ctx.quadraticCurveTo(-sz * 0.4, 0, -sz * 0.7, sz * 0.1);
+        ctx.quadraticCurveTo(0, sz * (1.15 + beat), sz * 0.9, 0);
+        ctx.fill();
+        // Tail whip
+        ctx.strokeStyle = hexA(col, 0.6); ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(-sz * 0.65, 0);
+        for (let i = 1; i <= 4; i++) ctx.lineTo(-sz * (0.65 + i * 0.3), Math.sin(t * 4 + ph + i) * sz * 0.14);
+        ctx.stroke();
+        // Spot pattern (seeded)
+        ctx.fillStyle = 'rgba(255,255,255,0.14)';
+        for (let i = 0; i < 5; i++) ctx.beginPath(), ctx.arc((vr(i) - 0.4) * sz, (vr(i + 9) - 0.5) * sz * 0.9, 1.6 + vr(i + 5) * 2, 0, PI2), ctx.fill();
+        ctx.fillStyle = '#0A0E12';
+        ctx.beginPath(); ctx.arc(sz * 0.5, -sz * 0.12, sz * 0.08, 0, PI2); ctx.fill();
+        ctx.beginPath(); ctx.arc(sz * 0.5, sz * 0.12, sz * 0.08, 0, PI2); ctx.fill();
+    } else if (plan === 'ceph') {
+        const arms = look.longArms ? 6 : 8;
+        const armLen = look.longArms ? 1.9 : 1.25;
+        ctx.strokeStyle = look.glass ? hexA(col, 0.4) : hexA(col, 0.8);
+        for (let i = 0; i < arms; i++) {
+            const spread = ((i / (arms - 1)) - 0.5) * 1.7;
+            ctx.lineWidth = 2.4 - (i % 2) * 0.8;
+            ctx.beginPath(); ctx.moveTo(-sz * 0.25, 0);
+            for (let j2 = 1; j2 <= 5; j2++) {
+                const u2 = j2 / 5;
+                ctx.lineTo(-sz * (0.25 + u2 * armLen), spread * sz * u2 + Math.sin(t * 4 + ph + i * 1.2 + j2) * sz * 0.13 * u2);
+            }
+            ctx.stroke();
+        }
+        // Mantle
+        ctx.fillStyle = look.glass ? hexA(col, 0.28) : col;
+        ctx.beginPath(); ctx.ellipse(sz * 0.32, 0, sz * 0.72, sz * 0.5, 0, 0, PI2); ctx.fill();
+        if (look.glass) { ctx.strokeStyle = hexA(col, 0.7); ctx.lineWidth = 1; ctx.stroke(); }
+        if (look.crown) { // kraken crest
+            ctx.fillStyle = hexA(col, 0.9);
+            for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(sz * 0.7, i * sz * 0.25); ctx.lineTo(sz * 1.15, i * sz * 0.45); ctx.lineTo(sz * 0.85, i * sz * 0.12); ctx.closePath(); ctx.fill(); }
+        }
+        // Eye bar
+        ctx.fillStyle = '#0A0E12'; ctx.beginPath(); ctx.ellipse(sz * 0.5, 0, sz * 0.12, sz * 0.2, 0, 0, PI2); ctx.fill();
+        ctx.fillStyle = '#DFF3FF'; ctx.beginPath(); ctx.arc(sz * 0.53, -sz * 0.06, sz * 0.05, 0, PI2); ctx.fill();
+    } else if (plan === 'crab') {
+        // Legs — angular strides
+        ctx.strokeStyle = hexA(col, 0.85); ctx.lineWidth = 1.8;
+        for (const sgn of [-1, 1]) for (let i = 0; i < 4; i++) {
+            const step = Math.sin(t * 7 + ph + i * 1.5 + (sgn > 0 ? 0 : 0.7)) * 0.16;
+            const bx2 = -sz * 0.35 + i * sz * 0.26;
+            ctx.beginPath(); ctx.moveTo(bx2, sgn * sz * 0.3);
+            ctx.lineTo(bx2 + sz * 0.1, sgn * sz * (0.65 + step));
+            ctx.lineTo(bx2 + sz * 0.02, sgn * sz * (0.95 + step)); ctx.stroke();
+        }
+        // Carapace
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.ellipse(0, 0, sz * 0.78, sz * 0.52, 0, 0, PI2); ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.ellipse(0, -sz * 0.08, sz * 0.55, sz * 0.3, 0, Math.PI, 0); ctx.stroke();
+        // Claws
+        for (const sgn of [-1, 1]) {
+            const snap = Math.abs(Math.sin(t * 2.4 + ph + sgn)) * 0.2;
+            ctx.fillStyle = hexA(col, 0.95);
+            ctx.beginPath(); ctx.ellipse(sz * 0.75, sgn * sz * 0.4, sz * 0.3, sz * 0.18 + snap * sz * 0.1, sgn * 0.4, 0, PI2); ctx.fill();
+        }
+        // Eye stalks
+        ctx.fillStyle = '#0A0E12';
+        ctx.beginPath(); ctx.arc(sz * 0.45, -sz * 0.14, sz * 0.07, 0, PI2); ctx.fill();
+        ctx.beginPath(); ctx.arc(sz * 0.45, sz * 0.14, sz * 0.07, 0, PI2); ctx.fill();
+    } else if (plan === 'sessile') {
+        // Stalk sways; crown does the talking
+        const sway2 = Math.sin(t * 1.4 + ph) * 0.12;
+        ctx.strokeStyle = hexA(col, 0.7); ctx.lineWidth = sz * 0.22;
+        ctx.beginPath(); ctx.moveTo(0, sz * 0.9);
+        ctx.quadraticCurveTo(sway2 * sz, 0, sway2 * sz * 2, -sz * 0.5); ctx.stroke();
+        const cx2 = sway2 * sz * 2, cy2 = -sz * 0.5;
+        if (look.dish) { // listener: a fleshy antenna dish, slowly tracking
+            ctx.fillStyle = hexA(col, 0.5);
+            ctx.beginPath(); ctx.ellipse(cx2, cy2, sz * 0.62, sz * 0.4, Math.sin(t * 0.7 + ph) * 0.4, 0, PI2); ctx.fill();
+            ctx.fillStyle = '#0A0E12'; ctx.beginPath(); ctx.arc(cx2, cy2, sz * 0.1, 0, PI2); ctx.fill();
+            ctx.strokeStyle = hexA('#9FE8FF', 0.3 + Math.sin(t * 3 + ph) * 0.2); ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(cx2, cy2, sz * (0.75 + (t * 0.4 % 0.5)), 0, PI2); ctx.stroke();
+        } else if (look.branches) { // bonecoral antlers
+            ctx.strokeStyle = '#D8D4C4'; ctx.lineWidth = 2;
+            for (let i = 0; i < 4; i++) {
+                const a2 = -Math.PI / 2 + (i - 1.5) * 0.5 + vr(i) * 0.2;
+                ctx.beginPath(); ctx.moveTo(cx2, cy2);
+                ctx.lineTo(cx2 + Math.cos(a2) * sz * 0.8, cy2 + Math.sin(a2) * sz * 0.8);
+                ctx.lineTo(cx2 + Math.cos(a2 + 0.35) * sz * 1.1, cy2 + Math.sin(a2 + 0.35) * sz * 1.1);
+                ctx.stroke();
+            }
+        } else if (look.smoke) { // bonesmoker chimney
+            ctx.fillStyle = col;
+            ctx.beginPath(); ctx.ellipse(cx2, cy2, sz * 0.4, sz * 0.55, 0, 0, PI2); ctx.fill();
+            ctx.fillStyle = 'rgba(160,150,140,0.18)';
+            for (let i = 0; i < 3; i++) {
+                const u2 = ((t * 0.5 + i * 0.33 + vr(i)) % 1);
+                ctx.beginPath(); ctx.arc(cx2 + Math.sin(u2 * 5) * 4, cy2 - sz * 0.5 - u2 * sz * 1.2, 3 + u2 * 6, 0, PI2); ctx.fill();
+            }
+        } else { // polyp tentacle crown
+            ctx.strokeStyle = hexA(col, 0.85); ctx.lineWidth = 1.6;
+            for (let i = 0; i < 8; i++) {
+                const a2 = -Math.PI / 2 + (i - 3.5) * 0.38;
+                const curl = Math.sin(t * 2.2 + ph + i) * 0.25;
+                ctx.beginPath(); ctx.moveTo(cx2, cy2);
+                ctx.quadraticCurveTo(cx2 + Math.cos(a2) * sz * 0.5, cy2 + Math.sin(a2) * sz * 0.5,
+                    cx2 + Math.cos(a2 + curl) * sz * 0.85, cy2 + Math.sin(a2 + curl) * sz * 0.85);
+                ctx.stroke();
+            }
+            ctx.fillStyle = hexA(col, 0.9);
+            ctx.beginPath(); ctx.arc(cx2, cy2, sz * 0.2, 0, PI2); ctx.fill();
+        }
+    } else { // horror
+        const soft = look.soft ? 1 : 0;
+        const baseCol = look.red ? '#7A1E2A' : col;
+        // Tendrils behind
+        const nT = look.tendrils || 5;
+        ctx.strokeStyle = hexA(baseCol, 0.5); ctx.lineWidth = 1.4;
+        for (let i = 0; i < nT; i++) {
+            const a2 = (i / nT) * PI2 + vr(i) * 0.8;
+            ctx.beginPath(); ctx.moveTo(Math.cos(a2) * sz * 0.4, Math.sin(a2) * sz * 0.4);
+            for (let j2 = 1; j2 <= 4; j2++) {
+                const u2 = j2 / 4;
+                ctx.lineTo(Math.cos(a2 + Math.sin(t * 1.6 + ph + i + j2) * 0.3) * sz * (0.4 + u2 * 1.1),
+                           Math.sin(a2 + Math.cos(t * 1.4 + ph + i + j2) * 0.3) * sz * (0.4 + u2 * 1.1));
+            }
+            ctx.stroke();
+        }
+        // Core — irregular pulsing mass (seeded lobes)
+        ctx.fillStyle = hexA(baseCol, soft ? 0.6 : 0.9);
+        ctx.beginPath();
+        for (let i = 0; i <= 9; i++) {
+            const a2 = (i / 9) * PI2;
+            const rr = sz * (0.55 + vr(i % 9) * 0.3 + Math.sin(t * (soft ? 1.2 : 2.5) + ph + i) * 0.08);
+            if (i === 0) ctx.moveTo(Math.cos(a2) * rr, Math.sin(a2) * rr); else ctx.lineTo(Math.cos(a2) * rr, Math.sin(a2) * rr);
+        }
+        ctx.closePath(); ctx.fill();
+        if (look.facets) { // pressureform: impossible geometry lines
+            ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 0.8;
+            for (let i = 0; i < 4; i++) {
+                ctx.beginPath(); ctx.moveTo((vr(i) - 0.5) * sz, (vr(i + 3) - 0.5) * sz);
+                ctx.lineTo((vr(i + 6) - 0.5) * sz, (vr(i + 8) - 0.5) * sz); ctx.stroke();
+            }
+        }
+        if (look.pods) { // carrier: clinging young
+            ctx.fillStyle = hexA(baseCol, 0.85);
+            for (let i = 0; i < 4; i++) {
+                const a2 = vr(i + 20) * PI2, rr = sz * 0.75;
+                ctx.beginPath(); ctx.arc(Math.cos(a2) * rr, Math.sin(a2) * rr, sz * 0.16 + Math.sin(t * 3 + i) * 1, 0, PI2); ctx.fill();
+            }
+        }
+        if (look.maw) { // abyssal maw: the mouth IS the animal
+            ctx.fillStyle = '#12060A';
+            const openM = 0.35 + Math.abs(Math.sin(t * 1.1 + ph)) * 0.3;
+            ctx.beginPath(); ctx.ellipse(sz * 0.2, 0, sz * 0.5 * openM + sz * 0.12, sz * 0.42, 0, 0, PI2); ctx.fill();
+            ctx.fillStyle = '#E8E4D8';
+            for (let i = 0; i < 7; i++) {
+                const a2 = (i / 7) * PI2;
+                ctx.beginPath();
+                ctx.moveTo(sz * 0.2 + Math.cos(a2) * sz * 0.45 * openM, Math.sin(a2) * sz * 0.38);
+                ctx.lineTo(sz * 0.2 + Math.cos(a2) * sz * 0.28 * openM, Math.sin(a2) * sz * 0.22);
+                ctx.lineTo(sz * 0.2 + Math.cos(a2 + 0.25) * sz * 0.45 * openM, Math.sin(a2 + 0.25) * sz * 0.38);
+                ctx.fill();
+            }
+        }
+        // Eyes — mismatched, watching
+        const nE = look.eyes || 2;
+        for (let i = 0; i < nE; i++) {
+            const a2 = vr(i + 30) * PI2, rr = sz * (0.2 + vr(i + 34) * 0.3);
+            const er = sz * (0.06 + vr(i + 38) * 0.07);
+            ctx.fillStyle = '#0A0E12';
+            ctx.beginPath(); ctx.arc(Math.cos(a2) * rr, Math.sin(a2) * rr, er * 1.8, 0, PI2); ctx.fill();
+            ctx.fillStyle = hexA('#FFD866', 0.7 + Math.sin(t * 2 + ph + i) * 0.2);
+            ctx.beginPath(); ctx.arc(Math.cos(a2) * rr, Math.sin(a2) * rr, er, 0, PI2); ctx.fill();
+        }
+        if (look.halo) { // whisperer: a slow ring of not-quite-light
+            ctx.strokeStyle = hexA(col, 0.2 + Math.sin(t * 1.3 + ph) * 0.1); ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(0, 0, sz * 1.35, 0, PI2); ctx.stroke();
+        }
+    }
+}
+
 function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     const p = g.player;
 
@@ -8733,8 +9226,9 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         }
         if ((g.attention || 0) > 20) {
             const at = g.attention / 100;
+            const stWord = g.attention >= 90 ? 'MARKED' : g.attention >= 70 ? 'HUNTED' : g.attention >= 40 ? 'SUSPECTED' : 'NOTICED';
             ctx.fillStyle = hexA(at > 0.6 ? '#FF7060' : '#D8B060', 0.75); ctx.font = 'bold 10px monospace';
-            ctx.fillText('ATTENTION', 16, sy);
+            ctx.fillText(stWord, 16, sy);
             ctx.fillStyle = '#141C24'; ctx.fillRect(80, sy - 8, 70, 7);
             ctx.fillStyle = hexA(at > 0.6 ? '#FF7060' : '#D8B060', 0.8); ctx.fillRect(80, sy - 8, 70 * at, 7);
             sy += 18;
@@ -9008,6 +9502,14 @@ function drawCompactMinimap(w, h, g, pal) {
         const ey = mmCy + (e.y - (wb.cy || 0)) * scale;
         ctx.fillStyle = e.isBoss ? '#FF2030' : 'rgba(220,80,80,0.85)';
         ctx.fillRect(ex - 1, ey - 1, e.isBoss ? 4 : 2, e.isBoss ? 4 : 2);
+    }
+    // LAST KNOWN POSITION — amber pulse: where the trench thinks you are
+    if (g.lastNoise && (g.attention || 0) > 20 && g.runTime - g.lastNoise.t < 60) {
+        const nx2 = mmCx + (g.lastNoise.x - (wb.cx || 0)) * scale;
+        const ny2 = mmCy + (g.lastNoise.y - (wb.cy || 0)) * scale;
+        const lkPulse = 0.4 + Math.sin(g.runTime * 3) * 0.3;
+        ctx.strokeStyle = hexA('#E8B050', lkPulse); ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.arc(nx2, ny2, 4 + Math.sin(g.runTime * 3) * 1.5, 0, PI2); ctx.stroke();
     }
     // Wrecks — gold squares
     for (const wr of (g.wrecks || [])) {
@@ -11177,7 +11679,14 @@ function pressPuzzle(i) {
     puzzleMoves++;
     if (puzzleGrid.every(v => v)) {
         puzzleSolved = true;
-        if (game && game._puzzleReward === 'battery') {
+        if (game && game._puzzleReward === 'unseal' && game._puzzleWreck) {
+            game._puzzleReward = null;
+            game._puzzleWreck.sealed = false;
+            game._puzzleWreck.sealedBonus = true;
+            game._puzzleWreck = null;
+            addNereidLog(game, 'Bay power restored. The doors remember how to open. Take what they were keeping.');
+            game.streak = 'BAY UNSEALED — bonus cargo'; game.streakTimer = 2.5;
+        } else if (game && game._puzzleReward === 'battery') {
             game._puzzleReward = null;
             game.player.battery = Math.min(125, (game.player.battery || 100) + 25);
             addNereidLog(game, 'Junction rebuilt properly. Power restored. Good hands, Pilot.');
