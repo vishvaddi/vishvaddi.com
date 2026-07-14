@@ -10716,10 +10716,10 @@ function drawDeathScreen(w, h, g) {
     const headColor = surfaced ? '#80FFA0' : dPal.accent;
     ctx.fillStyle = hexA(headColor, 0.15);
     ctx.font = 'bold 60px monospace';
-    ctx.fillText(`${reportDepth}m`, w / 2, h / 2 - 115);
+    ctx.fillText(`${Math.floor(reportDepth)}m`, w / 2, h / 2 - 115);
     ctx.fillStyle = headColor;
     ctx.font = 'bold 56px monospace';
-    ctx.fillText(`${reportDepth}m`, w / 2, h / 2 - 117);
+    ctx.fillText(`${Math.floor(reportDepth)}m`, w / 2, h / 2 - 117);
     // Zone
     ctx.fillStyle = dPal.textDim;
     ctx.font = '12px monospace';
