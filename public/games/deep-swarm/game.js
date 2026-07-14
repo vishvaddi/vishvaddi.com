@@ -295,6 +295,11 @@ function initAudio() {
     // Dry path: source -> underwaterFilter -> masterGain -> destination (LOUD)
     underwaterFilter.connect(masterGain);
     masterGain.connect(audioCtx.destination);
+    // Split buses: independent music/sfx volume, both through the water
+    sfxBus = audioCtx.createGain(); sfxBus.gain.value = meta.sfxVol != null ? meta.sfxVol : 1;
+    sfxBus.connect(underwaterFilter);
+    musicBus = audioCtx.createGain(); musicBus.gain.value = meta.musicVol != null ? meta.musicVol : 0.7;
+    musicBus.connect(underwaterFilter);
     // Wet path: source -> underwaterFilter -> reverbNode -> wetGain -> destination (QUIET)
     const wetGain = audioCtx.createGain();
     wetGain.gain.value = 0.12; // only 12% wet — subtle tail, not cathedral
@@ -311,7 +316,7 @@ function playTone(freq, dur, type = 'sine', vol = 0.15) {
     o.type = type; o.frequency.value = freq;
     g.gain.setValueAtTime(vol, audioCtx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-    o.connect(g); g.connect(underwaterFilter || audioCtx.destination);
+    o.connect(g); g.connect(sfxBus || underwaterFilter || audioCtx.destination);
     o.start(); o.stop(audioCtx.currentTime + dur + 0.1);
 }
 
@@ -324,8 +329,149 @@ function noiseBurst(dur, vol, cutoff) {
     const n = audioCtx.createBufferSource(); n.buffer = buf;
     const ng = audioCtx.createGain(); ng.gain.value = vol;
     const nf = audioCtx.createBiquadFilter(); nf.type = 'lowpass'; nf.frequency.value = cutoff || 500;
-    n.connect(nf); nf.connect(ng); ng.connect(underwaterFilter || audioCtx.destination);
+    n.connect(nf); nf.connect(ng); ng.connect(sfxBus || underwaterFilter || audioCtx.destination);
     n.start();
+}
+
+// =====================================================================
+// MUSIC SYSTEM — zone-layered bed + beat, corruption-reactive.
+// Files in music/*.ogg (sources + licences: music/README.md). Bed = drone
+// ambience (Shapeforms Dystopia); beat = rhythmic layer (ESM loops /
+// White Bat / Pixabay drop-ins). Missing files fail silent — the game
+// never breaks because a track isn't there. [N] in pause auditions beat
+// candidates for the current slot; the pick persists per slot.
+// =====================================================================
+let musicBus = null, sfxBus = null;
+const MUSIC = {
+    title:    { bed: 'bed_signal',       beats: ['beat_looming'] },
+    sunlight: { bed: 'bed_signal',       beats: ['beat_discovery', 'beat_rabbit'] },
+    twilight: { bed: 'bed_tundra',       beats: ['beat_tribe', 'beat_timesensitive'] },
+    midnight: { bed: 'bed_hold',         beats: ['beat_twisted', 'beat_redflag'] },
+    abyssal:  { bed: 'bed_wind',         beats: ['beat_looming', 'beat_trust'] },
+    hadal:    { bed: 'bed_heartbeat',    beats: ['beat_faultering'] },
+    p3:       { bed: 'bed_powerstation', beats: ['beat_alerting', 'beat_twisted'] },
+};
+const _musicBuf = {};
+let _music = { slot: null, layers: [], switching: false };
+
+function musicBuffer(name) {
+    if (_musicBuf[name] !== undefined) return Promise.resolve(_musicBuf[name]);
+    _musicBuf[name] = null;   // in-flight marker — parallel callers get null once, then the cache
+    return fetch('music/' + name + '.ogg')
+        .then(res => { if (!res.ok) throw 0; return res.arrayBuffer(); })
+        .then(ab => audioCtx.decodeAudioData(ab))
+        .then(buf => { _musicBuf[name] = buf; return buf; })
+        .catch(() => { _musicBuf[name] = false; return false; });
+}
+
+function musicSlot() {
+    if (phase === 'title' || phase === 'shop' || phase === 'workshop' || phase === 'modules' ||
+        phase === 'contracts' || phase === 'codex' || phase === 'cards' || phase === 'mooring' ||
+        phase === 'intro' || phase === 'tutorial' || phase === 'puzzle') return 'title';
+    if (!game || (phase !== 'playing' && phase !== 'paused' && phase !== 'levelup' && phase !== 'event' && phase !== 'gameover')) return null;
+    if (game.moon === 'p3') return 'p3';
+    const d = game.depth || 0;
+    return d < 200 ? 'sunlight' : d < 1000 ? 'twilight' : d < 2000 ? 'midnight' : d < 4000 ? 'abyssal' : 'hadal';
+}
+
+function beatFor(slot) {
+    const def = MUSIC[slot];
+    if (!def || !def.beats.length) return null;
+    const pick = (meta.beatPick && meta.beatPick[slot]) || 0;
+    return def.beats[pick % def.beats.length];
+}
+
+async function startMusicSlot(slot) {
+    if (!audioCtx || !musicBus) return;
+    _music.switching = true;
+    const now = audioCtx.currentTime;
+    for (const L of _music.layers) {
+        try {
+            L.gain.gain.cancelScheduledValues(now);
+            L.gain.gain.setValueAtTime(L.gain.gain.value, now);
+            L.gain.gain.linearRampToValueAtTime(0, now + 2.5);
+            L.src.stop(now + 2.6);
+        } catch (err) { /* already stopped */ }
+    }
+    _music.layers = [];
+    _music.slot = slot;
+    const def = MUSIC[slot];
+    if (!def) { _music.switching = false; return; }
+    const wanted = [{ name: def.bed, vol: 0.55, kind: 'bed' }];
+    const beat = beatFor(slot);
+    if (beat) wanted.push({ name: beat, vol: 0.34, kind: 'beat' });
+    for (const wtd of wanted) {
+        const buf = await musicBuffer(wtd.name);
+        if (!buf || _music.slot !== slot) continue;   // file missing, or zone moved on mid-decode
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf; src.loop = true;
+        const g = audioCtx.createGain(); g.gain.value = 0;
+        let head = src, filter = null;
+        if (wtd.kind === 'beat') {
+            filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 9000;
+            src.connect(filter); head = filter;
+        }
+        head.connect(g); g.connect(musicBus);
+        const t = audioCtx.currentTime;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(wtd.vol, t + 3.5);
+        src.start();
+        _music.layers.push({ src, gain: g, filter, kind: wtd.kind, vol: wtd.vol, name: wtd.name });
+    }
+    _music.switching = false;
+}
+
+let _duckT = 0;
+function duckMusic(sec = 1.4) { _duckT = Math.max(_duckT, sec); }
+
+let _lastCorrTier = 0;
+function updateMusic(dt) {
+    if (!audioCtx || !musicBus) return;
+    const slot = musicSlot();
+    if (slot && slot !== _music.slot && !_music.switching) startMusicSlot(slot);
+    // Duck envelope (damage, boss arrivals) — recovers on its own
+    const target = (meta.musicVol != null ? meta.musicVol : 0.7) * (_duckT > 0 ? 0.35 : 1);
+    musicBus.gain.value += (target - musicBus.gain.value) * Math.min(1, dt * 5);
+    if (_duckT > 0) _duckT -= dt;
+    const corr = game ? (game.corruption || 0) : 0;
+    // Corruption drags the beat under: slight detune, then 60→90 the beat
+    // "drowns" (lowpass sweeps 9kHz→300Hz) leaving bed + heartbeat.
+    for (const L of _music.layers) {
+        if (L.kind !== 'beat') continue;
+        try { L.src.playbackRate.value = 1 - Math.min(0.035, corr * 0.0004); } catch (err) { /* stopped */ }
+        if (L.filter) {
+            const clear = corr <= 60 ? 1 : Math.max(0, 1 - (corr - 60) / 30);
+            L.filter.frequency.value = 300 + 8700 * clear;
+        }
+    }
+    // Corruption tier crossings get a glitch burst (40/60/75/90)
+    const tier = corr >= 90 ? 4 : corr >= 75 ? 3 : corr >= 60 ? 2 : corr >= 40 ? 1 : 0;
+    if (tier > _lastCorrTier) playSample(tier >= 3 ? 'glitch2' : 'glitch1', 0.5);
+    _lastCorrTier = tier;
+}
+
+function nextBeatCandidate() {
+    const slot = _music.slot;
+    if (!slot || !MUSIC[slot] || MUSIC[slot].beats.length < 2) return null;
+    meta.beatPick = meta.beatPick || {};
+    meta.beatPick[slot] = ((meta.beatPick[slot] || 0) + 1) % MUSIC[slot].beats.length;
+    saveMeta();
+    startMusicSlot(slot);
+    return beatFor(slot);
+}
+
+// --- Sampled SFX (pack one-shots; the procedural engine stays for the rest) ---
+const SFX_SAMPLES = { glitch1: 'sfx_glitch1', glitch2: 'sfx_glitch2', ui: 'sfx_ui', impact: 'sfx_impact', stinger: 'sfx_stinger', tear: 'sfx_tear' };
+function playSample(key, vol = 0.5, rate = 1) {
+    if (!audioCtx || !SFX_SAMPLES[key]) return;
+    musicBuffer(SFX_SAMPLES[key]).then(buf => {
+        if (!buf) return;
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf; src.playbackRate.value = rate;
+        const g = audioCtx.createGain(); g.gain.value = vol;
+        src.connect(g); g.connect(sfxBus || underwaterFilter);
+        src.start();
+    });
 }
 
 // --- INDIVIDUAL SOUNDS ---
@@ -442,7 +588,7 @@ function sfxDash() {
     o.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.15);
     g.gain.setValueAtTime(0.16, audioCtx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
-    o.connect(g); g.connect(underwaterFilter || audioCtx.destination);
+    o.connect(g); g.connect(sfxBus || underwaterFilter || audioCtx.destination);
     o.start(); o.stop(audioCtx.currentTime + 0.2);
     // Ascending whistle (the jet release)
     setTimeout(() => playTone(420, 0.08, 'sine', 0.05), 30);
@@ -757,7 +903,7 @@ canvas.addEventListener('mousedown', e => {
     if (phase !== 'playing') {
         const rect = canvas.getBoundingClientRect();
         const z = hitTapZone(e.clientX - rect.left, e.clientY - rect.top);
-        if (z) simulateKey(z.key);
+        if (z) { if (z.key !== 'Escape') playSample('ui', 0.22); simulateKey(z.key); }
         return;
     }
     if (!game) return;
@@ -836,6 +982,9 @@ if (!meta.hintsSeen) meta.hintsSeen = [];
 UI_SCALE = meta.uiScale;
 // Migrate missing meta fields
 if (meta.volume === undefined) meta.volume = 0.8;
+if (meta.musicVol === undefined) meta.musicVol = 0.7;
+if (meta.sfxVol === undefined) meta.sfxVol = 1;
+if (meta.worldZoom === undefined) meta.worldZoom = null;   // null = auto by screen size
 if (meta.muted === undefined) meta.muted = false;
 if (meta.highestStake === undefined) meta.highestStake = 0;
 if (meta.currentStake === undefined) meta.currentStake = 0;
@@ -3573,7 +3722,7 @@ function onTouchStart(e) {
         // Menus / overlays — tap zones registered by the current screen's draw
         if (phase !== 'playing') {
             const z = hitTapZone(tx, ty);
-            if (z) simulateKey(z.key);
+            if (z) { if (z.key !== 'Escape') playSample('ui', 0.22); simulateKey(z.key); }
             continue;
         }
         // In-game buttons
@@ -4057,6 +4206,9 @@ function update(dt) {
         const spawnBossAt = (typeId) => {
             if (g._bossesSpawned[typeId]) return;
             g._bossesSpawned[typeId] = true;
+            // Something enormous just noticed you — the music gets out of its way
+            duckMusic(3);
+            playSample('stinger', 0.8);
             const boss = ENEMY_TYPES[typeId];
             const a = Math.random() * PI2;
             const e = {
@@ -4555,7 +4707,7 @@ function update(dt) {
                 const pR = def.pulseR || 220;
                 if (dist(e, p) < pR && p.iFrames <= 0) {
                     const dmg = Math.max(1, (def.pulseDmg || 18) - p.armor);
-                    p.hp -= dmg; p.iFrames = 0.5; g.shake = 5; sfxHit();
+                    p.hp -= dmg; p.iFrames = 0.5; g.shake = 5; sfxHit(); duckMusic(0.8); playSample("impact", 0.4, 0.9 + Math.random() * 0.2);
                     if (g.scoreCombo) g.scoreCombo.lastHitTime = g.runTime;
                     g._lastAttackerTypeId = e.typeId;
                 }
@@ -4598,7 +4750,7 @@ function update(dt) {
                     p.y += Math.sin(ta) * pull * dt;
                     if (dToPlayer < 46 && p.iFrames <= 0) {
                         const dmg = Math.max(4, (e.damage || 12) - p.armor);
-                        p.hp -= dmg; p.iFrames = 0.6; g.shake = 6; sfxHit();
+                        p.hp -= dmg; p.iFrames = 0.6; g.shake = 6; sfxHit(); duckMusic(0.8); playSample("impact", 0.45, 0.85 + Math.random() * 0.2);
                         if (g.scoreCombo) g.scoreCombo.lastHitTime = g.runTime;
                         g._lastAttackerTypeId = e.typeId;
                         e._tethered = false; e._tetherCd = 4;
@@ -5866,6 +6018,14 @@ function draw() {
         modules: drawModules, contracts: drawContracts, puzzle: drawPuzzle,
         cards: drawCardDraft, codex: drawCodex, tutorial: drawTutorial,
     };
+    // Round 4: title + card draft get REAL mobile layouts on phones — the
+    // scale-to-fit shrink (h/760 ≈ 0.5 on a landscape phone) made them
+    // legible-at-arm's-length tiny. Other menus keep scale-to-fit for now.
+    if (touchUI() && Math.min(w, h) < 520 && (phase === 'title' || phase === 'cards')) {
+        MENU_S = 1;
+        if (phase === 'title') drawTitleMobile(w, h); else drawCardDraftMobile(w, h);
+        return;
+    }
     if (MENU_DRAWS[phase] || phase === 'mooring') {
         // Width AND height matter: landscape phones are short, not narrow
         MENU_S = Math.min(1, w / 720, h / 760);
@@ -5949,7 +6109,10 @@ function draw() {
     // PHONE ZOOM — 1:1 world scale is ant-sized on a hand-span screen. Zoom the
     // world about the view centre; the clip's save/restore pops it with the clip.
     // (Touch aim is nearest-enemy, so no pointer math needs the inverse.)
-    const WORLD_Z = small ? (Math.min(w, h) < 480 ? 1.35 : 1.2) : 1;
+    // Round-4 verdict: 1.35 was too much. Auto 1.15/1.1, overridable via [V]
+    // (cycles 1.0 / 1.15 / 1.3, persists in meta.worldZoom; null = auto).
+    const autoZ = Math.min(w, h) < 480 ? 1.15 : 1.1;
+    const WORLD_Z = small ? (meta.worldZoom || autoZ) : 1;
     g._worldZ = WORLD_Z;
     if (WORLD_Z !== 1) { ctx.translate(vpCx, vpCy); ctx.scale(WORLD_Z, WORLD_Z); ctx.translate(-vpCx, -vpCy); }
 
@@ -9431,32 +9594,41 @@ function drawDeathScreen(w, h, g) {
 // FEATURE 1: Pause Menu
 // =====================================================================
 function drawPauseOverlay(w, h, g) {
-    addTapZone(0, 0, w, h, 'Escape');   // tap anywhere resumes
-    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    // NOTE: hitTapZone is first-match-wins — the fullscreen resume zone is
+    // registered at the END so the option rows underneath stay tappable.
+    ctx.fillStyle = 'rgba(0,0,0,0.8)';
     ctx.fillRect(0, 0, w, h);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#5ADFCF';
-    ctx.font = 'bold 32px monospace';
-    ctx.fillText('PAUSED', w/2, h/2 - 100);
-    ctx.fillStyle = '#888';
-    ctx.font = '13px monospace';
-    const lines = [
-        '[ESC] Resume',
-        `[M] ${meta.muted ? 'Unmute' : 'Mute'} Sound`,
-        `[ Volume: ${Math.round(meta.volume * 100)}% — adjust with [ and ] ]`,
-        `[T] HUD text size: ${Math.round((meta.uiScale || 1) * 100)}%`,
-        `[H] High-contrast HUD: ${meta.hudContrast ? 'ON' : 'off'}`,
-        '[Q] Quit to Title',
+    ctx.font = 'bold 26px monospace';
+    const compact = h < 460;
+    const rowH = compact ? 30 : 36;
+    let ry = compact ? 52 : h / 2 - 150;
+    ctx.fillText('PAUSED', w / 2, ry - (compact ? 18 : 24));
+    // Every row is a tap zone — phones have no keyboard. ◂ ▸ rows get
+    // split zones (left half = down, right half = up).
+    const rows = [
+        { label: '[ESC] Resume', key: 'Escape', color: '#5ADFCF' },
+        { label: `[M] Sound: ${meta.muted ? 'MUTED' : 'on'}`, key: 'm' },
+        { label: `[ ◂ ] Master ${Math.round(meta.volume * 100)}% [ ▸ ]`, keyL: '[', keyR: ']' },
+        { label: `[ ◂ ] Music ${Math.round((meta.musicVol != null ? meta.musicVol : 0.7) * 100)}% [ ▸ ]`, keyL: ',', keyR: '.' },
+        { label: `[ ◂ ] SFX ${Math.round((meta.sfxVol != null ? meta.sfxVol : 1) * 100)}% [ ▸ ]`, keyL: ';', keyR: "'" },
+        { label: '[N] Next track (this zone)', key: 'n' },
+        { label: `[V] World zoom: ${meta.worldZoom ? Math.round(meta.worldZoom * 100) + '%' : 'auto'}`, key: 'v' },
+        { label: `[T] HUD text: ${Math.round((meta.uiScale || 1) * 100)}%`, key: 't' },
+        { label: `[H] High-contrast HUD: ${meta.hudContrast ? 'ON' : 'off'}`, key: 'h' },
+        { label: '[Q] Quit to Title', key: 'q', color: '#C47840' },
     ];
-    for (let i = 0; i < lines.length; i++) {
-        ctx.fillStyle = i === 0 ? '#5ADFCF' : '#AAA';
-        ctx.fillText(lines[i], w/2, h/2 - 40 + i * 35);
+    ctx.font = (compact ? '12px' : '13px') + ' monospace';
+    const zoneW = 300;
+    for (const row of rows) {
+        ctx.fillStyle = row.color || '#AAB8C2';
+        ctx.fillText(row.label, w / 2, ry);
+        if (row.key) addTapZone(w / 2 - zoneW / 2, ry - rowH / 2 - 4, zoneW, rowH, row.key);
+        else { addTapZone(w / 2 - zoneW / 2, ry - rowH / 2 - 4, zoneW / 2, rowH, row.keyL); addTapZone(w / 2, ry - rowH / 2 - 4, zoneW / 2, rowH, row.keyR); }
+        ry += rowH;
     }
-    // Volume bar
-    const vbx = w/2 - 100, vby = h/2 + 70;
-    ctx.fillStyle = '#222'; ctx.fillRect(vbx, vby, 200, 10);
-    ctx.fillStyle = '#5ADFCF'; ctx.fillRect(vbx, vby, 200 * meta.volume, 10);
-    ctx.strokeStyle = '#5ADFCF'; ctx.lineWidth = 1; ctx.strokeRect(vbx, vby, 200, 10);
+    addTapZone(0, 0, w, h, 'Escape');   // tap anywhere outside the rows resumes
 }
 
 // =====================================================================
@@ -10195,6 +10367,205 @@ function drawPuzzle(w, h) {
 
 // --- Card Draft Screen ---
 let cardHand = [], cardSelected = new Set();
+// ===== MOBILE TITLE — landscape phone (~780×390). Real pixels, big targets. =====
+function drawTitleMobile(w, h) {
+    const tt = Date.now() / 1000;
+    ctx.fillStyle = '#010208'; ctx.fillRect(0, 0, w, h);
+    if (titleBgImg && titleBgImg._ready) {
+        const iw = titleBgImg.naturalWidth || 1, ih = titleBgImg.naturalHeight || 1;
+        const scale = Math.max(w / iw, h / ih);
+        ctx.drawImage(titleBgImg, (w - iw * scale) / 2, (h - ih * scale) / 2, iw * scale, ih * scale);
+        ctx.fillStyle = 'rgba(0,4,10,0.66)'; ctx.fillRect(0, 0, w, h);
+    }
+    // Header: title left, stats right
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 24px monospace';
+    ctx.fillText('DEEP SWARM', 16, 30);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#7A8A98'; ctx.font = '11px monospace';
+    ctx.fillText(`⌁ ${meta.signal || 0} · ${meta.gold}g · best W${meta.bestWave}`, w - 16, 30);
+
+    // Character cells — 4 across, real size
+    const chars = Object.entries(CHARACTERS);
+    const gap = 10, cellW = Math.min(180, (w - 32 - gap * (chars.length - 1)) / chars.length), cellH = 108;
+    let cx = (w - (cellW * chars.length + gap * (chars.length - 1))) / 2;
+    const cy = 42;
+    for (let i = 0; i < chars.length; i++) {
+        const [id, ch] = chars[i];
+        const unlocked = meta.unlocked.includes(id);
+        const selected = meta.selectedChar === id;
+        addTapZone(cx, cy, cellW, cellH, String(i + 1));
+        ctx.fillStyle = selected ? '#0E2030' : '#080F18';
+        ctx.beginPath(); ctx.roundRect(cx, cy, cellW, cellH, 6); ctx.fill();
+        ctx.strokeStyle = selected ? ch.color : (unlocked ? '#2A3540' : '#1A2028');
+        ctx.lineWidth = selected ? 2.5 : 1;
+        ctx.beginPath(); ctx.roundRect(cx, cy, cellW, cellH, 6); ctx.stroke();
+        ctx.textAlign = 'center';
+        if (unlocked) {
+            drawGlow(ctx, ch.color, cx + cellW / 2, cy + 30, 24, selected ? 0.7 : 0.35);
+            ctx.fillStyle = ch.color;
+            ctx.beginPath(); ctx.arc(cx + cellW / 2, cy + 30, 12, 0, PI2); ctx.fill();
+            ctx.fillStyle = '#FFF';
+            ctx.beginPath(); ctx.arc(cx + cellW / 2 + 9, cy + 30, 2.2, 0, PI2); ctx.fill();
+            ctx.fillStyle = selected ? '#FFF' : '#9AB0C0'; ctx.font = 'bold 13px monospace';
+            ctx.fillText(ch.name, cx + cellW / 2, cy + 62);
+            ctx.fillStyle = '#7A8A98'; ctx.font = '11px monospace';
+            ctx.fillText(`HP ${ch.hp} · SPD ${ch.speed}`, cx + cellW / 2, cy + 80);
+            ctx.fillText(`${ch.crushDepth}m crush`, cx + cellW / 2, cy + 96);
+        } else {
+            ctx.fillStyle = '#2A3540'; ctx.font = 'bold 20px monospace';
+            ctx.fillText('???', cx + cellW / 2, cy + 44);
+            ctx.fillStyle = '#5A6A7A'; ctx.font = '11px monospace';
+            ctx.fillText('LOCKED', cx + cellW / 2, cy + 72);
+        }
+        cx += cellW + gap;
+    }
+
+    // Hull bar — slim, with repair tap when damaged
+    const hc = meta.hullCondition != null ? meta.hullCondition : 100;
+    const hullColor = hc > 70 ? '#4A9A6A' : hc > 35 ? '#DAA520' : '#DA4060';
+    const hbY = cy + cellH + 10, hbW = Math.min(420, w - 220), hbX = 16;
+    ctx.fillStyle = '#070D14'; ctx.beginPath(); ctx.roundRect(hbX, hbY, hbW, 12, 4); ctx.fill();
+    ctx.fillStyle = hullColor; ctx.beginPath(); ctx.roundRect(hbX + 1, hbY + 1, (hbW - 2) * (hc / 100), 10, 3); ctx.fill();
+    ctx.textAlign = 'left'; ctx.fillStyle = hullColor; ctx.font = 'bold 11px monospace';
+    ctx.fillText(`HULL ${Math.floor(hc)}%`, hbX + hbW + 8, hbY + 10);
+    if (hc < 100 && meta.gold >= 5) {
+        ctx.fillStyle = '#FFD040'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'right';
+        ctx.fillText('[REPAIR]', w - 16, hbY + 10);
+        addTapZone(w - 110, hbY - 8, 100, 30, 'h');
+    }
+
+    // Action row: big DIVE + secondary buttons
+    const btnY = hbY + 24, btnH = 46;
+    const dive = { x: 16, w: Math.min(230, w * 0.3) };
+    ctx.fillStyle = '#0A2A28'; ctx.beginPath(); ctx.roundRect(dive.x, btnY, dive.w, btnH, 8); ctx.fill();
+    ctx.strokeStyle = '#5ADFCF'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(dive.x, btnY, dive.w, btnH, 8); ctx.stroke();
+    ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('DIVE ▼', dive.x + dive.w / 2, btnY + 29);
+    addTapZone(dive.x, btnY, dive.w, btnH, 'Enter');
+    const secondary = [
+        { label: 'UPGRADES', key: 'u', color: '#DAA520' },
+        { label: `CODEX ${meta.loreFragments.length}`, key: 'c', color: '#5AAFDA' },
+        { label: dailyArmed ? '◈ DAILY ON' : 'DAILY', key: 'd', color: '#E8D080' },
+    ];
+    if (meta.p3Unlocked) secondary.push({ label: meta.destination === 'p3' ? '→ P3 SCAR' : '→ P9', key: 'p', color: meta.destination === 'p3' ? '#C87840' : '#4A8ADA' });
+    let sx = dive.x + dive.w + 10;
+    const secW = Math.min(150, (w - sx - 16 - 10 * (secondary.length - 1)) / secondary.length);
+    for (const b of secondary) {
+        ctx.fillStyle = '#080F16'; ctx.beginPath(); ctx.roundRect(sx, btnY, secW, btnH, 8); ctx.fill();
+        ctx.strokeStyle = b.color; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.roundRect(sx, btnY, secW, btnH, 8); ctx.stroke();
+        ctx.fillStyle = b.color; ctx.font = 'bold 12px monospace';
+        ctx.fillText(b.label, sx + secW / 2, btnY + 28);
+        addTapZone(sx, btnY, secW, btnH, b.key);
+        sx += secW + 10;
+    }
+
+    // Stakes chips — compressed row (only if unlocked)
+    if ((meta.stakesUnlocked || 0) > 0) {
+        const active = new Set(meta.stakeSet || []);
+        const chY = btnY + btnH + 8, chH = 30;
+        const chW = (w - 32 - 6 * (STAKE_DEFS.length - 1)) / STAKE_DEFS.length;
+        let cx0 = 16;
+        for (let si = 0; si < STAKE_DEFS.length; si++) {
+            const sd = STAKE_DEFS[si];
+            const unlocked = si < (meta.stakesUnlocked || 0);
+            const on = active.has(sd.id);
+            ctx.fillStyle = on ? hexA(sd.color, 0.25) : '#080F16';
+            ctx.beginPath(); ctx.roundRect(cx0, chY, chW, chH, 5); ctx.fill();
+            ctx.strokeStyle = on ? sd.color : (unlocked ? '#3A4A5A' : '#1A2028'); ctx.lineWidth = on ? 2 : 1;
+            ctx.beginPath(); ctx.roundRect(cx0, chY, chW, chH, 5); ctx.stroke();
+            ctx.fillStyle = unlocked ? (on ? sd.color : '#8A9AAA') : '#2A3540'; ctx.font = 'bold 10px monospace';
+            ctx.fillText(unlocked ? sd.name.toUpperCase() : '🔒', cx0 + chW / 2, chY + 19);
+            if (unlocked) addTapZone(cx0, chY, chW, chH, sd.key);
+            cx0 += chW + 6;
+        }
+    }
+
+    // Bottom line: dive-count subtitle, subtle
+    ctx.fillStyle = `rgba(90,160,170,${0.3 + Math.sin(tt * 0.5) * 0.12})`;
+    ctx.font = '10px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(meta.totalRuns === 0 ? '"The ocean remembers everything you forget."' : `${meta.totalRuns} dives · ${meta.totalKills} dead · the swarm grows`, w / 2, h - 8);
+}
+
+// ===== MOBILE CARD DRAFT — cards fill the real screen, no shrink =====
+function drawCardDraftMobile(w, h) {
+    ctx.fillStyle = '#010208'; ctx.fillRect(0, 0, w, h);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 18px monospace';
+    ctx.fillText(`SELECT 3 CARDS — ${cardSelected.size}/3`, w / 2, 26);
+    // Dive brief — one compact line per objective, top-right corner clear
+    if (pendingObjectives && pendingObjectives.length) {
+        ctx.font = '10px monospace'; ctx.textAlign = 'left';
+        for (let oi = 0; oi < pendingObjectives.length; oi++) {
+            ctx.fillStyle = '#A0DDD0';
+            ctx.fillText(`◯ ${pendingObjectives[oi].brief} (+${pendingObjectives[oi].scoreBonus})`, 14, 44 + oi * 13);
+        }
+    }
+    const topY = 44 + (pendingObjectives ? pendingObjectives.length * 13 : 0) + 6;
+    const gap = 8;
+    const cardW = (w - 28 - gap * (cardHand.length - 1)) / cardHand.length;
+    const cardH = Math.min(h - topY - 60, 230);
+    const startX = 14, by = topY;
+    ctx.textAlign = 'center';
+    for (let i = 0; i < cardHand.length; i++) {
+        const c = cardHand[i];
+        const bx = startX + i * (cardW + gap);
+        const sel = cardSelected.has(i);
+        addTapZone(bx, by, cardW, cardH, String(i + 1));
+        ctx.fillStyle = sel ? '#1a2a3a' : '#0a1015';
+        ctx.fillRect(bx, by, cardW, cardH);
+        ctx.strokeStyle = sel ? RARITY_COLORS[c.rarity] : '#333';
+        ctx.lineWidth = sel ? 3 : 1;
+        ctx.strokeRect(bx, by, cardW, cardH);
+        ctx.fillStyle = RARITY_COLORS[c.rarity]; ctx.fillRect(bx, by, cardW, 4);
+        ctx.fillStyle = RARITY_COLORS[c.rarity]; ctx.font = 'bold 12px monospace';
+        // Name — wrap on width, not char count
+        const nameWords = c.name.split(' ');
+        let nl = '', ny = by + 22;
+        for (const word of nameWords) {
+            const t = nl + word + ' ';
+            if (ctx.measureText(t).width > cardW - 10 && nl) { ctx.fillText(nl.trim(), bx + cardW / 2, ny); ny += 14; nl = word + ' '; }
+            else nl = t;
+        }
+        ctx.fillText(nl.trim(), bx + cardW / 2, ny);
+        ctx.fillStyle = '#556'; ctx.font = '10px monospace';
+        ctx.fillText(c.tags.join(' '), bx + cardW / 2, ny + 16);
+        ctx.fillStyle = '#AAB8C2'; ctx.font = '11px monospace';
+        const words = c.desc.split(' ');
+        let line = '', ly = ny + 34;
+        for (const word of words) {
+            const t = line + word + ' ';
+            if (ctx.measureText(t).width > cardW - 12 && line) { ctx.fillText(line.trim(), bx + cardW / 2, ly); ly += 13; line = word + ' '; }
+            else line = t;
+        }
+        ctx.fillText(line.trim(), bx + cardW / 2, ly);
+        ctx.fillStyle = RARITY_COLORS[c.rarity]; ctx.font = 'bold 10px monospace';
+        ctx.fillText(c.rarity.toUpperCase(), bx + cardW / 2, by + cardH - 10);
+        if (sel) { ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 16px monospace'; ctx.fillText('✓', bx + cardW - 14, by + 20); }
+    }
+    // Synergies + confirm
+    if (cardSelected.size > 0) {
+        const selCards = [...cardSelected].map(i => cardHand[i]);
+        const tagCounts = {};
+        for (const c of selCards) for (const t of c.tags) tagCounts[t] = (tagCounts[t] || 0) + 1;
+        const synHits = SYNERGIES.filter(s => (tagCounts[s.tag] || 0) >= s.count);
+        if (synHits.length > 0) {
+            ctx.fillStyle = '#DAA520'; ctx.font = 'bold 11px monospace';
+            ctx.fillText('SYNERGY: ' + synHits.map(s => s.name).join(' + '), w / 2 - 120, h - 22);
+        }
+    }
+    if (cardSelected.size === 3) {
+        const cbW = 200, cbH = 42, cbX = w - cbW - 14, cbY = h - cbH - 10;
+        ctx.fillStyle = '#0a2520'; ctx.beginPath(); ctx.roundRect(cbX, cbY, cbW, cbH, 8); ctx.fill();
+        ctx.strokeStyle = '#80E0A0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(cbX, cbY, cbW, cbH, 8); ctx.stroke();
+        ctx.fillStyle = '#80E0A0'; ctx.font = 'bold 16px monospace';
+        ctx.fillText('DIVE ▼', cbX + cbW / 2, cbY + 27);
+        addTapZone(cbX, cbY, cbW, cbH, 'Enter');
+    } else {
+        ctx.fillStyle = '#556'; ctx.font = '11px monospace';
+        ctx.fillText('tap cards to select', w - 110, h - 22);
+    }
+}
+
 function drawCardDraft(w, h) {
     ctx.fillStyle = '#010208'; ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 24px monospace'; ctx.textAlign = 'center';
@@ -10530,6 +10901,15 @@ window.addEventListener('keydown', e => {
         game.streakTimer = 2;
         return;
     }
+    // WORLD ZOOM — [V] cycles 1.0 / 1.15 / 1.3 on touch screens (persisted)
+    if ((phase === 'playing' || phase === 'paused') && (e.key === 'v' || e.key === 'V')) {
+        e.preventDefault();
+        const cur = meta.worldZoom || 1.15;
+        meta.worldZoom = cur >= 1.3 ? 1.0 : cur >= 1.15 ? 1.3 : 1.15;
+        saveMeta();
+        if (game) { game.streak = `ZOOM ${Math.round(meta.worldZoom * 100)}%`; game.streakTimer = 2; }
+        return;
+    }
     // PROTOTYPE: open a Power Junction puzzle (P). TODO: trigger from fouled terminals / sealed wrecks instead.
     if (phase === 'playing' && (e.key === 'p' || e.key === 'P') && game) {
         e.preventDefault();
@@ -10622,6 +11002,17 @@ window.addEventListener('keydown', e => {
             meta.uiScale = meta.uiScale >= 1.3 ? 1 : meta.uiScale >= 1.15 ? 1.3 : 1.15;
             UI_SCALE = meta.uiScale;
             saveMeta();
+            return;
+        }
+        // Music volume (,/.) and SFX volume (;/') — buses applied live
+        if (e.key === ',') { meta.musicVol = Math.max(0, (meta.musicVol != null ? meta.musicVol : 0.7) - 0.1); saveMeta(); return; }
+        if (e.key === '.') { meta.musicVol = Math.min(1, (meta.musicVol != null ? meta.musicVol : 0.7) + 0.1); saveMeta(); return; }
+        if (e.key === ';') { meta.sfxVol = Math.max(0, (meta.sfxVol != null ? meta.sfxVol : 1) - 0.1); if (sfxBus) sfxBus.gain.value = meta.sfxVol; saveMeta(); return; }
+        if (e.key === "'") { meta.sfxVol = Math.min(1, (meta.sfxVol != null ? meta.sfxVol : 1) + 0.1); if (sfxBus) sfxBus.gain.value = meta.sfxVol; saveMeta(); return; }
+        // Audition: [N] cycles the beat-layer candidate for the current zone
+        if (e.key === 'n' || e.key === 'N') {
+            const picked = nextBeatCandidate();
+            if (picked && game) { game.streak = 'TRACK: ' + picked; game.streakTimer = 2.5; }
             return;
         }
         if (e.key === 'h' || e.key === 'H') {
@@ -10959,6 +11350,7 @@ function loop(ts) {
         const dt = lastTime ? Math.min((ts - lastTime) / 1000, 0.05) : 0.016;
         lastTime = ts;
         update(dt);
+        updateMusic(dt);
         draw();
         if (!POSTFX.on) drawCRT(); // shader absorbs the CRT when post-FX is on
         drawFps();
