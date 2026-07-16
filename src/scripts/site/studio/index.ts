@@ -35,7 +35,9 @@ import { buildProjectExport } from "./render";
 import { buildScratchpad } from "./scratch";
 import { buildSession } from "./session";
 import { buildMixer } from "./mixerui";
-import { ctx } from "./ctx";
+import { ctx, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
+import { setCellOpacity, showVelPopup, showVelocityPopup } from "./velpopup";
+import { buildDrumGrid } from "./drumgrid";
 
 // One color per scene (A-H), distinct from the accent/amber/blue already
 // used for state (playing/queued/selected) — identity, not status.
@@ -153,163 +155,10 @@ export async function initStudio(): Promise<void> {
   }
   let waveRedraws: Array<() => void> = [];
   let modBadgeRefreshers: Array<() => void> = [];
-  // Populated by the drum grid, pad-event grid and piano roll as they build
-  // themselves; re-run whenever the Grid selector changes so all three
-  // repaint their "wa-beat" line grouping to match.
-  const gridRepainters: Array<() => void> = [];
-  function stepsPerGridLine(): number { return STEPS / transport.quantizeGrid; }
-  function isGridLine(step: number): boolean { return step % stepsPerGridLine() === 0; }
+  // ── Shared velocity popup ── (velpopup.ts — Phase 0 split)
 
-  // ── Shared velocity popup ──
-  const velPopup = el("div", "wa-vel-popup");
-  velPopup.style.display = "none";
-  const velSlider = document.createElement("input");
-  velSlider.type = "range"; velSlider.min = "1"; velSlider.max = "127"; velSlider.step = "1"; velSlider.className = "wa-vel-slider";
-  const velLabel = el("span", "wa-vel-num", "100");
-  velPopup.append(el("span", "wa-lbl", "VEL"), velSlider, velLabel);
-  document.body.append(velPopup);
-  let velApply: ((v: number) => void) | null = null;
-  velSlider.addEventListener("input", () => {
-    const v = Number(velSlider.value); velLabel.textContent = String(v);
-    velApply?.(v); saveAll();
-  });
-  document.addEventListener("click", (e) => { if (!velPopup.contains(e.target as Node)) velPopup.style.display = "none"; });
-  function setCellOpacity(cell: HTMLElement, v: number): void { cell.style.opacity = String(0.45 + 0.55 * (v / 127)); }
-  function showVelocityPopup(value: number, x: number, y: number, apply: (v: number) => void): void {
-    velApply = apply;
-    velSlider.value = String(value); velLabel.textContent = String(value);
-    velPopup.style.left = `${Math.min(x, window.innerWidth - 190)}px`;
-    velPopup.style.top = `${Math.max(y - 54, 4)}px`;
-    velPopup.style.display = "flex";
-  }
-  function showVelPopup(r: number, c: number, cell: HTMLElement, x: number, y: number): void {
-    showVelocityPopup(allVels[clip.sel][r][c], x, y, (v) => {
-      allVels[clip.sel][r][c] = v; setCellOpacity(cell, v);
-    });
-  }
-
-  // ── Beat ──
-  const beat = el("div", "wa-panel");
-
-  // Scene selector row — chooses which scene every editor edits.
-  const patRow = el("div", "wa-pat-row");
-  patRow.append(el("span", "wa-lbl", "Scene"));
-  const sceneBtns: HTMLButtonElement[] = [];
-  SCENE_LABELS.forEach((label, pi) => {
-    const pb = btn(label, "wa-pat-btn" + (pi === clip.sel ? " active" : "")); pb.classList.remove("wa-btn");
-    pb.addEventListener("click", () => { selectScene(pi); saveAll(); });
-    sceneBtns.push(pb); patRow.append(pb);
-  });
-  const copyBtn = btn("Copy →next", "wa-btn-sm");
-  copyBtn.title = "Copy this scene (drums, pads and synth) to the next slot";
-  copyBtn.addEventListener("click", () => {
-    checkpoint();
-    const next = (clip.sel + 1) % SCENES;
-    for (let r = 0; r < 8; r++) for (let c = 0; c < STEPS; c++) {
-      allPats[next][r][c] = allPats[clip.sel][r][c];
-      allVels[next][r][c] = allVels[clip.sel][r][c];
-    }
-    synthNotes[next] = synthNotes[clip.sel].map((note) => ({ ...note }));
-    padEvents[next] = padEvents[clip.sel].map((event) => ({ ...event }));
-    paintSession();
-    saveAll(); const orig = copyBtn.textContent; copyBtn.textContent = "Copied ✓";
-    setTimeout(() => { copyBtn.textContent = orig; }, 1200);
-  });
-  patRow.append(el("span", "wa-sep"), copyBtn);
-  beat.append(patRow);
-
-  const grid = el("div", "wa-grid");
-  const cells: HTMLElement[][] = [];
-  const sdPanels: HTMLElement[] = [];
-
-  DRUMS.forEach((name, r) => {
-    // Drum row
-    const rowEl = el("div", "wa-row");
-    const lab = btn(name, "wa-drum"); lab.classList.remove("wa-btn");
-    let sdOpen = false;
-    lab.addEventListener("click", () => {
-      sdOpen = !sdOpen;
-      sdPanels[r].style.display = sdOpen ? "block" : "none";
-      lab.classList.toggle("active", sdOpen);
-    });
-    rowEl.append(lab);
-
-    const rowCells: HTMLElement[] = [];
-    for (let c = 0; c < STEPS; c++) {
-      const cell = el("button", "wa-cell" + (isGridLine(c) ? " wa-beat" : "")) as HTMLButtonElement;
-      cell.type = "button";
-      if (allPats[clip.sel][r][c]) { cell.classList.add("on"); setCellOpacity(cell, allVels[clip.sel][r][c]); }
-      cell.addEventListener("click", () => {
-        checkpoint();
-        allPats[clip.sel][r][c] = !allPats[clip.sel][r][c];
-        cell.classList.toggle("on", allPats[clip.sel][r][c]);
-        if (allPats[clip.sel][r][c]) {
-          setCellOpacity(cell, allVels[clip.sel][r][c]);
-          ensureNodes(); playDrum(ac(), trackGain[r], r, allVels[clip.sel][r][c] / 127, ac().currentTime);
-        } else { cell.style.opacity = ""; }
-        paintSession();
-        saveAll();
-      });
-      cell.addEventListener("contextmenu", (e) => {
-        e.preventDefault(); if (!allPats[clip.sel][r][c]) return;
-        showVelPopup(r, c, cell, (e as MouseEvent).clientX, (e as MouseEvent).clientY);
-      });
-      // Long-press for velocity on mobile
-      let lpTimer: number | null = null;
-      cell.addEventListener("touchstart", (e: TouchEvent) => {
-        const t = e.touches[0]; const x = t.clientX, y = t.clientY;
-        lpTimer = window.setTimeout(() => { if (allPats[clip.sel][r][c]) showVelPopup(r, c, cell, x, y); lpTimer = null; }, 500);
-      }, { passive: true });
-      cell.addEventListener("touchend", () => { if (lpTimer !== null) { clearTimeout(lpTimer); lpTimer = null; } });
-      rowCells.push(cell); rowEl.append(cell);
-    }
-    cells.push(rowCells); grid.append(rowEl);
-
-    // Sound design panel (below each row, hidden by default)
-    const sdPanel = el("div", "wa-sd-panel"); sdPanel.style.display = "none";
-    const sdRow = el("div", "wa-sd-row");
-    const specs = DP_SPECS[r];
-    specs.forEach((spec) => {
-      const item = el("div", "wa-sd-item");
-      const inp = document.createElement("input");
-      inp.type = "range"; inp.min = String(spec.min); inp.max = String(spec.max); inp.step = String(spec.step); inp.value = String(dp[r][spec.key]);
-      const vout = el("span", "wa-sd-val", `${dp[r][spec.key]}${spec.unit ?? ""}`);
-      inp.addEventListener("input", () => {
-        const v = Number(inp.value); (dp[r][spec.key] as number) = v; vout.textContent = `${v}${spec.unit ?? ""}`; saveAll();
-      });
-      item.append(el("span", "wa-sd-lbl", spec.label), inp, vout);
-      sdRow.append(item);
-    });
-    const testBtn = btn("▶ Test", "wa-btn-sm");
-    testBtn.addEventListener("click", () => { ensureNodes(); playDrum(ac(), trackGain[r], r, 1, ac().currentTime); });
-    const resetBtn = btn("Reset", "wa-btn-sm");
-    resetBtn.addEventListener("click", () => {
-      Object.assign(dp[r], DP_DEF[r]);
-      sdPanel.querySelectorAll<HTMLInputElement>("input[type=range]").forEach((inp, i) => {
-        if (i >= specs.length) return;
-        inp.value = String(dp[r][specs[i].key]);
-        const vout = inp.nextElementSibling as HTMLElement;
-        if (vout) vout.textContent = `${dp[r][specs[i].key]}${specs[i].unit ?? ""}`;
-      });
-      saveAll();
-    });
-    const actions = el("div", "wa-sd-actions"); actions.append(testBtn, resetBtn);
-    sdPanel.append(sdRow, actions);
-    sdPanels.push(sdPanel); grid.append(sdPanel);
-  });
-  gridRepainters.push(() => cells.forEach((row) => row.forEach((cell, c) => cell.classList.toggle("wa-beat", isGridLine(c)))));
-
-  const clearBtn = btn("CLEAR", "wa-btn-sm");
-  clearBtn.addEventListener("click", () => {
-    checkpoint();
-    for (let r = 0; r < 8; r++) for (let c = 0; c < STEPS; c++) {
-      allPats[clip.sel][r][c] = false; cells[r][c].classList.remove("on"); cells[r][c].style.opacity = "";
-    }
-    paintSession();
-    saveAll();
-  });
-  const rowTools = el("div", "wa-row-tools"); rowTools.append(clearBtn);
-  beat.append(grid, rowTools);
+  // ── Beat ── (drumgrid.ts — Phase 0 split)
+  const { beat, cells, sceneBtns } = buildDrumGrid();
 
   // ── MPC performance ──
   const mpcPanel = el("div", "wa-panel");
@@ -1407,6 +1256,7 @@ export async function initStudio(): Promise<void> {
 
   // ── Session view ── (session.ts — Phase 0 split)
   const { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid, arrangeLanes } = buildSession();
+  ctx.paintSession = paintSession;
 
   // ── Mixer ── (mixerui.ts — Phase 0 split)
   const mixer = buildMixer();
