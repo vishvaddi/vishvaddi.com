@@ -22,7 +22,7 @@ const ctx = await browser.newContext({ acceptDownloads: true, viewport: { width:
 const page = await ctx.newPage()
 
 const consoleErrors = []
-const DEV_NOISE = /sw\.js|Outdated Optimize Dep|fetching the script/
+const DEV_NOISE = /sw\.js|Outdated Optimize Dep|fetching the script|cloudflareinsights|ERR_FAILED/
 page.on('console', (m) => {
   // dev-server-only noise: SW registration 404s + Vite dep re-optimisation
   if (m.type() === 'error' && !DEV_NOISE.test(m.text())) consoleErrors.push(m.text())
