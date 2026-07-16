@@ -31,27 +31,14 @@ import {
 } from "./helpers";
 import { initTooltips } from "./tooltip";
 import { buildKeys, highlightKey } from "./keys";
+import { buildProjectExport } from "./render";
+import { buildScratchpad } from "./scratch";
+import { buildSession } from "./session";
+import { buildMixer } from "./mixerui";
+import { ctx } from "./ctx";
 
 // One color per scene (A-H), distinct from the accent/amber/blue already
 // used for state (playing/queued/selected) — identity, not status.
-const SCENE_COLORS = ["#ff6b8a", "#b98bff", "#ffe066", "#5fd9d9", "#ff8c5a", "#7c8cff", "#b4e66e", "#ff6bd6"];
-
-function mixChannel(name: string, val: number, on: (v: number) => void, idx: number): HTMLElement {
-  const ch = el("div", "wa-ch");
-  const inp = document.createElement("input");
-  inp.type = "range"; inp.min = "0"; inp.max = "1"; inp.step = "0.01"; inp.value = String(val); inp.className = "wa-fader";
-  inp.addEventListener("input", () => on(Number(inp.value))); ch.append(inp);
-  if (idx >= 0) {
-    const ms = el("div", "wa-ms");
-    const m = btn("M", "wa-mute"); m.classList.remove("wa-btn");
-    m.addEventListener("click", () => { mute[idx] = !mute[idx]; m.classList.toggle("active", mute[idx]); });
-    const s = btn("S", "wa-solo"); s.classList.remove("wa-btn");
-    s.addEventListener("click", () => { solo[idx] = !solo[idx]; s.classList.toggle("active", solo[idx]); });
-    ms.append(m, s); ch.append(ms);
-  }
-  ch.append(el("span", "wa-ch-name", name)); return ch;
-}
-
 // ─── Main ────────────────────────────────────────────────────────────────────
 export async function initStudio(): Promise<void> {
   const root = document.getElementById("studio");
@@ -118,6 +105,7 @@ export async function initStudio(): Promise<void> {
   help(playBtn, "Start playback from the beginning of the current clips or song.");
   help(stopBtn, "Stop playback and clear the playhead.");
   help(metroBtn, "Toggle the metronome. It is also included in audio export while enabled.");
+  ctx.songBtn = songBtn;
   help(songBtn, "Switch between looping the launched session clips and playing each track's own arrangement.");
   help(undoBtn, "Restore the previous destructive edit, including chops, fills and dropped samples.");
   help(redoBtn, "Reapply the last undone edit.");
@@ -137,6 +125,7 @@ export async function initStudio(): Promise<void> {
     undoBtn.disabled = undoStack.length === 0; redoBtn.disabled = true;
   }
   undoBtn.disabled = true; redoBtn.disabled = true;
+  ctx.checkpoint = checkpoint;
 
   // ── Workspaces ──
   const tabbar = el("div", "wa-tabs"), panels = el("div", "wa-panels");
@@ -1416,142 +1405,11 @@ export async function initStudio(): Promise<void> {
     keysHeader, synthKeys,
   );
 
-  // ── Session view ──
-  const song = el("div", "wa-panel");
-  const launchStatus = el("span", "wa-status", "Clips launch on the next bar");
-  const sessionGrid = el("div", "wa-session");
-  const sessionCells: HTMLButtonElement[][] = [];   // [scene][track]
-  const sceneLaunchBtns: HTMLButtonElement[] = [];
-  function clipHasContent(track: TrackId, scene: number): boolean {
-    if (track === "drums") return allPats[scene].some((row) => row.some(Boolean));
-    if (track === "pads") return padEvents[scene].length > 0;
-    return synthNotes[scene].length > 0;
-  }
-  function paintSession(): void {
-    sessionCells.forEach((row, scene) => row.forEach((cell, ti) => {
-      const track = TRACKS[ti];
-      cell.classList.toggle("has", clipHasContent(track, scene));
-      cell.classList.toggle("playing", playing && clip.play[track] === scene);
-      cell.classList.toggle("armed", !playing && clip.play[track] === scene);
-      cell.classList.toggle("queued", clip.queued[track] === scene);
-      cell.classList.toggle("sel", clip.sel === scene);
-    }));
-    sceneLaunchBtns.forEach((b, scene) => b.classList.toggle("active", clip.sel === scene));
-  }
-  function launchClip(track: TrackId, scene: number | null): void {
-    if (playing) {
-      // Clicking an already-queued clip cancels the queue.
-      clip.queued[track] = clip.queued[track] === scene ? undefined : scene;
-      launchStatus.textContent = scene === null
-        ? `${TRACK_LABELS[track]} stopping at the bar`
-        : `${TRACK_LABELS[track]} ${SCENE_LABELS[scene]} queued`;
-    } else {
-      clip.play[track] = scene;
-      launchStatus.textContent = scene === null ? `${TRACK_LABELS[track]} stopped` : `${TRACK_LABELS[track]} ${SCENE_LABELS[scene]} armed`;
-    }
-    if (scene !== null && clip.sel !== scene) selectScene(scene);
-    paintSession(); saveAll();
-  }
-  function launchScene(scene: number): void {
-    TRACKS.forEach((track) => {
-      if (playing) clip.queued[track] = scene;
-      else clip.play[track] = scene;
-    });
-    transport.songMode = false; songBtn.textContent = "Session"; songBtn.classList.remove("active"); renderSel.value = "pattern";
-    launchStatus.textContent = playing ? `Scene ${SCENE_LABELS[scene]} queued` : `Scene ${SCENE_LABELS[scene]} armed`;
-    if (clip.sel !== scene) selectScene(scene);
-    paintSession(); saveAll();
-  }
-  // Header: track names double as stop buttons.
-  const headRow = el("div", "wa-session-row wa-session-head");
-  headRow.append(el("span", "wa-session-scene", "Scene"));
-  TRACKS.forEach((track) => {
-    const stop = btn(`${TRACK_LABELS[track]} ■`, "wa-clip-stop");
-    stop.classList.remove("wa-btn");
-    help(stop, `Stop the ${TRACK_LABELS[track].toLowerCase()} track at the next bar.`);
-    stop.addEventListener("click", () => launchClip(track, null));
-    headRow.append(stop);
-  });
-  sessionGrid.append(headRow);
-  SCENE_LABELS.forEach((label, scene) => {
-    const row = el("div", "wa-session-row");
-    const launch = btn(`▶ ${label}`, "wa-scene-launch");
-    help(launch, `Launch every track's clip ${label} together (a scene).`);
-    launch.addEventListener("click", () => launchScene(scene));
-    sceneLaunchBtns.push(launch);
-    row.append(launch);
-    const rowCells: HTMLButtonElement[] = [];
-    TRACKS.forEach((track) => {
-      const cell = btn("", "wa-clip");
-      cell.classList.remove("wa-btn");
-      cell.style.setProperty("--scene-color", SCENE_COLORS[scene]);
-      help(cell, `Launch ${TRACK_LABELS[track].toLowerCase()} clip ${label}. Tracks can play clips from different scenes.`);
-      cell.addEventListener("click", () => launchClip(track, scene));
-      rowCells.push(cell); row.append(cell);
-    });
-    sessionCells.push(rowCells);
-    sessionGrid.append(row);
-  });
-  // Arrangement — each track keeps its own ordered list of blocks (scene +
-  // bar-length), independent of the other tracks, so a drum groove can loop
-  // for 4 bars while the synth changes scene every bar underneath it.
-  const arrangeLanes = el("div", "wa-arrange-lanes");
-  const arrangeLanePaints: Array<() => void> = [];
-  TRACKS.forEach((track) => {
-    const lane = el("div", "wa-arrange-lane");
-    lane.append(el("span", "wa-arrange-lane-label", TRACK_LABELS[track]));
-    const blocksHost = el("div", "wa-arrange-blocks");
-    function paintLane(): void {
-      blocksHost.replaceChildren();
-      arrangement[track].forEach((block, i) => {
-        const chip = el("div", "wa-arrange-block");
-        chip.classList.toggle("sel", block.scene === clip.sel);
-        chip.style.flexGrow = String(block.bars);
-        chip.style.setProperty("--scene-color", SCENE_COLORS[block.scene]);
-        const sceneSel = document.createElement("select");
-        SCENE_LABELS.forEach((label, si) => {
-          const option = document.createElement("option"); option.value = String(si); option.textContent = label; sceneSel.append(option);
-        });
-        sceneSel.value = String(block.scene);
-        sceneSel.addEventListener("change", () => { block.scene = Number(sceneSel.value); saveAll(); paintLane(); });
-        const barsRow = el("div", "wa-arrange-bars-row");
-        const barsOut = el("span", "wa-arrange-bars", `${block.bars} bar${block.bars === 1 ? "" : "s"}`);
-        const barsMinus = btn("−", "wa-btn-sm"), barsPlus = btn("+", "wa-btn-sm");
-        const setBars = (bars: number) => {
-          block.bars = Math.max(1, Math.min(64, bars));
-          barsOut.textContent = `${block.bars} bar${block.bars === 1 ? "" : "s"}`;
-          chip.style.flexGrow = String(block.bars); saveAll();
-        };
-        barsMinus.addEventListener("click", () => setBars(block.bars - 1));
-        barsPlus.addEventListener("click", () => setBars(block.bars + 1));
-        barsRow.append(barsMinus, barsOut, barsPlus);
-        const delBtn = btn("✕", "wa-btn-sm");
-        help(delBtn, `Remove this ${TRACK_LABELS[track].toLowerCase()} block.`);
-        delBtn.addEventListener("click", () => { checkpoint(); arrangement[track].splice(i, 1); saveAll(); paintLane(); });
-        chip.append(sceneSel, barsRow, delBtn);
-        blocksHost.append(chip);
-      });
-    }
-    arrangeLanePaints.push(paintLane);
-    const addBtn = btn("+ Block", "wa-btn-sm");
-    help(addBtn, `Append a block playing the currently selected scene to the ${TRACK_LABELS[track].toLowerCase()} arrangement.`);
-    addBtn.addEventListener("click", () => {
-      arrangement[track].push({ scene: clip.sel, bars: 1 } as ArrangeBlock); saveAll(); paintLane();
-    });
-    lane.append(blocksHost, addBtn);
-    paintLane();
-    arrangeLanes.append(lane);
-  });
-  const songHelp = el("p", "wa-help", "Each column is a track, each row a scene. Launch single clips or whole scenes — changes land on the next bar. Arrange mode plays each track's own block list independently, looping shorter tracks to match the longest.");
-  song.append(songHelp, launchStatus, sessionGrid, el("div", "wa-sep-h"), el("div", "wa-lbl", "ARRANGEMENT"), arrangeLanes);
+  // ── Session view ── (session.ts — Phase 0 split)
+  const { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid, arrangeLanes } = buildSession();
 
-  // ── Mixer ── (channel levels only — device parameters live in the rack below)
-  const mixer = el("div", "wa-panel");
-  const mixGrid = el("div", "wa-mixer");
-  DRUMS.forEach((name, i) => mixGrid.append(mixChannel(name, 0.8, (v) => { ensureNodes(); trackGain[i].gain.value = v; }, i)));
-  mixGrid.append(mixChannel("Synth",  0.7, (v) => { ensureNodes(); engine.synthGain!.gain.value = v; }, -1));
-  mixGrid.append(mixChannel("MASTER", 0.8, (v) => { ac(); engine.master!.gain.value = v; }, -1));
-  mixer.append(mixGrid);
+  // ── Mixer ── (mixerui.ts — Phase 0 split)
+  const mixer = buildMixer();
 
   // ── Modular device rack ──
   const devicePanel = el("div", "wa-panel");
@@ -1665,30 +1523,9 @@ export async function initStudio(): Promise<void> {
     combinator, playerRack, deviceRack,
   );
 
-  // ── Project / export ──
-  const exp = el("div", "wa-panel");
-  const expRow = el("div", "wa-export");
-  const renderSel = document.createElement("select");
-  [["pattern","Launched clips"],["song","Full arrangement"]].forEach(([v, l]) => {
-    const o = document.createElement("option"); o.value = v; o.textContent = l; renderSel.append(o);
-  });
-  renderSel.value = transport.songMode ? "song" : "pattern";
-  const wavBtn = btn("Export WAV"), mp3Btn = btn("Export MP3"), expStatus = el("span", "wa-status");
-  help(wavBtn, "Render the launched clips or full song as lossless WAV.");
-  help(mp3Btn, "Render and encode the launched clips or full song as 192 kbps MP3.");
-  expRow.append(el("span", "wa-lbl", "Render"), renderSel, wavBtn, mp3Btn, expStatus);
-  const projectRow = el("div", "wa-export");
-  const saveProjectBtn = btn("Save project"), loadProjectBtn = btn("Open project");
-  help(saveProjectBtn, "Download an editable project containing patterns, settings and embedded samples.");
-  help(loadProjectBtn, "Open a previously saved editable Studio project.");
-  const projectInput = document.createElement("input"); projectInput.type = "file"; projectInput.accept = ".json,application/json"; projectInput.hidden = true;
-  projectRow.append(saveProjectBtn, loadProjectBtn, projectInput);
-  exp.append(
-    el("p", "wa-help", "Audio export includes drums and sequenced synth. Project files preserve editable patterns, song order, sounds and tempo."),
-    expRow,
-    el("div", "wa-sep-h"),
-    projectRow,
-  );
+  // ── Project / export ── (render.ts — Phase 0 split)
+  const { panel: exp, renderSel, renderBuffer } = buildProjectExport();
+  ctx.renderSel = renderSel;
 
   const createWorkspace = el("div", "wa-workspace");
   const sequenceWorkspace = el("div", "wa-workspace");
@@ -1791,74 +1628,8 @@ export async function initStudio(): Promise<void> {
   helpSearch.addEventListener("input", () => renderHelpTopics(helpSearch.value));
   renderHelpTopics("");
 
-  // ── Vinyl scratchpad — drag the platter to scratch the selected pad's sample
-  // (or the loaded break) over whatever's playing. Forward drags play the buffer
-  // forwards; backward drags play a reversed copy. Rate tracks hand speed. ──
-  const scratchPanel = el("div", "wa-panel");
-  const platter = el("div", "wa-scratch");
-  const disc = el("div", "wa-scratch-disc");
-  disc.append(el("div", "wa-scratch-label", "VV"));
-  platter.append(disc);
-  scratchPanel.append(
-    el("p", "wa-help", "Drag the record left/right to scratch the selected pad's sample over the beat. Forward and backward both sound. Release to stop."),
-    platter,
-  );
-
-  let scGain: GainNode | null = null, scFwd: AudioBuffer | null = null, scRev: AudioBuffer | null = null;
-  let scSrc: AudioBufferSourceNode | null = null, scDir = 1, scPos = 0, scStartT = 0, scStartPos = 0;
-  let scDragging = false, scLastX = 0, scLastT = 0, scAngle = 0, scIdle = 0;
-  const scBuffer = (): AudioBuffer | null => sampleBuffers[mpc.selectedPad] || chopBuffer || null;
-  const scStop = (): void => { if (scSrc) { try { scSrc.stop(); } catch { /* already stopped */ } try { scSrc.disconnect(); } catch { /* noop */ } scSrc = null; } };
-  const scNow = (a: AudioContext, dur: number): number => {
-    if (!scSrc) return scPos;
-    const elapsed = (a.currentTime - scStartT) * scSrc.playbackRate.value;
-    return (((scStartPos + scDir * elapsed) % dur) + dur) % dur;
-  };
-  const scStart = (a: AudioContext, rate: number, dir: number, dur: number): void => {
-    scStop();
-    const b = dir > 0 ? scFwd : scRev; if (!b) return;
-    const src = a.createBufferSource();
-    src.buffer = b; src.loop = true; src.loopStart = 0; src.loopEnd = dur;
-    src.playbackRate.value = Math.max(0.05, Math.min(8, Math.abs(rate)));
-    if (!scGain) { scGain = a.createGain(); scGain.gain.value = 0.9; scGain.connect(engine.master!); }
-    src.connect(scGain);
-    const offset = dir > 0 ? scPos : dur - scPos;
-    src.start(0, Math.max(0, Math.min(dur - 0.001, offset)));
-    scSrc = src; scDir = dir; scStartT = a.currentTime; scStartPos = scPos;
-  };
-  const scBegin = (x: number): void => {
-    const b = scBuffer(); if (!b) return;
-    ensureNodes(); const a = ac(); if (a.state === "suspended") void a.resume();
-    scFwd = b; scRev = reversedBuffer(a, b);
-    scDragging = true; scLastX = x; scLastT = performance.now();
-  };
-  const scMove = (x: number): void => {
-    if (!scDragging || !scFwd) return;
-    const a = ac(), dur = scFwd.duration, now = performance.now();
-    const dt = Math.max(8, now - scLastT), dx = x - scLastX;
-    scLastX = x; scLastT = now;
-    scAngle += dx * 0.6; disc.style.transform = `rotate(${scAngle}deg)`;
-    const rate = (dx / dt) * 6;
-    scPos = scNow(a, dur);
-    const dir = rate >= 0 ? 1 : -1;
-    // Sound only while the hand is moving — if no move fires for ~70ms, hold/stop.
-    window.clearTimeout(scIdle);
-    scIdle = window.setTimeout(() => { if (scFwd) scPos = scNow(ac(), scFwd.duration); scStop(); }, 70);
-    if (Math.abs(rate) < 0.05) { scStop(); return; }
-    if (!scSrc || dir !== scDir) scStart(a, rate, dir, dur);
-    else scSrc.playbackRate.value = Math.min(8, Math.abs(rate));
-  };
-  const scEnd = (): void => {
-    if (!scDragging) return;
-    scDragging = false;
-    window.clearTimeout(scIdle);
-    if (scFwd) scPos = scNow(ac(), scFwd.duration);
-    scStop();
-  };
-  platter.addEventListener("pointerdown", (e) => { e.preventDefault(); try { platter.setPointerCapture(e.pointerId); } catch { /* noop */ } scBegin(e.clientX); });
-  platter.addEventListener("pointermove", (e) => scMove(e.clientX));
-  platter.addEventListener("pointerup", scEnd);
-  platter.addEventListener("pointercancel", scEnd);
+  // ── Vinyl scratchpad ── (scratch.ts — Phase 0 split)
+  const scratchPanel = buildScratchpad(() => chopBuffer);
 
   createWorkspace.append(
     hint("Start here.", "Drop audio onto a pad, or load a break in Chop. Use Z–V, A–F, Q–R and 1–4 to play the 16 pads."),
@@ -2022,7 +1793,9 @@ export async function initStudio(): Promise<void> {
   flipExit.addEventListener("click", () => setFlip(false));
 
   // ── Transport / scheduler ──
+  ctx.selectScene = selectScene;
   let playing = false, schedTimer = 0, nextTime = 0, schStep = 0, lastHi = -1, lastStepStartedMs = 0;
+  ctx.isPlaying = () => playing;
   // Arrangement playback: each track independently follows its own block list
   // (scene + bar-length), advancing at bar boundaries — replaces the old
   // single shared songChain, which forced every track onto the same scene.
@@ -2150,106 +1923,7 @@ export async function initStudio(): Promise<void> {
     }
   });
 
-  // ── Export logic ──
-  async function renderBuffer(mode: "pattern" | "song"): Promise<AudioBuffer> {
-    ensureNodes();
-    const sr = 44100, sd = 60 / transport.bpm / 4;
-    // Song mode renders each track's own arrangement independently (looping
-    // shorter tracks to match the longest one); clip mode renders the
-    // launched per-track clips once.
-    const totalBars = (track: TrackId): number => arrangement[track].reduce((sum, b) => sum + b.bars, 0);
-    const bars = mode === "song" ? Math.max(1, ...TRACKS.map(totalBars)) : 1;
-    const sceneAt = (track: TrackId, bar: number): number | null => {
-      if (mode !== "song") return clip.play[track];
-      const blocks = arrangement[track], total = totalBars(track);
-      if (!blocks.length || !total) return null;
-      let offset = bar % total;
-      for (const block of blocks) {
-        if (offset < block.bars) return block.scene;
-        offset -= block.bars;
-      }
-      return blocks[blocks.length - 1].scene;
-    };
-    const dur = bars * STEPS * sd + 2.2;
-    const off = new OfflineAudioContext(2, Math.ceil(dur * sr), sr);
-    const om = off.createGain(); om.gain.value = engine.master!.gain.value;
-    const ol = off.createBiquadFilter(); ol.type = "lowshelf"; ol.frequency.value = 180; ol.gain.value = rackState.devices.eq ? fx.low : 0;
-    const omi = off.createBiquadFilter(); omi.type = "peaking"; omi.frequency.value = 1200; omi.Q.value = 0.8; omi.gain.value = rackState.devices.eq ? fx.mid : 0;
-    const oh = off.createBiquadFilter(); oh.type = "highshelf"; oh.frequency.value = 6500; oh.gain.value = rackState.devices.eq ? fx.high : 0;
-    const oc = off.createDynamicsCompressor(); oc.threshold.value = rackState.devices.compressor ? fx.compThreshold : 0; oc.ratio.value = rackState.devices.compressor ? fx.compRatio : 1; oc.knee.value = 12;
-    const oli = off.createDynamicsCompressor(); oli.threshold.value = rackState.devices.limiter ? fx.limiter : 0; oli.ratio.value = rackState.devices.limiter ? 20 : 1; oli.knee.value = 0; oli.attack.value = 0.001;
-    om.connect(ol); ol.connect(omi); omi.connect(oh); oh.connect(oc); oc.connect(oli); oli.connect(off.destination);
-    if (rackState.devices.reverb && fx.reverb > 0) {
-      const len = Math.floor(sr * 2.2), ir = off.createBuffer(2, len, sr);
-      for (let c = 0; c < 2; c++) {
-        const data = ir.getChannelData(c);
-        for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 4);
-      }
-      const conv = off.createConvolver(), wet = off.createGain(); conv.buffer = ir; wet.gain.value = fx.reverb;
-      om.connect(conv); conv.connect(wet); wet.connect(ol);
-    }
-    if (rackState.devices.delay && fx.delayMix > 0) {
-      const delay = off.createDelay(2), feedback = off.createGain(), wet = off.createGain();
-      delay.delayTime.value = fx.delayTime; feedback.gain.value = fx.delayFeedback; wet.gain.value = fx.delayMix;
-      om.connect(delay); delay.connect(feedback); feedback.connect(delay); delay.connect(wet); wet.connect(ol);
-    }
-    const ot: GainNode[] = [];
-    for (let i = 0; i < 8; i++) { const g = off.createGain(); g.gain.value = trackGain[i].gain.value; g.connect(om); ot.push(g); }
-    const osg = off.createGain(); osg.gain.value = engine.synthGain!.gain.value; osg.connect(om);
-    for (let bar = 0; bar < bars; bar++) { for (let s = 0; s < STEPS; s++) {
-      const base = (bar * STEPS + s) * sd;
-      const groove = rackState.devices.player && s % 2 === 1 ? rackState.grooveTiming * sd * 0.5 : 0;
-      const when = base + (s % 2 === 1 ? transport.swing * sd : 0) + groove;
-      const drumClip = sceneAt("drums", bar), padClip = sceneAt("pads", bar), synthClip = sceneAt("synth", bar);
-      if (drumClip !== null) for (let r = 0; r < 8; r++) {
-        if (allPats[drumClip][r][s] && audible(r)) playDrum(off, ot[r], r, allVels[drumClip][r][s] / 127, when);
-      }
-      if (padClip !== null) padEvents[padClip].filter((event) => event.step === s).forEach((event) => {
-        if (Math.random() * 100 > event.probability) return;
-        const ratchets = Math.max(1, event.ratchets), spacing = sd / ratchets;
-        for (let i = 0; i < ratchets; i++) {
-          playPad(off, event.pad, event.velocity, Math.max(base, when + event.offset / 1000 + i * spacing), event.pad % PAD_BANK_SIZE, ot[event.pad % ot.length]);
-        }
-      });
-      if (synthClip !== null) synthNotes[synthClip].forEach((n) => {
-        if (n.step === s) playNote(off, osg, vsynthPatch, n.note, n.vel, when, sd * n.len * 0.98);
-      });
-      if (transport.metro && s % 4 === 0) metroClick(off, om, base, s === 0);
-    } }
-    return off.startRendering();
-  }
-  async function doExport(fmt: "wav" | "mp3"): Promise<void> {
-    wavBtn.setAttribute("disabled", "1"); mp3Btn.setAttribute("disabled", "1"); expStatus.textContent = "Rendering…";
-    try {
-      const buf = await renderBuffer(renderSel.value as "pattern" | "song");
-      if (fmt === "wav") { download(`vishamp-${transport.bpm}bpm.wav`, encodeWav(buf)); }
-      else { expStatus.textContent = "Encoding MP3…"; download(`vishamp-${transport.bpm}bpm.mp3`, await encodeMp3(buf)); }
-      expStatus.textContent = "Saved ✓";
-    } catch { expStatus.textContent = fmt === "mp3" ? "MP3 failed — try WAV." : "Export failed."; }
-    finally {
-      wavBtn.removeAttribute("disabled"); mp3Btn.removeAttribute("disabled");
-      setTimeout(() => { if (expStatus.textContent === "Saved ✓") expStatus.textContent = ""; }, 2500);
-    }
-  }
-  wavBtn.addEventListener("click", () => doExport("wav"));
-  mp3Btn.addEventListener("click", () => doExport("mp3"));
-  saveProjectBtn.addEventListener("click", () => {
-    download(`vishamp-project-${transport.bpm}bpm.json`, new Blob([JSON.stringify(projectState())], { type: "application/json" }));
-  });
-  loadProjectBtn.addEventListener("click", () => projectInput.click());
-  projectInput.addEventListener("change", async () => {
-    const file = projectInput.files?.[0]; if (!file) return;
-    if (!window.confirm("Open this project? It replaces everything currently in the studio — save first if you want to keep it.")) {
-      projectInput.value = ""; return;
-    }
-    try {
-      const raw = await file.text();
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      if (!parsed?.pats || !Array.isArray(parsed.pats)) throw new Error("Invalid project");
-      await pendingProjectStore("put", parsed);
-      location.reload();
-    } catch { expStatus.textContent = "Project file is invalid."; }
-  });
+  // Export + project file logic lives in render.ts (Phase 0 split).
 
   // ── Keyboard ──
   // Two-row DAW layout (Ableton/FL): Z-row is the lower octave, Q-row the
