@@ -80,5 +80,7 @@ import "../../styles/site.css";
     .lattice :global(.lat-actions) { display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.5rem 0; }
     .lattice :global(.lat-hint) { font-size: 0.75rem; color: var(--muted); padding: 0.25rem 0.1rem; }
     :global(.lat-toast) { position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%); background: var(--fg); color: var(--bg); font-size: 0.85rem; padding: 0.5rem 1rem; border-radius: 8px; z-index: 50; }
+    .lattice :global(.lat-linesel) { position: absolute; background: var(--accent); border-radius: 2px; z-index: 2; pointer-events: none; }
+    .lattice :global(.lat-multi) { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: -1px; }
   </style>
 </Base>
