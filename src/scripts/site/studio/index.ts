@@ -44,6 +44,8 @@ import { buildChop } from "./chopui";
 import { buildSynth } from "./synthui";
 import { buildDeviceRack } from "./fxrack";
 import { buildTutorial } from "./tutorial";
+import { buildPlayback } from "./playback";
+import { bindKeyboard } from "./keymap";
 
 // One color per scene (A-H), distinct from the accent/amber/blue already
 // used for state (playhead.playing/queued/selected) — identity, not status.
@@ -332,186 +334,13 @@ export async function initStudio(): Promise<void> {
   rotBtn.addEventListener("click", () => setFlip(!win.classList.contains("wa-rotated")));
   flipExit.addEventListener("click", () => setFlip(false));
 
-  // ── Transport / scheduler ──
+  // ── Transport / scheduler ── (playback.ts — Phase 0 split)
   ctx.selectScene = selectScene;
-  let schedTimer = 0, nextTime = 0;
   ctx.isPlaying = () => playhead.playing;
-  // Arrangement playback: each track independently follows its own block list
-  // (scene + bar-length), advancing at bar boundaries — replaces the old
-  // single shared songChain, which forced every track onto the same scene.
-  function applyArrangePos(track: TrackId): void {
-    const blocks = arrangement[track];
-    clip.play[track] = blocks.length ? blocks[Math.min(arrangePos[track].block, blocks.length - 1)].scene : null;
-  }
-  function advanceArrangeTrack(track: TrackId): void {
-    const blocks = arrangement[track];
-    if (!blocks.length) { arrangePos[track] = { block: 0, barInBlock: 0 }; clip.play[track] = null; return; }
-    const pos = arrangePos[track];
-    if (pos.block >= blocks.length) pos.block = 0;
-    pos.barInBlock++;
-    if (pos.barInBlock >= blocks[pos.block].bars) { pos.barInBlock = 0; pos.block = (pos.block + 1) % blocks.length; }
-    clip.play[track] = blocks[pos.block].scene;
-  }
-  function highlight(s: number): void {
-    if (playhead.lastHi >= 0) for (let r = 0; r < 8; r++) cells[r][playhead.lastHi].classList.remove("play");
-    if (clip.play.drums === clip.sel) for (let r = 0; r < 8; r++) cells[r][s].classList.add("play");
-    rollPlayheadBar.classList.toggle("on", clip.play.synth === clip.sel);
-    rollPlayheadBar.style.left = `${(s / STEPS) * 100}%`;
-    playhead.lastStepStartedMs = performance.now();
-    playhead.lastHi = s; lcdState.textContent = `▶ ${String(s + 1).padStart(2, "0")}`;
-  }
-  function scheduleStep(s: number, baseWhen: number): void {
-    const a = ac();
-    const groove = rackState.devices.player && s % 2 === 1 ? rackState.grooveTiming * stepDur() * 0.5 : 0;
-    const random = rackState.devices.player ? (Math.random() * 2 - 1) * rackState.grooveRandom / 1000 : 0;
-    const when = baseWhen + (s % 2 === 1 ? transport.swing * stepDur() : 0) + groove + random;
-    const drumClip = clip.play.drums, padClip = clip.play.pads, synthClip = clip.play.synth;
-    if (drumClip !== null) {
-      for (let r = 0; r < 8; r++) {
-        if (allPats[drumClip][r][s] && audible(r)) playDrum(a, trackGain[r], r, allVels[drumClip][r][s] / 127, when);
-      }
-    }
-    if (padClip !== null) {
-      padEvents[padClip].filter((event) => event.step === s).forEach((event) => {
-        if (Math.random() * 100 > event.probability) return;
-        const velocity = Math.max(1, Math.min(127, event.velocity * (1 + (rackState.devices.player ? (Math.random() * 2 - 1) * rackState.grooveVelocity : 0))));
-        const ratchets = Math.max(1, event.ratchets), spacing = stepDur() / ratchets;
-        for (let i = 0; i < ratchets; i++) {
-          const eventWhen = Math.max(baseWhen, when + event.offset / 1000 + i * spacing);
-          playPad(a, event.pad, velocity, eventWhen, event.pad % PAD_BANK_SIZE);
-          if (rackState.devices.player && rackState.noteEcho > 0) for (let echo = 1; echo <= rackState.noteEcho; echo++) {
-            playPad(a, event.pad, velocity * Math.pow(rackState.echoDecay, echo), eventWhen + echo * stepDur(), event.pad % PAD_BANK_SIZE);
-          }
-        }
-      });
-    }
-    if (synthClip !== null) {
-      synthNotes[synthClip].forEach((n) => {
-        if (n.step === s) playNote(a, engine.synthGain!, vsynthPatch, n.note, n.vel, when, stepDur() * n.len * 0.98);
-      });
-    }
-    if (transport.metro && s % 4 === 0) metroClick(a, engine.master!, baseWhen, s === 0);
-    window.setTimeout(() => { if (playhead.playing) highlight(s); }, Math.max(0, (baseWhen - a.currentTime) * 1000));
-  }
-  function applyQueued(): boolean {
-    let changed = false;
-    TRACKS.forEach((track) => {
-      if (clip.queued[track] !== undefined) {
-        clip.play[track] = clip.queued[track] as number | null;
-        clip.queued[track] = undefined;
-        changed = true;
-      }
-    });
-    return changed;
-  }
-  function scheduler(): void {
-    const a = ac();
-    while (nextTime < a.currentTime + 0.1) {
-      scheduleStep(playhead.schStep, nextTime);
-      nextTime += stepDur();
-      playhead.schStep++;
-      if (playhead.schStep >= STEPS) {
-        playhead.schStep = 0;
-        const launched = applyQueued();
-        if (launched) {
-          transport.songMode = false;
-          songBtn.textContent = "Session"; songBtn.classList.remove("active"); renderSel.value = "pattern";
-          launchStatus.textContent = "Launched";
-        } else if (transport.songMode) {
-          TRACKS.forEach((track) => advanceArrangeTrack(track));
-        }
-        paintSession();
-      }
-    }
-  }
-  playBtn.addEventListener("click", () => {
-    if (playhead.playing) return;
-    ensureNodes(); playhead.playing = true; playhead.schStep = 0;
-    TRACKS.forEach((track) => { arrangePos[track] = { block: 0, barInBlock: 0 }; });
-    applyQueued();
-    if (transport.songMode) TRACKS.forEach((track) => applyArrangePos(track));
-    paintSession();
-    nextTime = ac().currentTime + 0.06;
-    // 1-bar count-in when recording is armed: four clicks, then the loop starts.
-    if (countIn && (mpc.recording || synth.isSynthRec())) {
-      const beat = stepDur() * 4;
-      for (let b = 0; b < 4; b++) metroClick(ac(), engine.master!, nextTime + b * beat, b === 0);
-      nextTime += 4 * beat;
-      lcdState.textContent = "COUNT";
-    }
-    schedTimer = window.setInterval(scheduler, 25);
-  });
-  stopBtn.addEventListener("click", () => {
-    playhead.playing = false; if (schedTimer) { clearInterval(schedTimer); schedTimer = 0; }
-    if (playhead.lastHi >= 0) for (let r = 0; r < 8; r++) cells[r][playhead.lastHi].classList.remove("play");
-    rollPlayheadBar.classList.remove("on");
-    TRACKS.forEach((track) => { clip.queued[track] = undefined; });
-    paintSession();
-    playhead.lastHi = -1; lcdState.textContent = "■ STOP";
-  });
+  buildPlayback({ cells, rollPlayheadBar, launchStatus, lcdState, playBtn, stopBtn, getCountIn: () => countIn, isSynthRec: synth.isSynthRec });
 
-  // Global transport/undo shortcuts — skipped while typing in any text
-  // field so Space still types a space and Ctrl+Z still edits text natively.
-  window.addEventListener("keydown", (ev) => {
-    const active = document.activeElement;
-    if (active instanceof HTMLElement && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) return;
-    if (ev.code === "Space" && !ev.repeat) { ev.preventDefault(); (playhead.playing ? stopBtn : playBtn).click(); return; }
-    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey) {
-      const key = ev.key.toLowerCase();
-      if (key === "z" && !ev.shiftKey) { ev.preventDefault(); undoBtn.click(); }
-      else if ((key === "z" && ev.shiftKey) || key === "y") { ev.preventDefault(); redoBtn.click(); }
-    }
-  });
-
-  // Export + project file logic lives in render.ts (Phase 0 split).
-
-  // ── Keyboard ──
-  // Two-row DAW layout (Ableton/FL): Z-row is the lower octave, Q-row the
-  // upper — ~2.5 octaves without shifting. - / = still shift for extremes.
-  const keyMap: Record<string, string> = {
-    z:"C3", s:"C#3", x:"D3", d:"D#3", c:"E3", v:"F3", g:"F#3",
-    b:"G3", h:"G#3", n:"A3", j:"A#3", m:"B3",
-    q:"C4", "2":"C#4", w:"D4", "3":"D#4", e:"E4", r:"F4", "5":"F#4",
-    t:"G4", "6":"G#4", y:"A4", "7":"A#4", u:"B4",
-    i:"C5", "9":"C#5", o:"D5", "0":"D#5", p:"E5",
-  };
-  const padKeyMap: Record<string, number> = {
-    "1": 12, "2": 13, "3": 14, "4": 15,
-    q: 8, w: 9, e: 10, r: 11,
-    a: 4, s: 5, d: 6, f: 7,
-    z: 0, x: 1, c: 2, v: 3,
-  };
-  // Physical key -> the actual (octave-shifted) note it triggered, so keyup
-  // releases the right note even if the octave changed while it was held.
-  const downMap = new Map<string, string>();
-  window.addEventListener("keydown", (ev) => {
-    if (activeTab === 0) {
-      const localPad = padKeyMap[ev.key.toLowerCase()];
-      if (localPad != null && !ev.repeat && !ev.metaKey && !ev.ctrlKey) {
-        ev.preventDefault(); triggerPerformancePad(localPad, mpc.fullLevel ? 127 : 105); padButtons[localPad].classList.add("down"); return;
-      }
-    }
-    if (activeTab !== 1) return;
-    const key = ev.key.toLowerCase();
-    if (!ev.repeat && !ev.metaKey && !ev.ctrlKey) {
-      if (key === "-") { setOctaveShift(synth.getOctaveShift() - 1); return; }
-      if (key === "=") { setOctaveShift(synth.getOctaveShift() + 1); return; }
-    }
-    const n0 = keyMap[key];
-    if (!n0 || downMap.has(key) || ev.metaKey || ev.ctrlKey) return;
-    const n = midiToNote(noteToMidi(n0) + synth.getOctaveShift() * 12);
-    downMap.set(key, n); ensureNodes(); liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, n); highlightKey(synthKeys, n0, true);
-    recordSynthOn(n);
-  });
-  window.addEventListener("keyup", (ev) => {
-    const localPad = padKeyMap[ev.key.toLowerCase()];
-    if (localPad != null) padButtons[localPad].classList.remove("down");
-    if (activeTab !== 1) return;
-    const key = ev.key.toLowerCase();
-    const n = downMap.get(key); if (!n) return;
-    downMap.delete(key); liveKeys.noteOff(ac(), n); highlightKey(synthKeys, keyMap[key], false);
-    recordSynthOff(n);
-  });
+  // ── Keyboard ── (keymap.ts — Phase 0 split)
+  bindKeyboard({ getActiveTab: () => activeTab, padButtons, triggerPerformancePad, synth, playBtn, stopBtn, undoBtn, redoBtn });
 
   // Initial paint reflects loaded project state (scene selection, session grid).
   selectScene(clip.sel);
