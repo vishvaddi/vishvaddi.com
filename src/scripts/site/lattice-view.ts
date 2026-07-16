@@ -23,8 +23,10 @@ const COLLAPSE_DEPTH = 2
 const UNDO_CAP = 50
 
 // selected grid line: the grid it belongs to (via owner cell id or root),
-// axis, and boundary index (row line i sits between rows i-1 and i)
-interface LineSel { owner: string | null; axis: 'row' | 'col'; index: number }
+// axis, and boundary index (row line i sits between rows i-1 and i).
+// `at` remembers the perpendicular coordinate so keyboard traversal
+// (cell → line → cell, TreeSheets-style) returns to the right row/column.
+interface LineSel { owner: string | null; axis: 'row' | 'col'; index: number; at?: number }
 interface RectSel { owner: string | null; r0: number; c0: number; r1: number; c1: number }
 
 interface ClipBlock { rows: LatticeCell[][] }
@@ -66,6 +68,22 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
 
   const resolveGrid = (owner: string | null, root: LatticeGrid): LatticeGrid | null =>
     owner === null ? root : (locate(root, owner)?.cell.grid ?? null)
+
+  /** Owner-cell id of a grid within the displayed tree (null = the displayed root). */
+  function ownerOf(display: LatticeGrid, g: LatticeGrid): string | null {
+    if (display === g) return null
+    const walk = (gr: LatticeGrid): string | undefined => {
+      for (const row of gr.rows) for (const cell of row) {
+        if (cell.grid === g) return cell.id
+        if (cell.grid) {
+          const r = walk(cell.grid)
+          if (r !== undefined) return r
+        }
+      }
+      return undefined
+    }
+    return walk(display) ?? null
+  }
 
   function scheduleSave() {
     if (!sheet) return
@@ -853,7 +871,7 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
     } else {
       const hint = document.createElement('div')
       hint.className = 'lat-hint'
-      hint.textContent = 'Tap a cell to select · again to edit · click a gap between cells and type to insert · drag across cells to multi-select · =12*85 evaluates · [[Sheet]] links'
+      hint.textContent = 'Arrows walk cells AND the gaps between them — type on a gap to insert a row/col. Insert dives into a cell (creating a grid), PageUp climbs out. Shift+arrows select a block · Ctrl+arrows move a cell · =12*85 evaluates · [[Sheet]] links'
       act.appendChild(hint)
     }
 
@@ -946,10 +964,10 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
           const r = Number(cell.dataset.r), c = Number(cell.dataset.c)
           const cr = cell.getBoundingClientRect()
           const candidates: { sel: LineSel; dist: number }[] = [
-            { sel: { owner, axis: 'col', index: c }, dist: Math.abs(e.clientX - cr.left) },
-            { sel: { owner, axis: 'col', index: c + 1 }, dist: Math.abs(e.clientX - cr.right) },
-            { sel: { owner, axis: 'row', index: r }, dist: Math.abs(e.clientY - cr.top) },
-            { sel: { owner, axis: 'row', index: r + 1 }, dist: Math.abs(e.clientY - cr.bottom) },
+            { sel: { owner, axis: 'col', index: c, at: r }, dist: Math.abs(e.clientX - cr.left) },
+            { sel: { owner, axis: 'col', index: c + 1, at: r }, dist: Math.abs(e.clientX - cr.right) },
+            { sel: { owner, axis: 'row', index: r, at: c }, dist: Math.abs(e.clientY - cr.top) },
+            { sel: { owner, axis: 'row', index: r + 1, at: c }, dist: Math.abs(e.clientY - cr.bottom) },
           ]
           for (const cand of candidates) {
             // the other axis must actually be near the cell too
@@ -986,14 +1004,49 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
 
     // ---- keyboard -----------------------------------------------------------------
 
+    // TreeSheets cursor model: arrows walk a single sequence of cells AND the
+    // boundary lines between them — line(0), cell(0), line(1), cell(1) … —
+    // so keyboard-only insert is: arrow onto a line, type. Arrowing past a
+    // grid's outer edge pops the selection out to the owner cell.
     el.onkeydown = (e) => {
       if (editing || !sheet) return
 
-      // grid-line mode: typing inserts, Backspace/Delete removes (TreeSheets)
+      const selectCell = (c: LatticeCell) => { selectedId = c.id; lineSel = null; rectSel = null; drawEditor() }
+      const selectLine = (owner: string | null, axis: 'row' | 'col', index: number, at: number) => {
+        lineSel = { owner, axis, index, at }
+        selectedId = null
+        rectSel = null
+        drawEditor()
+      }
+      const popOut = (owner: string | null) => {
+        if (owner === null) return         // already at the displayed root's edge
+        const loc = locate(grid, owner)
+        if (loc) selectCell(loc.cell)
+        else if (zoomPath.length) { zoomPath = zoomPath.slice(0, -1); selectedId = owner; lineSel = null; drawEditor() }
+      }
+
+      // grid-line mode
       if (lineSel) {
         const g = resolveGrid(lineSel.owner, sheet.root)
         if (!g) { lineSel = null; return }
+        const at = lineSel.at ?? 0
         if (e.key === 'Escape') { e.preventDefault(); lineSel = null; drawEditor(); return }
+        if (e.key.startsWith('Arrow')) {
+          e.preventDefault()
+          const { owner, axis, index } = lineSel
+          if (axis === 'col') {
+            const r = Math.max(0, Math.min(g.rows.length - 1, at))
+            if (e.key === 'ArrowRight') { if (index < g.cols) selectCell(g.rows[r][index]); else popOut(owner) }
+            else if (e.key === 'ArrowLeft') { if (index > 0) selectCell(g.rows[r][index - 1]); else popOut(owner) }
+            else selectCell(g.rows[Math.max(0, Math.min(g.rows.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))][Math.min(index, g.cols - 1)])
+          } else {
+            const c = Math.max(0, Math.min(g.cols - 1, at))
+            if (e.key === 'ArrowDown') { if (index < g.rows.length) selectCell(g.rows[index][c]); else popOut(owner) }
+            else if (e.key === 'ArrowUp') { if (index > 0) selectCell(g.rows[index - 1][c]); else popOut(owner) }
+            else selectCell(g.rows[Math.min(index, g.rows.length - 1)][Math.max(0, Math.min(g.cols - 1, at + (e.key === 'ArrowRight' ? 1 : -1)))])
+          }
+          return
+        }
         if (e.key === 'Backspace' || e.key === 'Delete') {
           e.preventDefault()
           snapshot()
@@ -1011,10 +1064,12 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
           e.preventDefault()
           snapshot()
-          const at = lineSel.index
-          if (lineSel.axis === 'row') insertRow(g, at)
-          else insertCol(g, at)
-          const cell = lineSel.axis === 'row' ? g.rows[at][0] : g.rows[0][at]
+          const idx = lineSel.index
+          if (lineSel.axis === 'row') insertRow(g, idx)
+          else insertCol(g, idx)
+          const cell = lineSel.axis === 'row'
+            ? g.rows[idx][Math.max(0, Math.min(g.cols - 1, at))]
+            : g.rows[Math.max(0, Math.min(g.rows.length - 1, at))][idx]
           const seed = e.key
           lineSel = null
           selectedId = cell.id
@@ -1037,20 +1092,45 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
         pasteBlock()
         return
       }
-      if (e.key === 'Escape' && rectSel) { e.preventDefault(); rectSel = null; drawEditor(); return }
-
-      const cur = selectedId ? locate(grid, selectedId) : null
-      const move = (dr: number, dc: number) => {
-        if (!cur) return
-        const nr = Math.max(0, Math.min(cur.grid.rows.length - 1, cur.row + dr))
-        const nc = Math.max(0, Math.min(cur.grid.cols - 1, cur.col + dc))
-        selectedId = cur.grid.rows[nr][nc].id
-        drawEditor()
+      if (e.key === 'Escape') {
+        if (rectSel || selectedId) { e.preventDefault(); rectSel = null; selectedId = null; drawEditor() }
+        return
       }
       if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); return }
       if (e.ctrlKey && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); redo(); return }
+      if (e.key === 'PageUp') {
+        e.preventDefault()
+        if (zoomPath.length) { zoomPath = zoomPath.slice(0, -1); selectedId = null; drawEditor() }
+        return
+      }
+
+      // rect selection + arrows: plain arrow collapses to the moving corner
+      if (rectSel && e.key.startsWith('Arrow') && !e.shiftKey && !e.ctrlKey) {
+        e.preventDefault()
+        const g = resolveGrid(rectSel.owner, sheet.root)
+        if (g) selectCell(g.rows[Math.max(0, Math.min(g.rows.length - 1, rectSel.r1))][Math.max(0, Math.min(g.cols - 1, rectSel.c1))])
+        return
+      }
+      if (rectSel && e.key.startsWith('Arrow') && e.shiftKey) {
+        e.preventDefault()
+        const g = resolveGrid(rectSel.owner, sheet.root)
+        if (!g) return
+        const d = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key]!
+        rectSel = {
+          ...rectSel,
+          r1: Math.max(0, Math.min(g.rows.length - 1, rectSel.r1 + d[0])),
+          c1: Math.max(0, Math.min(g.cols - 1, rectSel.c1 + d[1])),
+        }
+        drawEditor()
+        return
+      }
+
+      const cur = selectedId ? locate(grid, selectedId) : null
       if (!cur) return
+      const curOwner = ownerOf(grid, cur.grid)
+
       if (e.ctrlKey && e.key.startsWith('Arrow')) {
+        // Ctrl+arrows move the cell itself (TreeSheets)
         e.preventDefault()
         snapshot()
         const d = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key]!
@@ -1058,21 +1138,58 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
         else undoStack.pop()
         return
       }
+      if (e.shiftKey && e.key.startsWith('Arrow')) {
+        // Shift+arrows start/extend a rectangular selection
+        e.preventDefault()
+        const d = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key]!
+        rectSel = {
+          owner: curOwner,
+          r0: cur.row, c0: cur.col,
+          r1: Math.max(0, Math.min(cur.grid.rows.length - 1, cur.row + d[0])),
+          c1: Math.max(0, Math.min(cur.grid.cols - 1, cur.col + d[1])),
+        }
+        selectedId = null
+        drawEditor()
+        return
+      }
+
       switch (e.key) {
-        case 'ArrowUp': e.preventDefault(); move(-1, 0); break
-        case 'ArrowDown': e.preventDefault(); move(1, 0); break
-        case 'ArrowLeft': e.preventDefault(); move(0, -1); break
-        case 'ArrowRight': e.preventDefault(); move(0, 1); break
-        case 'Tab': e.preventDefault(); move(0, e.shiftKey ? -1 : 1); break
+        // arrows step from the cell onto the adjacent boundary line
+        case 'ArrowRight': e.preventDefault(); selectLine(curOwner, 'col', cur.col + 1, cur.row); break
+        case 'ArrowLeft': e.preventDefault(); selectLine(curOwner, 'col', cur.col, cur.row); break
+        case 'ArrowDown': e.preventDefault(); selectLine(curOwner, 'row', cur.row + 1, cur.col); break
+        case 'ArrowUp': e.preventDefault(); selectLine(curOwner, 'row', cur.row, cur.col); break
+        // Tab walks cell-to-cell (skipping lines), wrapping rows
+        case 'Tab': {
+          e.preventDefault()
+          const flat = cur.grid.rows.flat()
+          const i = flat.indexOf(cur.cell)
+          const next = flat[(i + (e.shiftKey ? flat.length - 1 : 1)) % flat.length]
+          selectCell(next)
+          break
+        }
+        case 'Home': e.preventDefault(); selectCell(cur.grid.rows[cur.row][0]); break
+        case 'End': e.preventDefault(); selectCell(cur.grid.rows[cur.row][cur.grid.cols - 1]); break
         case 'Enter': {
           e.preventDefault()
           const cd = wrap.querySelector<HTMLElement>(`.lat-cell[data-id="${cur.cell.id}"]`)
           if (cd) startEdit(cur.cell, cd)
           break
         }
-        case 'Insert': {
+        // Insert = go deeper: create the subgrid if needed, dive, select its first cell
+        case 'Insert': case 'PageDown': {
           e.preventDefault()
-          if (!cur.cell.grid) { snapshot(); insertSubgrid(sheet.root, cur.cell.id); afterMutate() }
+          if (!cur.cell.grid) {
+            if (e.key === 'PageDown') break        // PageDown only dives into existing grids
+            snapshot()
+            insertSubgrid(sheet.root, cur.cell.id)
+            scheduleSave()
+          }
+          const sub = cur.cell.grid ?? locate(sheet.root, cur.cell.id)?.cell.grid
+          zoomPath = [...zoomPath, cur.cell.id]
+          selectedId = sub?.rows[0]?.[0]?.id ?? null
+          lineSel = null
+          drawEditor()
           break
         }
         case 'Delete': case 'Backspace': {
