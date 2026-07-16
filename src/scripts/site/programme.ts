@@ -49,6 +49,16 @@ export function initProgramme(el: HTMLElement): void {
   let zoom = 1                          // index into ZOOMS
   let showFloat = false
   let lookAhead = 0                     // 0 = all, else weeks
+  let fitMode = false
+  let fitDayW = 10
+  let mobileView: 'chart' | 'table' = 'chart'
+
+  // fullscreen exit + breakpoint changes need a repaint (button labels, layout)
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) (screen.orientation as any).unlock?.()
+    if (prog) drawEditor()
+  })
+  window.matchMedia('(max-width: 900px)').addEventListener('change', () => { if (prog) drawEditor() })
 
   function scheduleSave() {
     if (!prog) return
@@ -252,85 +262,97 @@ export function initProgramme(el: HTMLElement): void {
     start.value = prog.startDate
     start.setAttribute('aria-label', 'Possession date')
     start.addEventListener('change', () => { if (prog && start.value) { prog.startDate = start.value; scheduleSave(); drawEditor() } })
-    const sat = document.createElement('button')
-    sat.className = 'prog-tb'
-    sat.textContent = prog.calendar.workDays[6] ? '6-day week' : '5-day week'
-    sat.title = 'Toggle Saturday working'
-    sat.addEventListener('click', () => {
-      if (!prog) return
-      prog.calendar.workDays[6] = !prog.calendar.workDays[6]
-      scheduleSave()
-      drawEditor()
-    })
     const spacer = document.createElement('span')
     spacer.className = 'prog-spacer'
+    const fsBtn = document.createElement('button')
+    fsBtn.className = 'prog-tb'
+    fsBtn.textContent = document.fullscreenElement ? '⛶ exit' : '⛶'
+    fsBtn.title = 'Fullscreen (locks landscape on Android)'
+    fsBtn.setAttribute('aria-label', 'Toggle fullscreen')
+    fsBtn.addEventListener('click', async () => {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen().catch(() => {})
+      } else {
+        try {
+          await el.requestFullscreen()
+          // landscape lock only exists inside fullscreen (Chrome Android); iOS has neither — stay silent
+          await (screen.orientation as any).lock?.('landscape').catch(() => {})
+        } catch { toast('Fullscreen not available in this browser') }
+      }
+    })
+    const fitBtn = document.createElement('button')
+    fitBtn.className = 'prog-tb'
+    fitBtn.textContent = fitMode ? 'fit ✓' : 'fit'
+    fitBtn.title = 'Fit the whole programme to the screen'
+    fitBtn.addEventListener('click', () => {
+      const gw = el.querySelector<HTMLElement>('.prog-gantt-wrap')
+      const days = Number(el.querySelector('.prog-gantt')?.getAttribute('data-days') ?? 0)
+      if (gw && days) fitDayW = Math.max(3, Math.min(34, Math.floor((gw.clientWidth - 4) / days)))
+      fitMode = !fitMode
+      drawEditor()
+    })
     const zoomOut = document.createElement('button')
     zoomOut.className = 'prog-tb'
     zoomOut.textContent = '−'
     zoomOut.setAttribute('aria-label', 'Zoom out')
-    zoomOut.disabled = zoom === 0
-    zoomOut.addEventListener('click', () => { zoom = Math.max(0, zoom - 1); drawEditor() })
+    zoomOut.disabled = !fitMode && zoom === 0
+    zoomOut.addEventListener('click', () => { fitMode = false; zoom = Math.max(0, zoom - 1); drawEditor() })
     const zoomIn = document.createElement('button')
     zoomIn.className = 'prog-tb'
     zoomIn.textContent = '＋'
     zoomIn.setAttribute('aria-label', 'Zoom in')
-    zoomIn.disabled = zoom === ZOOMS.length - 1
-    zoomIn.addEventListener('click', () => { zoom = Math.min(ZOOMS.length - 1, zoom + 1); drawEditor() })
-    const floatBtn = document.createElement('button')
-    floatBtn.className = 'prog-tb'
-    floatBtn.textContent = showFloat ? 'float: on' : 'float: off'
-    floatBtn.title = 'Show total float whiskers'
-    floatBtn.addEventListener('click', () => { showFloat = !showFloat; drawEditor() })
-    const lookBtn = document.createElement('button')
-    lookBtn.className = 'prog-tb'
-    lookBtn.textContent = lookAhead ? `look-ahead: ${lookAhead}wk` : 'look-ahead: off'
-    lookBtn.title = 'Filter to the next 3 / 6 weeks'
-    lookBtn.addEventListener('click', () => { lookAhead = lookAhead === 0 ? 3 : lookAhead === 3 ? 6 : 0; drawEditor() })
-    const blBtn = document.createElement('button')
-    blBtn.className = 'prog-tb'
-    blBtn.textContent = prog.baseline ? `baseline ${fmtAU(prog.baseline.lockedAt)}` : 'lock baseline'
-    blBtn.title = prog.baseline ? 'Baseline locked — ghost bars show it. Click to re-baseline (confirmation required).' : 'Snapshot current dates as the contract baseline'
-    blBtn.addEventListener('click', () => {
-      if (!prog) return
-      if (!prog.baseline) { lockBaseline(); return }
-      // re-baselining destroys the delay-claim record — deliberate friction
-      const existing = el.querySelector('#prog-rebase')
-      if (existing) { existing.remove(); return }
-      const row = document.createElement('div')
-      row.id = 'prog-rebase'
-      row.className = 'prog-stats'
-      const inp = document.createElement('input')
-      inp.placeholder = `type "${prog.title}" to re-baseline`
-      inp.className = 'prog-rebase-input'
-      inp.setAttribute('aria-label', 'Type the programme title to confirm re-baseline')
-      const go = document.createElement('button')
-      go.className = 'prog-tb'
-      go.textContent = 're-baseline'
-      go.addEventListener('click', () => {
-        if (inp.value.trim() === prog!.title) lockBaseline()
-        else toast('Title does not match — baseline kept')
-      })
-      row.append(inp, go)
-      bar.insertAdjacentElement('afterend', row)
-      inp.focus()
-    })
-    const exportBtn = document.createElement('button')
-    exportBtn.className = 'prog-tb'
-    exportBtn.textContent = '⧉'
-    exportBtn.setAttribute('aria-label', 'Export')
-    exportBtn.addEventListener('click', () => {
+    zoomIn.disabled = !fitMode && zoom === ZOOMS.length - 1
+    zoomIn.addEventListener('click', () => { fitMode = false; zoom = Math.min(ZOOMS.length - 1, zoom + 1); drawEditor() })
+
+    // everything secondary lives in one ⋯ menu so the toolbar stays calm
+    const menuBtn = document.createElement('button')
+    menuBtn.className = 'prog-tb'
+    menuBtn.textContent = '⋯'
+    menuBtn.setAttribute('aria-label', 'More: calendar, float, look-ahead, baseline, exports')
+    menuBtn.addEventListener('click', () => {
       const existing = el.querySelector('#prog-export')
       if (existing) { existing.remove(); return }
       const menu = document.createElement('div')
       menu.id = 'prog-export'
       menu.className = 'prog-stats'
-      const mk = (label: string, fn: () => void) => {
+      const mk = (label: string, fn: () => void, keepOpen = false) => {
         const b = document.createElement('button')
         b.className = 'prog-tb'
         b.textContent = label
-        b.addEventListener('click', () => { fn(); menu.remove() })
+        b.addEventListener('click', () => { fn(); if (!keepOpen) menu.remove() })
         menu.appendChild(b)
+        return b
       }
+      mk(prog!.calendar.workDays[6] ? '6-day week' : '5-day week', () => {
+        if (!prog) return
+        prog.calendar.workDays[6] = !prog.calendar.workDays[6]
+        scheduleSave()
+        drawEditor()
+      })
+      mk(showFloat ? 'float: on' : 'float: off', () => { showFloat = !showFloat; drawEditor() })
+      mk(lookAhead ? `look-ahead: ${lookAhead}wk` : 'look-ahead: off', () => { lookAhead = lookAhead === 0 ? 3 : lookAhead === 3 ? 6 : 0; drawEditor() })
+      mk(prog!.baseline ? `baseline ${fmtAU(prog!.baseline.lockedAt)}` : 'lock baseline', () => {
+        if (!prog) return
+        if (!prog.baseline) { lockBaseline(); return }
+        // re-baselining destroys the delay-claim record — deliberate friction
+        const rb = document.createElement('div')
+        rb.id = 'prog-rebase'
+        rb.className = 'prog-stats'
+        const inp = document.createElement('input')
+        inp.placeholder = `type "${prog.title}" to re-baseline`
+        inp.className = 'prog-rebase-input'
+        inp.setAttribute('aria-label', 'Type the programme title to confirm re-baseline')
+        const go = document.createElement('button')
+        go.className = 'prog-tb'
+        go.textContent = 're-baseline'
+        go.addEventListener('click', () => {
+          if (inp.value.trim() === prog!.title) lockBaseline()
+          else toast('Title does not match — baseline kept')
+        })
+        rb.append(inp, go)
+        bar.insertAdjacentElement('afterend', rb)
+        inp.focus()
+      })
       mk('print / PDF', () => window.print())
       mk('PNG', exportPNG)
       mk('CSV', exportCSV)
@@ -372,8 +394,36 @@ export function initProgramme(el: HTMLElement): void {
       scheduleSave()
       drawEditor()
     })
-    bar.append(back, title, start, sat, spacer, zoomOut, zoomIn, floatBtn, lookBtn, blBtn, exportBtn, addBtn)
+    bar.append(back, title, start, spacer, fsBtn, fitBtn, zoomOut, zoomIn, menuBtn, addBtn)
     el.appendChild(bar)
+
+    // narrow screens: chart-first with a Chart/Table switcher + one-time rotate hint
+    const narrow = window.matchMedia('(max-width: 900px)').matches
+    if (narrow) {
+      const seg = document.createElement('div')
+      seg.className = 'prog-seg'
+      for (const v of ['chart', 'table'] as const) {
+        const b = document.createElement('button')
+        b.className = 'prog-tb' + (mobileView === v ? ' prog-seg-on' : '')
+        b.textContent = v === 'chart' ? '📊 chart' : '☷ table'
+        b.addEventListener('click', () => { mobileView = v; drawEditor() })
+        seg.appendChild(b)
+      }
+      el.appendChild(seg)
+      if (window.matchMedia('(orientation: portrait) and (max-width: 700px)').matches
+          && !sessionStorage.getItem('prog_rotate_hint') && !document.fullscreenElement) {
+        const chip = document.createElement('div')
+        chip.className = 'prog-hintchip'
+        const span = document.createElement('span')
+        span.textContent = '⟳ Rotate your phone or tap ⛶ for the full chart'
+        const x = document.createElement('button')
+        x.textContent = '✕'
+        x.setAttribute('aria-label', 'Dismiss hint')
+        x.addEventListener('click', () => { sessionStorage.setItem('prog_rotate_hint', '1'); chip.remove() })
+        chip.append(span, x)
+        el.appendChild(chip)
+      }
+    }
 
     if (!sched) return
 
@@ -398,6 +448,7 @@ export function initProgramme(el: HTMLElement): void {
     // ---- split: table + timeline
     const split = document.createElement('div')
     split.className = 'prog-split'
+    if (narrow) split.classList.add(mobileView === 'chart' ? 'prog-chart-only' : 'prog-table-only')
     el.appendChild(split)
 
     const trades = [...new Set(prog.tasks.map(t => t.trade).filter(Boolean))] as string[]
@@ -578,7 +629,9 @@ export function initProgramme(el: HTMLElement): void {
   }
 
   function renderTimeline(p: Programme, sched: Map<string, ScheduledTask>, trades: string[], visTasks: Task[]): HTMLElement {
-    const DAY_W = ZOOMS[zoom]
+    const DAY_W = fitMode ? fitDayW : ZOOMS[zoom]
+    // chart carries its own task names when the table is hidden (narrow chart-first view)
+    const barLabels = window.matchMedia('(max-width: 900px)').matches && mobileView === 'chart'
     const wrap = document.createElement('div')
     wrap.className = 'prog-gantt-wrap'
 
@@ -637,6 +690,7 @@ export function initProgramme(el: HTMLElement): void {
     svg.setAttribute('height', String(height))
     svg.setAttribute('class', 'prog-gantt')
     svg.setAttribute('aria-label', `Gantt chart for ${p.title}`)
+    svg.setAttribute('data-days', String(days.length))
 
     const rect = (x: number, y: number, w: number, h: number, cls: string, fill?: string) => {
       const r = document.createElementNS(NS, 'rect')
@@ -752,6 +806,16 @@ export function initProgramme(el: HTMLElement): void {
       tip.textContent = `${t.name} — ${fmtAU(s.esDate)} → ${fmtAU(s.efDate)} (${t.duration}d${s.tf > 0 ? `, float ${s.tf}d` : ', critical'})${t.nightWork ? ' · night work' : ''}${t.constraint ? ' · pinned' : ''}`
       bar.appendChild(tip)
       if (t.nightWork) rect(x0, y + 6, barW, 3, 'pg-night')
+      if (barLabels) {
+        const short = t.name.length > 28 ? t.name.slice(0, 27) + '…' : t.name
+        if (barW >= short.length * 6.2 + 10) {
+          const inLbl = text(x0 + 5, y + ROW_H / 2 + 3.5, short, 'pg-barlabel-in')
+          inLbl.setAttribute('pointer-events', 'none')
+        } else {
+          const outLbl = text(x0 + barW + 10, y + ROW_H / 2 + 3.5, short, 'pg-mslabel')
+          outLbl.setAttribute('pointer-events', 'none')
+        }
+      }
       const bl = p.baseline?.dates[t.id]
       if (bl) {
         const gx0 = (calIdx.get(bl.es) ?? 0) * DAY_W
@@ -929,12 +993,36 @@ export function initProgramme(el: HTMLElement): void {
       close.addEventListener('click', () => box.remove())
       box.append(sel, lag, ok, del, close)
       document.body.appendChild(box)
+      const r = box.getBoundingClientRect()
+      if (r.right > innerWidth - 8) box.style.left = `${Math.max(8, innerWidth - r.width - 8)}px`
+      if (r.bottom > innerHeight - 8) box.style.top = `${Math.max(8, innerHeight - r.height - 8)}px`
       lag.focus()
     }
 
+    // pinch on the chart steps the zoom level (same threshold pattern as Lattice)
+    let pinchStart = 0
+    wrap.addEventListener('touchstart', (ev) => {
+      if (ev.touches.length === 2) {
+        pinchStart = Math.hypot(
+          ev.touches[0].clientX - ev.touches[1].clientX,
+          ev.touches[0].clientY - ev.touches[1].clientY)
+      }
+    }, { passive: true })
+    wrap.addEventListener('touchmove', (ev) => {
+      if (ev.touches.length !== 2 || !pinchStart) return
+      const d = Math.hypot(
+        ev.touches[0].clientX - ev.touches[1].clientX,
+        ev.touches[0].clientY - ev.touches[1].clientY)
+      if (d > pinchStart * 1.4) { pinchStart = 0; fitMode = false; zoom = Math.min(ZOOMS.length - 1, zoom + 1); drawEditor() }
+      else if (d < pinchStart * 0.7) { pinchStart = 0; fitMode = false; zoom = Math.max(0, zoom - 1); drawEditor() }
+    }, { passive: true })
+
     wrap.appendChild(svg)
-    // keep the possession end in view on first paint
-    requestAnimationFrame(() => { wrap.scrollLeft = 0 })
+    // land with today (or possession) ~15% in from the left edge
+    requestAnimationFrame(() => {
+      const tx = (todayIdx !== undefined ? todayIdx : 0) * DAY_W
+      wrap.scrollLeft = Math.max(0, tx - wrap.clientWidth * 0.15)
+    })
     return wrap
   }
 

@@ -132,6 +132,25 @@ import "../../styles/site.css";
     .programme :global(.pg-ghost) { fill: color-mix(in srgb, var(--fg) 40%, transparent); }
     .programme :global(.prog-rebase-input) { background: var(--bg); border: 1px solid var(--prog-crit); border-radius: 6px; color: var(--fg); font: inherit; font-size: 0.85rem; padding: 0.35rem 0.6rem; min-width: 16rem; }
 
+    .programme :global(.prog-seg) { display: flex; gap: 0.4rem; padding: 0 0 0.5rem; }
+    .programme :global(.prog-seg-on) { border-color: var(--accent); color: var(--accent); }
+    .programme :global(.prog-hintchip) { display: flex; align-items: center; gap: 0.6rem; background: var(--code-bg); border: 1px solid var(--rule); border-radius: 99px; font-size: 0.8rem; color: var(--muted); padding: 0.35rem 0.5rem 0.35rem 0.9rem; margin-bottom: 0.5rem; width: fit-content; }
+    .programme :global(.prog-hintchip button) { background: none; border: none; color: var(--muted); cursor: pointer; min-width: 32px; min-height: 32px; }
+    .programme :global(.pg-barlabel-in) { font-size: 10px; fill: #fff; font-family: ui-monospace, monospace; }
+    @media (max-width: 900px) {
+      .programme :global(.prog-chart-only .prog-table-wrap) { display: none; }
+      .programme :global(.prog-chart-only) { grid-template-columns: 1fr; }
+      .programme :global(.prog-table-only .prog-gantt-wrap) { display: none; }
+      .programme :global(.prog-table-only) { grid-template-columns: 1fr; }
+      .programme :global(.prog-table input), .programme :global(.prog-gen input), .programme :global(.prog-title) { font-size: 16px; }
+      .programme :global(.prog-date) { max-width: 8.5rem; }
+    }
+    /* fullscreen: the chart gets the screen */
+    .programme :global(#programme-root:fullscreen) { background: var(--bg); padding: 0.5rem 0.75rem; overflow: auto; }
+    .programme :global(#programme-root:fullscreen .prog-split) { grid-template-columns: minmax(280px, 30%) 1fr; }
+    .programme :global(#programme-root:fullscreen.prog-narrow .prog-split) { grid-template-columns: 1fr; }
+    .programme :global(#programme-root:fullscreen .prog-gantt-wrap) { max-height: none; }
+
     @page { size: A3 landscape; margin: 10mm; }
     @media print {
       :global(nav), :global(.site-rail), :global(.eyebrow), :global(.note-foot),
