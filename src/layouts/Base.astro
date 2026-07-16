@@ -7,6 +7,7 @@ interface Props {
   ogImage?: string;
   updatedDate?: Date;
   siteNav?: boolean;
+  noindex?: boolean;
 }
 
 const {
@@ -15,6 +16,7 @@ const {
   ogImage = "/og/index.png",
   updatedDate,
   siteNav = false,
+  noindex = false,
 } = Astro.props;
 
 const siteTools: [string, string][] = [
@@ -92,6 +94,7 @@ const updatedFmt = updatedDate
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="generator" content={Astro.generator} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
     <link rel="canonical" href={canonical} />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
