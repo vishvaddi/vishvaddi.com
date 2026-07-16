@@ -10,6 +10,7 @@ export interface StudioCtx {
   selectScene: (scene: number) => void
   isPlaying: () => boolean
   paintSession: () => void
+  setBpm: (v: number) => void
   songBtn: HTMLButtonElement
   renderSel: HTMLSelectElement
 }
