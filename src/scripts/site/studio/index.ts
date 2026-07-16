@@ -29,6 +29,8 @@ import {
   equalSlices, transientSlices, snapZero, euclideanPattern, drawWaveform, drawScope, drawEnvelopeShape,
   encodeWav, encodeMp3,
 } from "./helpers";
+import { initTooltips } from "./tooltip";
+import { buildKeys, highlightKey } from "./keys";
 
 // One color per scene (A-H), distinct from the accent/amber/blue already
 // used for state (playing/queued/selected) — identity, not status.
@@ -62,57 +64,8 @@ export async function initStudio(): Promise<void> {
   if (pending) applyProject(pending); else loadAll();
   sampleData.forEach((data, r) => { if (data) void hydrateSample(r); });
 
-  // ── Tooltips ── help() has been setting data-help/aria-description on
-  // controls throughout this file all along, but nothing ever rendered it —
-  // this delegated listener is what finally shows it. Right-click was
-  // considered instead of hover, but the drum grid, piano roll and pad-event
-  // grid all already use right-click for velocity editing, so it would
-  // collide on exactly the busiest screens. Hover stays, but: (a) it only
-  // shows after a short pause instead of flashing on every mouse pass, and
-  // (b) it prefers appearing ABOVE the target so it doesn't sit on top of
-  // whatever's in the row directly below (dense stacked sliders/lists).
-  const tooltip = el("div", "wa-tooltip"); tooltip.hidden = true;
-  document.body.append(tooltip);
-  let tooltipTarget: HTMLElement | null = null;
-  let tooltipTimer = 0;
-  function positionTooltip(target: HTMLElement): void {
-    const rect = target.getBoundingClientRect();
-    const tipRect = tooltip.getBoundingClientRect();
-    const fitsAbove = rect.top - tipRect.height - 8 >= 0;
-    const top = fitsAbove ? rect.top - tipRect.height - 8 : Math.min(window.innerHeight - tipRect.height - 8, rect.bottom + 8);
-    tooltip.style.top = `${Math.max(8, top)}px`;
-    tooltip.style.left = `${Math.min(window.innerWidth - 268, Math.max(8, rect.left))}px`;
-  }
-  function showTooltipNow(target: HTMLElement): void {
-    const text = target.dataset.help; if (!text) return;
-    tooltipTarget = target;
-    tooltip.textContent = text; tooltip.hidden = false;
-    positionTooltip(target);
-  }
-  function showTooltip(target: HTMLElement, delayMs: number): void {
-    window.clearTimeout(tooltipTimer);
-    tooltipTimer = window.setTimeout(() => showTooltipNow(target), delayMs);
-  }
-  function hideTooltip(target: HTMLElement): void {
-    window.clearTimeout(tooltipTimer);
-    if (tooltipTarget === target) { tooltip.hidden = true; tooltipTarget = null; }
-  }
-  document.addEventListener("pointerover", (event) => {
-    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
-    if (target && target !== tooltipTarget) showTooltip(target, 750);
-  });
-  document.addEventListener("pointerout", (event) => {
-    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
-    if (target) hideTooltip(target);
-  });
-  document.addEventListener("focusin", (event) => {
-    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
-    if (target) showTooltipNow(target);
-  });
-  document.addEventListener("focusout", (event) => {
-    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
-    if (target) hideTooltip(target);
-  });
+  // ── Tooltips ── delegated hover/focus rendering of [data-help] — see tooltip.ts
+  initTooltips();
 
   const win = el("div", "wa-win");
   const titleBar = el("div", "wa-title");
@@ -2353,30 +2306,4 @@ export async function initStudio(): Promise<void> {
   if (!localStorage.getItem("vv_studio_tutorial_seen")) showTutorialStep(0);
 }
 
-// ─── Key builders ─────────────────────────────────────────────────────────────
-const WHITE = ["C", "D", "E", "F", "G", "A", "B"];
-const HAS_BLACK: Record<string, boolean> = { C: true, D: true, F: true, G: true, A: true };
-type NoteFn = (note: string) => void;
-function buildKeys(host: HTMLElement, noteOn: NoteFn, noteOff: NoteFn): void {
-  for (let oct = 3; oct <= 4; oct++) {
-    for (const w of WHITE) {
-      const key = el("button", "wa-key") as HTMLButtonElement; key.type = "button"; key.dataset.note = `${w}${oct}`; bindKey(key, `${w}${oct}`, noteOn, noteOff);
-      if (HAS_BLACK[w]) {
-        const bk = el("button", "wa-key wa-key-black") as HTMLButtonElement; bk.type = "button"; bk.dataset.note = `${w}#${oct}`; bindKey(bk, `${w}#${oct}`, noteOn, noteOff); key.append(bk);
-      }
-      host.append(key);
-    }
-  }
-}
-function bindKey(key: HTMLElement, note: string, noteOn: NoteFn, noteOff: NoteFn): void {
-  const on = (e: Event) => { e.preventDefault(); e.stopPropagation(); noteOn(note); key.classList.add("down"); };
-  const off = () => { noteOff(note); key.classList.remove("down"); };
-  key.addEventListener("mousedown", on); key.addEventListener("mouseup", off);
-  key.addEventListener("mouseleave", () => { if (key.classList.contains("down")) off(); });
-  key.addEventListener("touchstart", on, { passive: false });
-  key.addEventListener("touchend", (e) => { e.preventDefault(); off(); });
-}
-function highlightKey(host: HTMLElement, note: string, on: boolean): void {
-  const k = host.querySelector<HTMLElement>(`[data-note="${CSS.escape(note)}"]`);
-  if (k) k.classList.toggle("down", on);
-}
+// Key builders live in keys.ts (Phase 0 split).
