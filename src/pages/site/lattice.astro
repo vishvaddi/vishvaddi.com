@@ -82,5 +82,15 @@ import "../../styles/site.css";
     :global(.lat-toast) { position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%); background: var(--fg); color: var(--bg); font-size: 0.85rem; padding: 0.5rem 1rem; border-radius: 8px; z-index: 50; }
     .lattice :global(.lat-linesel) { position: absolute; background: var(--accent); border-radius: 2px; z-index: 2; pointer-events: none; }
     .lattice :global(.lat-multi) { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: -1px; }
+    .lattice :global(.lat-b) { font-weight: 700; }
+    .lattice :global(.lat-i) { font-style: italic; }
+    .lattice :global(.lat-hit) { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent); }
+    .lattice :global(.lat-tag) { align-self: flex-start; font-size: 0.62rem; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 99px; padding: 0 0.4rem; }
+    .lattice :global(.lat-search) { background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; color: var(--fg); font: inherit; font-size: 0.8rem; padding: 0.3rem 0.5rem; width: 8rem; }
+    .lattice :global(.lat-map-links) { position: absolute; inset: 0; pointer-events: none; }
+    .lattice :global(.lat-map-links path) { fill: none; stroke: var(--muted); stroke-width: 1.2; opacity: 0.6; }
+    .lattice :global(.lat-map-node) { text-align: left; background: var(--code-bg); border: 1px solid var(--rule); border-radius: 8px; color: var(--fg); font: inherit; font-size: 0.78rem; padding: 0.3rem 0.5rem; cursor: pointer; overflow-wrap: anywhere; }
+    .lattice :global(.lat-map-node.lat-selected) { border-color: var(--accent); outline: 1px solid var(--accent); }
+    .lattice :global(.lat-done-node) { text-decoration: line-through; opacity: 0.55; }
   </style>
 </Base>

@@ -7,6 +7,7 @@ import {
   locate, gridAtPath, setText, insertSubgrid, removeSubgrid,
   insertRow, deleteRow, insertCol, deleteCol, moveCell, rollupLabel,
   fromIndentedText, toIndentedText, fromTSV, toTSV, templateSheets, newSheet, latticeId,
+  sortGrid, transposeGrid, flattenGrid, subtreeMatches, replaceAll,
 } from './lattice-model'
 
 export interface LatticeAdapter {
@@ -46,6 +47,9 @@ export function armTwice(btn: HTMLButtonElement, label: string, fn: () => void):
   })
 }
 
+// 8 fill colours that read on both hosts' light + dark surfaces
+const FILLS = ['#5b8dd633', '#c5683f33', '#6aa84f33', '#8e63ce33', '#d0a03f33', '#4fa8a033', '#c65b7a33', '#7a7a7a33']
+
 export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): void {
   let sheet: LatticeSheet | null = null
   let zoomPath: string[] = []
@@ -56,6 +60,9 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
   let undoStack: string[] = []
   let redoStack: string[] = []
   let saveTimer: number | undefined
+  let mapMode = false
+  let searchQ = ''
+  let filterOn = false
 
   const resolveGrid = (owner: string | null, root: LatticeGrid): LatticeGrid | null =>
     owner === null ? root : (locate(root, owner)?.cell.grid ?? null)
@@ -229,6 +236,17 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
     if (cell.id === selectedId) d.classList.add('lat-selected')
     if (inRect(owner, r, c)) d.classList.add('lat-multi')
     if (cell.done) d.classList.add('lat-done')
+    if (cell.style?.b) d.classList.add('lat-b')
+    if (cell.style?.i) d.classList.add('lat-i')
+    if (typeof cell.style?.fill === 'number') d.style.background = FILLS[cell.style.fill % FILLS.length]
+    if (searchQ && (cell.text.toLowerCase().includes(searchQ) || (cell.tag ?? '').toLowerCase().includes(searchQ))) d.classList.add('lat-hit')
+
+    if (cell.tag) {
+      const tg = document.createElement('span')
+      tg.className = 'lat-tag'
+      tg.textContent = cell.tag
+      d.appendChild(tg)
+    }
 
     const label = rollupLabel(cell)
     if (label) {
@@ -286,8 +304,75 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
     g.className = 'lat-grid'
     g.dataset.gridOwner = owner ?? ''
     g.style.gridTemplateColumns = `repeat(${grid.cols}, minmax(${depth === 0 ? 72 : 48}px, 1fr))`
-    grid.rows.forEach((row, r) => row.forEach((cell, c) => g.appendChild(cellEl(cell, depth, owner, r, c))))
+    grid.rows.forEach((row, r) => {
+      // filter mode: hide top-level rows whose subtree has no match
+      if (depth === 0 && filterOn && searchQ && !row.some(c => subtreeMatches(c, searchQ))) return
+      row.forEach((cell, c) => g.appendChild(cellEl(cell, depth, owner, r, c)))
+    })
     return g
+  }
+
+  // ---- mind-map view: same data, node-link layout -------------------------------
+
+  function mapEl(grid: LatticeGrid): HTMLElement {
+    const NODE_W = 150, NODE_H = 34, GAP_X = 44, GAP_Y = 10
+    interface Node { cell: LatticeCell; depth: number; y: number; children: Node[] }
+    let nextY = 0
+    const build = (cell: LatticeCell, depth: number): Node => {
+      const kids: Node[] = []
+      if (cell.grid) for (const row of cell.grid.rows) for (const c of row) {
+        if (c.text.trim() || c.grid) kids.push(build(c, depth + 1))
+      }
+      let y: number
+      if (kids.length) y = (kids[0].y + kids[kids.length - 1].y) / 2
+      else { y = nextY; nextY += NODE_H + GAP_Y }
+      return { cell, depth, y, children: kids }
+    }
+    const roots: Node[] = []
+    for (const row of grid.rows) for (const c of row) {
+      if (c.text.trim() || c.grid) roots.push(build(c, 0))
+    }
+    const all: Node[] = []
+    const collect = (n: Node) => { all.push(n); n.children.forEach(collect) }
+    roots.forEach(collect)
+    const maxDepth = Math.max(0, ...all.map(n => n.depth))
+    const width = (maxDepth + 1) * (NODE_W + GAP_X) + 20
+    const height = Math.max(nextY, NODE_H) + 20
+
+    const holder = document.createElement('div')
+    holder.className = 'lat-map'
+    holder.style.cssText = `position:relative;width:${width}px;height:${height}px`
+    const NS = 'http://www.w3.org/2000/svg'
+    const svg = document.createElementNS(NS, 'svg')
+    svg.setAttribute('width', String(width))
+    svg.setAttribute('height', String(height))
+    svg.setAttribute('class', 'lat-map-links')
+    holder.appendChild(svg)
+    for (const n of all) {
+      const x = n.depth * (NODE_W + GAP_X) + 10
+      for (const k of n.children) {
+        const path = document.createElementNS(NS, 'path')
+        const x1 = x + NODE_W, y1 = n.y + NODE_H / 2
+        const x2 = k.depth * (NODE_W + GAP_X) + 10, y2 = k.y + NODE_H / 2
+        path.setAttribute('d', `M ${x1} ${y1} C ${x1 + GAP_X / 2} ${y1}, ${x2 - GAP_X / 2} ${y2}, ${x2} ${y2}`)
+        svg.appendChild(path)
+      }
+      const nd = document.createElement('button')
+      nd.className = 'lat-map-node'
+      nd.dataset.id = n.cell.id
+      if (n.cell.id === selectedId) nd.classList.add('lat-selected')
+      if (typeof n.cell.style?.fill === 'number') nd.style.background = FILLS[n.cell.style.fill % FILLS.length]
+      nd.style.cssText += `;position:absolute;left:${x}px;top:${n.y}px;width:${NODE_W}px;min-height:${NODE_H}px`
+      const txt = n.cell.text.startsWith('=') && typeof n.cell.num === 'number' ? String(n.cell.num) : n.cell.text
+      nd.textContent = txt.length > 40 ? txt.slice(0, 39) + '…' : (txt || '▦')
+      if (n.cell.done) nd.classList.add('lat-done-node')
+      nd.addEventListener('click', () => {
+        selectedId = n.cell.id === selectedId ? null : n.cell.id
+        drawEditor()
+      })
+      holder.appendChild(nd)
+    }
+    return holder
   }
 
   /** Highlight the selected grid line by measuring the rendered cells around it. */
@@ -472,7 +557,35 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
     exportB.className = 'lat-tb'
     exportB.setAttribute('aria-label', 'Export')
     exportB.textContent = '⧉'
-    bar.append(back, title, spacer, undoB, redoB, exportB)
+    const mapB = document.createElement('button')
+    mapB.className = 'lat-tb'
+    mapB.setAttribute('aria-label', 'Toggle mind-map view')
+    mapB.textContent = mapMode ? '▦ grid' : '🗺 map'
+    mapB.addEventListener('click', () => { mapMode = !mapMode; lineSel = null; rectSel = null; drawEditor() })
+    const search = document.createElement('input')
+    search.className = 'lat-search'
+    search.type = 'search'
+    search.placeholder = 'find…'
+    search.value = searchQ
+    search.setAttribute('aria-label', 'Search cells')
+    let searchT: number | undefined
+    search.addEventListener('input', () => {
+      clearTimeout(searchT)
+      searchT = window.setTimeout(() => {
+        searchQ = search.value.trim().toLowerCase()
+        drawEditor()
+        const s2 = el.querySelector<HTMLInputElement>('.lat-search')
+        if (s2) { s2.focus(); s2.setSelectionRange(s2.value.length, s2.value.length) }
+      }, 300)
+    })
+    search.addEventListener('keydown', e => e.stopPropagation())
+    const filterB = document.createElement('button')
+    filterB.className = 'lat-tb'
+    filterB.setAttribute('aria-label', 'Filter to matches')
+    filterB.textContent = filterOn ? '▼ on' : '▼'
+    filterB.title = 'Show only rows with a match'
+    filterB.addEventListener('click', () => { filterOn = !filterOn; drawEditor() })
+    bar.append(back, title, spacer, search, filterB, mapB, undoB, redoB, exportB)
     el.appendChild(bar)
 
     back.addEventListener('click', async () => {
@@ -504,7 +617,7 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
 
     const wrap = document.createElement('div')
     wrap.className = 'lat-wrap'
-    wrap.appendChild(gridEl(grid, 0, zoomOwner))
+    wrap.appendChild(mapMode ? mapEl(grid) : gridEl(grid, 0, zoomOwner))
     el.appendChild(wrap)
 
     const sel = selectedId ? locate(grid, selectedId) : null
@@ -569,6 +682,45 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
         menu.remove()
       })
       menu.appendChild(imp)
+      // grid ops — act on the selected cell's grid, else the displayed grid;
+      // sort keys off the selected cell's column (or column 0)
+      const op = (label: string, fn: () => void, aria?: string) => {
+        const b = document.createElement('button')
+        b.className = 'lat-tb'
+        b.textContent = label
+        if (aria) b.setAttribute('aria-label', aria)
+        b.addEventListener('click', () => {
+          if (!sheet) return
+          snapshot()
+          fn()
+          menu.remove()
+          afterMutate()
+        })
+        menu.appendChild(b)
+      }
+      const opGrid = sel?.cell.grid ?? grid
+      const sortCol = sel && !sel.cell.grid ? sel.col : 0
+      op('sort ↓', () => sortGrid(opGrid, sortCol), 'Sort rows ascending')
+      op('sort ↑', () => sortGrid(opGrid, sortCol, true), 'Sort rows descending')
+      op('transpose', () => transposeGrid(opGrid))
+      op('flatten', () => flattenGrid(opGrid), 'Flatten hierarchy to an outline')
+      if (searchQ) {
+        const rep = document.createElement('input')
+        rep.className = 'lat-search'
+        rep.placeholder = `replace "${searchQ}" with… (Enter)`
+        rep.setAttribute('aria-label', 'Replacement text')
+        rep.addEventListener('keydown', (e) => {
+          e.stopPropagation()
+          if (e.key === 'Enter' && sheet) {
+            snapshot()
+            const n = replaceAll(sheet.root, searchQ, rep.value)
+            adapter.toast(`Replaced in ${n} cell${n === 1 ? '' : 's'}`, 'success')
+            menu.remove()
+            afterMutate()
+          }
+        })
+        menu.appendChild(rep)
+      }
       bar.insertAdjacentElement('afterend', menu)
     })
 
@@ -639,6 +791,54 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
       mkBtn('＋col', () => { snapshot(); insertCol(sel.grid, sel.col + 1); afterMutate() }, 'Add column right')
       mkBtn('−row', () => { snapshot(); deleteRow(sel.grid, sel.row); selectedId = null; afterMutate() }, 'Delete row')
       mkBtn('−col', () => { snapshot(); deleteCol(sel.grid, sel.col); selectedId = null; afterMutate() }, 'Delete column')
+      const bBtn = mkBtn('B', () => {
+        snapshot()
+        sel.cell.style = { ...sel.cell.style, b: !sel.cell.style?.b }
+        afterMutate()
+      }, 'Bold')
+      bBtn.style.fontWeight = '700'
+      const iBtn = mkBtn('I', () => {
+        snapshot()
+        sel.cell.style = { ...sel.cell.style, i: !sel.cell.style?.i }
+        afterMutate()
+      }, 'Italic')
+      iBtn.style.fontStyle = 'italic'
+      const fillBtn = mkBtn('◐', () => {
+        snapshot()
+        const cur = sel.cell.style?.fill
+        const next = cur === undefined ? 0 : cur + 1
+        if (next >= FILLS.length) {
+          const st = { ...sel.cell.style }
+          delete st.fill
+          sel.cell.style = st
+        } else {
+          sel.cell.style = { ...sel.cell.style, fill: next }
+        }
+        afterMutate()
+      }, 'Cycle cell colour')
+      if (typeof sel.cell.style?.fill === 'number') fillBtn.style.background = FILLS[sel.cell.style.fill % FILLS.length]
+      mkBtn(sel.cell.tag ? `#${sel.cell.tag}` : '#tag', () => {
+        const existingTag = act.querySelector('#lat-tag-edit')
+        if (existingTag) { existingTag.remove(); return }
+        const inp = document.createElement('input')
+        inp.id = 'lat-tag-edit'
+        inp.className = 'lat-search'
+        inp.placeholder = 'tag (empty clears)'
+        inp.value = sel.cell.tag ?? ''
+        inp.addEventListener('keydown', e => {
+          e.stopPropagation()
+          if (e.key === 'Enter') {
+            snapshot()
+            const v = inp.value.trim()
+            if (v) sel.cell.tag = v
+            else delete sel.cell.tag
+            afterMutate()
+          }
+          if (e.key === 'Escape') inp.remove()
+        })
+        act.appendChild(inp)
+        inp.focus()
+      }, 'Set tag')
       if (clipboard) mkBtn('paste', pasteBlock, 'Paste block')
       if (sel.cell.grid) {
         const un = mkBtn('un-nest', () => {}, 'Remove nested grid')

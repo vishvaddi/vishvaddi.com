@@ -11,6 +11,8 @@ export interface LatticeCell {
   grid?: LatticeGrid
   bind?: { source: 'streaks' | 'ladder' | 'calendar' | 'quests'; key?: string }
   habit?: string
+  tag?: string
+  style?: { b?: boolean; i?: boolean; fill?: number }   // fill = palette index
 }
 
 export interface LatticeGrid {
@@ -290,6 +292,73 @@ export function toIndentedText(grid: LatticeGrid, depth = 0): string {
     }
   }
   return out.filter(Boolean).join('\n')
+}
+
+// ---- whole-grid operations (TreeSheets parity) --------------------------------
+
+/** Sort rows by a column: numeric when both sides are numeric, else natural text. */
+export function sortGrid(grid: LatticeGrid, col: number, desc = false): void {
+  const c = Math.max(0, Math.min(grid.cols - 1, col))
+  grid.rows.sort((a, b) => {
+    const av = a[c], bv = b[c]
+    const cmp = (typeof av.num === 'number' && typeof bv.num === 'number')
+      ? av.num - bv.num
+      : av.text.localeCompare(bv.text, undefined, { numeric: true, sensitivity: 'base' })
+    return desc ? -cmp : cmp
+  })
+}
+
+export function transposeGrid(grid: LatticeGrid): void {
+  const rows = grid.rows
+  const newRows: LatticeCell[][] = []
+  for (let c = 0; c < grid.cols; c++) newRows.push(rows.map(r => r[c]))
+  grid.cols = rows.length
+  grid.rows = newRows
+}
+
+/** Collapse the hierarchy into a single-column outline (indent as text prefix). */
+export function flattenGrid(grid: LatticeGrid): void {
+  const out: LatticeCell[][] = []
+  const walk = (g: LatticeGrid, depth: number) => {
+    for (const row of g.rows) {
+      for (const cell of row) {
+        if (!cell.text.trim() && !cell.grid) continue
+        const sub = cell.grid
+        delete cell.grid
+        cell.text = `${'    '.repeat(depth)}${cell.text}`
+        out.push([cell])
+        if (sub) walk(sub, depth + 1)
+      }
+    }
+  }
+  walk({ cols: grid.cols, rows: grid.rows }, 0)
+  grid.cols = 1
+  grid.rows = out.length ? out : [[newCell()]]
+}
+
+/** Does any cell in this subtree match the query (case-insensitive)? */
+export function subtreeMatches(cell: LatticeCell, q: string): boolean {
+  if (cell.text.toLowerCase().includes(q) || (cell.tag ?? '').toLowerCase().includes(q)) return true
+  if (cell.grid) for (const row of cell.grid.rows) for (const c of row) if (subtreeMatches(c, q)) return true
+  return false
+}
+
+/** Replace query text in every matching cell; returns replacement count. */
+export function replaceAll(grid: LatticeGrid, q: string, w: string): number {
+  let n = 0
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+  const walk = (g: LatticeGrid) => {
+    for (const row of g.rows) for (const cell of row) {
+      if (re.test(cell.text)) {
+        cell.text = cell.text.replace(re, w)
+        n++
+      }
+      re.lastIndex = 0
+      if (cell.grid) walk(cell.grid)
+    }
+  }
+  walk(grid)
+  return n
 }
 
 // ---- TSV interop (paste straight from Excel / Google Sheets) -----------------
