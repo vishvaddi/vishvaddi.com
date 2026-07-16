@@ -129,5 +129,17 @@ import "../../styles/site.css";
     .programme :global(.prog-proc td) { padding: 0.35rem 0.5rem 0.35rem 0; border-bottom: 1px solid var(--rule); }
     .programme :global(.prog-late) { color: var(--prog-crit); font-weight: 600; }
     .programme :global(.prog-critchip) { color: var(--accent); font-size: 0.72rem; }
+    .programme :global(.pg-ghost) { fill: color-mix(in srgb, var(--fg) 40%, transparent); }
+    .programme :global(.prog-rebase-input) { background: var(--bg); border: 1px solid var(--prog-crit); border-radius: 6px; color: var(--fg); font: inherit; font-size: 0.85rem; padding: 0.35rem 0.6rem; min-width: 16rem; }
+
+    @page { size: A3 landscape; margin: 10mm; }
+    @media print {
+      :global(nav), :global(.site-rail), :global(.eyebrow), :global(.note-foot),
+      .programme :global(.prog-toolbar), .programme :global(.prog-card:has(.prog-tpl)),
+      .programme :global(.pc-x), .programme :global(.pg-linkdot) { display: none !important; }
+      .programme :global(.prog-split) { grid-template-columns: 34% 1fr; border: none; }
+      .programme :global(.prog-gantt-wrap), .programme :global(.prog-table-wrap) { overflow: visible; }
+      :global(body) { max-width: none; padding: 0; }
+    }
   </style>
 </Base>

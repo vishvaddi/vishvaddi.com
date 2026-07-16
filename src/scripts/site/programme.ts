@@ -3,7 +3,7 @@
 // weekends shaded, milestones as diamonds). Interactions (drag/link) are G2.
 import { schedule, projectSpan, parseDate, fmtDate, isWorkDay, minusCalendarDays, CycleError, type ScheduledTask } from './cpm'
 import {
-  type Programme, templates, scaleDurations,
+  type Programme, type Task, templates, scaleDurations,
   loadProgrammes, persistProgramme, removeProgramme,
   pid, depsToText, textToDeps,
 } from './programme-model'
@@ -48,6 +48,7 @@ export function initProgramme(el: HTMLElement): void {
   let saveTimer: number | undefined
   let zoom = 1                          // index into ZOOMS
   let showFloat = false
+  let lookAhead = 0                     // 0 = all, else weeks
 
   function scheduleSave() {
     if (!prog) return
@@ -140,6 +141,89 @@ export function initProgramme(el: HTMLElement): void {
     }
   }
 
+  function lockBaseline() {
+    if (!prog) return
+    const sched = compute()
+    if (!sched) return
+    const dates: Record<string, { es: string; ef: string }> = {}
+    for (const [id, s] of sched) dates[id] = { es: s.esDate, ef: s.efDate }
+    prog.baseline = { lockedAt: fmtDate(new Date()), dates }
+    scheduleSave()
+    drawEditor()
+    toast('Baseline locked — this snapshot substantiates any delay claim')
+  }
+
+  function exportCSV() {
+    if (!prog) return
+    const sched = compute()
+    if (!sched) return
+    const esc = (s: string) => `"${s.replace(/"/g, '""')}"`
+    const lines = ['#,Task,Trade,Phase,Duration (wd),Predecessors,Start,Finish,Hours,Float,Critical']
+    prog.tasks.forEach((t, i) => {
+      const s = sched.get(t.id)!
+      lines.push([
+        i + 1, esc(t.name), esc(t.trade ?? ''), esc(t.phase ?? ''), t.duration,
+        esc(depsToText(t, prog!.tasks)), s.esDate, s.efDate, t.hours ?? '', s.tf, s.critical ? 'Y' : '',
+      ].join(','))
+    })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv' }))
+    a.download = `${prog.title.replace(/[^\w\- ]+/g, '')}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  function exportPNG() {
+    const svg = el.querySelector<SVGSVGElement>('.prog-gantt')
+    if (!svg || !prog) return
+    const clone = svg.cloneNode(true) as SVGSVGElement
+    // inline the CSS-variable colours so the rasteriser sees real values
+    const cs = getComputedStyle(el)
+    const style = document.createElement('style')
+    style.textContent = `
+      text { font-family: ui-monospace, monospace; fill: ${cs.color}; }
+      .pg-month { font-size: 11px; font-weight: 600; }
+      .pg-day, .pg-mslabel, .pg-phaselabel { font-size: 9px; fill: #888; }
+      .pg-offday { fill: rgba(128,128,128,0.12); }
+      .pg-weekline { fill: rgba(128,128,128,0.35); }
+      .pg-today { fill: #2c9c4a; }
+      .pg-bar { rx: 3; opacity: 0.9; }
+      .pg-crit { stroke: #c0392b; stroke-width: 1.5; }
+      .pg-milestone { fill: ${cs.color}; }
+      .pg-link { fill: none; stroke: #888; stroke-width: 1; opacity: 0.5; }
+      .pg-linkhead { fill: #888; }
+      .pg-float { fill: #888; }
+      .pg-phase { fill: #c5683f; }
+      .pg-hist { fill: #c5683f; opacity: 0.45; }
+      .pg-ghost { fill: rgba(128,128,128,0.45); }
+      .pg-handle, .pg-linkdot, .pg-linkdraft, .pg-ghostbar { display: none; }
+      .pg-rowband-alt { fill: rgba(128,128,128,0.05); } .pg-rowband { fill: none; }
+    `
+    clone.insertBefore(style, clone.firstChild)
+    const bg = getComputedStyle(document.body).backgroundColor
+    const xml = new XMLSerializer().serializeToString(clone)
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = Number(svg.getAttribute('width')) * 2
+      canvas.height = Number(svg.getAttribute('height')) * 2
+      const ctx = canvas.getContext('2d')!
+      ctx.fillStyle = bg
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.scale(2, 2)
+      ctx.drawImage(img, 0, 0)
+      canvas.toBlob((blob) => {
+        if (!blob || !prog) return
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = `${prog.title.replace(/[^\w\- ]+/g, '')}-gantt.png`
+        a.click()
+        URL.revokeObjectURL(a.href)
+      })
+    }
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml)
+  }
+
   function drawEditor() {
     if (!prog) return
     const sched = compute()
@@ -197,6 +281,88 @@ export function initProgramme(el: HTMLElement): void {
     floatBtn.textContent = showFloat ? 'float: on' : 'float: off'
     floatBtn.title = 'Show total float whiskers'
     floatBtn.addEventListener('click', () => { showFloat = !showFloat; drawEditor() })
+    const lookBtn = document.createElement('button')
+    lookBtn.className = 'prog-tb'
+    lookBtn.textContent = lookAhead ? `look-ahead: ${lookAhead}wk` : 'look-ahead: off'
+    lookBtn.title = 'Filter to the next 3 / 6 weeks'
+    lookBtn.addEventListener('click', () => { lookAhead = lookAhead === 0 ? 3 : lookAhead === 3 ? 6 : 0; drawEditor() })
+    const blBtn = document.createElement('button')
+    blBtn.className = 'prog-tb'
+    blBtn.textContent = prog.baseline ? `baseline ${fmtAU(prog.baseline.lockedAt)}` : 'lock baseline'
+    blBtn.title = prog.baseline ? 'Baseline locked — ghost bars show it. Click to re-baseline (confirmation required).' : 'Snapshot current dates as the contract baseline'
+    blBtn.addEventListener('click', () => {
+      if (!prog) return
+      if (!prog.baseline) { lockBaseline(); return }
+      // re-baselining destroys the delay-claim record — deliberate friction
+      const existing = el.querySelector('#prog-rebase')
+      if (existing) { existing.remove(); return }
+      const row = document.createElement('div')
+      row.id = 'prog-rebase'
+      row.className = 'prog-stats'
+      const inp = document.createElement('input')
+      inp.placeholder = `type "${prog.title}" to re-baseline`
+      inp.className = 'prog-rebase-input'
+      inp.setAttribute('aria-label', 'Type the programme title to confirm re-baseline')
+      const go = document.createElement('button')
+      go.className = 'prog-tb'
+      go.textContent = 're-baseline'
+      go.addEventListener('click', () => {
+        if (inp.value.trim() === prog!.title) lockBaseline()
+        else toast('Title does not match — baseline kept')
+      })
+      row.append(inp, go)
+      bar.insertAdjacentElement('afterend', row)
+      inp.focus()
+    })
+    const exportBtn = document.createElement('button')
+    exportBtn.className = 'prog-tb'
+    exportBtn.textContent = '⧉'
+    exportBtn.setAttribute('aria-label', 'Export')
+    exportBtn.addEventListener('click', () => {
+      const existing = el.querySelector('#prog-export')
+      if (existing) { existing.remove(); return }
+      const menu = document.createElement('div')
+      menu.id = 'prog-export'
+      menu.className = 'prog-stats'
+      const mk = (label: string, fn: () => void) => {
+        const b = document.createElement('button')
+        b.className = 'prog-tb'
+        b.textContent = label
+        b.addEventListener('click', () => { fn(); menu.remove() })
+        menu.appendChild(b)
+      }
+      mk('print / PDF', () => window.print())
+      mk('PNG', exportPNG)
+      mk('CSV', exportCSV)
+      mk('JSON', () => {
+        if (!prog) return
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(prog, null, 2)], { type: 'application/json' }))
+        a.download = `${prog.title.replace(/[^\w\- ]+/g, '')}.programme.json`
+        a.click()
+        URL.revokeObjectURL(a.href)
+      })
+      mk('import JSON', () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = '.json,application/json'
+        input.addEventListener('change', async () => {
+          const f = input.files?.[0]
+          if (!f) return
+          try {
+            const p = JSON.parse(await f.text()) as Programme
+            if (!p.tasks || !p.startDate) throw new Error('bad shape')
+            p.id = `${p.id}-imp${Date.now().toString(36)}`
+            persistProgramme(p)
+            prog = p
+            drawEditor()
+            toast(`Imported "${p.title}"`)
+          } catch { toast('Not a programme JSON file') }
+        })
+        input.click()
+      })
+      bar.insertAdjacentElement('afterend', menu)
+    })
     const addBtn = document.createElement('button')
     addBtn.className = 'prog-tb'
     addBtn.textContent = '＋ task'
@@ -206,7 +372,7 @@ export function initProgramme(el: HTMLElement): void {
       scheduleSave()
       drawEditor()
     })
-    bar.append(back, title, start, sat, spacer, zoomOut, zoomIn, floatBtn, addBtn)
+    bar.append(back, title, start, sat, spacer, zoomOut, zoomIn, floatBtn, lookBtn, blBtn, exportBtn, addBtn)
     el.appendChild(bar)
 
     if (!sched) return
@@ -236,6 +402,19 @@ export function initProgramme(el: HTMLElement): void {
 
     const trades = [...new Set(prog.tasks.map(t => t.trade).filter(Boolean))] as string[]
 
+    // look-ahead window (site-coordination view: what's live in the next N weeks)
+    const todayStr = fmtDate(new Date())
+    const winEnd = lookAhead ? fmtDate(new Date(Date.now() + lookAhead * 7 * 86400000)) : null
+    const visTasks = winEnd
+      ? prog.tasks.filter(t => { const s = sched.get(t.id)!; return s.esDate <= winEnd && s.efDate >= todayStr })
+      : prog.tasks
+    if (winEnd && !visTasks.length) {
+      const none = document.createElement('div')
+      none.className = 'prog-blurb'
+      none.textContent = `Nothing scheduled in the next ${lookAhead} weeks.`
+      split.appendChild(none)
+    }
+
     // table
     const table = document.createElement('table')
     table.className = 'prog-table'
@@ -248,6 +427,7 @@ export function initProgramme(el: HTMLElement): void {
     `
     const tbody = document.createElement('tbody')
     prog.tasks.forEach((t, i) => {
+      if (winEnd && !visTasks.includes(t)) return
       const s = sched.get(t.id)!
       const tr = document.createElement('tr')
       if (s.critical) tr.classList.add('prog-crit-row')
@@ -321,7 +501,48 @@ export function initProgramme(el: HTMLElement): void {
     split.appendChild(tableWrap)
 
     // timeline
-    split.appendChild(renderTimeline(prog, sched, trades))
+    split.appendChild(renderTimeline(prog, sched, trades, visTasks))
+
+    // baseline variance
+    if (prog.baseline) {
+      const moved = prog.tasks
+        .map(t => {
+          const bl = prog!.baseline!.dates[t.id]
+          const s = sched.get(t.id)!
+          if (!bl) return null
+          const delta = Math.round((parseDate(s.efDate).getTime() - parseDate(bl.ef).getTime()) / 86400000)
+          return delta ? { t, bl, s, delta } : null
+        })
+        .filter((x): x is NonNullable<typeof x> => !!x)
+        .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      const card = document.createElement('div')
+      card.className = 'prog-card'
+      card.innerHTML = `<div class="prog-card-title">BASELINE VARIANCE — locked ${fmtAU(prog.baseline.lockedAt)}</div>`
+      if (!moved.length) {
+        const p2 = document.createElement('p')
+        p2.className = 'prog-blurb'
+        p2.textContent = 'On baseline — no task finish has moved.'
+        card.appendChild(p2)
+      } else {
+        const tbl = document.createElement('table')
+        tbl.className = 'prog-proc'
+        tbl.innerHTML = '<thead><tr><th>Task</th><th>Baseline finish</th><th>Current finish</th><th>Δ days</th></tr></thead>'
+        const tb = document.createElement('tbody')
+        for (const m of moved.slice(0, 12)) {
+          const tr = document.createElement('tr')
+          for (const c of [m.t.name, fmtAU(m.bl.ef), fmtAU(m.s.efDate), `${m.delta > 0 ? '+' : ''}${m.delta}`]) {
+            const td = document.createElement('td')
+            td.textContent = c
+            if (c.startsWith('+')) td.className = 'prog-late'
+            tr.appendChild(td)
+          }
+          tb.appendChild(tr)
+        }
+        tbl.appendChild(tb)
+        card.appendChild(tbl)
+      }
+      el.appendChild(card)
+    }
 
     // procurement panel
     const procured = prog.tasks.filter(t => t.procurement)
@@ -356,7 +577,7 @@ export function initProgramme(el: HTMLElement): void {
     }
   }
 
-  function renderTimeline(p: Programme, sched: Map<string, ScheduledTask>, trades: string[]): HTMLElement {
+  function renderTimeline(p: Programme, sched: Map<string, ScheduledTask>, trades: string[], visTasks: Task[]): HTMLElement {
     const DAY_W = ZOOMS[zoom]
     const wrap = document.createElement('div')
     wrap.className = 'prog-gantt-wrap'
@@ -372,6 +593,10 @@ export function initProgramme(el: HTMLElement): void {
       const d = parseDate(s.lfDate)
       if (showFloat && d > endDate) endDate = d
     }
+    if (p.baseline) for (const bl of Object.values(p.baseline.dates)) {
+      const d = parseDate(bl.ef)
+      if (d > endDate) endDate = d
+    }
     const days: Date[] = []
     for (let d = new Date(startD); d <= endDate || days.length < 7; d.setDate(d.getDate() + 1)) {
       days.push(new Date(d))
@@ -381,12 +606,12 @@ export function initProgramme(el: HTMLElement): void {
       const d = new Date(days[days.length - 1]); d.setDate(d.getDate() + 1); days.push(d)
     }
     const calIdx = new Map(days.map((d, i) => [fmtDate(d), i]))
-    const rowOf = new Map(p.tasks.map((t, i) => [t.id, i]))
+    const rowOf = new Map(visTasks.map((t, i) => [t.id, i]))
 
     // weekly labour totals (hours spread evenly over each task's working days)
     const weekHours = new Map<number, number>()   // Monday calIdx → hours
     const mondayOf = (i: number) => { let j = i; while (j > 0 && days[j].getDay() !== 1) j--; return j }
-    for (const t of p.tasks) {
+    for (const t of visTasks) {
       if (!t.hours || t.duration === 0) continue
       const s = sched.get(t.id)!
       const from = calIdx.get(s.esDate) ?? 0
@@ -403,7 +628,7 @@ export function initProgramme(el: HTMLElement): void {
     const hasHours = weekHours.size > 0
 
     const width = days.length * DAY_W
-    const barsBottom = HEADER_H + p.tasks.length * ROW_H
+    const barsBottom = HEADER_H + visTasks.length * ROW_H
     const height = barsBottom + (hasHours ? HIST_H : 0) + 8
     const NS = 'http://www.w3.org/2000/svg'
     const svg = document.createElementNS(NS, 'svg')
@@ -447,11 +672,11 @@ export function initProgramme(el: HTMLElement): void {
 
     // phase brackets (consecutive runs of the same phase)
     let runStart = 0
-    for (let i = 1; i <= p.tasks.length; i++) {
-      const prev = p.tasks[i - 1]?.phase
-      if (i === p.tasks.length || p.tasks[i].phase !== prev) {
+    for (let i = 1; i <= visTasks.length; i++) {
+      const prev = visTasks[i - 1]?.phase
+      if (i === visTasks.length || visTasks[i].phase !== prev) {
         if (prev) {
-          const runTasks = p.tasks.slice(runStart, i)
+          const runTasks = visTasks.slice(runStart, i)
           const es = Math.min(...runTasks.map(t => calIdx.get(sched.get(t.id)!.esDate) ?? 0))
           const ef = Math.max(...runTasks.map(t => calIdx.get(sched.get(t.id)!.efDate) ?? 0))
           const y = HEADER_H + runStart * ROW_H + 2
@@ -472,8 +697,9 @@ export function initProgramme(el: HTMLElement): void {
       const x1 = ((calIdx.get(s.efDate) ?? 0) + 1) * DAY_W
       return { x0, x1: Math.max(x0 + DAY_W / 2, x1) }
     }
-    for (const t of p.tasks) {
-      const toRow = rowOf.get(t.id)!
+    for (const t of visTasks) {
+      const toRow = rowOf.get(t.id)
+      if (toRow === undefined) continue
       for (const dep of t.deps) {
         const fromRow = rowOf.get(dep.id)
         if (fromRow === undefined) continue
@@ -498,7 +724,7 @@ export function initProgramme(el: HTMLElement): void {
     }
 
     // bars + interactions
-    p.tasks.forEach((t, row) => {
+    visTasks.forEach((t, row) => {
       const s = sched.get(t.id)!
       const y = HEADER_H + row * ROW_H
       rect(0, y, width, ROW_H, row % 2 ? 'pg-rowband' : 'pg-rowband-alt')
@@ -526,6 +752,12 @@ export function initProgramme(el: HTMLElement): void {
       tip.textContent = `${t.name} — ${fmtAU(s.esDate)} → ${fmtAU(s.efDate)} (${t.duration}d${s.tf > 0 ? `, float ${s.tf}d` : ', critical'})${t.nightWork ? ' · night work' : ''}${t.constraint ? ' · pinned' : ''}`
       bar.appendChild(tip)
       if (t.nightWork) rect(x0, y + 6, barW, 3, 'pg-night')
+      const bl = p.baseline?.dates[t.id]
+      if (bl) {
+        const gx0 = (calIdx.get(bl.es) ?? 0) * DAY_W
+        const gx1 = ((calIdx.get(bl.ef) ?? 0) + 1) * DAY_W
+        rect(gx0, y + ROW_H - 8, Math.max(3, gx1 - gx0), 4, 'pg-ghost')
+      }
       if (t.constraint) text(x0 - 4, y + ROW_H / 2 + 4, '📌', 'pg-pin', 'end')
 
       // resize handle + link handle
