@@ -1,0 +1,109 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+---
+
+<Base
+  title="Programme Builder"
+  description="Free construction programme generator — CPM scheduling, critical path, shopfitting templates, beautiful Gantt charts. Runs entirely in your browser."
+  siteNav
+>
+  <div class="blueprint tool programme">
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Programme</p>
+    <h1>Programme Builder</h1>
+    <p>
+      Generate a construction programme from a template, or build one task by
+      task. Proper critical-path scheduling — FS/SS/FF links with lag, working-day
+      calendar, float — with the fitout trade sequence built in. Everything stays
+      in this browser.
+    </p>
+
+    <div id="programme-root" aria-live="polite"></div>
+
+    <p class="note-foot">Indicative programme only — validate durations against your own benchmarks. <a href="/site">← all tools</a></p>
+  </div>
+
+  <script>
+    import { initProgramme } from "../../scripts/site/programme";
+    initProgramme(document.getElementById("programme-root")!);
+  </script>
+
+  <style>
+    .programme {
+      --prog-crit: #c0392b;
+      --prog-today: #2c9c4a;
+    }
+    :global([data-theme="dark"]) .programme {
+      --prog-crit: #ff7a6b;
+      --prog-today: #58c97a;
+    }
+    /* the tool needs more width than the 38rem prose column */
+    .programme :global(.prog-split),
+    .programme :global(.prog-toolbar),
+    .programme :global(.prog-stats) { max-width: none; }
+
+    .programme :global(.prog-card) { border: 1px solid var(--rule); border-radius: 8px; padding: 1rem 1.1rem; margin: 1rem 0; }
+    .programme :global(.prog-card-title) { font-family: ui-monospace, monospace; font-size: 0.72rem; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.35rem; }
+    .programme :global(.prog-blurb) { font-size: 0.85rem; color: var(--muted); margin: 0.2rem 0 0.6rem; }
+    .programme :global(.prog-row) { display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--rule); }
+    .programme :global(.prog-open) { flex: 1; min-width: 0; text-align: left; background: none; border: none; cursor: pointer; padding: 0.6rem 0; font: inherit; color: var(--fg); display: flex; flex-direction: column; }
+    .programme :global(.prog-name) { font-weight: 600; }
+    .programme :global(.prog-sub) { font-size: 0.78rem; color: var(--muted); }
+    .programme :global(.prog-del) { background: none; border: none; color: var(--prog-crit); cursor: pointer; font-size: 1rem; min-width: 44px; min-height: 44px; }
+    .programme :global(.prog-gen) { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0.4rem 0 0.8rem; }
+    .programme :global(.prog-gen .field) { display: flex; flex-direction: column; gap: 0.25rem; }
+    .programme :global(.prog-gen label) { font-size: 0.78rem; color: var(--muted); }
+    .programme :global(.prog-gen input) { background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; color: var(--fg); font: inherit; padding: 0.4rem 0.6rem; }
+    .programme :global(.prog-tpl-wrap) { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .programme :global(.prog-tpl) { text-align: left; background: var(--code-bg); border: 1px solid var(--rule); border-radius: 8px; padding: 0.5rem 0.75rem; cursor: pointer; font: inherit; color: var(--fg); transition: border-color var(--dur-fast) var(--ease); }
+    .programme :global(.prog-tpl:hover) { border-color: var(--accent); }
+    .programme :global(.prog-tpl-name) { font-size: 0.9rem; font-weight: 600; }
+    .programme :global(.prog-tpl-blurb) { font-size: 0.72rem; color: var(--muted); }
+
+    .programme :global(.prog-toolbar) { display: flex; align-items: center; gap: 0.4rem; padding: 0.6rem 0 0.4rem; flex-wrap: wrap; }
+    .programme :global(.prog-tb) { background: var(--code-bg); border: 1px solid var(--rule); border-radius: 6px; color: var(--fg); font: inherit; font-size: 0.85rem; min-height: 40px; padding: 0.3rem 0.7rem; cursor: pointer; }
+    .programme :global(.prog-title) { background: none; border: none; border-bottom: 1px dashed transparent; color: var(--fg); font: inherit; font-size: 1rem; font-weight: 600; max-width: 34%; padding: 0.3rem 0.4rem; }
+    .programme :global(.prog-title:focus) { outline: none; border-bottom-color: var(--accent); }
+    .programme :global(.prog-date) { cursor: auto; }
+    .programme :global(.prog-spacer) { flex: 1; }
+    .programme :global(.prog-stats) { display: flex; gap: 1.2rem; flex-wrap: wrap; font-size: 0.85rem; color: var(--muted); padding: 0.2rem 0 0.6rem; }
+    .programme :global(.prog-stats strong) { color: var(--fg); }
+
+    .programme :global(.prog-split) { display: grid; grid-template-columns: minmax(340px, 46%) 1fr; gap: 0; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+    @media (max-width: 900px) { .programme :global(.prog-split) { grid-template-columns: 1fr; } }
+    .programme :global(.prog-table-wrap) { overflow-x: auto; border-right: 1px solid var(--rule); }
+    .programme :global(.prog-table) { border-collapse: collapse; width: 100%; font-size: 0.78rem; }
+    .programme :global(.prog-table th) { text-align: left; font-family: ui-monospace, monospace; font-size: 0.62rem; letter-spacing: 0.06em; color: var(--muted); padding: 0.4rem 0.3rem; border-bottom: 1px solid var(--rule); height: 44px; box-sizing: border-box; }
+    .programme :global(.prog-table td) { border-bottom: 1px solid var(--rule); padding: 0 0.15rem; height: 30px; box-sizing: border-box; }
+    .programme :global(.prog-table input) { width: 100%; background: none; border: none; color: var(--fg); font: inherit; font-size: 0.78rem; padding: 0.2rem; }
+    .programme :global(.prog-table input:focus) { outline: 1px solid var(--accent); border-radius: 3px; }
+    .programme :global(.prog-bad) { outline: 1px solid var(--prog-crit) !important; }
+    .programme :global(.pc-num) { width: 1.6rem; color: var(--muted); text-align: right; font-family: ui-monospace, monospace; font-size: 0.68rem; }
+    .programme :global(.pc-dur) { width: 2.6rem; }
+    .programme :global(.pc-trade) { width: 5.5rem; }
+    .programme :global(.pc-pred) { width: 5rem; }
+    .programme :global(.pc-date) { width: 4.2rem; white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .programme :global(.pc-hrs) { width: 3rem; }
+    .programme :global(.pc-x) { width: 2rem; }
+    .programme :global(.pc-x button) { background: none; border: none; color: var(--muted); cursor: pointer; min-height: 28px; }
+    .programme :global(.pc-x button:hover) { color: var(--prog-crit); }
+    .programme :global(.prog-crit-row .pc-name input) { color: var(--prog-crit); }
+    .programme :global(.prog-ms-row .pc-name input) { font-weight: 600; }
+
+    .programme :global(.prog-gantt-wrap) { overflow-x: auto; background: var(--bg); }
+    .programme :global(.prog-gantt) { display: block; }
+    .programme :global(.pg-offday) { fill: color-mix(in srgb, var(--fg) 5%, transparent); }
+    .programme :global(.pg-rowband) { fill: transparent; }
+    .programme :global(.pg-rowband-alt) { fill: color-mix(in srgb, var(--fg) 2.5%, transparent); }
+    .programme :global(.pg-weekline) { fill: var(--rule); }
+    .programme :global(.pg-month) { font-size: 11px; font-weight: 600; fill: var(--fg); font-family: ui-monospace, monospace; }
+    .programme :global(.pg-day) { font-size: 9px; fill: var(--muted); font-family: ui-monospace, monospace; }
+    .programme :global(.pg-today) { fill: var(--prog-today); }
+    .programme :global(.pg-bar) { rx: 3; opacity: 0.9; }
+    .programme :global(.pg-crit) { stroke: var(--prog-crit); stroke-width: 1.5; }
+    .programme :global(.pg-night) { fill: color-mix(in srgb, var(--fg) 55%, transparent); }
+    .programme :global(.pg-milestone) { fill: var(--fg); }
+    .programme :global(.pg-mslabel) { font-size: 10px; fill: var(--muted); }
+    :global(.prog-toast) { position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%); background: var(--fg); color: var(--bg); font-size: 0.85rem; padding: 0.5rem 1rem; border-radius: 8px; z-index: 50; }
+  </style>
+</Base>
