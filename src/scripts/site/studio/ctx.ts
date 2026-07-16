@@ -16,6 +16,10 @@ export interface StudioCtx {
 
 export const ctx = {} as StudioCtx
 
+// Live playhead state — written by the scheduler (still in index.ts until
+// playback.ts lands), read by pad/synth recording to place captured events.
+export const playhead = { playing: false, schStep: 0, lastHi: -1, lastStepStartedMs: 0 };
+
 // Populated by the drum grid, pad-event grid and piano roll as they build
 // themselves; re-run whenever the Grid selector changes so all three
 // repaint their "wa-beat" line grouping to match.

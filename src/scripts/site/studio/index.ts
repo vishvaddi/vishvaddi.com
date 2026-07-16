@@ -35,12 +35,13 @@ import { buildProjectExport } from "./render";
 import { buildScratchpad } from "./scratch";
 import { buildSession } from "./session";
 import { buildMixer } from "./mixerui";
-import { ctx, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
+import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
 import { setCellOpacity, showVelPopup, showVelocityPopup } from "./velpopup";
 import { buildDrumGrid } from "./drumgrid";
+import { buildPads } from "./padsui";
 
 // One color per scene (A-H), distinct from the accent/amber/blue already
-// used for state (playing/queued/selected) — identity, not status.
+// used for state (playhead.playing/queued/selected) — identity, not status.
 // ─── Main ────────────────────────────────────────────────────────────────────
 export async function initStudio(): Promise<void> {
   const root = document.getElementById("studio");
@@ -160,388 +161,13 @@ export async function initStudio(): Promise<void> {
   // ── Beat ── (drumgrid.ts — Phase 0 split)
   const { beat, cells, sceneBtns } = buildDrumGrid();
 
-  // ── MPC performance ──
-  const mpcPanel = el("div", "wa-panel");
-  const mpcToolbar = el("div", "wa-mpc-toolbar");
-  const bankButtons: HTMLButtonElement[] = [];
-  const padButtons: HTMLButtonElement[] = [];
-  const eventCells: HTMLButtonElement[][] = [];
-  const eventRows: HTMLElement[] = [];
-  const eventRowLabels: HTMLElement[] = [];
-  const repeatTimers = new Map<number, number>();
-  const performanceStatus = el("span", "wa-status", "Ready");
-  const fullLevelBtn = btn("Full Level", "wa-toggle wa-btn-sm");
-  const levelsBtn = btn("16 Levels", "wa-toggle wa-btn-sm");
-  const repeatBtn = btn("Note Repeat", "wa-toggle wa-btn-sm");
-  const recordBtn = btn("Record", "wa-toggle wa-btn-sm");
-  const overdubBtn = btn("Overdub", "wa-toggle wa-btn-sm active");
-  const undoPassBtn = btn("Undo pass", "wa-btn-sm");
-  const rotateBtn = btn("Rotate", "wa-btn-sm"), mutateBtn = btn("Mutate", "wa-btn-sm"), fillBtn = btn("Fill", "wa-btn-sm");
-  const ghostBtn = btn("Ghosts", "wa-btn-sm"), extractGrooveBtn = btn("Extract groove", "wa-btn-sm");
-  const resampleBtn = btn("Resample → pad", "wa-btn-sm");
-  const midiBtn = btn("MIDI", "wa-toggle wa-btn-sm");
-  help(fullLevelBtn, "Force every pad hit to maximum velocity.");
-  help(levelsBtn, "Map the 16 pads across velocity, pitch, filter cutoff or sample start.");
-  help(repeatBtn, "Retrigger a held pad at the division selected beside it.");
-  help(recordBtn, "Capture pad hits into the playing pads clip while playback runs.");
-  help(overdubBtn, "Keep existing events while recording. Disable it to replace events at recorded steps.");
-  help(undoPassBtn, "Remove the most recent pad-recording pass.");
-  help(rotateBtn, "Move every pad event one step later.");
-  help(mutateBtn, "Create a variation by changing timing, velocity and occasional ratchets.");
-  help(fillBtn, "Write a four-step fill for the selected pad at the end of the pattern.");
-  help(ghostBtn, "Add low-velocity, probabilistic ghost notes for the selected pad.");
-  help(extractGrooveBtn, "Create groove timing and velocity settings from the current pad performance.");
-  help(midiBtn, "Connect Web MIDI inputs. Notes starting at MIDI note 36 map across the 16 pads.");
-  help(resampleBtn, "Render the playing clips through the mixer and effects onto the selected pad.");
-  const resampleQuality = document.createElement("select");
-  [["clean", "Clean"], ["12bit", "12-bit"], ["8bit", "8-bit"], ["jungle", "Jungle grit"]].forEach(([value, label]) => {
-    const option = document.createElement("option"); option.value = value; option.textContent = label; resampleQuality.append(option);
-  });
-  let recordSnapshot: PadEvent[] | null = null;
-  const levelModeSel = document.createElement("select");
-  [["velocity", "16 Velocities"], ["pitch", "16 Pitches"], ["filter", "16 Filters"], ["start", "16 Starts"]].forEach(([value, label]) => {
-    const option = document.createElement("option"); option.value = value; option.textContent = label; levelModeSel.append(option);
-  });
-  levelModeSel.value = mpc.levelMode;
-  const repeatSel = document.createElement("select");
-  [["2", "1/8"], ["3", "1/8T"], ["4", "1/16"], ["6", "1/16T"], ["8", "1/32"], ["16", "1/64"]].forEach(([value, label]) => {
-    const option = document.createElement("option"); option.value = value; option.textContent = label; repeatSel.append(option);
-  });
-  repeatSel.value = String(mpc.repeatDivision);
-  const quantSel = document.createElement("select");
-  [["0", "Quantise off"], ["2", "1/8"], ["3", "1/8T"], ["4", "1/16"], ["6", "1/16T"], ["8", "1/32"]].forEach(([value, label]) => {
-    const option = document.createElement("option"); option.value = value; option.textContent = label; quantSel.append(option);
-  });
-  quantSel.value = String(mpc.quantize);
-  mpcToolbar.append(fullLevelBtn, levelsBtn, levelModeSel, repeatBtn, repeatSel, recordBtn, overdubBtn, undoPassBtn, quantSel, rotateBtn, mutateBtn, fillBtn, ghostBtn, extractGrooveBtn, midiBtn, resampleQuality, resampleBtn, performanceStatus);
+  // ── Project / export ── (render.ts — Phase 0 split; built before pads so
+  // the resample feature can take renderBuffer directly)
+  const { panel: exp, renderSel, renderBuffer } = buildProjectExport();
+  ctx.renderSel = renderSel;
 
-  const padBankRow = el("div", "wa-pad-banks");
-  ["A", "B", "C", "D"].forEach((label, bank) => {
-    const button = btn(`Bank ${label}`, "wa-pat-btn" + (mpc.bank === bank ? " active" : ""));
-    button.classList.remove("wa-btn");
-    button.addEventListener("click", () => {
-      mpc.bank = bank; bankButtons.forEach((item, i) => item.classList.toggle("active", i === bank)); paintMpcPads(); saveAll();
-    });
-    bankButtons.push(button); padBankRow.append(button);
-  });
-  const padGrid = el("div", "wa-mpc-pads");
-  const selectedPadLabel = el("span", "wa-status");
-  const selectedSampleEditor = el("div", "wa-selected-sample");
-  const selectedInputs: Array<{ key: keyof SamplerP; input: HTMLInputElement; out: HTMLElement }> = [];
-  function selectedParam(label: string, key: keyof SamplerP, min: number, max: number, step: number): HTMLElement {
-    const row = el("div", "wa-slider-row"), input = document.createElement("input"), out = el("span", "wa-val");
-    input.type = "range"; input.min = String(min); input.max = String(max); input.step = String(step); input.className = "wa-slider";
-    input.addEventListener("input", () => {
-      const value = Number(input.value); (sampleParams[mpc.selectedPad][key] as number) = value; out.textContent = String(value); saveAll();
-    });
-    selectedInputs.push({ key, input, out }); row.append(el("span", "wa-lbl", label), input, out); return row;
-  }
-  const reverseSelectedBtn = btn("Reverse", "wa-toggle wa-btn-sm"), loopSelectedBtn = btn("Loop", "wa-toggle wa-btn-sm"), warpSelectedBtn = btn("Warp", "wa-toggle wa-btn-sm");
-  const muteSelectedBtn = btn("Mute", "wa-toggle wa-btn-sm"), soloSelectedBtn = btn("Solo", "wa-toggle wa-btn-sm");
-  help(reverseSelectedBtn, "Play this pad's audio backwards.");
-  help(loopSelectedBtn, "Loop the selected sample while it plays.");
-  help(warpSelectedBtn, "Use granular playback to follow project tempo without ordinary repitching.");
-  help(muteSelectedBtn, "Silence the selected pad.");
-  help(soloSelectedBtn, "Play only soloed pads.");
-  reverseSelectedBtn.addEventListener("click", () => {
-    const p = sampleParams[mpc.selectedPad]; p.reverse = !p.reverse; reverseSelectedBtn.classList.toggle("active", p.reverse); saveAll();
-  });
-  loopSelectedBtn.addEventListener("click", () => {
-    const p = sampleParams[mpc.selectedPad]; p.loop = !p.loop; loopSelectedBtn.classList.toggle("active", p.loop); saveAll();
-  });
-  warpSelectedBtn.addEventListener("click", () => {
-    const p = sampleParams[mpc.selectedPad]; p.warp = !p.warp; warpSelectedBtn.classList.toggle("active", p.warp); saveAll();
-  });
-  muteSelectedBtn.addEventListener("click", () => {
-    mpc.padMute[mpc.selectedPad] = !mpc.padMute[mpc.selectedPad]; paintMpcPads(); saveAll();
-  });
-  soloSelectedBtn.addEventListener("click", () => {
-    mpc.padSolo[mpc.selectedPad] = !mpc.padSolo[mpc.selectedPad]; paintMpcPads(); saveAll();
-  });
-  selectedSampleEditor.append(
-    selectedParam("Tune", "tune", -24, 24, 1),
-    selectedParam("Start", "start", 0, 0.95, 0.01),
-    selectedParam("End", "end", 0.05, 1, 0.01),
-    selectedParam("Filter", "filter", 200, 18000, 100),
-    selectedParam("Attack", "attack", 0, 0.5, 0.01),
-    selectedParam("Decay", "decay", 0.02, 2, 0.02),
-    selectedParam("Choke", "choke", 0, 8, 1),
-    selectedParam("Source BPM", "sourceBpm", 40, 240, 1),
-    reverseSelectedBtn, loopSelectedBtn, warpSelectedBtn, muteSelectedBtn, soloSelectedBtn,
-  );
-
-  function selectedGlobalPad(localPad: number): number { return mpc.bank * PAD_BANK_SIZE + localPad; }
-  function paintMpcPads(): void {
-    padButtons.forEach((button, localPad) => {
-      const pad = selectedGlobalPad(localPad), params = sampleParams[pad];
-      button.classList.toggle("selected", pad === mpc.selectedPad);
-      button.replaceChildren(
-        el("span", "wa-mpc-pad-number", String(localPad + 1)),
-        el("span", "wa-mpc-pad-name", params.name || `Pad ${pad + 1}`),
-      );
-    });
-    selectedPadLabel.textContent = `Selected: ${sampleParams[mpc.selectedPad].name || `Pad ${mpc.selectedPad + 1}`}`;
-    const selected = sampleParams[mpc.selectedPad];
-    selectedInputs.forEach(({ key, input, out }) => {
-      input.value = String(selected[key]); out.textContent = String(selected[key]);
-    });
-    reverseSelectedBtn.classList.toggle("active", selected.reverse); loopSelectedBtn.classList.toggle("active", selected.loop);
-    warpSelectedBtn.classList.toggle("active", selected.warp);
-    muteSelectedBtn.classList.toggle("active", mpc.padMute[mpc.selectedPad]);
-    soloSelectedBtn.classList.toggle("active", mpc.padSolo[mpc.selectedPad]);
-    paintEventLane();
-  }
-  function variationFor(localPad: number): number {
-    if (mpc.levelMode === "velocity") return localPad / 15;
-    if (mpc.levelMode === "pitch") return localPad - 8;
-    return localPad;
-  }
-  // Recording writes into the pads clip you can hear (the playing one), falling
-  // back to the edit scene when the pads track is stopped.
-  function recordTarget(): number { return playing ? (clip.play.pads ?? clip.sel) : clip.sel; }
-  function recordPadEvent(pad: number, velocity: number): void {
-    if (!mpc.recording || !playing) return;
-    const target = recordTarget();
-    const rawStep = lastHi >= 0 ? lastHi : schStep;
-    const grid = mpc.quantize || STEPS;
-    const snapped = Math.round(rawStep / (STEPS / grid)) * (STEPS / grid);
-    const strength = mpc.quantizeStrength / 100;
-    const step = Math.round(rawStep + (snapped - rawStep) * strength) % STEPS;
-    if (!mpc.overdub) padEvents[target] = padEvents[target].filter((event) => event.step !== step);
-    else padEvents[target] = padEvents[target].filter((event) => !(event.step === step && event.pad === pad));
-    const playedOffset = lastStepStartedMs > 0 ? Math.max(-60, Math.min(60, performance.now() - lastStepStartedMs)) : 0;
-    padEvents[target].push({ pad, step, velocity, offset: playedOffset, probability: 100, ratchets: 1 });
-    paintEventLane(); saveAll();
-  }
-  function triggerPerformancePad(localPad: number, velocity: number): void {
-    ensureNodes();
-    const pad = selectedGlobalPad(localPad);
-    const levelVelocity = 8 + localPad * 8;
-    const finalVelocity = mpc.fullLevel ? 127 : (mpc.sixteenLevels && mpc.levelMode === "velocity" ? levelVelocity : velocity);
-    mpc.selectedPad = pad; paintMpcPads();
-    playPad(ac(), pad, finalVelocity, ac().currentTime, variationFor(localPad));
-    recordPadEvent(pad, finalVelocity);
-    if (rackState.devices.player && rackState.noteEcho > 0) {
-      for (let i = 1; i <= rackState.noteEcho; i++) {
-        playPad(ac(), pad, finalVelocity * Math.pow(rackState.echoDecay, i), ac().currentTime + i * stepDur(), variationFor(localPad));
-      }
-    }
-  }
-  midiBtn.addEventListener("click", async () => {
-    const nav = navigator as Navigator & {
-      requestMIDIAccess?: () => Promise<{ inputs: Map<unknown, { onmidimessage: ((event: { data: Uint8Array }) => void) | null }> }>;
-    };
-    if (!nav.requestMIDIAccess) { performanceStatus.textContent = "Web MIDI is not supported"; return; }
-    try {
-      const access = await nav.requestMIDIAccess();
-      access.inputs.forEach((input) => {
-        input.onmidimessage = (event) => {
-          const [status, note, velocity] = event.data, command = status & 0xf0;
-          if (command !== 0x90 || velocity === 0) return;
-          const localPad = ((note - 36) % PAD_BANK_SIZE + PAD_BANK_SIZE) % PAD_BANK_SIZE;
-          triggerPerformancePad(localPad, velocity);
-          padButtons[localPad].classList.add("down");
-          setTimeout(() => padButtons[localPad].classList.remove("down"), 90);
-        };
-      });
-      midiBtn.classList.add("active"); performanceStatus.textContent = `${access.inputs.size} MIDI input${access.inputs.size === 1 ? "" : "s"} connected`;
-    } catch { performanceStatus.textContent = "MIDI access was not granted"; }
-  });
-  for (let localPad = 0; localPad < PAD_BANK_SIZE; localPad++) {
-    const pad = el("button", "wa-mpc-pad") as HTMLButtonElement; pad.type = "button";
-    const press = (event: PointerEvent) => {
-      event.preventDefault(); pad.setPointerCapture?.(event.pointerId); pad.classList.add("down");
-      const rect = pad.getBoundingClientRect();
-      const velocity = Math.max(20, Math.min(127, Math.round((1 - (event.clientY - rect.top) / rect.height) * 107 + 20)));
-      triggerPerformancePad(localPad, velocity);
-      if (mpc.noteRepeat) {
-        const interval = Math.max(30, stepDur() * 1000 * (4 / mpc.repeatDivision));
-        repeatTimers.set(localPad, window.setInterval(() => triggerPerformancePad(localPad, velocity), interval));
-      }
-    };
-    const release = () => {
-      pad.classList.remove("down");
-      const timer = repeatTimers.get(localPad); if (timer) clearInterval(timer);
-      repeatTimers.delete(localPad);
-    };
-    pad.addEventListener("pointerdown", press); pad.addEventListener("pointerup", release); pad.addEventListener("pointercancel", release); pad.addEventListener("pointerleave", release);
-    pad.addEventListener("dragover", (event) => { event.preventDefault(); pad.classList.add("drop"); });
-    pad.addEventListener("dragleave", () => pad.classList.remove("drop"));
-    pad.addEventListener("drop", async (event) => {
-      event.preventDefault(); pad.classList.remove("drop");
-      const file = event.dataTransfer?.files?.[0]; if (!file?.type.startsWith("audio/")) return;
-      checkpoint();
-      const globalPad = selectedGlobalPad(localPad);
-      try {
-        sampleData[globalPad] = await readAsDataUrl(file); sampleParams[globalPad].name = file.name;
-        await hydrateSample(globalPad); mpc.selectedPad = globalPad; paintMpcPads(); saveAll();
-        performanceStatus.textContent = `${file.name} loaded on pad ${localPad + 1}`;
-      } catch { performanceStatus.textContent = "Could not load dropped sample"; }
-    });
-    padButtons.push(pad); padGrid.append(pad);
-  }
-  fullLevelBtn.classList.toggle("active", mpc.fullLevel);
-  fullLevelBtn.addEventListener("click", () => { mpc.fullLevel = !mpc.fullLevel; fullLevelBtn.classList.toggle("active", mpc.fullLevel); saveAll(); });
-  levelsBtn.classList.toggle("active", mpc.sixteenLevels);
-  levelsBtn.addEventListener("click", () => { mpc.sixteenLevels = !mpc.sixteenLevels; levelsBtn.classList.toggle("active", mpc.sixteenLevels); saveAll(); });
-  repeatBtn.classList.toggle("active", mpc.noteRepeat);
-  repeatBtn.addEventListener("click", () => { mpc.noteRepeat = !mpc.noteRepeat; repeatBtn.classList.toggle("active", mpc.noteRepeat); saveAll(); });
-  recordBtn.classList.toggle("active", mpc.recording);
-  recordBtn.addEventListener("click", () => {
-    mpc.recording = !mpc.recording;
-    if (mpc.recording) { checkpoint(); recordSnapshot = padEvents[recordTarget()].map((event) => ({ ...event })); }
-    recordBtn.classList.toggle("active", mpc.recording); performanceStatus.textContent = mpc.recording ? "Recording pad events" : "Ready"; saveAll();
-  });
-  overdubBtn.addEventListener("click", () => { mpc.overdub = !mpc.overdub; overdubBtn.classList.toggle("active", mpc.overdub); saveAll(); });
-  undoPassBtn.addEventListener("click", () => {
-    if (!recordSnapshot) return;
-    padEvents[recordTarget()] = recordSnapshot.map((event) => ({ ...event })); recordSnapshot = null; paintEventLane(); saveAll(); performanceStatus.textContent = "Last recording pass undone";
-  });
-  repeatSel.addEventListener("change", () => { mpc.repeatDivision = Number(repeatSel.value); saveAll(); });
-  quantSel.addEventListener("change", () => { mpc.quantize = Number(quantSel.value); saveAll(); });
-  levelModeSel.addEventListener("change", () => { mpc.levelMode = levelModeSel.value as MpcState["levelMode"]; saveAll(); });
-  rotateBtn.addEventListener("click", () => {
-    if (!padEvents[clip.sel].length) { performanceStatus.textContent = "Pattern is empty — nothing to rotate"; return; }
-    checkpoint();
-    padEvents[clip.sel].forEach((event) => { event.step = (event.step + 1) % STEPS; }); paintEventLane(); saveAll();
-    performanceStatus.textContent = "Pattern rotated one step later";
-  });
-  mutateBtn.addEventListener("click", () => {
-    if (!padEvents[clip.sel].length) { performanceStatus.textContent = "Pattern is empty — nothing to mutate"; return; }
-    checkpoint();
-    padEvents[clip.sel].forEach((event) => {
-      if (Math.random() < 0.35) event.step = (event.step + (Math.random() < 0.5 ? -1 : 1) + STEPS) % STEPS;
-      event.velocity = Math.max(20, Math.min(127, event.velocity + Math.round((Math.random() * 2 - 1) * 18)));
-      if (Math.random() < 0.2) event.ratchets = 1 + Math.floor(Math.random() * 4);
-    });
-    paintEventLane(); saveAll();
-    performanceStatus.textContent = "Pattern mutated";
-  });
-  fillBtn.addEventListener("click", () => {
-    checkpoint();
-    const pad = mpc.selectedPad;
-    for (let step = 12; step < 16; step++) {
-      padEvents[clip.sel] = padEvents[clip.sel].filter((event) => !(event.pad === pad && event.step === step));
-      padEvents[clip.sel].push({ pad, step, velocity: 72 + (step - 12) * 14, offset: 0, probability: 100, ratchets: step === 15 ? 4 : 1 });
-    }
-    paintEventLane(); saveAll();
-    performanceStatus.textContent = `Fill written for ${sampleParams[pad].name || `pad ${pad + 1}`}`;
-  });
-  ghostBtn.addEventListener("click", () => {
-    checkpoint();
-    const pad = mpc.selectedPad;
-    let added = 0;
-    [3, 7, 11, 15].forEach((step, i) => {
-      if (!padEvents[clip.sel].some((event) => event.pad === pad && event.step === step)) {
-        padEvents[clip.sel].push({ pad, step, velocity: 34 + i * 5, offset: i % 2 ? 12 : -8, probability: 72, ratchets: 1 });
-        added++;
-      }
-    });
-    paintEventLane(); saveAll();
-    performanceStatus.textContent = added ? `${added} ghost note${added === 1 ? "" : "s"} added` : "Ghost steps already occupied — nothing added";
-  });
-  extractGrooveBtn.addEventListener("click", () => {
-    const events = padEvents[clip.sel];
-    if (!events.length) { performanceStatus.textContent = "Pattern is empty — nothing to extract"; return; }
-    const odd = events.filter((event) => event.step % 2 === 1);
-    rackState.grooveTiming = Math.max(0, Math.min(0.75, odd.reduce((sum, event) => sum + Math.max(0, event.offset), 0) / Math.max(1, odd.length) / 80));
-    const velocities = events.map((event) => event.velocity), mean = velocities.reduce((sum, value) => sum + value, 0) / velocities.length;
-    rackState.grooveVelocity = Math.min(0.5, velocities.reduce((sum, value) => sum + Math.abs(value - mean), 0) / velocities.length / 127);
-    performanceStatus.textContent = "Groove extracted from current pattern"; saveAll();
-  });
-  resampleBtn.addEventListener("click", async () => {
-    performanceStatus.textContent = "Resampling pattern...";
-    try {
-      const rendered = await renderBuffer("pattern");
-      const buffer = resampleQuality.value === "12bit" ? crushBuffer(rendered, 12, 2)
-        : resampleQuality.value === "8bit" ? crushBuffer(rendered, 8, 4)
-        : resampleQuality.value === "jungle" ? crushBuffer(rendered, 10, 3) : rendered;
-      const data = await blobAsDataUrl(encodeWav(buffer)), pad = mpc.selectedPad;
-      sampleData[pad] = data; sampleBuffers[pad] = buffer;
-      Object.assign(sampleParams[pad], { name: `Resample ${SCENE_LABELS[clip.sel]}`, start: 0, end: 1, tune: 0, reverse: false });
-      paintMpcPads(); saveAll(); performanceStatus.textContent = `Pattern resampled to pad ${pad + 1}`;
-    } catch { performanceStatus.textContent = "Resampling failed"; }
-  });
-
-  // All 16 pads in the current bank get their own lane, mirroring the legacy
-  // drum grid's UX — switching the selected pad no longer swaps the lane's
-  // contents out from under you, it just moves which row is highlighted.
-  const eventLane = el("div", "wa-event-grid");
-  let paintingEvents = false, paintEventsOn = true;
-  function paintEventLane(): void {
-    eventRowLabels.forEach((label, localPad) => {
-      const pad = selectedGlobalPad(localPad);
-      label.textContent = sampleParams[pad].name || `Pad ${pad + 1}`;
-      eventRows[localPad].classList.toggle("selected", pad === mpc.selectedPad);
-    });
-    eventCells.forEach((rowCells, localPad) => {
-      const pad = selectedGlobalPad(localPad);
-      rowCells.forEach((cell, step) => {
-        const event = padEvents[clip.sel].find((item) => item.pad === pad && item.step === step);
-        cell.classList.toggle("on", !!event);
-        cell.title = event
-          ? `${eventRowLabels[localPad].textContent}, step ${step + 1}: velocity ${event.velocity}, chance ${event.probability}%, ratchets ${event.ratchets}, offset ${event.offset}ms`
-          : `${eventRowLabels[localPad].textContent}, step ${step + 1}`;
-      });
-    });
-  }
-  for (let localPad = 0; localPad < PAD_BANK_SIZE; localPad++) {
-    const rowEl = el("div", "wa-row");
-    const label = el("span", "wa-drum wa-event-row-label");
-    label.addEventListener("click", () => { mpc.selectedPad = selectedGlobalPad(localPad); paintMpcPads(); });
-    rowEl.append(label);
-    const rowCells: HTMLButtonElement[] = [];
-    for (let step = 0; step < STEPS; step++) {
-      const cell = el("button", "wa-cell wa-event-cell" + (isGridLine(step) ? " wa-beat" : "")) as HTMLButtonElement; cell.type = "button";
-      const paint = () => {
-        const pad = selectedGlobalPad(localPad);
-        const existing = padEvents[clip.sel].findIndex((event) => event.pad === pad && event.step === step);
-        if (paintEventsOn && existing < 0) padEvents[clip.sel].push({ pad, step, velocity: 100, offset: 0, probability: 100, ratchets: 1 });
-        if (!paintEventsOn && existing >= 0) padEvents[clip.sel].splice(existing, 1);
-        paintEventLane(); paintSession(); saveAll();
-      };
-      cell.addEventListener("pointerdown", (event) => {
-        event.preventDefault(); checkpoint(); paintingEvents = true;
-        const pad = selectedGlobalPad(localPad);
-        mpc.selectedPad = pad; paintMpcPads();
-        paintEventsOn = !padEvents[clip.sel].some((item) => item.pad === pad && item.step === step); paint();
-      });
-      cell.addEventListener("pointerenter", () => { if (paintingEvents) paint(); });
-      cell.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        const pad = selectedGlobalPad(localPad);
-        const existing = padEvents[clip.sel].find((item) => item.pad === pad && item.step === step);
-        if (!existing) return;
-        showVelocityPopup(existing.velocity, (event as MouseEvent).clientX, (event as MouseEvent).clientY, (v) => {
-          existing.velocity = v; paintEventLane(); saveAll();
-        });
-      });
-      rowCells.push(cell); rowEl.append(cell);
-    }
-    eventCells.push(rowCells); eventRows.push(rowEl); eventRowLabels.push(label);
-    eventLane.append(rowEl);
-  }
-  gridRepainters.push(() => eventCells.forEach((row) => row.forEach((cell, step) => cell.classList.toggle("wa-beat", isGridLine(step)))));
-  window.addEventListener("pointerup", () => { paintingEvents = false; });
-  const eventEditor = el("div", "wa-event-editor");
-  eventEditor.append(
-    sliderRow("Velocity", 1, 127, 100, 1, (v) => { padEvents[clip.sel].filter((e) => e.pad === mpc.selectedPad).forEach((e) => { e.velocity = v; }); paintEventLane(); saveAll(); }),
-    sliderRow("Chance", 1, 100, 100, 1, (v) => { padEvents[clip.sel].filter((e) => e.pad === mpc.selectedPad).forEach((e) => { e.probability = v; }); paintEventLane(); saveAll(); }),
-    sliderRow("Micro", -60, 60, 0, 1, (v) => { padEvents[clip.sel].filter((e) => e.pad === mpc.selectedPad).forEach((e) => { e.offset = v; }); paintEventLane(); saveAll(); }),
-    sliderRow("Ratchet", 1, 8, 1, 1, (v) => { padEvents[clip.sel].filter((e) => e.pad === mpc.selectedPad).forEach((e) => { e.ratchets = v; }); paintEventLane(); saveAll(); }),
-  );
-  // MPC/Maschine-style deck: the 4×4 pads dominate; the action controls (full
-  // level, levels, repeat, record, quantise, resample…) live in a side column.
-  const mpcPadArea = el("div", "wa-mpc-pad-area"); mpcPadArea.append(padBankRow, padGrid);
-  const mpcSide = el("div", "wa-mpc-side"); mpcSide.append(mpcToolbar);
-  const mpcDeck = el("div", "wa-mpc-deck"); mpcDeck.append(mpcPadArea, mpcSide);
-  // The pad event lane belongs with the other sequencers on the Sequence tab
-  // (Create stays a performance surface). Assembled into padSeqPanel, mounted
-  // in the workspace section below.
-  mpcPanel.append(mpcDeck);
-  const padSeqPanel = el("div", "wa-panel");
-  padSeqPanel.append(el("div", "wa-lbl", "Pad sequence — current bank"), eventLane, eventEditor);
-  paintMpcPads();
+  // ── MPC performance ── (padsui.ts — Phase 0 split)
+  const { mpcPanel, padSeqPanel, padButtons, paintMpcPads, paintEventLane, triggerPerformancePad, padGrid, eventLane, selectedPadLabel, selectedSampleEditor } = buildPads({ renderBuffer });
 
   // ── Drum rack / sampler ──
   const rack = el("div", "wa-panel");
@@ -1211,19 +837,19 @@ export async function initStudio(): Promise<void> {
   let synthRec = false;
   const heldRec = new Map<string, number>();   // note -> start step
   function currentStepFloat(): number {
-    if (!playing || lastHi < 0) return -1;
-    return lastHi + Math.min(1, (performance.now() - lastStepStartedMs) / (stepDur() * 1000));
+    if (!playhead.playing || playhead.lastHi < 0) return -1;
+    return playhead.lastHi + Math.min(1, (performance.now() - playhead.lastStepStartedMs) / (stepDur() * 1000));
   }
-  function synthRecTarget(): number { return (playing ? clip.play.synth : null) ?? clip.sel; }
+  function synthRecTarget(): number { return (playhead.playing ? clip.play.synth : null) ?? clip.sel; }
   function recordSynthOn(note: string): void {
-    if (!synthRec || !playing) return;
+    if (!synthRec || !playhead.playing) return;
     const pos = currentStepFloat(); if (pos < 0) return;
     heldRec.set(note, Math.round(pos) % STEPS);
   }
   function recordSynthOff(note: string): void {
     const start = heldRec.get(note); if (start === undefined) return;
     heldRec.delete(note);
-    if (!synthRec || !playing) return;
+    if (!synthRec || !playhead.playing) return;
     const pos = currentStepFloat(); if (pos < 0) return;
     let len = Math.round(pos) - start;
     if (len <= 0) len += STEPS;
@@ -1373,9 +999,7 @@ export async function initStudio(): Promise<void> {
     combinator, playerRack, deviceRack,
   );
 
-  // ── Project / export ── (render.ts — Phase 0 split)
-  const { panel: exp, renderSel, renderBuffer } = buildProjectExport();
-  ctx.renderSel = renderSel;
+  // Project/export built earlier (render.ts) — panel mounted here.
 
   const createWorkspace = el("div", "wa-workspace");
   const sequenceWorkspace = el("div", "wa-workspace");
@@ -1644,8 +1268,8 @@ export async function initStudio(): Promise<void> {
 
   // ── Transport / scheduler ──
   ctx.selectScene = selectScene;
-  let playing = false, schedTimer = 0, nextTime = 0, schStep = 0, lastHi = -1, lastStepStartedMs = 0;
-  ctx.isPlaying = () => playing;
+  let schedTimer = 0, nextTime = 0;
+  ctx.isPlaying = () => playhead.playing;
   // Arrangement playback: each track independently follows its own block list
   // (scene + bar-length), advancing at bar boundaries — replaces the old
   // single shared songChain, which forced every track onto the same scene.
@@ -1663,12 +1287,12 @@ export async function initStudio(): Promise<void> {
     clip.play[track] = blocks[pos.block].scene;
   }
   function highlight(s: number): void {
-    if (lastHi >= 0) for (let r = 0; r < 8; r++) cells[r][lastHi].classList.remove("play");
+    if (playhead.lastHi >= 0) for (let r = 0; r < 8; r++) cells[r][playhead.lastHi].classList.remove("play");
     if (clip.play.drums === clip.sel) for (let r = 0; r < 8; r++) cells[r][s].classList.add("play");
     rollPlayheadBar.classList.toggle("on", clip.play.synth === clip.sel);
     rollPlayheadBar.style.left = `${(s / STEPS) * 100}%`;
-    lastStepStartedMs = performance.now();
-    lastHi = s; lcdState.textContent = `▶ ${String(s + 1).padStart(2, "0")}`;
+    playhead.lastStepStartedMs = performance.now();
+    playhead.lastHi = s; lcdState.textContent = `▶ ${String(s + 1).padStart(2, "0")}`;
   }
   function scheduleStep(s: number, baseWhen: number): void {
     const a = ac();
@@ -1701,7 +1325,7 @@ export async function initStudio(): Promise<void> {
       });
     }
     if (transport.metro && s % 4 === 0) metroClick(a, engine.master!, baseWhen, s === 0);
-    window.setTimeout(() => { if (playing) highlight(s); }, Math.max(0, (baseWhen - a.currentTime) * 1000));
+    window.setTimeout(() => { if (playhead.playing) highlight(s); }, Math.max(0, (baseWhen - a.currentTime) * 1000));
   }
   function applyQueued(): boolean {
     let changed = false;
@@ -1717,11 +1341,11 @@ export async function initStudio(): Promise<void> {
   function scheduler(): void {
     const a = ac();
     while (nextTime < a.currentTime + 0.1) {
-      scheduleStep(schStep, nextTime);
+      scheduleStep(playhead.schStep, nextTime);
       nextTime += stepDur();
-      schStep++;
-      if (schStep >= STEPS) {
-        schStep = 0;
+      playhead.schStep++;
+      if (playhead.schStep >= STEPS) {
+        playhead.schStep = 0;
         const launched = applyQueued();
         if (launched) {
           transport.songMode = false;
@@ -1735,8 +1359,8 @@ export async function initStudio(): Promise<void> {
     }
   }
   playBtn.addEventListener("click", () => {
-    if (playing) return;
-    ensureNodes(); playing = true; schStep = 0;
+    if (playhead.playing) return;
+    ensureNodes(); playhead.playing = true; playhead.schStep = 0;
     TRACKS.forEach((track) => { arrangePos[track] = { block: 0, barInBlock: 0 }; });
     applyQueued();
     if (transport.songMode) TRACKS.forEach((track) => applyArrangePos(track));
@@ -1752,12 +1376,12 @@ export async function initStudio(): Promise<void> {
     schedTimer = window.setInterval(scheduler, 25);
   });
   stopBtn.addEventListener("click", () => {
-    playing = false; if (schedTimer) { clearInterval(schedTimer); schedTimer = 0; }
-    if (lastHi >= 0) for (let r = 0; r < 8; r++) cells[r][lastHi].classList.remove("play");
+    playhead.playing = false; if (schedTimer) { clearInterval(schedTimer); schedTimer = 0; }
+    if (playhead.lastHi >= 0) for (let r = 0; r < 8; r++) cells[r][playhead.lastHi].classList.remove("play");
     rollPlayheadBar.classList.remove("on");
     TRACKS.forEach((track) => { clip.queued[track] = undefined; });
     paintSession();
-    lastHi = -1; lcdState.textContent = "■ STOP";
+    playhead.lastHi = -1; lcdState.textContent = "■ STOP";
   });
 
   // Global transport/undo shortcuts — skipped while typing in any text
@@ -1765,7 +1389,7 @@ export async function initStudio(): Promise<void> {
   window.addEventListener("keydown", (ev) => {
     const active = document.activeElement;
     if (active instanceof HTMLElement && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) return;
-    if (ev.code === "Space" && !ev.repeat) { ev.preventDefault(); (playing ? stopBtn : playBtn).click(); return; }
+    if (ev.code === "Space" && !ev.repeat) { ev.preventDefault(); (playhead.playing ? stopBtn : playBtn).click(); return; }
     if ((ev.ctrlKey || ev.metaKey) && !ev.altKey) {
       const key = ev.key.toLowerCase();
       if (key === "z" && !ev.shiftKey) { ev.preventDefault(); undoBtn.click(); }
