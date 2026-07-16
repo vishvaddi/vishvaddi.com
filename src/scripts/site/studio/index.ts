@@ -298,6 +298,7 @@ export async function initStudio(): Promise<void> {
       cell.type = "button";
       if (allPats[clip.sel][r][c]) { cell.classList.add("on"); setCellOpacity(cell, allVels[clip.sel][r][c]); }
       cell.addEventListener("click", () => {
+        checkpoint();
         allPats[clip.sel][r][c] = !allPats[clip.sel][r][c];
         cell.classList.toggle("on", allPats[clip.sel][r][c]);
         if (allPats[clip.sel][r][c]) {
