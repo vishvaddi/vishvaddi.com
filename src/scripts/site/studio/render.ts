@@ -24,7 +24,8 @@ export function buildProjectExport(): ProjectExport {
   const exp = el("div", "wa-panel");
   const expRow = el("div", "wa-export");
   const renderSel = document.createElement("select");
-  [["pattern", "Launched clips"], ["song", "Full arrangement"]].forEach(([v, l]) => {
+  // "Full arrangement" render retired with the timeline (E) — clips only.
+  [["pattern", "Launched clips"]].forEach(([v, l]) => {
     const o = document.createElement("option"); o.value = v; o.textContent = l; renderSel.append(o);
   });
   renderSel.value = transport.songMode ? "song" : "pattern";

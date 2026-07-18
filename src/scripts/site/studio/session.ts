@@ -8,7 +8,6 @@ import type { TrackId } from "./state";
 import { saveAll } from "./persistence";
 import { el, btn, help } from "./helpers";
 import { ctx, SCENE_COLORS } from "./ctx";
-import { buildArrange } from "./arrange";
 
 export interface SessionView {
   song: HTMLElement;
@@ -17,7 +16,6 @@ export interface SessionView {
   arrangeLanePaints: Array<() => void>;
   // tutorial tour targets
   sessionGrid: HTMLElement;
-  arrangeLanes: HTMLElement;
 }
 
 export function buildSession(): SessionView {
@@ -41,7 +39,6 @@ export function buildSession(): SessionView {
       cell.classList.toggle("sel", clip.sel === scene);
     }));
     sceneLaunchBtns.forEach((b, scene) => b.classList.toggle("active", clip.sel === scene));
-    arr.paintPlayhead();
   }
   function launchClip(track: TrackId, scene: number | null): void {
     if (ctx.isPlaying()) {
@@ -97,27 +94,11 @@ export function buildSession(): SessionView {
     sessionCells.push(rowCells);
     sessionGrid.append(row);
   });
-  // Arrangement timeline (arrange.ts, C5) — session keeps the old return
-  // contract (arrangeLanes element + paint list) so index.ts, the tutorial
-  // target and the layout stay untouched.
-  const arr = buildArrange();
-  const arrangeLanes = arr.host;
-  const arrangeLanePaints: Array<() => void> = [arr.paintArrange];
-  help(sessionGrid, "Each column is a track, each row a scene — launch clips or whole scenes; changes land on the next bar. The timeline below is the song: blocks play their scene at their bar, gaps are silence, the brace loops a region.");
-  // Collapsible SCENES section (D4) — the timeline is the page's main event
-  const scenesHead = btn("SCENES ▾", "wa-btn-sm wa-scenes-head");
-  help(scenesHead, "Fold the scene launcher away to give the timeline the full page.");
-  let scenesOpen = localStorage.getItem("vv_studio_scenes") !== "0";
-  const paintScenes = () => {
-    sessionGrid.style.display = scenesOpen ? "" : "none";
-    launchStatus.style.display = scenesOpen ? "" : "none";
-    scenesHead.textContent = scenesOpen ? "SCENES ▾" : "SCENES ▸";
-    song.classList.toggle("scenes-folded", !scenesOpen);
-    localStorage.setItem("vv_studio_scenes", scenesOpen ? "1" : "0");
-  };
-  scenesHead.addEventListener("click", () => { scenesOpen = !scenesOpen; paintScenes(); });
-  song.append(scenesHead, sessionGrid, launchStatus, arrangeLanes);
-  paintScenes();
+  // Arrangement timeline removed (E) — clips only, per Vish. The paint list
+  // survives (empty) so index.ts's repaint hooks stay untouched.
+  const arrangeLanePaints: Array<() => void> = [];
+  help(sessionGrid, "Each column is a track, each row a scene — launch single clips or whole scenes; changes land on the next bar so transitions stay in time.");
+  song.append(launchStatus, sessionGrid);
 
-  return { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid, arrangeLanes };
+  return { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid };
 }

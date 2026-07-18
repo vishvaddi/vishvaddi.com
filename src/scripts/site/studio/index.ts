@@ -148,9 +148,11 @@ export async function initStudio(): Promise<void> {
   help(redoBtn, "Reapply the last undone edit.");
   help(tutorialBtn, "Open the guided tour, or switch to Browse Help for a searchable reference and keyboard shortcuts.");
   songBtn.classList.toggle("active", transport.songMode);
+  // songBtn (Session/Arrange toggle) retired with the timeline (E) — the
+  // element survives detached because session.ts still pokes ctx.songBtn.
   transportBar.append(
     playBtn, stopBtn, el("span", "wa-sep"), el("span", "wa-lbl", "BPM"), bpmDown, bpmInput, bpmUp, el("span", "wa-sep"),
-    swingWrap, el("span", "wa-lbl", "Grid"), gridSel, metroBtn, metroVolIn, countBtn, songBtn, el("span", "wa-sep"),
+    swingWrap, el("span", "wa-lbl", "Grid"), gridSel, metroBtn, metroVolIn, countBtn, el("span", "wa-sep"),
     undoBtn, redoBtn, tutorialBtn,
   );
   const undoStack: HistoryState[] = [], redoStack: HistoryState[] = [];
@@ -186,7 +188,7 @@ export async function initStudio(): Promise<void> {
   const { synthPanel, synthKeys, liveKeys, rollPlayheadBar, paintRoll, renderPatchEditor, recordSynthOn, recordSynthOff, setOctaveShift, presetRow, pianoRoll } = synth;
 
   // ── Session view ── (session.ts — Phase 0 split)
-  const { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid, arrangeLanes } = buildSession();
+  const { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid } = buildSession();
   ctx.paintSession = paintSession;
 
   // ── Mixer ── (mixerui.ts — Phase 0 split)
@@ -214,23 +216,22 @@ export async function initStudio(): Promise<void> {
     onModeChange: (label) => { lcdMode.textContent = label; },
   });
   const tabBtns = layout.navButtons;
-  win.append(titleBar, lcd, layout.modeBar, transportBar, layout.workarea);
+  // Mode keys + transport stick together while the page scrolls (Cubase-style
+  // fixed toolbars) — the un-squash (E) lets every panel take natural height.
+  const stickyChrome = el("div", "wa-sticky-chrome");
+  stickyChrome.append(layout.modeBar, transportBar);
+  win.append(titleBar, lcd, stickyChrome, layout.workarea);
   root.append(win);
-  // Fit the chassis to the viewport remainder below the site nav — the CSS
-  // 100dvh height assumed the win started at the top of the document.
-  const fitWin = () => {
-    if (document.fullscreenElement === win) { win.style.height = "100dvh"; return; }
-    const top = Math.round(win.getBoundingClientRect().top + window.scrollY);
-    win.style.height = `max(480px, calc(100dvh - ${top}px - 8px))`;
-  };
-  fitWin();
-  window.addEventListener("resize", fitWin);
-  document.addEventListener("fullscreenchange", fitWin);
+  // Fullscreen is the one fixed-height case: the chassis becomes the display
+  // and scrolls internally.
+  document.addEventListener("fullscreenchange", () => {
+    win.style.height = document.fullscreenElement === win ? "100dvh" : "";
+  });
 
   // ── Help and tutorial ── (tutorial.ts — Phase 0 split)
   const { showTutorialStep } = buildTutorial({
     tabBtns, padGrid, selectedSampleEditor, waveform, eventLane, pianoRoll,
-    gridSel, presetRow, sessionGrid, arrangeLanes, devicePanel, exp,
+    gridSel, presetRow, sessionGrid, devicePanel, exp,
     transportBar, tutorialBtn,
   });
   tutorialBtn.addEventListener("click", () => showTutorialStep(0));

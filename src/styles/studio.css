@@ -555,76 +555,6 @@
   background: var(--wa-amber); border-color: var(--wa-amber); font-weight: 700;
 }
 .wa-scene-launch:hover { filter: brightness(1.07); background: var(--wa-amber); }
-/* ── Arrangement — one lane per track, blocks sized by bar count ── */
-/* ── Arrangement timeline (C5 → D4 Reaper pass): the page's main element ── */
-.wa-tl { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; flex: 1; min-height: 220px; }
-.wa-tl-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: none; }
-.wa-tl-body { display: flex; align-items: stretch; gap: 0; flex: 1; min-height: 0; }
-.wa-tl-labels { flex: 0 0 58px; display: flex; flex-direction: column; }
-.wa-tl-label {
-  flex: 1; min-height: 48px; display: flex; align-items: center;
-  font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--wa-muted);
-}
-.wa-tl-labels .wa-tl-label:first-child { flex: none; height: 24px; min-height: 24px; }
-.wa-tl-scroll { flex: 1; min-width: 0; overflow-x: auto; overscroll-behavior-inline: contain; }
-.wa-tl-inner { position: relative; min-height: 100%; display: flex; flex-direction: column; }
-.wa-tl-ruler {
-  position: relative; height: 24px; cursor: pointer;
-  background: var(--wa-phos-bg);
-  border: 1px solid #123640; border-bottom: none;
-  border-radius: var(--wa-radius-sm) var(--wa-radius-sm) 0 0;
-  overflow: hidden;
-}
-.wa-tl-tick {
-  position: absolute; top: 0; bottom: 0; width: 1px;
-  background: rgba(52, 226, 255, 0.1);
-  color: var(--wa-phos); font-size: 9px; font-family: ui-monospace, monospace;
-  padding-left: 3px; line-height: 24px; white-space: nowrap; pointer-events: none;
-}
-.wa-tl-tick.major { background: rgba(52, 226, 255, 0.28); }
-.wa-tl-loop {
-  position: absolute; top: 0; bottom: 0;
-  background: rgba(52, 226, 255, 0.16);
-  border-left: 2px solid var(--wa-phos); border-right: 2px solid var(--wa-phos);
-  pointer-events: none;
-}
-.wa-tl-ruler { flex: none; }
-.wa-tl-tick.beat { background: rgba(52, 226, 255, 0.14); }
-.wa-tl-row {
-  position: relative; flex: 1; min-height: 48px;
-  background: var(--wa-surface);
-  border: 1px solid var(--wa-border); border-top: none;
-}
-.wa-tl-preview {
-  position: absolute; inset: 3px 4px;
-  width: calc(100% - 8px); height: calc(100% - 6px);
-  pointer-events: none; opacity: 0.75;
-}
-.wa-tl-block {
-  position: absolute; top: 3px; bottom: 3px;
-  display: flex; align-items: center; gap: 4px; padding: 0 6px;
-  background: color-mix(in srgb, var(--scene-color, var(--wa-surface-3)) 30%, var(--wa-surface-2));
-  border: 1px solid var(--scene-color, var(--wa-border-2));
-  border-radius: 4px;
-  cursor: grab; overflow: hidden;
-  font-size: 11px; font-weight: 700; color: var(--wa-text);
-}
-.wa-tl-block:active { cursor: grabbing; }
-.wa-tl-block.sel { outline: 1px solid var(--wa-accent); box-shadow: 0 0 8px rgba(0, 229, 255, 0.35); }
-.wa-tl-block-label {
-  pointer-events: none; position: relative; z-index: 1;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-}
-.wa-tl-block-x {
-  margin-left: auto; border: none; background: none; color: var(--wa-muted);
-  font-size: 10px; cursor: pointer; padding: 2px;
-}
-.wa-tl-block-x:hover { color: var(--wa-red); }
-.wa-tl-playline {
-  position: absolute; top: 0; bottom: 0; width: 2px; z-index: 5;
-  background: var(--wa-amber); display: none; pointer-events: none;
-}
-.wa-tl-playline.on { display: block; }
 
 .wa-fx-title { margin-bottom: 11px; color: var(--wa-accent); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
 .wa-device .wa-slider-row { margin: 9px 0; }
@@ -1204,32 +1134,44 @@
 .wa-knob-row .wa-lbl { display: none; }
 
 
-/* ----- Mode frame: chassis mode keys + one full-screen page per mode ----- */
+/* ----- Mode frame (un-squashed, E): natural heights, the page scrolls.
+   Chrome (mode keys + transport) sticks Cubase-style while you scroll. ----- */
 
 .wa-win {
-  height: calc(100dvh - 16px);
+  min-height: calc(100dvh - 150px);
+  height: auto;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+}
+
+.wa-sticky-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--wa-bg);
+  padding: 6px 0 8px;
+  margin: 0 -2px;
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.45);
 }
 
 /* Engraved hardware mode keys under the LCD (MPC / Maschine / DSN-12 idiom) */
-.wa-modebar { display: flex; gap: 6px; margin-top: 6px; }
+.wa-modebar { display: flex; gap: 8px; }
 .wa-modekey {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 8px;
   background: linear-gradient(180deg, var(--wa-surface-2), var(--wa-surface));
   border: 1px solid var(--wa-border);
   border-bottom-width: 3px;
   border-radius: var(--wa-radius-sm);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   color: var(--wa-muted);
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  padding: 7px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  padding: 11px 6px;
   cursor: pointer;
 }
 .wa-modekey:hover { color: var(--wa-text); }
@@ -1251,21 +1193,15 @@
 }
 .wa-lcd-mode { color: var(--wa-phos); }
 
-/* Page host — one page visible at a time, sized to the viewport */
+/* Page host — one page visible at a time, natural height, breathing room */
 .wa-pagehost {
-  flex: 1;
-  min-height: 0;
-  margin-top: 6px;
+  margin-top: 4px;
   position: relative;
-  display: flex;
-  flex-direction: column;
 }
 .wa-page {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 .wa-page[hidden] { display: none; }
 
@@ -1281,16 +1217,20 @@
 }
 .wa-subtab.active { color: var(--wa-text); background: var(--wa-surface-2); border-color: var(--wa-accent-dim); }
 
-/* DRUMS — grid main + per-lane sampler sidebar (D2) */
-.wa-page-drums { flex-direction: row; }
-.wa-drums-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
-.wa-page-drums .wa-inspector {
-  width: 265px;
-  min-height: 0;
-  overflow-y: auto;
+/* DRUMS — grid main + per-lane sampler sidebar (D2). The sidebar sticks
+   under the chrome while the page scrolls (Cubase inspector idiom). */
+.wa-page-drums { flex-direction: row; gap: 12px; }
+.wa-drums-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.wa-page-drums .wa-inspector,
+.wa-page-pads .wa-inspector {
+  width: 280px;
+  flex: 0 0 280px;
   margin: 0;
-  position: static;
-  max-height: none;
+  position: sticky;
+  top: 118px;
+  align-self: flex-start;
+  max-height: calc(100dvh - 130px);
+  overflow-y: auto;
 }
 .wa-lane-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .wa-lane-wave {
@@ -1305,44 +1245,27 @@
 }
 .wa-lane-knobs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .wa-lane-sd { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--wa-border); }
-.wa-page-drums .wa-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
-.wa-page-drums .wa-grid { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 3px; }
-.wa-page-drums .wa-grid .wa-row { flex: 1; min-height: 26px; max-height: 44px; align-items: stretch; }
-.wa-page-drums .wa-grid .wa-cell { height: auto; }
+/* Drum rows at their natural chunky size — no more viewport squeezing */
+.wa-page-drums .wa-grid { display: flex; flex-direction: column; gap: 4px; }
+.wa-page-drums .wa-grid .wa-cell { height: 34px; }
 
-/* PADS — square deck (sized in JS to min of avail w/h), inspector column right */
-.wa-page-pads { flex-direction: row; }
-.wa-pads-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
-.wa-pads-main > .wa-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
-.wa-page-pads .wa-mpc-deck { flex: 1; min-height: 0; display: flex; gap: 14px; margin-bottom: 0; }
-.wa-page-pads .wa-mpc-pad-area { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; }
-.wa-page-pads .wa-mpc-pads { flex: none; width: 100%; max-width: 720px; margin-bottom: 0; }
-.wa-page-pads .wa-mpc-pad { min-height: 0; }
-.wa-pads-main > .wa-panel { margin-bottom: 0; }
-.wa-page-pads .wa-mpc-side { overflow-y: auto; min-height: 0; }
+/* PADS — natural deck (chunky pads, CSS-sized), sticky inspector right */
+.wa-page-pads { flex-direction: row; gap: 12px; }
+.wa-pads-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.wa-page-pads .wa-mpc-deck { display: flex; gap: 16px; margin-bottom: 0; align-items: flex-start; }
+.wa-page-pads .wa-mpc-pad-area { flex: 1; min-width: 0; }
+.wa-page-pads .wa-mpc-pads { width: 100%; max-width: 720px; margin: 0; }
+.wa-page-pads .wa-mpc-side { flex: 0 0 190px; }
 /* Side toolbar condensed by default: performance essentials (levels /
    note-repeat / record row) stay; pattern tools sit behind the ⋯ toggle.
    Positional cut — if padsui reorders the toolbar, revisit the index. */
 .wa-page-pads .wa-mpc-side.condensed .wa-mpc-toolbar > :nth-child(n+10) { display: none; }
 .wa-side-more { width: 100%; margin-top: 4px; }
-.wa-transport .wa-btn { height: 32px; }
-/* Stacked phones: back to natural block flow (the layout that worked
-   pre-rework) with the pads column as the one scroll container. */
+.wa-transport .wa-btn { height: 34px; }
 @media (max-width: 700px) {
-  .wa-pads-main { overflow-y: auto; }
-  .wa-pads-main > .wa-panel { flex: none; overflow: visible; }
-  .wa-page-pads .wa-mpc-deck { display: grid; grid-template-columns: 1fr; flex: none; }
-  .wa-page-pads .wa-mpc-pad-area { display: block; flex: none; }
-  .wa-page-pads .wa-mpc-side { overflow-y: visible; }
-  .wa-page-pads .wa-mpc-pad { min-height: 64px; }
-}
-.wa-page-pads .wa-inspector {
-  width: 250px;
-  min-height: 0;
-  overflow-y: auto;
-  margin: 0;
-  position: static;
-  max-height: none;
+  .wa-page-pads .wa-mpc-deck { flex-direction: column; }
+  .wa-page-pads .wa-mpc-side { flex: none; width: 100%; }
+  .wa-page-pads .wa-mpc-pad { min-height: 74px; }
 }
 @media (min-width: 1101px) { .wa-editpad-toggle { display: none; } }
 @media (max-width: 1100px) {
@@ -1351,31 +1274,27 @@
   .wa-page-pads.show-inspector .wa-inspector,
   .wa-page-drums.show-inspector .wa-inspector {
     display: block;
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
+    position: fixed;
+    top: 120px;
+    right: 8px;
+    bottom: 8px;
     width: min(300px, 85%);
-    z-index: 25;
+    z-index: 45;
     background: var(--wa-surface);
     border: 1px solid var(--wa-border);
     border-radius: var(--wa-radius-sm);
     padding: 10px;
+    overflow-y: auto;
   }
 }
 
-/* SYNTH view host (D1 merge) — Roll or Patch fills the space over the keys */
+/* SYNTH view host (D1 merge) — Roll or Patch above the keys, natural flow */
 .wa-synth-viewhost {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 .wa-synth-viewhost .wa-piano-roll {
-  flex: 1 1 auto;
-  height: auto;
-  min-height: 0;
-  overflow-y: auto;
+  height: 480px;
   margin: 0;
 }
 /* Piano roll v2 — canvas editor (roll.ts): the note area scrolls inside the
@@ -1407,28 +1326,34 @@
 }
 .wa-roll2 .wa-roll-playhead { left: 37px; bottom: auto; }
 
-/* SYNTH — the one browse page: internal scroll by design.
-   The keys strip migrates here from KEYS (compact) so patches stay playable. */
-.wa-page-synth { overflow: hidden; }
-.wa-page-synth .wa-export { flex: none; }
-.wa-page-synth .wa-keys { flex: none; }
-.wa-page-synth .wa-keys, .wa-page-synth .wa-key { height: 110px; }
-.wa-page-synth .wa-key-black { height: 68px; }
-.wa-sound-host { flex: 1; min-height: 0; overflow-y: auto; }
+/* SYNTH — the keys stick to the bottom of the view while the page scrolls,
+   so the patch (or roll) above is always playable */
+.wa-page-synth .wa-keys {
+  position: sticky;
+  bottom: 8px;
+  z-index: 20;
+  box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.5);
+}
+.wa-page-synth .wa-keys, .wa-page-synth .wa-key { height: 140px; }
+.wa-page-synth .wa-key-black { height: 88px; }
 .wa-sound-host > [hidden] { display: none; }
-.wa-sound-host .wa-vpatch { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
-.wa-sound-host .wa-vblock { min-width: 180px; }
+.wa-sound-host .wa-vpatch { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+.wa-sound-host .wa-vblock { min-width: 200px; }
 
-/* ARRANGE — the timeline is the flexible element (D4); the scene launcher
-   folds behind the SCENES header and keeps a modest working height. */
-.wa-page-song .wa-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
-.wa-page-song .wa-session { flex: none; max-height: min(200px, 26dvh); overflow: auto; }
-.wa-scenes-head { align-self: flex-start; margin-bottom: 6px; }
+/* CLIPS — the launcher takes the page, Bitwig-style colour-filled cells */
+.wa-page-song .wa-panel { display: flex; flex-direction: column; }
+.wa-page-song .wa-session { margin-top: 10px; }
+.wa-page-song .wa-clip {
+  height: 42px;
+  background: color-mix(in srgb, var(--scene-color, var(--wa-surface-3)) 10%, var(--wa-surface-2));
+  border: 1px solid color-mix(in srgb, var(--scene-color, var(--wa-border-2)) 35%, var(--wa-border-2));
+}
+.wa-page-song .wa-clip.has {
+  background: color-mix(in srgb, var(--scene-color, var(--wa-surface-3)) 42%, var(--wa-surface-2));
+}
+.wa-page-song .wa-scene-launch { min-width: 64px; }
 
-/* MIX — devices flex and scroll internally; mixer + export natural size.
-   Page-level scroll is a safety net until R2 compacts the mixer strips. */
-.wa-page-mix { overflow-y: auto; }
-.wa-page-mix .wa-mix-flex { flex: 1 1 auto; min-height: min(240px, 32dvh); overflow-y: auto; display: flex; flex-direction: column; }
+/* MIX — natural stacking; the page scrolls */
 .wa-page-mix .wa-device { min-width: 200px; }
 .wa-page-mix .wa-mixer { display: flex; gap: 8px; }
 /* Device browser (D3): vertical tab list + detail pane */
@@ -1462,17 +1387,23 @@
 .wa-pad-layer-row .wa-sample-name { flex: 1 1 100%; margin-top: 0; }
 .wa-vel-in { width: 46px; font-family: inherit; background: var(--wa-surface-2); color: var(--wa-text); border: 1px solid var(--wa-border-2); border-radius: 4px; padding: 3px 4px; }
 
-/* Overlays (chop / scratch) cover the page area, hardware-service-hatch style */
+/* Overlays (chop / scratch) float fixed under the chrome — the page behind
+   can be any height now */
 .wa-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 30;
+  position: fixed;
+  top: 118px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(1100px, 96vw);
+  max-height: calc(100dvh - 130px);
+  z-index: 45;
   display: flex;
   flex-direction: column;
   background: var(--wa-bg);
-  border: 1px solid var(--wa-border);
+  border: 1px solid var(--wa-border-2);
   border-radius: var(--wa-radius-sm);
-  padding: 10px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  padding: 12px;
 }
 .wa-overlay[hidden] { display: none; }
 .wa-overlay-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -1480,22 +1411,21 @@
 
 .wa-transport { position: static; }
 
-/* Fullscreen: the chassis IS the display — rails clip offscreen, so drop them */
+/* Fullscreen: the chassis IS the display, scrolling internally */
 .wa-win:fullscreen {
   border-radius: 0;
   border-left-width: 0;
   border-right-width: 0;
   margin: 0;
-  overflow: hidden;
+  overflow-y: auto;
 }
 .wa-win:fullscreen::before,
 .wa-win:fullscreen::after { display: none; }
 
-/* Mobile tiers — same six keys, tighter engraving */
+/* Mobile tiers — same five keys, tighter engraving */
 @media (max-width: 900px) {
-  .wa-win { height: calc(100dvh - 8px); }
   .wa-modebar { gap: 3px; }
-  .wa-modekey { gap: 4px; font-size: 9px; letter-spacing: 0.06em; padding: 8px 2px; }
+  .wa-modekey { gap: 4px; font-size: 9px; letter-spacing: 0.06em; padding: 9px 2px; }
   .wa-page-pads { flex-direction: column; }
   .wa-page-drums { flex-direction: column; }
 }

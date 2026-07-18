@@ -14,7 +14,6 @@ export interface TutorialTargets {
   gridSel: HTMLElement;
   presetRow: HTMLElement;
   sessionGrid: HTMLElement;
-  arrangeLanes: HTMLElement;
   devicePanel: HTMLElement;
   exp: HTMLElement;
   transportBar: HTMLElement;
@@ -22,7 +21,7 @@ export interface TutorialTargets {
 }
 
 export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: number) => void } {
-  const { tabBtns, padGrid, selectedSampleEditor, waveform, eventLane, pianoRoll, gridSel, presetRow, sessionGrid, arrangeLanes, devicePanel, exp, transportBar, tutorialBtn } = t;
+  const { tabBtns, padGrid, selectedSampleEditor, waveform, eventLane, pianoRoll, gridSel, presetRow, sessionGrid, devicePanel, exp, transportBar, tutorialBtn } = t;
   const shortcutsBox = el("div", "wa-help-shortcuts");
   shortcutsBox.append(el("div", "wa-fx-title", "KEYBOARD SHORTCUTS"));
   ([
@@ -115,7 +114,6 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
     { workspace: 3, target: gridSel, title: "Grid & quantize", text: "Sets the snap resolution for the piano roll, and the beat-line grouping shown on the drum and pad grids. Coarser (1/4) locks notes to the beat; 1/16 allows free placement." },
     { workspace: 6, target: presetRow, title: "The VV-1 synth", text: "The Patch view holds the full editor. Search or randomize a patch, or drag the envelope shape and watch the live waveform preview react. Simple view collapses the editor to the essentials — Advanced view reveals the full mod matrix." },
     { workspace: 4, target: sessionGrid, title: "Launch clips and scenes", text: "Each column is a track and each row a scene. Launch single clips or a whole row — changes wait for the next bar so transitions stay in time." },
-    { workspace: 4, target: arrangeLanes, title: "Arrange the song", text: "Each track keeps its own list of blocks (scene + bar length) — add, resize or reassign them, then enable Arrange mode in the transport to play them back independently." },
     { workspace: 5, target: devicePanel, title: "Process the sound", text: "Use macros, groove controls and device bypass switches to shape the complete signal chain." },
     { workspace: 5, target: exp, title: "Save and export", text: "Save an editable project before exporting. WAV preserves full quality; MP3 is smaller for sharing." },
     { workspace: 5, target: transportBar, title: "Transport stays available", text: "Playback, BPM, grid, metronome, undo and tutorial controls remain visible in every mode. Space plays/stops; Ctrl+Z undoes." },

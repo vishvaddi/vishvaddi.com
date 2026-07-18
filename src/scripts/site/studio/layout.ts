@@ -43,7 +43,7 @@ const MODES: Array<{ id: ModeId; label: string; helpText: string }> = [
   { id: "drums", label: "DRUMS", helpText: "Program the eight drum lanes on the step grid." },
   { id: "pads", label: "PADS", helpText: "Perform on the 16 pads, edit the selected pad, chop breaks and scratch." },
   { id: "synth", label: "SYNTH", helpText: "The VV-1: piano roll or patch editor above always-playable keys." },
-  { id: "song", label: "ARRANGE", helpText: "The arrangement — scene blocks on the song's bar timeline, plus the scene launcher." },
+  { id: "song", label: "CLIPS", helpText: "The clip launcher — every track's clips across the eight scenes." },
   { id: "mix", label: "MIX", helpText: "Mixer, master devices, project save and export." },
 ];
 
@@ -126,31 +126,8 @@ export function buildLayout(p: LayoutPanels): Layout {
     mpcSide.append(moreBtn);
   }
 
-  // All 16 pads visible at once: square deck sized to min(availW, availH).
-  // Height is measured from the deck's own top to the page host's bottom —
-  // position-based, so a stale flex pass can't feed back a wrong size.
-  const deckStacked = window.matchMedia("(max-width: 700px)");
-  const fitDeck = () => {
-    const area = p.padGrid.parentElement;
-    if (!area || padsPage.hidden) return;
-    if (deckStacked.matches) {
-      // stacked mobile layout: the narrow-viewport CSS flows the deck;
-      // an explicit square here paints over the toolbar stacked below it
-      p.padGrid.style.width = "";
-      p.padGrid.style.height = "";
-      return;
-    }
-    const availH = workarea.getBoundingClientRect().bottom - p.padGrid.getBoundingClientRect().top - 10;
-    const w = area.clientWidth;
-    // floor: on short viewports the deck holds min(w, 300) and the panel scrolls
-    const side = Math.max(Math.min(w, availH), Math.min(w, 300));
-    if (side > 80) {
-      p.padGrid.style.width = `${side}px`;
-      p.padGrid.style.height = `${side}px`;
-    }
-  };
-  deckStacked.addEventListener("change", fitDeck);
-  if (p.padGrid.parentElement) new ResizeObserver(fitDeck).observe(p.padGrid.parentElement);
+  // Deck sizing is pure CSS since the un-squash (E): natural width up to
+  // 720px, chunky pads, the page scrolls if it must.
 
   // ── SYNTH ── one instrument page (D1 merge): Roll ⇄ Patch views above the
   // always-pinned keys strip, so the VV-1 is playable whichever view is up
@@ -209,7 +186,6 @@ export function buildLayout(p: LayoutPanels): Layout {
     modeKeyBtns.forEach((b, i) => b.classList.toggle("active", MODES[i].id === next));
     (Object.keys(pages) as ModeId[]).forEach((id) => { pages[id].hidden = id !== next; });
     if (next === "synth") p.onSynthVisible();
-    if (next === "pads") fitDeck();
     p.onModeChange(MODES.find((m) => m.id === next)!.label);
     localStorage.setItem("vv_studio_mode", next);
   }
