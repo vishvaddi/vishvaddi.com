@@ -76,7 +76,7 @@
 /* ── Title / header bar ── */
 .wa-title {
   display: flex; align-items: center; gap: 12px;
-  height: 44px; padding: 0 12px; margin-bottom: 8px;
+  height: 38px; padding: 0 12px; margin-bottom: 6px;
   background: var(--wa-surface);
   border: 1px solid var(--wa-border);
   border-radius: var(--wa-radius-sm);
@@ -101,13 +101,13 @@
 /* ── LCD / status readout ── */
 .wa-lcd {
   display: flex; gap: 18px; align-items: center;
-  min-height: 46px; padding: 8px 14px; margin-bottom: 8px;
+  min-height: 36px; padding: 5px 14px; margin-bottom: 6px;
   background: var(--wa-surface);
   border: 1px solid var(--wa-border);
   border-radius: var(--wa-radius-sm);
 }
 .wa-lcd-seg {
-  font-size: 20px; font-weight: 600; letter-spacing: 0.06em;
+  font-size: 17px; font-weight: 600; letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
   color: var(--wa-accent);
 }
@@ -122,8 +122,8 @@
 /* ── Transport ── */
 .wa-transport {
   position: sticky; top: 0; z-index: 20;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 7px;
-  margin-top: 8px; padding: 9px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin-top: 6px; padding: 6px 9px;
   background: var(--wa-surface);
   border: 1px solid var(--wa-border);
   border-radius: var(--wa-radius-sm);
@@ -1147,7 +1147,7 @@
 }
 
 /* Engraved hardware mode keys under the LCD (MPC / Maschine / DSN-12 idiom) */
-.wa-modebar { display: flex; gap: 6px; margin-top: 8px; }
+.wa-modebar { display: flex; gap: 6px; margin-top: 6px; }
 .wa-modekey {
   flex: 1;
   display: flex;
@@ -1162,7 +1162,7 @@
   color: var(--wa-muted);
   font-size: 11px;
   letter-spacing: 0.14em;
-  padding: 9px 6px;
+  padding: 7px 6px;
   cursor: pointer;
 }
 .wa-modekey:hover { color: var(--wa-text); }
@@ -1188,7 +1188,7 @@
 .wa-pagehost {
   flex: 1;
   min-height: 0;
-  margin-top: 8px;
+  margin-top: 6px;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -1230,6 +1230,12 @@
 .wa-page-pads .wa-mpc-pad { min-height: 0; }
 .wa-pads-main > .wa-panel { margin-bottom: 0; }
 .wa-page-pads .wa-mpc-side { overflow-y: auto; min-height: 0; }
+/* Side toolbar condensed by default: performance essentials (levels /
+   note-repeat / record row) stay; pattern tools sit behind the ⋯ toggle.
+   Positional cut — if padsui reorders the toolbar, revisit the index. */
+.wa-page-pads .wa-mpc-side.condensed .wa-mpc-toolbar > :nth-child(n+10) { display: none; }
+.wa-side-more { width: 100%; margin-top: 4px; }
+.wa-transport .wa-btn { height: 32px; }
 /* Stacked phones: back to natural block flow (the layout that worked
    pre-rework) with the pads column as the one scroll container. */
 @media (max-width: 700px) {

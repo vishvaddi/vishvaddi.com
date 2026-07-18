@@ -106,6 +106,20 @@ export function buildLayout(p: LayoutPanels): Layout {
   chopBtn.addEventListener("click", chopOverlay.open);
   scratchBtn.addEventListener("click", scratchOverlay.open);
 
+  // Side toolbar: performance essentials up front, pattern tools behind ⋯
+  // (queried rather than passed — padsui owns the column, layout only folds it)
+  const mpcSide = p.mpcPanel.querySelector(".wa-mpc-side");
+  if (mpcSide) {
+    mpcSide.classList.add("condensed");
+    const moreBtn = btn("⋯ More", "wa-btn-sm wa-side-more");
+    help(moreBtn, "Show the pattern tools — rotate, mutate, fill, ghosts, groove extraction, MIDI and resampling.");
+    moreBtn.addEventListener("click", () => {
+      const condensed = mpcSide.classList.toggle("condensed");
+      moreBtn.textContent = condensed ? "⋯ More" : "⋯ Less";
+    });
+    mpcSide.append(moreBtn);
+  }
+
   // All 16 pads visible at once: square deck sized to min(availW, availH).
   // Height is measured from the deck's own top to the page host's bottom —
   // position-based, so a stale flex pass can't feed back a wrong size.
@@ -164,10 +178,11 @@ export function buildLayout(p: LayoutPanels): Layout {
   p.song.prepend(p.sessionGrid, p.launchStatus);
   songPage.append(p.song);
 
-  // ── MIX ── devices flex and scroll internally; mixer + export keep natural size
+  // ── MIX ── mixer + export up front (export must not need a scroll to find),
+  // devices flex below and scroll internally
   const mixPage = el("div", "wa-page wa-page-mix");
   p.devicePanel.classList.add("wa-mix-flex");
-  mixPage.append(p.mixer, p.devicePanel, p.exp);
+  mixPage.append(p.mixer, p.exp, p.devicePanel);
 
   const pages: Record<ModeId, HTMLElement> = {
     drums: drumsPage, pads: padsPage, keys: keysPage,
