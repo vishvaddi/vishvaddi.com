@@ -45,6 +45,7 @@ import { buildSynth } from "./synthui";
 import { buildDeviceRack } from "./fxrack";
 import { buildTutorial } from "./tutorial";
 import { buildPlayback } from "./playback";
+import { knob } from "./knob";
 import { bindKeyboard } from "./keymap";
 
 // One color per scene (A-H), distinct from the accent/amber/blue already
@@ -70,7 +71,25 @@ export async function initStudio(): Promise<void> {
   projectName.className = "wa-project-name"; projectName.value = localStorage.getItem("vv_studio_name") || "Untitled beat";
   projectName.setAttribute("aria-label", "Project name");
   projectName.addEventListener("change", () => { localStorage.setItem("vv_studio_name", projectName.value.trim() || "Untitled beat"); });
-  titleBar.append(el("span", "wa-title-text", "VISHAMP — STUDIO"), projectName, el("span", "wa-title-dots"));
+  // CV-80 header hardware: POWER (master mute with phosphor LED) + MASTER knob
+  const powerBtn = el("button", "wa-power on") as HTMLButtonElement;
+  powerBtn.type = "button";
+  powerBtn.append(el("span", "wa-power-led"), document.createTextNode("POWER"));
+  help(powerBtn, "Master output on/off — the polite panic button.");
+  let masterLevel = 0.8;
+  powerBtn.addEventListener("click", () => {
+    ensureNodes();
+    const on = !powerBtn.classList.contains("on");
+    powerBtn.classList.toggle("on", on);
+    engine.master!.gain.value = on ? masterLevel : 0;
+  });
+  const masterKnob = knob("Master", 0, 1, masterLevel, 0.01, (v) => {
+    masterLevel = v;
+    ensureNodes();
+    if (powerBtn.classList.contains("on")) engine.master!.gain.value = v;
+  });
+  help(masterKnob.root, "Master output level — the same gain the mixer's MASTER fader controls.");
+  titleBar.append(el("span", "wa-title-text", "VISHAMP — STUDIO"), projectName, el("span", "wa-title-dots"), powerBtn, masterKnob.root);
   const lcd = el("div", "wa-lcd");
   const lcdBpm = el("span", "wa-lcd-seg", `${transport.bpm} BPM`);
   const lcdState = el("span", "wa-lcd-seg", "■ STOP");

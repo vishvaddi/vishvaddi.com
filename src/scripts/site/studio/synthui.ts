@@ -181,7 +181,7 @@ export function buildSynth(): SynthUI {
     scopeAnalyser.getByteTimeDomainData(data);
     const floats = new Float32Array(data.length);
     for (let i = 0; i < data.length; i++) floats[i] = (data[i] - 128) / 128;
-    drawScope(scopeCanvas, floats, "#ffe24d");
+    drawScope(scopeCanvas, floats, "#33ff99");
   }
   drawSynthScope();
   function renderPatchEditor(): void {

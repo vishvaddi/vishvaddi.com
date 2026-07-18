@@ -4,20 +4,29 @@
    /_astro cache cleanly. DOM + class names match the TS; only the look changed. */
 
 .wa-win {
-  --wa-bg: #14161b;
-  --wa-surface: #1b1e25;
-  --wa-surface-2: #232732;
-  --wa-surface-3: #2c313e;
-  --wa-border: #313746;
-  --wa-border-2: #3d4454;
-  --wa-text: #e0e3ea;
-  --wa-muted: #899; /* fallback */
-  --wa-muted: #8b91a1;
-  --wa-accent: #2fe3a6;
-  --wa-accent-dim: #1c9d72;
-  --wa-blue: #4aa8ff;
+  /* CV-80 hardware chassis: warm near-black panels, cream engraving, orange
+     master accent - with LYSERGIC phosphor green reserved for "screens"
+     (LCD, scope, waveforms, roll). Synth Parity Plan, Phase 1. */
+  --wa-bg: #201913;
+  --wa-surface: #2a221a;
+  --wa-surface-2: #342a20;
+  --wa-surface-3: #3f3327;
+  --wa-border: #4a3b2c;
+  --wa-border-2: #5c4936;
+  --wa-text: #f0e6d2;
+  --wa-muted: #a8977f;
+  --wa-accent: #ff9f43;
+  --wa-accent-dim: #c77b2e;
+  --wa-blue: #6ea8d8;
   --wa-amber: #ffb422;
   --wa-red: #ff5d4e;
+  --wa-teal: #4fd1b5;
+  --wa-purple: #b98bff;
+  --wa-phos: #33ff99;
+  --wa-phos-dim: #1d9a5f;
+  --wa-phos-bg: #0a120c;
+  --wa-wood-1: #5a3d26;
+  --wa-wood-2: #3d2917;
   --wa-radius: 9px;
   --wa-radius-sm: 6px;
   --wa-font: var(--font-sans, system-ui, -apple-system, "Segoe UI", sans-serif);
@@ -26,13 +35,33 @@
   max-width: none;
   font-family: var(--wa-font);
   color: var(--wa-text);
-  background: var(--wa-bg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.12)),
+    var(--wa-bg);
   border: 1px solid var(--wa-border);
+  border-left: 14px solid transparent;
+  border-right: 14px solid transparent;
   border-radius: var(--wa-radius);
   padding: 10px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  position: relative;
   user-select: none;
 }
+/* Wood side rails */
+.wa-win::before,
+.wa-win::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 14px;
+  background:
+    repeating-linear-gradient(175deg, rgba(0, 0, 0, 0.16) 0 2px, transparent 2px 5px),
+    linear-gradient(90deg, var(--wa-wood-1), var(--wa-wood-2));
+  border: 1px solid #2a1c0f;
+}
+.wa-win::before { left: -14px; border-radius: var(--wa-radius) 0 0 var(--wa-radius); }
+.wa-win::after { right: -14px; border-radius: 0 var(--wa-radius) var(--wa-radius) 0; }
 
 /* Break out of the centred text column to fill the viewport width. */
 .wa-wrap {
@@ -947,3 +976,191 @@
 @media (max-width: 760px) {
   .wa-session-row { grid-template-columns: 64px repeat(3, minmax(0, 1fr)); }
 }
+
+
+/* ----- Phase 1 reskin: CV-80 chassis details + LYSERGIC phosphor screens ----- */
+
+/* Engraved cream labels */
+.wa-lbl,
+.wa-fx-title,
+.wa-section-title,
+.wa-inspector-title,
+.wa-drawer-title,
+.wa-title-text {
+  color: var(--wa-text);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.07), 0 -1px 0 rgba(0, 0, 0, 0.55);
+}
+
+/* Recessed screw corners on section panels */
+.wa-workspace-section,
+.wa-panel {
+  background-image:
+    radial-gradient(circle 3px at 9px 9px, #171310 45%, #55483a 55%, transparent 60%),
+    radial-gradient(circle 3px at calc(100% - 9px) 9px, #171310 45%, #55483a 55%, transparent 60%),
+    radial-gradient(circle 3px at 9px calc(100% - 9px), #171310 45%, #55483a 55%, transparent 60%),
+    radial-gradient(circle 3px at calc(100% - 9px) calc(100% - 9px), #171310 45%, #55483a 55%, transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(0, 0, 0, 0.1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Phosphor screens: LCD, scope, waveforms, piano roll */
+.wa-lcd {
+  background: var(--wa-phos-bg);
+  border: 1px solid #1f3327;
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.75), inset 0 0 4px rgba(51, 255, 153, 0.12);
+  position: relative;
+  overflow: hidden;
+}
+.wa-lcd .wa-lcd-seg,
+.wa-lcd .wa-save-state {
+  color: var(--wa-phos);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  text-shadow: 0 0 6px rgba(51, 255, 153, 0.65);
+}
+.wa-lcd::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px);
+}
+.wa-scope,
+.wa-wave-mini,
+.wa-env-canvas,
+.wa-waveform {
+  background: var(--wa-phos-bg);
+  border: 1px solid #1f3327;
+  border-radius: 4px;
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.7), 0 0 6px rgba(51, 255, 153, 0.08);
+}
+.wa-piano-roll {
+  background: var(--wa-phos-bg);
+  border-color: #1f3327;
+}
+
+/* ----- Rotary knobs (knob.ts) ----- */
+.wa-knob-row.wa-slider-row,
+.wa-vblock .wa-knob-row,
+.wa-selected-sample .wa-knob-row,
+.wa-device .wa-knob-row,
+.wa-pad-controls .wa-knob-row,
+.wa-knob-row {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  min-width: 64px;
+}
+.wa-knob {
+  --wa-knob-col: var(--wa-accent);
+  --wa-knob-pct: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  position: relative;
+  cursor: ns-resize;
+  touch-action: none;
+  background:
+    radial-gradient(circle at 50% 38%, #4a3e30, #241d15 72%) content-box,
+    conic-gradient(from 225deg, var(--wa-knob-col) calc(var(--wa-knob-pct) * 270deg), rgba(0, 0, 0, 0.5) calc(var(--wa-knob-pct) * 270deg) 270deg, transparent 270deg) border-box;
+  padding: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.wa-knob:focus-visible { outline: 2px solid var(--wa-blue); outline-offset: 2px; }
+.wa-knob.active { box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(255, 159, 67, 0.25); }
+.wa-knob-line {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 15px;
+  margin-left: -1px;
+  transform-origin: 50% 0;
+  background: var(--wa-text);
+  border-radius: 2px;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
+}
+.wa-knob-val {
+  font-size: 10px;
+  color: var(--wa-muted);
+  font-variant-numeric: tabular-nums;
+  min-height: 12px;
+}
+.wa-knob-lbl {
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--wa-muted);
+  max-width: 74px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+/* knob rows flow into grids inside device/patch panels */
+.wa-device,
+.wa-vblock,
+.wa-combinator,
+.wa-selected-sample,
+.wa-pad-controls,
+.wa-event-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 2px 4px;
+}
+.wa-device > .wa-device-header,
+.wa-vblock > .wa-fx-title,
+.wa-vblock > .wa-wave-mini,
+.wa-vblock > .wa-env-canvas,
+.wa-combinator > .wa-fx-title,
+.wa-combinator > .wa-export,
+.wa-vblock > .wa-advanced-only,
+.wa-vblock > .wa-export {
+  flex-basis: 100%;
+}
+.wa-advanced-only { display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.wa-off { opacity: 0.4; pointer-events: none; }
+
+/* Section-coloured knob caps: filter/default orange, env teal, FX blue, macros purple */
+.wa-vblock:has(.wa-env-canvas) .wa-knob { --wa-knob-col: var(--wa-teal); }
+.wa-device .wa-knob { --wa-knob-col: var(--wa-blue); }
+.wa-combinator .wa-knob { --wa-knob-col: var(--wa-purple); }
+
+/* ----- POWER + MASTER header controls ----- */
+.wa-power {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--wa-surface-2);
+  border: 1px solid var(--wa-border);
+  border-radius: var(--wa-radius-sm);
+  color: var(--wa-muted);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  padding: 5px 9px;
+  cursor: pointer;
+}
+.wa-power-led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #57402a;
+  box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.7);
+}
+.wa-power.on { color: var(--wa-text); }
+.wa-power.on .wa-power-led {
+  background: var(--wa-phos);
+  box-shadow: 0 0 7px rgba(51, 255, 153, 0.8);
+}
+.wa-title .wa-knob-row { padding: 0 4px; min-width: 52px; }
+.wa-title .wa-knob { width: 34px; height: 34px; padding: 3px; }
+.wa-title .wa-knob-line { height: 11px; }
+.wa-title .wa-knob-val { display: none; }
+
+.wa-knob-row.wa-slider-row { justify-content: flex-start; width: auto; }
+.wa-knob-row .wa-lbl { display: none; }

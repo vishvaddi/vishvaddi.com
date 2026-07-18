@@ -1,4 +1,5 @@
 // Pure helpers — no shared studio state.
+import { knob as knobCtor } from "./knob";
 
 // ─── DOM ─────────────────────────────────────────────────────────────────────
 export const el = (tag: string, cls?: string, text?: string): HTMLElement => {
@@ -16,14 +17,11 @@ export function help(target: HTMLElement, text: string): HTMLElement {
   target.setAttribute("aria-description", text);
   return target;
 }
+// sliderRow keeps its original signature but renders a CV-80 rotary knob
+// (knob.ts) since Phase 1 — every parameter row across the studio upgrades
+// through this one function.
 export function sliderRow(label: string, min: number, max: number, val: number, step: number, on: (v: number) => void): HTMLElement {
-  const row = el("div", "wa-slider-row");
-  row.append(el("span", "wa-lbl", label));
-  const inp = document.createElement("input");
-  inp.type = "range"; inp.min = String(min); inp.max = String(max); inp.step = String(step); inp.value = String(val); inp.className = "wa-slider";
-  const out = el("span", "wa-val", String(val));
-  inp.addEventListener("input", () => { const v = Number(inp.value); out.textContent = String(v); on(v); });
-  row.append(inp, out); return row;
+  return knobCtor(label, min, max, val, step, on).root;
 }
 export function download(name: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
@@ -97,14 +95,14 @@ export function drawWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer, sli
   const scale = window.devicePixelRatio || 1, width = canvas.clientWidth || 900, height = canvas.clientHeight || 220;
   canvas.width = Math.floor(width * scale); canvas.height = Math.floor(height * scale);
   const ctx = canvas.getContext("2d"); if (!ctx) return;
-  ctx.scale(scale, scale); ctx.fillStyle = "#0c0c12"; ctx.fillRect(0, 0, width, height);
+  ctx.scale(scale, scale); ctx.fillStyle = "#0a120c"; ctx.fillRect(0, 0, width, height);
   if (selected >= 0 && slices[selected]) {
     const [start, end] = slices[selected];
     ctx.fillStyle = "rgba(47, 227, 166, 0.16)";
     ctx.fillRect(start * width, 0, (end - start) * width, height);
   }
   const data = buffer.getChannelData(0), stride = Math.max(1, Math.floor(data.length / width));
-  ctx.strokeStyle = "#22ee55"; ctx.beginPath();
+  ctx.strokeStyle = "#33ff99"; ctx.beginPath();
   for (let x = 0; x < width; x++) {
     let peak = 0;
     for (let i = x * stride; i < Math.min(data.length, (x + 1) * stride); i++) peak = Math.max(peak, Math.abs(data[i]));
@@ -112,17 +110,17 @@ export function drawWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer, sli
     ctx.moveTo(x, height / 2 - y); ctx.lineTo(x, height / 2 + y);
   }
   ctx.stroke();
-  ctx.strokeStyle = "#ffe24d"; ctx.fillStyle = "#ffe24d"; ctx.font = "10px monospace";
+  ctx.strokeStyle = "#33ff99"; ctx.fillStyle = "#33ff99"; ctx.font = "10px monospace";
   slices.forEach(([start], i) => {
     const x = start * width; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); ctx.fillText(String(i + 1), x + 3, 12);
   });
 }
 
-export function drawScope(canvas: HTMLCanvasElement, samples: Float32Array, color = "#22ee55"): void {
+export function drawScope(canvas: HTMLCanvasElement, samples: Float32Array, color = "#33ff99"): void {
   const scale = window.devicePixelRatio || 1, width = canvas.clientWidth || 200, height = canvas.clientHeight || 40;
   canvas.width = Math.floor(width * scale); canvas.height = Math.floor(height * scale);
   const ctx = canvas.getContext("2d"); if (!ctx) return;
-  ctx.scale(scale, scale); ctx.fillStyle = "#0c0c12"; ctx.fillRect(0, 0, width, height);
+  ctx.scale(scale, scale); ctx.fillStyle = "#0a120c"; ctx.fillRect(0, 0, width, height);
   ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath();
   for (let i = 0; i < samples.length; i++) {
     const x = (i / (samples.length - 1)) * width, y = height / 2 - samples[i] * height * 0.45;
@@ -131,11 +129,11 @@ export function drawScope(canvas: HTMLCanvasElement, samples: Float32Array, colo
   ctx.stroke();
 }
 
-export function drawEnvelopeShape(canvas: HTMLCanvasElement, points: Array<[number, number]>, color = "#22ee55"): void {
+export function drawEnvelopeShape(canvas: HTMLCanvasElement, points: Array<[number, number]>, color = "#33ff99"): void {
   const scale = window.devicePixelRatio || 1, width = canvas.clientWidth || 200, height = canvas.clientHeight || 70;
   canvas.width = Math.floor(width * scale); canvas.height = Math.floor(height * scale);
   const ctx = canvas.getContext("2d"); if (!ctx) return;
-  ctx.scale(scale, scale); ctx.fillStyle = "#0c0c12"; ctx.fillRect(0, 0, width, height);
+  ctx.scale(scale, scale); ctx.fillStyle = "#0a120c"; ctx.fillRect(0, 0, width, height);
   const toPx = ([x, y]: [number, number]): [number, number] => [x * width, (1 - y) * (height - 6) + 3];
   ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath();
   points.forEach((p, i) => { const [px, py] = toPx(p); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); });
