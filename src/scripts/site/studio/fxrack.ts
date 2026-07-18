@@ -9,6 +9,7 @@ import { el, btn, help, sliderRow, euclideanPattern } from "./helpers";
 
 export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLElement {
   const devicePanel = el("div", "wa-panel");
+  let refreshTabs = (): void => {};   // assigned once the device tab list exists (D3)
   const fxSlider = (label: string, min: number, max: number, value: number, step: number, apply: (v: number) => void) =>
     sliderRow(label, min, max, value, step, (v) => { ensureNodes(); apply(v); applyFxState(); saveAll(); });
   const deviceHeader = (key: string, label: string): HTMLElement => {
@@ -18,7 +19,7 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
     bypass.addEventListener("click", () => {
       rackState.devices[key] = !rackState.devices[key];
       bypass.textContent = rackState.devices[key] ? "ON" : "BYPASS"; bypass.classList.toggle("active", rackState.devices[key]);
-      applyFxState(); saveAll();
+      applyFxState(); saveAll(); refreshTabs();
     });
     header.append(el("span", "wa-device-title", label), bypass);
     return header;
@@ -82,7 +83,6 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
     sliderRow("Echo decay", 0.1, 0.95, rackState.echoDecay, 0.01, (v) => { rackState.echoDecay = v; saveAll(); }),
     euclidControls,
   );
-  const deviceRack = el("div", "wa-device-stack");
   const eqDevice = el("div", "wa-device");
   eqDevice.append(
     deviceHeader("eq", "CHANNEL EQ · low / mid / high"),
@@ -113,12 +113,47 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
     deviceHeader("limiter", "MASTER LIMITER"),
     fxSlider("CEILING", -12, 0, fx.limiter, 0.5, (v) => { fx.limiter = v; }),
   );
-  deviceRack.append(eqDevice, compDevice, delayDevice, reverbDevice, limiterDevice);
+  // ── Device browser (D3): side tab per device, one detail pane ──
+  const sections: Array<{ id: string; key: string | null; label: string; elx: HTMLElement }> = [
+    { id: "macros", key: null, label: "MACROS", elx: combinator },
+    { id: "player", key: "player", label: "PLAYER", elx: playerRack },
+    { id: "eq", key: "eq", label: "CHANNEL EQ", elx: eqDevice },
+    { id: "compressor", key: "compressor", label: "COMPRESSOR", elx: compDevice },
+    { id: "delay", key: "delay", label: "DELAY", elx: delayDevice },
+    { id: "reverb", key: "reverb", label: "REVERB", elx: reverbDevice },
+    { id: "limiter", key: "limiter", label: "LIMITER", elx: limiterDevice },
+  ];
+  const browser = el("div", "wa-devbrowser");
+  const tabList = el("div", "wa-devtabs");
+  const detail = el("div", "wa-devdetail");
+  const tabs: HTMLButtonElement[] = [];
+  let sel = localStorage.getItem("vv_studio_device") || "eq";
+  if (!sections.some((s) => s.id === sel)) sel = "eq";
+  const paintTabs = (): void => {
+    tabs.forEach((tab, i) => {
+      const s = sections[i];
+      tab.classList.toggle("active", s.id === sel);
+      const led = tab.querySelector(".wa-modekey-led");
+      if (led && s.key) led.classList.toggle("lit", !!rackState.devices[s.key]);
+    });
+    sections.forEach((s) => { s.elx.style.display = s.id === sel ? "" : "none"; });
+  };
+  refreshTabs = paintTabs;
+  sections.forEach((s) => {
+    const tab = el("button", "wa-devtab") as HTMLButtonElement;
+    tab.type = "button";
+    tab.append(el("span", "wa-modekey-led" + (s.key ? "" : " wa-led-none")), document.createTextNode(s.label));
+    help(tab, s.key ? `Show the ${s.label.toLowerCase()} — the dot lights when it's in the chain.` : "Combinator macros — four knobs that drive whole groups of parameters.");
+    tab.addEventListener("click", () => { sel = s.id; localStorage.setItem("vv_studio_device", sel); paintTabs(); });
+    tabs.push(tab); tabList.append(tab);
+    detail.append(s.elx);
+  });
+  browser.append(tabList, detail);
+  paintTabs();
   devicePanel.append(
     el("p", "wa-help", "Signal flow: Player → MPC Program → EQ → compressor → parallel delay/reverb → limiter."),
-    combinator, playerRack, deviceRack,
+    browser,
   );
-
 
   return devicePanel;
 }

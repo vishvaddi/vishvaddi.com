@@ -1417,10 +1417,32 @@
 /* MIX — devices flex and scroll internally; mixer + export natural size.
    Page-level scroll is a safety net until R2 compacts the mixer strips. */
 .wa-page-mix { overflow-y: auto; }
-.wa-page-mix .wa-mix-flex { flex: 1 1 auto; min-height: min(240px, 32dvh); overflow-y: auto; }
-.wa-page-mix .wa-device-stack { display: flex; flex-wrap: wrap; gap: 6px; }
+.wa-page-mix .wa-mix-flex { flex: 1 1 auto; min-height: min(240px, 32dvh); overflow-y: auto; display: flex; flex-direction: column; }
 .wa-page-mix .wa-device { min-width: 200px; }
 .wa-page-mix .wa-mixer { display: flex; gap: 8px; }
+/* Device browser (D3): vertical tab list + detail pane */
+.wa-devbrowser { display: flex; gap: 10px; min-height: 0; flex: 1; }
+.wa-devtabs { display: flex; flex-direction: column; gap: 4px; flex: 0 0 150px; }
+.wa-devtab {
+  display: flex; align-items: center; gap: 7px;
+  background: linear-gradient(180deg, var(--wa-surface-2), var(--wa-surface));
+  border: 1px solid var(--wa-border);
+  border-left-width: 3px;
+  border-radius: var(--wa-radius-sm);
+  color: var(--wa-muted);
+  font-family: inherit; font-size: 10px; letter-spacing: 0.1em; text-align: left;
+  padding: 8px 8px; cursor: pointer;
+}
+.wa-devtab:hover { color: var(--wa-text); }
+.wa-devtab.active { color: var(--wa-text); border-left-color: var(--wa-accent); background: var(--wa-surface-2); }
+.wa-devtab .wa-modekey-led.lit { background: var(--wa-phos); box-shadow: 0 0 6px var(--wa-phos); }
+.wa-devtab .wa-led-none { visibility: hidden; }
+.wa-devdetail { flex: 1; min-width: 0; overflow-y: auto; }
+.wa-devdetail .wa-device, .wa-devdetail .wa-combinator { max-width: 480px; }
+@media (max-width: 700px) {
+  .wa-devbrowser { flex-direction: column; }
+  .wa-devtabs { flex-direction: row; flex-wrap: wrap; flex-basis: auto; }
+}
 
 /* Pad layers (Poise-style, C4) — plain functional rows in the inspector */
 .wa-pad-layers { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--wa-border); }
