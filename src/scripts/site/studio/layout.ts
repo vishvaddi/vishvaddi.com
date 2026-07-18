@@ -43,7 +43,7 @@ const MODES: Array<{ id: ModeId; label: string; helpText: string }> = [
   { id: "drums", label: "DRUMS", helpText: "Program the eight drum lanes on the step grid." },
   { id: "pads", label: "PADS", helpText: "Perform on the 16 pads, edit the selected pad, chop breaks and scratch." },
   { id: "synth", label: "SYNTH", helpText: "The VV-1: piano roll or patch editor above always-playable keys." },
-  { id: "song", label: "SONG", helpText: "Launch scenes and arrange the full song." },
+  { id: "song", label: "ARRANGE", helpText: "The arrangement — scene blocks on the song's bar timeline, plus the scene launcher." },
   { id: "mix", label: "MIX", helpText: "Mixer, master devices, project save and export." },
 ];
 
@@ -180,9 +180,8 @@ export function buildLayout(p: LayoutPanels): Layout {
   patchTab.addEventListener("click", () => { synthView = "patch"; paintSynthView(); });
   paintSynthView();
 
-  // ── SONG ── session grid re-homed at the top of the arrangement panel
+  // ── ARRANGE ── session.ts owns the panel order (scenes fold + timeline)
   const songPage = el("div", "wa-page wa-page-song");
-  p.song.prepend(p.sessionGrid, p.launchStatus);
   songPage.append(p.song);
 
   // ── MIX ── mixer + export up front (export must not need a scroll to find),

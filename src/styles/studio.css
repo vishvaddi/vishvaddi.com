@@ -556,18 +556,18 @@
 }
 .wa-scene-launch:hover { filter: brightness(1.07); background: var(--wa-amber); }
 /* ── Arrangement — one lane per track, blocks sized by bar count ── */
-/* ── Arrangement timeline (C5, Ableton-style) ── */
-.wa-tl { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-.wa-tl-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.wa-tl-body { display: flex; align-items: stretch; gap: 0; }
+/* ── Arrangement timeline (C5 → D4 Reaper pass): the page's main element ── */
+.wa-tl { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; flex: 1; min-height: 220px; }
+.wa-tl-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: none; }
+.wa-tl-body { display: flex; align-items: stretch; gap: 0; flex: 1; min-height: 0; }
 .wa-tl-labels { flex: 0 0 58px; display: flex; flex-direction: column; }
 .wa-tl-label {
-  height: 34px; display: flex; align-items: center;
+  flex: 1; min-height: 48px; display: flex; align-items: center;
   font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--wa-muted);
 }
-.wa-tl-labels .wa-tl-label:first-child { height: 24px; }
+.wa-tl-labels .wa-tl-label:first-child { flex: none; height: 24px; min-height: 24px; }
 .wa-tl-scroll { flex: 1; min-width: 0; overflow-x: auto; overscroll-behavior-inline: contain; }
-.wa-tl-inner { position: relative; }
+.wa-tl-inner { position: relative; min-height: 100%; display: flex; flex-direction: column; }
 .wa-tl-ruler {
   position: relative; height: 24px; cursor: pointer;
   background: var(--wa-phos-bg);
@@ -588,10 +588,17 @@
   border-left: 2px solid var(--wa-phos); border-right: 2px solid var(--wa-phos);
   pointer-events: none;
 }
+.wa-tl-ruler { flex: none; }
+.wa-tl-tick.beat { background: rgba(52, 226, 255, 0.14); }
 .wa-tl-row {
-  position: relative; height: 34px;
+  position: relative; flex: 1; min-height: 48px;
   background: var(--wa-surface);
   border: 1px solid var(--wa-border); border-top: none;
+}
+.wa-tl-preview {
+  position: absolute; inset: 3px 4px;
+  width: calc(100% - 8px); height: calc(100% - 6px);
+  pointer-events: none; opacity: 0.75;
 }
 .wa-tl-block {
   position: absolute; top: 3px; bottom: 3px;
@@ -604,7 +611,10 @@
 }
 .wa-tl-block:active { cursor: grabbing; }
 .wa-tl-block.sel { outline: 1px solid var(--wa-accent); box-shadow: 0 0 8px rgba(0, 229, 255, 0.35); }
-.wa-tl-block-label { pointer-events: none; }
+.wa-tl-block-label {
+  pointer-events: none; position: relative; z-index: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
 .wa-tl-block-x {
   margin-left: auto; border: none; background: none; color: var(--wa-muted);
   font-size: 10px; cursor: pointer; padding: 2px;
@@ -1409,10 +1419,11 @@
 .wa-sound-host .wa-vpatch { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
 .wa-sound-host .wa-vblock { min-width: 180px; }
 
-/* SONG — session grid is the flexible element, arrangement below.
-   The grid keeps a working floor; the panel scrolls to reach the lanes. */
+/* ARRANGE — the timeline is the flexible element (D4); the scene launcher
+   folds behind the SCENES header and keeps a modest working height. */
 .wa-page-song .wa-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
-.wa-page-song .wa-session { flex: 1 1 auto; min-height: min(230px, 30dvh); overflow: auto; }
+.wa-page-song .wa-session { flex: none; max-height: min(200px, 26dvh); overflow: auto; }
+.wa-scenes-head { align-self: flex-start; margin-bottom: 6px; }
 
 /* MIX — devices flex and scroll internally; mixer + export natural size.
    Page-level scroll is a safety net until R2 compacts the mixer strips. */

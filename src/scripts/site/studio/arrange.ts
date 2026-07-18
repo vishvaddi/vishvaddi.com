@@ -5,8 +5,9 @@
 // song position. Replaces the old sequential "+ Block" lanes.
 import { el, btn, help } from "./helpers";
 import {
-  TRACKS, TRACK_LABELS, SCENE_LABELS, clip,
+  TRACKS, TRACK_LABELS, SCENE_LABELS, ROLL_NOTES, clip,
   arrangement, songPos, songLoop, songEndBar,
+  allPats, synthNotes, padEvents,
 } from "./state";
 import type { ArrangeBlock, TrackId } from "./state";
 import { saveAll } from "./persistence";
@@ -18,7 +19,32 @@ export interface ArrangeUI {
   paintPlayhead: () => void;
 }
 
-const ROW_H = 34;
+// Reaper-style clip preview: the scene's content drawn small inside its block.
+function drawClipPreview(canvas: HTMLCanvasElement, track: TrackId, scene: number): void {
+  const w = canvas.clientWidth || 60, h = canvas.clientHeight || 26;
+  if (w < 12 || h < 8) return;
+  const scale = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(w * scale); canvas.height = Math.floor(h * scale);
+  const g = canvas.getContext("2d"); if (!g) return;
+  g.scale(scale, scale);
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = "rgba(52,226,255,0.85)";
+  if (track === "drums") {
+    const pat = allPats[scene];
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 16; c++) {
+      if (pat[r][c]) g.fillRect((c / 16) * w, (r / 8) * h, Math.max(1.5, w / 24), Math.max(1.5, h / 10));
+    }
+  } else if (track === "synth") {
+    synthNotes[scene].forEach((n) => {
+      const row = ROLL_NOTES.indexOf(n.note); if (row < 0) return;
+      g.fillRect((n.step / 16) * w, (row / ROLL_NOTES.length) * h, Math.max(2, (n.len / 16) * w), Math.max(1.5, h / 14));
+    });
+  } else {
+    padEvents[scene].forEach((ev) => {
+      g.fillRect((ev.step / 16) * w, ((ev.pad % 16) / 16) * h, Math.max(1.5, w / 28), Math.max(1.5, h / 10));
+    });
+  }
+}
 
 export function buildArrange(): ArrangeUI {
   const host = el("div", "wa-arrange-lanes wa-tl");
@@ -67,14 +93,24 @@ export function buildArrange(): ArrangeUI {
   function paintArrange(): void {
     const total = viewBars();
     inner.style.width = `${total * pxPerBar}px`;
-    // ruler cells
+    // ruler cells — beat sub-ticks appear once zoomed in (Reaper-style)
     ruler.querySelectorAll(".wa-tl-tick").forEach((n) => n.remove());
     for (let b = 0; b < total; b++) {
       const tick = el("div", "wa-tl-tick" + (b % 4 === 0 ? " major" : ""));
       tick.style.left = `${b * pxPerBar}px`;
       if (b % 4 === 0) tick.textContent = String(b + 1);
       ruler.append(tick);
+      if (pxPerBar > 70) for (let q = 1; q < 4; q++) {
+        const beat = el("div", "wa-tl-tick beat");
+        beat.style.left = `${(b + q / 4) * pxPerBar}px`;
+        ruler.append(beat);
+      }
     }
+    // in-lane bar gridlines, brighter every 4 bars
+    const gridBg =
+      `repeating-linear-gradient(90deg, rgba(52,226,255,0.13) 0 1px, transparent 1px ${pxPerBar * 4}px), ` +
+      `repeating-linear-gradient(90deg, rgba(52,226,255,0.05) 0 1px, transparent 1px ${pxPerBar}px)`;
+    rows.forEach((row) => { row.style.backgroundImage = gridBg; });
     loopBrace.style.display = songLoop.on ? "" : "none";
     loopBrace.style.left = `${songLoop.startBar * pxPerBar}px`;
     loopBrace.style.width = `${Math.max(1, songLoop.endBar - songLoop.startBar) * pxPerBar}px`;
@@ -89,7 +125,10 @@ export function buildArrange(): ArrangeUI {
         chip.style.width = `${block.bars * pxPerBar - 2}px`;
         chip.style.setProperty("--scene-color", SCENE_COLORS[block.scene]);
         chip.classList.toggle("sel", selected?.block === block);
-        chip.append(el("span", "wa-tl-block-label", SCENE_LABELS[block.scene]));
+        const preview = document.createElement("canvas");
+        preview.className = "wa-tl-preview";
+        chip.append(preview, el("span", "wa-tl-block-label", `${SCENE_LABELS[block.scene]} · ${block.bars}b`));
+        requestAnimationFrame(() => drawClipPreview(preview, track, block.scene));
         help(chip, `${TRACK_LABELS[track]} · scene ${SCENE_LABELS[block.scene]} · bars ${block.startBar + 1}–${block.startBar + block.bars}. Drag to move, right edge to resize, ✕ or Del to remove, right-click to change scene.`);
         const removeBtn = el("button", "wa-tl-block-x") as HTMLButtonElement;
         removeBtn.type = "button"; removeBtn.textContent = "✕";
@@ -180,8 +219,14 @@ export function buildArrange(): ArrangeUI {
   });
 
   loopBtn.addEventListener("click", () => { songLoop.on = !songLoop.on; saveAll(); paintArrange(); });
-  zoomIn.addEventListener("click", () => { pxPerBar = Math.min(120, pxPerBar * 1.4); paintArrange(); });
+  zoomIn.addEventListener("click", () => { pxPerBar = Math.min(160, pxPerBar * 1.4); paintArrange(); });
   zoomOut.addEventListener("click", () => { pxPerBar = Math.max(14, pxPerBar / 1.4); paintArrange(); });
+  // wheel over the ruler zooms (Reaper habit)
+  ruler.addEventListener("wheel", (ev) => {
+    ev.preventDefault();
+    pxPerBar = Math.max(14, Math.min(160, pxPerBar * (ev.deltaY < 0 ? 1.15 : 1 / 1.15)));
+    paintArrange();
+  }, { passive: false });
 
   window.addEventListener("keydown", (ev) => {
     if (ev.key !== "Delete" && ev.key !== "Backspace") return;

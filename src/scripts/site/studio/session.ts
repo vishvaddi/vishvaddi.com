@@ -104,7 +104,20 @@ export function buildSession(): SessionView {
   const arrangeLanes = arr.host;
   const arrangeLanePaints: Array<() => void> = [arr.paintArrange];
   help(sessionGrid, "Each column is a track, each row a scene — launch clips or whole scenes; changes land on the next bar. The timeline below is the song: blocks play their scene at their bar, gaps are silence, the brace loops a region.");
-  song.append(launchStatus, sessionGrid, arrangeLanes);
+  // Collapsible SCENES section (D4) — the timeline is the page's main event
+  const scenesHead = btn("SCENES ▾", "wa-btn-sm wa-scenes-head");
+  help(scenesHead, "Fold the scene launcher away to give the timeline the full page.");
+  let scenesOpen = localStorage.getItem("vv_studio_scenes") !== "0";
+  const paintScenes = () => {
+    sessionGrid.style.display = scenesOpen ? "" : "none";
+    launchStatus.style.display = scenesOpen ? "" : "none";
+    scenesHead.textContent = scenesOpen ? "SCENES ▾" : "SCENES ▸";
+    song.classList.toggle("scenes-folded", !scenesOpen);
+    localStorage.setItem("vv_studio_scenes", scenesOpen ? "1" : "0");
+  };
+  scenesHead.addEventListener("click", () => { scenesOpen = !scenesOpen; paintScenes(); });
+  song.append(scenesHead, sessionGrid, launchStatus, arrangeLanes);
+  paintScenes();
 
   return { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid, arrangeLanes };
 }
