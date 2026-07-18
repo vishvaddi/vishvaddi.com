@@ -1291,8 +1291,13 @@
 .wa-page-keys .wa-export { flex: none; }
 .wa-page-keys .wa-keys { flex: none; }
 
-/* SYNTH — the one browse page: internal scroll by design */
+/* SYNTH — the one browse page: internal scroll by design.
+   The keys strip migrates here from KEYS (compact) so patches stay playable. */
 .wa-page-synth { overflow: hidden; }
+.wa-page-synth .wa-export { flex: none; }
+.wa-page-synth .wa-keys { flex: none; }
+.wa-page-synth .wa-keys, .wa-page-synth .wa-key { height: 110px; }
+.wa-page-synth .wa-key-black { height: 68px; }
 .wa-sound-host { flex: 1; min-height: 0; overflow-y: auto; }
 .wa-sound-host > [hidden] { display: none; }
 .wa-sound-host .wa-vpatch { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }

@@ -69,9 +69,13 @@ export function buildLayout(p: LayoutPanels): Layout {
   };
   const closeOverlays = () => overlays.forEach((o) => { o.hidden = true; });
 
-  // ── DRUMS ──
+  // ── DRUMS ── grid + a slim bar opening the sample rack as an overlay
   const drumsPage = el("div", "wa-page wa-page-drums");
-  drumsPage.append(p.beat);
+  const drumsBar = el("div", "wa-subtabs");
+  const rackBtn = btn("Rack", "wa-subtab");
+  help(rackBtn, "The drum sampler rack — per-lane sample loading and shaping.");
+  drumsBar.append(rackBtn);
+  drumsPage.append(drumsBar, p.beat);
 
   // ── PADS ── deck + toolbar row; inspector column right (toggle on small screens)
   const padsPage = el("div", "wa-page wa-page-pads");
@@ -150,28 +154,16 @@ export function buildLayout(p: LayoutPanels): Layout {
   const keysPage = el("div", "wa-page wa-page-keys");
   keysPage.append(p.pianoRoll, p.keysHeader, p.synthKeys);
 
-  // ── SOUND ── the browse page: patch editor or sample rack behind chips
+  // ── SYNTH ── pure patch editor (browse page, internal scroll by design);
+  // the keys strip migrates here from KEYS so patches are playable while edited
   const soundPage = el("div", "wa-page wa-page-synth");
-  const soundChips = el("div", "wa-subtabs");
-  const patchChip = btn("SYNTH PATCH", "wa-subtab");
-  const rackChip = btn("SAMPLE RACK", "wa-subtab");
-  help(patchChip, "The full VV-1 patch editor — oscillators, filter, envelopes, LFOs and the mod matrix.");
-  help(rackChip, "The drum sampler rack — per-lane sample loading and shaping.");
   const soundHost = el("div", "wa-sound-host");
-  soundHost.append(p.synthPanel, p.rack);
-  soundChips.append(patchChip, rackChip);
-  soundPage.append(soundChips, soundHost);
-  let soundView: "patch" | "rack" = "patch";
-  const paintSound = () => {
-    patchChip.classList.toggle("active", soundView === "patch");
-    rackChip.classList.toggle("active", soundView === "rack");
-    p.synthPanel.hidden = soundView !== "patch";
-    p.rack.hidden = soundView !== "rack";
-    if (soundView === "patch" && !soundPage.hidden) p.onSynthVisible();
-  };
-  patchChip.addEventListener("click", () => { soundView = "patch"; paintSound(); });
-  rackChip.addEventListener("click", () => { soundView = "rack"; paintSound(); });
-  paintSound();
+  soundHost.append(p.synthPanel);
+  soundPage.append(soundHost);
+  p.synthPanel.hidden = false;
+  const rackOverlay = makeOverlay("SAMPLE RACK", p.rack);
+  p.rack.hidden = false;
+  rackBtn.addEventListener("click", rackOverlay.open);
 
   // ── SONG ── session grid re-homed at the top of the arrangement panel
   const songPage = el("div", "wa-page wa-page-song");
@@ -202,13 +194,16 @@ export function buildLayout(p: LayoutPanels): Layout {
     closeOverlays();
     modeKeyBtns.forEach((b, i) => b.classList.toggle("active", MODES[i].id === next));
     (Object.keys(pages) as ModeId[]).forEach((id) => { pages[id].hidden = id !== next; });
+    // The keys strip lives on whichever synth-facing page is active —
+    // a DOM move keeps every listener and the octave/rec state intact.
     if (next === "synth") {
-      // SOUND follows context: keys → patch, drums/pads → rack, else keep last
-      if (from === "keys") soundView = "patch";
-      else if (from === "drums" || from === "pads") soundView = "rack";
-      paintSound();
+      soundPage.append(p.keysHeader, p.synthKeys);
+      p.onSynthVisible();
     }
-    if (next === "keys") p.onSynthVisible();
+    if (next === "keys") {
+      keysPage.append(p.keysHeader, p.synthKeys);
+      p.onSynthVisible();
+    }
     if (next === "pads") fitDeck();
     p.onModeChange(MODES.find((m) => m.id === next)!.label);
     localStorage.setItem("vv_studio_mode", next);
@@ -226,7 +221,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   setMode(activeMode);
 
   // tutorial nav proxies — composite actions per tour stop:
-  // 0 pads/perform+inspector · 1 pads/chop · 2 pads/steps · 3 keys · 4 song · 5 mix · 6 sound/patch
+  // 0 pads/perform+inspector · 1 pads/chop · 2 pads/steps · 3 keys · 4 song · 5 mix · 6 synth
   const nav = (fn: () => void): HTMLElement => {
     const b = el("button", "wa-nav-proxy") as HTMLButtonElement;
     b.type = "button";
@@ -240,7 +235,7 @@ export function buildLayout(p: LayoutPanels): Layout {
     nav(() => setMode("keys")),
     nav(() => setMode("song")),
     nav(() => setMode("mix")),
-    nav(() => { setMode("synth"); soundView = "patch"; paintSound(); }),
+    nav(() => setMode("synth")),
   ];
 
   return { modeBar, workarea, getActiveMode: () => activeMode, navButtons, modeKeyBtns };

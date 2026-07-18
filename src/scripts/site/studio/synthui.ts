@@ -12,7 +12,7 @@ import { saveAll } from "./persistence";
 import { el, btn, help, sliderRow, drawScope, drawEnvelopeShape, SCREEN_BG, SCREEN_FG } from "./helpers";
 import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
 import { showVelocityPopup } from "./velpopup";
-import { buildKeys } from "./keys";
+import { buildKeys, setKeysLatch } from "./keys";
 
 export interface SynthUI {
   synthPanel: HTMLElement;
@@ -552,8 +552,15 @@ export function buildSynth(): SynthUI {
     keysRecBtn.classList.toggle("active", synthRec);
   });
   help(keysRecBtn, "Capture key presses into the playing synth clip's piano roll while playback runs. Arm Count-in in the transport for a 1-bar lead-in.");
+  const holdBtn = btn("Hold", "wa-toggle wa-btn-sm");
+  help(holdBtn, "Latch mode — tap a key to hold its note, tap again to release. Drones on while you tweak the patch.");
+  holdBtn.addEventListener("click", () => {
+    const on = !holdBtn.classList.contains("active");
+    holdBtn.classList.toggle("active", on);
+    setKeysLatch(on);
+  });
   const keysHeader = el("div", "wa-export");
-  keysHeader.append(el("span", "wa-lbl", "KEYS — click, or Z-row / Q-row on the keyboard (− / = shift octave)"), keysRecBtn, octaveLabel);
+  keysHeader.append(el("span", "wa-lbl", "KEYS — click, or Z-row / Q-row on the keyboard (− / = shift octave)"), keysRecBtn, holdBtn, octaveLabel);
   // Roll, keys and the keys header live on the KEYS page — layout.ts houses
   // them; appending them here too would just steal them back at boot.
   synthPanel.append(
