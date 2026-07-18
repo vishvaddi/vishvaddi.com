@@ -209,7 +209,7 @@ export async function initStudio(): Promise<void> {
 
   const layout = buildLayout({
     beat, mpcPanel, padSeqPanel, padGrid, pianoRoll, synthKeys,
-    keysHeader: synth.keysHeader, synthPanel, xyPanel: synth.xyPanel, scope: synth.scope,
+    keysHeader: synth.keysHeader, synthPanel, xyPanel: synth.xyPanel, scope: synth.scope, chordPanel: synth.chordPanel,
     sessionGrid, launchStatus, song, mixer, devicePanel, exp,
     chop, scratchPanel, inspector, laneInspector,
     onSynthVisible: () => synth.waveRedraws().forEach((fn) => fn()),

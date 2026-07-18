@@ -1393,12 +1393,17 @@
 .wa-page-synth .wa-keys, .wa-page-synth .wa-key { height: 140px; }
 .wa-page-synth .wa-key-black { height: 88px; }
 .wa-sound-host > [hidden] { display: none; }
-/* multi-column patch console — blocks sit side by side, minimal scroll */
+/* masonry patch console (H): blocks pack column-wise with independent
+   heights — no dead space between rows by construction */
 .wa-sound-host .wa-vpatch {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 8px;
-  align-items: start;
+  display: block;
+  columns: 248px;
+  column-gap: 8px;
+}
+.wa-sound-host .wa-vblock {
+  break-inside: avoid;
+  width: 100%;
+  margin-bottom: 8px;
 }
 
 /* CLIPS — the launcher takes the page, Bitwig-style colour-filled cells */
@@ -1574,3 +1579,14 @@
 .wa-page-song .wa-session-row { grid-template-columns: 72px repeat(3, minmax(72px, 1fr)); }
 /* consistent panel chrome everywhere — one surface, one border, one radius */
 .wa-panel, .wa-xy-wrap, .wa-inspector { border-radius: var(--wa-radius-sm); }
+
+/* ═══ H: patch block internals tightened — every box earns its pixels ═══ */
+.wa-vblock { padding: 8px 9px; }
+.wa-vblock .wa-fx-title { margin-bottom: 5px; }
+.wa-vblock .wa-slider-row, .wa-vblock .wa-knob-row { margin: 3px 0; }
+.wa-vblock select { height: 24px; font-size: 11px; }
+.wa-vblock input[type="text"] { height: 24px; font-size: 11px; }
+.wa-env-canvas { height: 56px; }
+.wa-chords { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+.wa-chords .wa-btn, .wa-chords .wa-btn-sm { width: 100%; height: 26px; font-size: 10px; padding: 0 4px; }
+.wa-synth-side .wa-xy-wrap { padding: 8px; }
