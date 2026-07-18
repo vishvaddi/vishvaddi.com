@@ -1,7 +1,7 @@
 // Transport scheduler — the 25ms lookahead loop, per-track arrangement
 // playback, queued-clip application, step highlighting, play/stop wiring.
 // Extracted verbatim from index.ts (Phase 0 split). Owns ctx.playhead writes.
-import { STEPS, PAD_BANK_SIZE, TRACKS, clip, transport, stepDur, audible, mpc, rackState, allPats, allVels, synthNotes, padEvents, arrangement, arrangePos, vsynthPatch } from "./state";
+import { STEPS, PAD_BANK_SIZE, TRACKS, clip, transport, stepDur, audible, mpc, rackState, allPats, allVels, synthNotes, padEvents, blockAt, songPos, songLoop, songEndBar, vsynthPatch } from "./state";
 import type { TrackId } from "./state";
 import { ac, ensureNodes, trackGain, playDrum, playPad, metroClick } from "./engine";
 import * as engine from "./engine";
@@ -21,21 +21,17 @@ export interface PlaybackDeps {
 
 export function buildPlayback(deps: PlaybackDeps): void {
   let schedTimer = 0, nextTime = 0;
-  // Arrangement playback: each track independently follows its own block list
-  // (scene + bar-length), advancing at bar boundaries — replaces the old
-  // single shared songChain, which forced every track onto the same scene.
-  function applyArrangePos(track: TrackId): void {
-    const blocks = arrangement[track];
-    clip.play[track] = blocks.length ? blocks[Math.min(arrangePos[track].block, blocks.length - 1)].scene : null;
+  // Arrangement playback (C5, Ableton-style): one global song bar; each track
+  // plays whichever block covers the bar — no block means silence. The loop
+  // brace wraps within its region; otherwise the song wraps at its end.
+  function applySongBar(): void {
+    TRACKS.forEach((track) => { clip.play[track] = blockAt(track, songPos.bar)?.scene ?? null; });
   }
-  function advanceArrangeTrack(track: TrackId): void {
-    const blocks = arrangement[track];
-    if (!blocks.length) { arrangePos[track] = { block: 0, barInBlock: 0 }; clip.play[track] = null; return; }
-    const pos = arrangePos[track];
-    if (pos.block >= blocks.length) pos.block = 0;
-    pos.barInBlock++;
-    if (pos.barInBlock >= blocks[pos.block].bars) { pos.barInBlock = 0; pos.block = (pos.block + 1) % blocks.length; }
-    clip.play[track] = blocks[pos.block].scene;
+  function advanceSongBar(): void {
+    songPos.bar++;
+    if (songLoop.on && songPos.bar >= songLoop.endBar) songPos.bar = songLoop.startBar;
+    else if (songPos.bar >= songEndBar()) songPos.bar = songLoop.on ? songLoop.startBar : 0;
+    applySongBar();
   }
   function highlight(s: number): void {
     if (playhead.lastHi >= 0) for (let r = 0; r < 8; r++) deps.cells[r][playhead.lastHi].classList.remove("play");
@@ -104,7 +100,7 @@ export function buildPlayback(deps: PlaybackDeps): void {
           ctx.songBtn.textContent = "Session"; ctx.songBtn.classList.remove("active"); ctx.renderSel.value = "pattern";
           deps.launchStatus.textContent = "Launched";
         } else if (transport.songMode) {
-          TRACKS.forEach((track) => advanceArrangeTrack(track));
+          advanceSongBar();
         }
         ctx.paintSession();
       }
@@ -113,9 +109,9 @@ export function buildPlayback(deps: PlaybackDeps): void {
   deps.playBtn.addEventListener("click", () => {
     if (playhead.playing) return;
     ensureNodes(); playhead.playing = true; playhead.schStep = 0;
-    TRACKS.forEach((track) => { arrangePos[track] = { block: 0, barInBlock: 0 }; });
+    songPos.bar = songLoop.on ? songLoop.startBar : 0;
     applyQueued();
-    if (transport.songMode) TRACKS.forEach((track) => applyArrangePos(track));
+    if (transport.songMode) applySongBar();
     ctx.paintSession();
     nextTime = ac().currentTime + 0.06;
     // 1-bar count-in when recording is armed: four clicks, then the loop starts.

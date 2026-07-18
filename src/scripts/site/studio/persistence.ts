@@ -4,7 +4,7 @@
 
 import {
   SCENES, STEPS, SONG_SLOTS, PAD_COUNT, PAD_LAYER_MAX, PIANO_NOTES, TRACKS, clip, transport,
-  allPats, allVels, synthNotes, padEvents, songChain, arrangement, sampleParams, sampleData, sampleBuffers,
+  allPats, allVels, synthNotes, padEvents, songChain, arrangement, songLoop, sampleParams, sampleData, sampleBuffers,
   padLayers, padLayerBuffers, padLayerMode,
   dp, mpc, rackState, fx, vsynthPatch,
 } from "./state";
@@ -66,7 +66,7 @@ export function projectState(includeSamples = true): object {
     return index;
   });
   return {
-    version: 8, // v8: VNote.step/len are floats (unquantized roll) — v7 ints load unchanged
+    version: 9, // v8: float VNote steps; v9: timeline arrangement (startBar) + songLoop + pad layers
     pats: allPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
     vels: allVels,
     dp,
@@ -77,6 +77,7 @@ export function projectState(includeSamples = true): object {
     vsynth: vsynthPatch,
     songChain, // kept read-only for one version so older saves aren't stranded
     arrangement,
+    songLoop,
     songMode: transport.songMode,
     quantizeGrid: transport.quantizeGrid,
     metroVolume: transport.metroVolume,
@@ -163,9 +164,17 @@ export function applyProject(saved: Record<string, unknown>): void {
         TRACKS.forEach((track) => {
           const blocks = incoming[track];
           if (Array.isArray(blocks)) {
+            // pre-v9 blocks were sequential (no startBar) — migrate to
+            // cumulative positions on the shared timeline
+            let cursor = 0;
             arrangement[track] = blocks
               .filter((b) => b && typeof b.scene === "number" && typeof b.bars === "number")
-              .map((b) => ({ scene: Math.max(0, Math.min(SCENES - 1, b.scene)), bars: Math.max(1, Math.min(64, b.bars)) }));
+              .map((b) => {
+                const bars = Math.max(1, Math.min(128, b.bars));
+                const startBar = typeof b.startBar === "number" ? Math.max(0, b.startBar) : cursor;
+                cursor = startBar + bars;
+                return { scene: Math.max(0, Math.min(SCENES - 1, b.scene)), bars, startBar };
+              });
           }
         });
       } else if (saved.songChain) {
@@ -174,8 +183,14 @@ export function applyProject(saved: Record<string, unknown>): void {
         // old songs still play back the same way until edited further.
         const chain = saved.songChain as number[];
         TRACKS.forEach((track) => {
-          arrangement[track] = chain.map((scene) => ({ scene: Math.max(0, Math.min(SCENES - 1, Number(scene) || 0)), bars: 1 }));
+          arrangement[track] = chain.map((scene, i) => ({ scene: Math.max(0, Math.min(SCENES - 1, Number(scene) || 0)), bars: 1, startBar: i }));
         });
+      }
+      if (saved.songLoop && typeof saved.songLoop === "object") {
+        const incoming = saved.songLoop as Partial<typeof songLoop>;
+        songLoop.on = !!incoming.on;
+        if (typeof incoming.startBar === "number") songLoop.startBar = Math.max(0, incoming.startBar);
+        if (typeof incoming.endBar === "number") songLoop.endBar = Math.max(songLoop.startBar + 1, incoming.endBar);
       }
       if (typeof saved.songMode === "boolean") transport.songMode = saved.songMode;
       if (typeof saved.quantizeGrid === "number" && [0, 4, 8, 16].includes(saved.quantizeGrid)) transport.quantizeGrid = saved.quantizeGrid;

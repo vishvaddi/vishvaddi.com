@@ -7,7 +7,7 @@ import "../../../styles/studio.css";
 import {
   STEPS, SCENES, SCENE_LABELS, DRUMS, PAD_BANK_SIZE, ROLL_NOTES,
   TRACKS, TRACK_LABELS, clip, transport, stepDur, audible,
-  allPats, allVels, synthNotes, padEvents, arrangement, arrangePos,
+  allPats, allVels, synthNotes, padEvents, arrangement,
   sampleParams, sampleBuffers, sampleData, dp, DP_DEF, DP_SPECS, mpc, rackState, fx, vsynthPatch, mute, solo,
 } from "./state";
 import type { ArrangeBlock, HistoryState, MpcState, PadEvent, SamplerP, TrackId, VNote } from "./state";

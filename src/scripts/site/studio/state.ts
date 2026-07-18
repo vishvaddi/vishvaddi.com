@@ -175,15 +175,19 @@ export const clip = {
 };
 
 // ─── Arrangement ─────────────────────────────────────────────────────────────
-// Each track gets its own ordered list of blocks (scene + bar-length), so
-// e.g. drums can loop scene A for 4 bars while synth plays 1 bar of A then 3
-// of C — real per-track independence, unlike the old shared songChain below.
-export interface ArrangeBlock { scene: number; bars: number; }
+// Ableton-Arrangement-style (C5): each track holds blocks placed on a shared
+// bar timeline — explicit startBar, gaps are silence. One global song
+// position replaces the old per-track sequential walk.
+export interface ArrangeBlock { scene: number; bars: number; startBar: number; }
 export const arrangement: Record<TrackId, ArrangeBlock[]> = { drums: [], pads: [], synth: [] };
-// Per-track playhead while transport.songMode drives the arrangement.
-export const arrangePos: Record<TrackId, { block: number; barInBlock: number }> = {
-  drums: { block: 0, barInBlock: 0 }, pads: { block: 0, barInBlock: 0 }, synth: { block: 0, barInBlock: 0 },
-};
+export const songPos = { bar: 0 };
+export const songLoop = { on: false, startBar: 0, endBar: 8 };
+export function blockAt(track: TrackId, bar: number): ArrangeBlock | null {
+  return arrangement[track].find((b) => bar >= b.startBar && bar < b.startBar + b.bars) ?? null;
+}
+export function songEndBar(): number {
+  return Math.max(1, ...TRACKS.map((t) => arrangement[t].reduce((m, b) => Math.max(m, b.startBar + b.bars), 0)));
+}
 
 // ─── Pattern data ────────────────────────────────────────────────────────────
 export const allPats: boolean[][][] = Array.from({ length: SCENES }, () => DRUMS.map(() => new Array(STEPS).fill(false)));

@@ -542,30 +542,65 @@
 }
 .wa-scene-launch:hover { filter: brightness(1.07); background: var(--wa-amber); }
 /* ── Arrangement — one lane per track, blocks sized by bar count ── */
-.wa-arrange-lanes { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
-.wa-arrange-lane { display: flex; align-items: stretch; gap: 8px; }
-.wa-arrange-lane-label {
-  width: 60px; flex: 0 0 60px; align-self: center;
-  font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--wa-muted);
+/* ── Arrangement timeline (C5, Ableton-style) ── */
+.wa-tl { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.wa-tl-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wa-tl-body { display: flex; align-items: stretch; gap: 0; }
+.wa-tl-labels { flex: 0 0 58px; display: flex; flex-direction: column; }
+.wa-tl-label {
+  height: 34px; display: flex; align-items: center;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--wa-muted);
 }
-.wa-arrange-blocks { display: flex; flex: 1 1 auto; gap: 6px; min-height: 64px; flex-wrap: wrap; }
-.wa-arrange-block {
-  position: relative; display: flex; flex-direction: column; gap: 4px; justify-content: center;
-  min-width: 92px; padding: 8px;
-  background: var(--wa-surface);
-  border: 1px solid var(--wa-border);
-  border-radius: var(--wa-radius-sm);
-}
-.wa-arrange-block.sel { border-color: var(--wa-accent-dim); }
-/* Scene-identity color strip — separate from the state-based border/dot
-   colors (playing/queued/selected), so both stay legible together. */
-.wa-arrange-block::before {
-  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-  background: var(--scene-color, transparent);
+.wa-tl-labels .wa-tl-label:first-child { height: 24px; }
+.wa-tl-scroll { flex: 1; min-width: 0; overflow-x: auto; overscroll-behavior-inline: contain; }
+.wa-tl-inner { position: relative; }
+.wa-tl-ruler {
+  position: relative; height: 24px; cursor: pointer;
+  background: var(--wa-phos-bg);
+  border: 1px solid #123640; border-bottom: none;
   border-radius: var(--wa-radius-sm) var(--wa-radius-sm) 0 0;
+  overflow: hidden;
 }
-.wa-arrange-bars-row { display: flex; align-items: center; gap: 4px; justify-content: space-between; }
-.wa-arrange-bars { font-size: 10px; color: var(--wa-muted); font-variant-numeric: tabular-nums; }
+.wa-tl-tick {
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: rgba(52, 226, 255, 0.1);
+  color: var(--wa-phos); font-size: 9px; font-family: ui-monospace, monospace;
+  padding-left: 3px; line-height: 24px; white-space: nowrap; pointer-events: none;
+}
+.wa-tl-tick.major { background: rgba(52, 226, 255, 0.28); }
+.wa-tl-loop {
+  position: absolute; top: 0; bottom: 0;
+  background: rgba(52, 226, 255, 0.16);
+  border-left: 2px solid var(--wa-phos); border-right: 2px solid var(--wa-phos);
+  pointer-events: none;
+}
+.wa-tl-row {
+  position: relative; height: 34px;
+  background: var(--wa-surface);
+  border: 1px solid var(--wa-border); border-top: none;
+}
+.wa-tl-block {
+  position: absolute; top: 3px; bottom: 3px;
+  display: flex; align-items: center; gap: 4px; padding: 0 6px;
+  background: color-mix(in srgb, var(--scene-color, var(--wa-surface-3)) 30%, var(--wa-surface-2));
+  border: 1px solid var(--scene-color, var(--wa-border-2));
+  border-radius: 4px;
+  cursor: grab; overflow: hidden;
+  font-size: 11px; font-weight: 700; color: var(--wa-text);
+}
+.wa-tl-block:active { cursor: grabbing; }
+.wa-tl-block.sel { outline: 1px solid var(--wa-accent); box-shadow: 0 0 8px rgba(0, 229, 255, 0.35); }
+.wa-tl-block-label { pointer-events: none; }
+.wa-tl-block-x {
+  margin-left: auto; border: none; background: none; color: var(--wa-muted);
+  font-size: 10px; cursor: pointer; padding: 2px;
+}
+.wa-tl-block-x:hover { color: var(--wa-red); }
+.wa-tl-playline {
+  position: absolute; top: 0; bottom: 0; width: 2px; z-index: 5;
+  background: var(--wa-amber); display: none; pointer-events: none;
+}
+.wa-tl-playline.on { display: block; }
 
 .wa-fx-title { margin-bottom: 11px; color: var(--wa-accent); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
 .wa-device .wa-slider-row { margin: 9px 0; }
@@ -1334,7 +1369,7 @@
 /* SONG — session grid is the flexible element, arrangement below.
    The grid keeps a working floor; the panel scrolls to reach the lanes. */
 .wa-page-song .wa-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
-.wa-page-song .wa-session { flex: 1 1 auto; min-height: min(320px, 45dvh); overflow: auto; }
+.wa-page-song .wa-session { flex: 1 1 auto; min-height: min(230px, 30dvh); overflow: auto; }
 
 /* MIX — devices flex and scroll internally; mixer + export natural size.
    Page-level scroll is a safety net until R2 compacts the mixer strips. */

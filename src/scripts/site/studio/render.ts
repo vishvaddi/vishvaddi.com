@@ -3,7 +3,7 @@
 // mirror the live engine chain so exports match what you hear.
 import {
   STEPS, PAD_BANK_SIZE, TRACKS, clip, transport,
-  allPats, allVels, synthNotes, padEvents, arrangement,
+  allPats, allVels, synthNotes, padEvents, blockAt, songEndBar,
   rackState, fx, vsynthPatch, audible,
 } from "./state";
 import type { TrackId } from "./state";
@@ -48,21 +48,13 @@ export function buildProjectExport(): ProjectExport {
   async function renderBuffer(mode: "pattern" | "song"): Promise<AudioBuffer> {
     ensureNodes();
     const sr = 44100, sd = 60 / transport.bpm / 4;
-    // Song mode renders each track's own arrangement independently (looping
-    // shorter tracks to match the longest one); clip mode renders the
+    // Song mode renders the shared bar timeline (C5): each track plays the
+    // block covering the bar, gaps are silence; clip mode renders the
     // launched per-track clips once.
-    const totalBars = (track: TrackId): number => arrangement[track].reduce((sum, b) => sum + b.bars, 0);
-    const bars = mode === "song" ? Math.max(1, ...TRACKS.map(totalBars)) : 1;
+    const bars = mode === "song" ? songEndBar() : 1;
     const sceneAt = (track: TrackId, bar: number): number | null => {
       if (mode !== "song") return clip.play[track];
-      const blocks = arrangement[track], total = totalBars(track);
-      if (!blocks.length || !total) return null;
-      let offset = bar % total;
-      for (const block of blocks) {
-        if (offset < block.bars) return block.scene;
-        offset -= block.bars;
-      }
-      return blocks[blocks.length - 1].scene;
+      return blockAt(track, bar)?.scene ?? null;
     };
     const dur = bars * STEPS * sd + 2.2;
     const off = new OfflineAudioContext(2, Math.ceil(dur * sr), sr);
