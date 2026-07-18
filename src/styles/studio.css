@@ -69,7 +69,7 @@
   margin-left: calc(50% - 49vw);
   display: flex;
   justify-content: center;
-  margin-top: 1.5rem;
+  margin-top: 0.5rem;
   margin-bottom: 2rem;
 }
 
@@ -1166,7 +1166,7 @@
 .wa-knob-row .wa-lbl { display: none; }
 
 
-/* ----- One-screen frame: rail / editor / inspector / drawer ----- */
+/* ----- Mode frame: chassis mode keys + one full-screen page per mode ----- */
 
 .wa-win {
   height: calc(100dvh - 16px);
@@ -1174,89 +1174,64 @@
   flex-direction: column;
   overflow: hidden;
 }
-.wa-frame {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 8px;
-  margin-top: 8px;
-}
 
-/* Session rail — compact, always in reach */
-.wa-rail {
-  grid-row: 1;
-  grid-column: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 168px;
-  min-height: 0;
-  overflow: hidden;
-  background: var(--wa-surface);
-  border: 1px solid var(--wa-border);
-  border-radius: var(--wa-radius-sm);
-  padding: 8px;
-  transition: width 0.2s ease;
-}
-.wa-rail.collapsed { width: 34px; padding: 8px 4px; }
-.wa-rail.collapsed .wa-session,
-.wa-rail.collapsed .wa-status,
-.wa-rail.collapsed .wa-rail-head .wa-lbl { display: none; }
-.wa-rail-head { display: flex; align-items: center; justify-content: space-between; }
-.wa-rail .wa-session { display: flex; flex-direction: column; gap: 3px; overflow-y: auto; min-height: 0; }
-.wa-rail .wa-session-row { display: flex; gap: 3px; align-items: stretch; }
-.wa-rail .wa-session-head { position: sticky; top: 0; background: var(--wa-surface); z-index: 1; }
-.wa-rail .wa-clip-stop { font-size: 8px; padding: 2px; flex: 1; min-width: 0; letter-spacing: 0; }
-.wa-rail .wa-session-scene { font-size: 8px; width: 30px; }
-.wa-rail .wa-scene-launch { width: 30px; min-width: 30px; font-size: 9px; padding: 2px; }
-.wa-rail .wa-clip { flex: 1; min-width: 0; height: 24px; padding: 0; }
-.wa-rail .wa-status { font-size: 9px; line-height: 1.3; }
-
-/* Centre editor — the only fit-to-viewport zone */
-.wa-editor {
-  grid-row: 1;
-  grid-column: 2;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-.wa-tracktabs { display: flex; gap: 4px; margin-bottom: 6px; }
-.wa-tracktab {
+/* Engraved hardware mode keys under the LCD (MPC / Maschine / DSN-12 idiom) */
+.wa-modebar { display: flex; gap: 6px; margin-top: 8px; }
+.wa-modekey {
   flex: 1;
-  background: var(--wa-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: linear-gradient(180deg, var(--wa-surface-2), var(--wa-surface));
   border: 1px solid var(--wa-border);
-  border-bottom-width: 2px;
+  border-bottom-width: 3px;
   border-radius: var(--wa-radius-sm);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   color: var(--wa-muted);
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  padding: 8px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  padding: 9px 6px;
   cursor: pointer;
 }
-.wa-tracktab.active {
+.wa-modekey:hover { color: var(--wa-text); }
+.wa-modekey.active {
   color: var(--wa-text);
-  border-bottom-color: var(--wa-accent);
   background: var(--wa-surface-2);
+  border-bottom-color: var(--wa-accent);
 }
-.wa-editor-host {
+.wa-modekey-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #16241b;
+  box-shadow: inset 0 0 2px #000;
+}
+.wa-modekey.active .wa-modekey-led {
+  background: var(--wa-phos);
+  box-shadow: 0 0 6px var(--wa-phos);
+}
+.wa-lcd-mode { color: var(--wa-phos); }
+
+/* Page host — one page visible at a time, sized to the viewport */
+.wa-pagehost {
   flex: 1;
   min-height: 0;
-  overflow: auto;             /* safety net; the drum grid is sized to fit */
+  margin-top: 8px;
+  position: relative;
   display: flex;
   flex-direction: column;
 }
-.wa-editor-host > * { min-height: 0; }
+.wa-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wa-page[hidden] { display: none; }
 
-/* Drum grid stretches to fill the editor */
-.wa-editor .wa-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.wa-editor .wa-grid { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 3px; }
-.wa-editor .wa-grid .wa-row { flex: 1; min-height: 26px; }
-.wa-editor .wa-grid .wa-cell { height: auto; }
-.wa-pads-editor, .wa-synth-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
-.wa-subtabs { display: flex; gap: 4px; margin-bottom: 6px; }
+.wa-subtabs { display: flex; gap: 4px; }
 .wa-subtab {
   background: var(--wa-surface);
   border: 1px solid var(--wa-border);
@@ -1268,10 +1243,27 @@
 }
 .wa-subtab.active { color: var(--wa-text); background: var(--wa-surface-2); border-color: var(--wa-accent-dim); }
 
-/* Inspector pinned right */
-.wa-frame > .wa-inspector {
-  grid-row: 1;
-  grid-column: 3;
+/* DRUMS — the grid is the page's flexible element (16 steps always visible) */
+.wa-page-drums .wa-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+.wa-page-drums .wa-grid { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 3px; }
+.wa-page-drums .wa-grid .wa-row { flex: 1; min-height: 26px; max-height: 44px; align-items: stretch; }
+.wa-page-drums .wa-grid .wa-cell { height: auto; }
+
+/* PADS — square deck (sized in JS to min of avail w/h), inspector column right */
+.wa-page-pads { flex-direction: row; }
+.wa-pads-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+.wa-pads-main > .wa-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+.wa-page-pads .wa-mpc-deck { flex: 1; min-height: 0; display: flex; gap: 14px; margin-bottom: 0; }
+.wa-page-pads .wa-mpc-pad-area { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; }
+.wa-page-pads .wa-mpc-pads { flex: none; width: 100%; max-width: 720px; margin-bottom: 0; }
+.wa-page-pads .wa-mpc-pad { min-height: 0; }
+.wa-pads-main > .wa-panel { margin-bottom: 0; }
+.wa-page-pads .wa-mpc-side { overflow-y: auto; min-height: 0; }
+@media (max-width: 700px) {
+  .wa-page-pads .wa-mpc-deck { flex-direction: column; }
+  .wa-page-pads .wa-mpc-side { overflow-y: visible; }
+}
+.wa-page-pads .wa-inspector {
   width: 250px;
   min-height: 0;
   overflow-y: auto;
@@ -1279,68 +1271,77 @@
   position: static;
   max-height: none;
 }
+@media (min-width: 1101px) { .wa-editpad-toggle { display: none; } }
+@media (max-width: 1100px) {
+  .wa-page-pads .wa-inspector { display: none; }
+  .wa-page-pads.show-inspector .wa-inspector {
+    display: block;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(300px, 85%);
+    z-index: 25;
+    background: var(--wa-surface);
+    border: 1px solid var(--wa-border);
+    border-radius: var(--wa-radius-sm);
+    padding: 10px;
+  }
+}
 
-/* Bottom drawer */
-.wa-drawerzone {
-  grid-row: 2;
-  grid-column: 1 / -1;
+/* KEYS — roll fills and scrolls itself; strip + keys pinned below, always visible */
+.wa-page-keys .wa-piano-roll {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+}
+.wa-page-keys .wa-export { flex: none; }
+.wa-page-keys .wa-keys { flex: none; }
+
+/* SOUND — the one browse page: internal scroll by design */
+.wa-page-sound { overflow: hidden; }
+.wa-sound-host { flex: 1; min-height: 0; overflow-y: auto; }
+.wa-sound-host > [hidden] { display: none; }
+.wa-sound-host .wa-vpatch { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+.wa-sound-host .wa-vblock { min-width: 180px; }
+
+/* SONG — session grid is the flexible element, arrangement below.
+   The grid keeps a working floor; the panel scrolls to reach the lanes. */
+.wa-page-song .wa-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+.wa-page-song .wa-session { flex: 1 1 auto; min-height: min(320px, 45dvh); overflow: auto; }
+
+/* MIX — devices flex and scroll internally; mixer + export natural size.
+   Page-level scroll is a safety net until R2 compacts the mixer strips. */
+.wa-page-mix { overflow-y: auto; }
+.wa-page-mix .wa-mix-flex { flex: 1; min-height: 0; overflow-y: auto; }
+.wa-page-mix .wa-device-stack { display: flex; flex-wrap: wrap; gap: 6px; }
+.wa-page-mix .wa-device { min-width: 200px; }
+.wa-page-mix .wa-mixer { display: flex; gap: 8px; }
+
+/* Overlays (chop / scratch) cover the page area, hardware-service-hatch style */
+.wa-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
   display: flex;
   flex-direction: column;
+  background: var(--wa-bg);
   border: 1px solid var(--wa-border);
   border-radius: var(--wa-radius-sm);
-  background: var(--wa-surface);
-  overflow: hidden;
+  padding: 10px;
 }
-.wa-segbar { display: flex; gap: 2px; padding: 4px 6px 0; }
-.wa-seg {
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--wa-muted);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  padding: 6px 12px;
-  cursor: pointer;
-}
-.wa-seg.active { color: var(--wa-text); border-bottom-color: var(--wa-accent); }
-.wa-drawer-host {
-  height: 265px;
-  overflow: auto;
-  padding: 6px 8px;
-}
-.wa-drawerzone.closed .wa-drawer-host { display: none; }
-.wa-drawer-host .wa-panel { border: none; background: none; box-shadow: none; padding: 0; }
-.wa-drawer-host .wa-vpatch { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
-.wa-drawer-host .wa-vblock { min-width: 180px; }
-.wa-drawer-host .wa-device-stack { display: flex; flex-wrap: wrap; gap: 6px; }
-.wa-drawer-host .wa-device { min-width: 200px; }
-.wa-drawer-host .wa-mixer { display: flex; gap: 8px; }
+.wa-overlay[hidden] { display: none; }
+.wa-overlay-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.wa-overlay-body { flex: 1; min-height: 0; overflow-y: auto; }
 
-/* Frame-era cleanups */
-.wa-workarea { display: contents; }
 .wa-transport { position: static; }
 
-/* Mobile tiers */
+/* Mobile tiers — same six keys, tighter engraving */
 @media (max-width: 900px) {
   .wa-win { height: calc(100dvh - 8px); }
-  .wa-frame {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto;
-  }
-  .wa-rail {
-    grid-row: 1;
-    grid-column: 1;
-    width: auto;
-    flex-direction: row;
-    align-items: stretch;
-    overflow-x: auto;
-    padding: 4px;
-  }
-  .wa-rail .wa-session { flex-direction: row; }
-  .wa-rail .wa-session-row { flex-direction: column; }
-  .wa-rail-head { display: none; }
-  .wa-editor { grid-row: 2; grid-column: 1; }
-  .wa-frame > .wa-inspector { display: none; }
-  .wa-drawerzone { grid-row: 3; grid-column: 1; }
-  .wa-drawer-host { height: 220px; }
+  .wa-modebar { gap: 3px; }
+  .wa-modekey { gap: 4px; font-size: 9px; letter-spacing: 0.06em; padding: 8px 2px; }
+  .wa-page-pads { flex-direction: column; }
 }

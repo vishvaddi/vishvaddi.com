@@ -1,17 +1,17 @@
-// Global keyboard maps — space/undo shortcuts, MPC pad keys (Create tab),
-// two-row DAW note layout with octave shift (Sequence tab). Extracted
-// verbatim from index.ts (Phase 0 split).
+// Global keyboard maps — space/undo shortcuts, MPC pad keys (DRUMS/PADS
+// modes), two-row DAW note layout with octave shift (KEYS mode). Extracted
+// verbatim from index.ts (Phase 0 split); routing follows the active mode.
 import { ensureNodes, ac } from "./engine";
 import * as engine from "./engine";
 import { vsynthPatch, mpc } from "./state";
-import type { TrackId } from "./state";
 import { noteToMidi, midiToNote } from "./vsynth";
 import { playhead } from "./ctx";
 import { highlightKey } from "./keys";
 import type { SynthUI } from "./synthui";
+import type { ModeId } from "./layout";
 
 export interface KeyboardDeps {
-  getActiveTrack: () => TrackId;
+  getActiveMode: () => ModeId;
   padButtons: HTMLButtonElement[];
   triggerPerformancePad: (localPad: number, velocity: number) => void;
   synth: SynthUI;
@@ -57,13 +57,14 @@ export function bindKeyboard(deps: KeyboardDeps): void {
   // releases the right note even if the octave changed while it was held.
   const downMap = new Map<string, string>();
   window.addEventListener("keydown", (ev) => {
-    if (deps.getActiveTrack() !== "synth") {
+    const mode = deps.getActiveMode();
+    if (mode === "drums" || mode === "pads") {
       const localPad = padKeyMap[ev.key.toLowerCase()];
       if (localPad != null && !ev.repeat && !ev.metaKey && !ev.ctrlKey) {
         ev.preventDefault(); deps.triggerPerformancePad(localPad, mpc.fullLevel ? 127 : 105); deps.padButtons[localPad].classList.add("down"); return;
       }
     }
-    if (deps.getActiveTrack() !== "synth") return;
+    if (mode !== "keys") return;
     const key = ev.key.toLowerCase();
     if (!ev.repeat && !ev.metaKey && !ev.ctrlKey) {
       if (key === "-") { deps.synth.setOctaveShift(deps.synth.getOctaveShift() - 1); return; }
@@ -78,7 +79,8 @@ export function bindKeyboard(deps: KeyboardDeps): void {
   window.addEventListener("keyup", (ev) => {
     const localPad = padKeyMap[ev.key.toLowerCase()];
     if (localPad != null) deps.padButtons[localPad].classList.remove("down");
-    if (deps.getActiveTrack() !== "synth") return;
+    // Note release is NOT mode-gated: switching modes mid-hold must still
+    // release the voice, or the note sticks on forever.
     const key = ev.key.toLowerCase();
     const n = downMap.get(key); if (!n) return;
     downMap.delete(key); deps.synth.liveKeys.noteOff(ac(), n); highlightKey(deps.synth.synthKeys, keyMap[key], false);

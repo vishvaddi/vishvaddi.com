@@ -71,8 +71,8 @@ try {
   const cellAfter = page.locator('.wa-grid .wa-row .wa-cell').nth(0)
   check('autosave: step survives reload', await cellAfter.evaluate((n) => n.classList.contains('on')))
 
-  // ── export WAV is non-trivial (export lives in the PROJECT drawer segment) ──
-  await page.click('.wa-seg:has-text("PROJECT")')
+  // ── export WAV is non-trivial (export lives on the MIX mode page) ──
+  await page.click('.wa-modekey:has-text("MIX")')
   await page.waitForTimeout(200)
   const dl = page.waitForEvent('download', { timeout: 60000 }).catch(() => null)
   await page.click('button:has-text("Export WAV")')

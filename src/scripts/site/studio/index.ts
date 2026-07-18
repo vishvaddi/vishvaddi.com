@@ -94,12 +94,13 @@ export async function initStudio(): Promise<void> {
   const lcd = el("div", "wa-lcd");
   const lcdBpm = el("span", "wa-lcd-seg", `${transport.bpm} BPM`);
   const lcdState = el("span", "wa-lcd-seg", "■ STOP");
+  const lcdMode = el("span", "wa-lcd-seg wa-lcd-mode", "");
   const saveState = el("span", "wa-save-state", "SAVED");
   window.addEventListener("vv-studio-saved", () => {
     saveState.textContent = "SAVED"; saveState.classList.add("flash");
     setTimeout(() => saveState.classList.remove("flash"), 450);
   });
-  lcd.append(lcdBpm, lcdState, saveState);
+  lcd.append(lcdBpm, lcdState, lcdMode, saveState);
 
   // ── Transport ──
   const transportBar = el("div", "wa-transport");
@@ -199,14 +200,24 @@ export async function initStudio(): Promise<void> {
   const scratchPanel = buildScratchpad(getChopBuffer);
 
   const layout = buildLayout({
-    beat, mpcPanel, padSeqPanel, pianoRoll, synthKeys, synthPanel,
+    beat, mpcPanel, padSeqPanel, padGrid, pianoRoll, synthKeys,
+    keysHeader: synth.keysHeader, synthPanel,
     sessionGrid, launchStatus, song, mixer, devicePanel, exp,
     rack, chop, scratchPanel, inspector,
     onSynthVisible: () => synth.waveRedraws().forEach((fn) => fn()),
+    onModeChange: (label) => { lcdMode.textContent = label; },
   });
   const tabBtns = layout.navButtons;
-  win.append(titleBar, lcd, transportBar, layout.workarea);
+  win.append(titleBar, lcd, layout.modeBar, transportBar, layout.workarea);
   root.append(win);
+  // Fit the chassis to the viewport remainder below the site nav — the CSS
+  // 100dvh height assumed the win started at the top of the document.
+  const fitWin = () => {
+    const top = Math.round(win.getBoundingClientRect().top + window.scrollY);
+    win.style.height = `max(480px, calc(100dvh - ${top}px - 8px))`;
+  };
+  fitWin();
+  window.addEventListener("resize", fitWin);
 
   // ── Help and tutorial ── (tutorial.ts — Phase 0 split)
   const { showTutorialStep } = buildTutorial({
@@ -281,7 +292,7 @@ export async function initStudio(): Promise<void> {
   buildPlayback({ cells, rollPlayheadBar, launchStatus, lcdState, playBtn, stopBtn, getCountIn: () => countIn, isSynthRec: synth.isSynthRec });
 
   // ── Keyboard ── (keymap.ts — Phase 0 split)
-  bindKeyboard({ getActiveTrack: layout.getActiveTrack, padButtons, triggerPerformancePad, synth, playBtn, stopBtn, undoBtn, redoBtn });
+  bindKeyboard({ getActiveMode: layout.getActiveMode, padButtons, triggerPerformancePad, synth, playBtn, stopBtn, undoBtn, redoBtn });
 
   // Initial paint reflects loaded project state (scene selection, session grid).
   selectScene(clip.sel);

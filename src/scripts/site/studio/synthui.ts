@@ -30,6 +30,8 @@ export interface SynthUI {
   // tutorial targets
   presetRow: HTMLElement;
   pianoRoll: HTMLElement;
+  /** KEYS-page strip: label + rec toggle + octave readout (layout re-houses it) */
+  keysHeader: HTMLElement;
 }
 
 export function buildSynth(): SynthUI {
@@ -517,6 +519,8 @@ export function buildSynth(): SynthUI {
   help(keysRecBtn, "Capture key presses into the playing synth clip's piano roll while playback runs. Arm Count-in in the transport for a 1-bar lead-in.");
   const keysHeader = el("div", "wa-export");
   keysHeader.append(el("span", "wa-lbl", "KEYS — click, or Z-row / Q-row on the keyboard (− / = shift octave)"), keysRecBtn, octaveLabel);
+  // Roll, keys and the keys header live on the KEYS page — layout.ts houses
+  // them; appending them here too would just steal them back at boot.
   synthPanel.append(
     presetBrowserRow,
     presetRow,
@@ -524,10 +528,6 @@ export function buildSynth(): SynthUI {
     patchBox,
     el("div", "wa-sep-h"),
     el("div", "wa-lbl", "CHORD PLAYER"), chordRow,
-    el("div", "wa-sep-h"),
-    el("div", "wa-lbl", "PIANO ROLL — drag empty space to draw, drag a note to move (vertical = pitch) or its right edge to resize, click to delete, right-click for velocity"), pianoRoll,
-    el("div", "wa-sep-h"),
-    keysHeader, synthKeys,
   );
 
 
@@ -537,6 +537,6 @@ export function buildSynth(): SynthUI {
     isSynthRec: () => synthRec,
     setOctaveShift, getOctaveShift: () => octaveShift,
     waveRedraws: () => waveRedraws,
-    presetRow, pianoRoll,
+    presetRow, pianoRoll, keysHeader,
   };
 }

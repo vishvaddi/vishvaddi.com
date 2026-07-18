@@ -29,10 +29,10 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
     ["Space", "Play / stop"],
     ["Ctrl+Z", "Undo"],
     ["Ctrl+Shift+Z or Ctrl+Y", "Redo"],
-    ["1-4, Q-R, A-F, Z-V", "Play MPC pads (Create tab)"],
-    ["Z–M row", "Play synth notes C3–B3 (Sequence tab)"],
-    ["Q–P row", "Play synth notes C4–E5 (Sequence tab)"],
-    ["− / =", "Shift synth keyboard octave (Sequence tab)"],
+    ["1-4, Q-R, A-F, Z-V", "Play MPC pads (DRUMS & PADS modes)"],
+    ["Z–M row", "Play synth notes C3–B3 (KEYS mode)"],
+    ["Q–P row", "Play synth notes C4–E5 (KEYS mode)"],
+    ["− / =", "Shift synth keyboard octave (KEYS mode)"],
     ["Enter", "Confirm the typed BPM"],
   ] as const).forEach(([key, desc]) => {
     const row = el("div", "wa-help-shortcut-row");
@@ -103,21 +103,23 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
   }
   help(browseHelpBtn, "Switch to a searchable reference covering every section, plus keyboard shortcuts.");
   help(takeTourBtn, "Switch back to the guided step-by-step tour.");
+  // workspace = nav-proxy index (layout.ts navButtons):
+  // 0 PADS/perform+inspector · 1 PADS/chop · 2 PADS/steps · 3 KEYS · 4 SONG · 5 MIX · 6 SOUND/patch
   const tutorialSteps: Array<{ workspace: number; target: HTMLElement; title: string; text: string }> = [
-    { workspace: 0, target: padGrid, title: "Create", text: "This is the sampling and performance workspace. Start here whenever you are building a new beat." },
+    { workspace: 0, target: padGrid, title: "The PADS mode", text: "The mode keys under the LCD switch the whole screen, hardware style. PADS is the sampling and performance mode — start here whenever you are building a new beat." },
     { workspace: 0, target: padGrid, title: "Play the pads", text: "Use the mouse, touch, computer keyboard or MIDI controller. Drop an audio file directly onto any pad to replace it." },
-    { workspace: 0, target: selectedSampleEditor, title: "Shape the selected pad", text: "The inspector follows your selected pad across every workspace. Trim, tune, filter, choke, reverse, loop or warp it here." },
-    { workspace: 0, target: waveform, title: "Chop a break", text: "Load or record audio, choose equal, transient or manual slicing, then assign the slices to the active pad bank." },
-    { workspace: 1, target: eventLane, title: "Sequence pad events", text: "Drag across the lane to paint or erase hits. Use velocity, chance, microtiming and ratchets to make the pattern move." },
-    { workspace: 1, target: pianoRoll, title: "Add musical parts", text: "Program synth notes in the piano roll or play them from the on-screen and computer keyboards. Drag a note to move it, its right edge to resize, or click without dragging to delete it." },
-    { workspace: 1, target: gridSel, title: "Grid & quantize", text: "Sets the snap resolution for the piano roll, and the beat-line grouping shown on the drum and pad grids. Coarser (1/4) locks notes to the beat; 1/16 allows free placement." },
-    { workspace: 1, target: presetRow, title: "The VV-1 synth", text: "Search or randomize a patch, or drag the envelope shape and watch the live waveform preview react. Simple view collapses the editor to the essentials — Advanced view reveals the full mod matrix." },
-    { workspace: 2, target: sessionGrid, title: "Launch clips and scenes", text: "Each column is a track and each row a scene. Launch single clips or a whole row — changes wait for the next bar so transitions stay in time." },
-    { workspace: 2, target: arrangeLanes, title: "Arrange the song", text: "Each track keeps its own list of blocks (scene + bar length) — add, resize or reassign them, then enable Arrange mode in the transport to play them back independently." },
-    { workspace: 3, target: devicePanel, title: "Process the sound", text: "Use macros, groove controls and device bypass switches to shape the complete signal chain." },
-    { workspace: 3, target: exp, title: "Save and export", text: "Save an editable project before exporting. WAV preserves full quality; MP3 is smaller for sharing." },
-    { workspace: 3, target: transportBar, title: "Transport stays available", text: "Playback, BPM, grid, metronome, undo and tutorial controls remain visible in every workspace. Space plays/stops; Ctrl+Z undoes." },
-    { workspace: 3, target: tutorialBtn, title: "Come back anytime", text: "This same button reopens things later — Browse Help (top of this card) is a searchable reference for every section plus the full keyboard-shortcut list, or replay this tour from the start." },
+    { workspace: 0, target: selectedSampleEditor, title: "Shape the selected pad", text: "The selected-pad editor lives beside the deck (Edit pad opens it on small screens). Trim, tune, filter, choke, reverse, loop or warp it here." },
+    { workspace: 1, target: waveform, title: "Chop a break", text: "Load or record audio, choose equal, transient or manual slicing, then assign the slices to the active pad bank." },
+    { workspace: 2, target: eventLane, title: "Sequence pad events", text: "Drag across the lane to paint or erase hits. Use velocity, chance, microtiming and ratchets to make the pattern move." },
+    { workspace: 3, target: pianoRoll, title: "Add musical parts", text: "Program synth notes in the piano roll or play them from the always-visible keys below. Drag a note to move it, its right edge to resize, or click without dragging to delete it." },
+    { workspace: 3, target: gridSel, title: "Grid & quantize", text: "Sets the snap resolution for the piano roll, and the beat-line grouping shown on the drum and pad grids. Coarser (1/4) locks notes to the beat; 1/16 allows free placement." },
+    { workspace: 6, target: presetRow, title: "The VV-1 synth", text: "SOUND mode holds the full patch editor. Search or randomize a patch, or drag the envelope shape and watch the live waveform preview react. Simple view collapses the editor to the essentials — Advanced view reveals the full mod matrix." },
+    { workspace: 4, target: sessionGrid, title: "Launch clips and scenes", text: "Each column is a track and each row a scene. Launch single clips or a whole row — changes wait for the next bar so transitions stay in time." },
+    { workspace: 4, target: arrangeLanes, title: "Arrange the song", text: "Each track keeps its own list of blocks (scene + bar length) — add, resize or reassign them, then enable Arrange mode in the transport to play them back independently." },
+    { workspace: 5, target: devicePanel, title: "Process the sound", text: "Use macros, groove controls and device bypass switches to shape the complete signal chain." },
+    { workspace: 5, target: exp, title: "Save and export", text: "Save an editable project before exporting. WAV preserves full quality; MP3 is smaller for sharing." },
+    { workspace: 5, target: transportBar, title: "Transport stays available", text: "Playback, BPM, grid, metronome, undo and tutorial controls remain visible in every mode. Space plays/stops; Ctrl+Z undoes." },
+    { workspace: 5, target: tutorialBtn, title: "Come back anytime", text: "This same button reopens things later — Browse Help (top of this card) is a searchable reference for every section plus the full keyboard-shortcut list, or replay this tour from the start." },
   ];
   let tutorialIndex = 0, tutorialTarget: HTMLElement | null = null;
   function closeTutorial(): void {

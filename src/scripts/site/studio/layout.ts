@@ -1,21 +1,24 @@
-// One-screen frame (Synth Parity Plan, layout rework): fixed chrome, session
-// rail on the left (Ableton's launch-while-editing loop), track-tab editor in
-// the centre sized to the viewport, inspector right, and an Ableton-style
-// bottom drawer whose segments hold everything that used to force scrolling.
+// Mode frame (layout take 3): DSN-12 × FL Studio Mobile. Six full-screen
+// modes behind a row of chassis mode keys that live under the LCD — one
+// function per screen, each sized to fit its viewport with no page scroll
+// (SOUND is the sole browse-and-scroll exception, by design).
 // This module RE-HOUSES panels built elsewhere — it builds no instruments.
 import { el, btn, help } from "./helpers";
-import type { TrackId } from "./state";
+
+export type ModeId = "drums" | "pads" | "keys" | "sound" | "song" | "mix";
 
 export interface LayoutPanels {
   beat: HTMLElement;
   mpcPanel: HTMLElement;
   padSeqPanel: HTMLElement;
+  padGrid: HTMLElement;
   pianoRoll: HTMLElement;
   synthKeys: HTMLElement;
-  synthPanel: HTMLElement;          // patch editor + presets + scope (roll/keys pulled out)
+  keysHeader: HTMLElement;
+  synthPanel: HTMLElement;          // patch editor + presets (roll/keys pulled out in synthui)
   sessionGrid: HTMLElement;
   launchStatus: HTMLElement;
-  song: HTMLElement;                // arrangement lanes + help (sessionGrid pulled out)
+  song: HTMLElement;                // arrangement lanes + help (grid/status re-homed here)
   mixer: HTMLElement;
   devicePanel: HTMLElement;
   exp: HTMLElement;
@@ -24,58 +27,66 @@ export interface LayoutPanels {
   scratchPanel: HTMLElement;
   inspector: HTMLElement;
   onSynthVisible: () => void;       // canvases need a redraw once measurable
+  onModeChange: (label: string) => void;
 }
 
 export interface Layout {
+  modeBar: HTMLElement;
   workarea: HTMLElement;
-  getActiveTrack: () => TrackId;
-  /** tutorial nav: composite buttons mapping the old 4-workspace steps */
+  getActiveMode: () => ModeId;
+  /** tutorial nav proxies — see navButtons construction at the bottom */
   navButtons: HTMLElement[];
-  trackTabBtns: HTMLElement[];
+  modeKeyBtns: HTMLElement[];
 }
 
-const TRACKS_UI: Array<{ id: TrackId; label: string; helpText: string }> = [
+const MODES: Array<{ id: ModeId; label: string; helpText: string }> = [
   { id: "drums", label: "DRUMS", helpText: "Program the eight drum lanes on the step grid." },
-  { id: "pads", label: "PADS", helpText: "Perform on the 16 pads or paint their event lane." },
-  { id: "synth", label: "SYNTH", helpText: "Sequence the VV-1 in the piano roll and play the keys." },
+  { id: "pads", label: "PADS", helpText: "Perform on the 16 pads, edit the selected pad, chop breaks and scratch." },
+  { id: "keys", label: "KEYS", helpText: "Play the VV-1 keys and sequence notes in the piano roll." },
+  { id: "sound", label: "SOUND", helpText: "Sound design — the VV-1 patch editor and the sample rack." },
+  { id: "song", label: "SONG", helpText: "Launch scenes and arrange the full song." },
+  { id: "mix", label: "MIX", helpText: "Mixer, master devices, project save and export." },
 ];
 
-const SEGMENTS = ["SOUND", "FX", "MIX", "SONG", "PROJECT"] as const;
-type Segment = (typeof SEGMENTS)[number];
-
 export function buildLayout(p: LayoutPanels): Layout {
-  // ── zones ──
-  const workarea = el("div", "wa-frame");
-  const rail = el("aside", "wa-rail");
-  const editor = el("section", "wa-editor");
-  const drawerZone = el("div", "wa-drawerzone");
+  const workarea = el("div", "wa-pagehost");
 
-  // rail: compact always-visible session grid
-  const railHead = el("div", "wa-rail-head");
-  const railTitle = el("span", "wa-lbl", "Session");
-  const railToggle = btn("⟨", "wa-btn-sm wa-rail-toggle");
-  help(railToggle, "Collapse or expand the session rail.");
-  railToggle.addEventListener("click", () => {
-    const collapsed = rail.classList.toggle("collapsed");
-    railToggle.textContent = collapsed ? "⟩" : "⟨";
-  });
-  railHead.append(railTitle, railToggle);
-  rail.append(railHead, p.sessionGrid, p.launchStatus);
+  // ── overlays (chop / scratch open over the PADS page) ──
+  const overlays: HTMLElement[] = [];
+  const makeOverlay = (title: string, panel: HTMLElement) => {
+    const host = el("div", "wa-overlay");
+    host.hidden = true;
+    const head = el("div", "wa-overlay-head");
+    const closeBtn = btn("✕ Close", "wa-btn-sm");
+    closeBtn.addEventListener("click", () => { host.hidden = true; });
+    head.append(el("span", "wa-fx-title", title), closeBtn);
+    const body = el("div", "wa-overlay-body");
+    body.append(panel);
+    host.append(head, body);
+    workarea.append(host);
+    overlays.push(host);
+    return { host, open: () => { closeOverlays(); host.hidden = false; } };
+  };
+  const closeOverlays = () => overlays.forEach((o) => { o.hidden = true; });
 
-  // centre: track tabs + editor host
-  const trackBar = el("div", "wa-tracktabs");
-  const trackTabBtns: HTMLElement[] = [];
-  let activeTrack = (localStorage.getItem("vv_studio_track") as TrackId) || "drums";
-  if (!TRACKS_UI.some((t) => t.id === activeTrack)) activeTrack = "drums";
-  const editorHost = el("div", "wa-editor-host");
+  // ── DRUMS ──
+  const drumsPage = el("div", "wa-page wa-page-drums");
+  drumsPage.append(p.beat);
 
-  // pads sub-view: Perform (deck) ⇄ Steps (event lane)
-  const padsWrap = el("div", "wa-pads-editor");
-  const padsToggle = el("div", "wa-subtabs");
+  // ── PADS ── deck + toolbar row; inspector column right (toggle on small screens)
+  const padsPage = el("div", "wa-page wa-page-pads");
+  const padsMain = el("div", "wa-pads-main");
+  const padsBar = el("div", "wa-subtabs");
   const performBtn = btn("Perform", "wa-subtab active");
   const stepsBtn = btn("Steps", "wa-subtab");
+  const chopBtn = btn("Chop", "wa-subtab");
+  const scratchBtn = btn("Scratch", "wa-subtab");
+  const editPadBtn = btn("Edit pad", "wa-subtab wa-editpad-toggle");
   help(performBtn, "The 4×4 pad deck for playing and recording.");
   help(stepsBtn, "The per-pad step lane for drawing and editing events.");
+  help(chopBtn, "Load or record a break and slice it across the pads.");
+  help(scratchBtn, "Drag the vinyl to scratch the selected pad's sample over the beat.");
+  help(editPadBtn, "Show or hide the selected-pad editor.");
   let padsView: "perform" | "steps" = "perform";
   const paintPadsView = () => {
     performBtn.classList.toggle("active", padsView === "perform");
@@ -85,114 +96,129 @@ export function buildLayout(p: LayoutPanels): Layout {
   };
   performBtn.addEventListener("click", () => { padsView = "perform"; paintPadsView(); });
   stepsBtn.addEventListener("click", () => { padsView = "steps"; paintPadsView(); });
-  padsToggle.append(performBtn, stepsBtn);
-  padsWrap.append(padsToggle, p.mpcPanel, p.padSeqPanel);
+  editPadBtn.addEventListener("click", () => padsPage.classList.toggle("show-inspector"));
+  padsBar.append(performBtn, stepsBtn, chopBtn, scratchBtn, editPadBtn);
+  padsMain.append(padsBar, p.mpcPanel, p.padSeqPanel);
+  padsPage.append(padsMain, p.inspector);
   paintPadsView();
+  const chopOverlay = makeOverlay("CHOP — SAMPLE CAPTURE", p.chop);
+  const scratchOverlay = makeOverlay("SCRATCH PAD", p.scratchPanel);
+  chopBtn.addEventListener("click", chopOverlay.open);
+  scratchBtn.addEventListener("click", scratchOverlay.open);
 
-  const synthWrap = el("div", "wa-synth-editor");
-  synthWrap.append(p.pianoRoll, p.synthKeys);
-
-  const editors: Record<TrackId, HTMLElement> = { drums: p.beat, pads: padsWrap, synth: synthWrap };
-  editorHost.append(p.beat, padsWrap, synthWrap);
-
-  // ── bottom drawer ──
-  const segBar = el("div", "wa-segbar");
-  const segBtns = new Map<Segment, HTMLButtonElement>();
-  let activeSeg: Segment = (localStorage.getItem("vv_studio_seg") as Segment) || "SOUND";
-  if (!SEGMENTS.includes(activeSeg)) activeSeg = "SOUND";
-  let drawerOpen = localStorage.getItem("vv_studio_drawer") !== "0";
-  const drawerHost = el("div", "wa-drawer-host");
-
-  const soundHost = el("div", "wa-seg-panel");     // per-track contents swapped below
-  soundHost.append(p.rack, p.chop, p.scratchPanel, p.synthPanel);
-  const segPanels: Record<Segment, HTMLElement> = {
-    SOUND: soundHost,
-    FX: p.devicePanel,
-    MIX: p.mixer,
-    SONG: p.song,
-    PROJECT: p.exp,
+  // All 16 pads visible at once: square deck sized to min(availW, availH).
+  // Height is measured from the deck's own top to the page host's bottom —
+  // position-based, so a stale flex pass can't feed back a wrong size.
+  const fitDeck = () => {
+    const area = p.padGrid.parentElement;
+    if (!area || padsPage.hidden) return;
+    const availH = workarea.getBoundingClientRect().bottom - p.padGrid.getBoundingClientRect().top - 10;
+    const w = area.clientWidth;
+    // floor: below ~300px of height (tiny phones) the deck holds min(w, 300)
+    // and the panel scrolls — mobile transport condensing is R2's job
+    const side = Math.max(Math.min(w, availH), Math.min(w, 300));
+    if (side > 80) {
+      p.padGrid.style.width = `${side}px`;
+      p.padGrid.style.height = `${side}px`;
+    }
   };
-  Object.values(segPanels).forEach((panel) => drawerHost.append(panel));
+  if (p.padGrid.parentElement) new ResizeObserver(fitDeck).observe(p.padGrid.parentElement);
 
-  function paintSound(): void {
-    // SOUND follows the track: drum/pads sound tools vs the synth patch editor
-    const synthMode = activeTrack === "synth";
-    p.synthPanel.style.display = synthMode ? "" : "none";
-    p.rack.style.display = synthMode ? "none" : "";
-    p.chop.style.display = synthMode ? "none" : "";
-    p.scratchPanel.style.display = synthMode ? "none" : "";
-    if (synthMode) p.onSynthVisible();
-  }
-  function paintDrawer(): void {
-    drawerZone.classList.toggle("closed", !drawerOpen);
-    segBtns.forEach((b, seg) => b.classList.toggle("active", drawerOpen && seg === activeSeg));
-    (Object.keys(segPanels) as Segment[]).forEach((seg) => {
-      segPanels[seg].style.display = seg === activeSeg ? "" : "none";
-    });
-    if (activeSeg === "SOUND") paintSound();
-    localStorage.setItem("vv_studio_seg", activeSeg);
-    localStorage.setItem("vv_studio_drawer", drawerOpen ? "1" : "0");
-  }
-  const segHelp: Record<Segment, string> = {
-    SOUND: "Sound design for the active track — sample rack and chop for drums/pads, the full VV-1 patch editor for synth.",
-    FX: "The master device chain: groove player, EQ, compressor, delay, reverb, limiter.",
-    MIX: "Channel, synth and master levels with mute/solo.",
-    SONG: "Per-track arrangement lanes — chain scenes into a full song.",
-    PROJECT: "Save or open editable projects; export WAV or MP3.",
+  // ── KEYS ── roll fills the top and scrolls itself; keys never move
+  const keysPage = el("div", "wa-page wa-page-keys");
+  keysPage.append(p.pianoRoll, p.keysHeader, p.synthKeys);
+
+  // ── SOUND ── the browse page: patch editor or sample rack behind chips
+  const soundPage = el("div", "wa-page wa-page-sound");
+  const soundChips = el("div", "wa-subtabs");
+  const patchChip = btn("SYNTH PATCH", "wa-subtab");
+  const rackChip = btn("SAMPLE RACK", "wa-subtab");
+  help(patchChip, "The full VV-1 patch editor — oscillators, filter, envelopes, LFOs and the mod matrix.");
+  help(rackChip, "The drum sampler rack — per-lane sample loading and shaping.");
+  const soundHost = el("div", "wa-sound-host");
+  soundHost.append(p.synthPanel, p.rack);
+  soundChips.append(patchChip, rackChip);
+  soundPage.append(soundChips, soundHost);
+  let soundView: "patch" | "rack" = "patch";
+  const paintSound = () => {
+    patchChip.classList.toggle("active", soundView === "patch");
+    rackChip.classList.toggle("active", soundView === "rack");
+    p.synthPanel.hidden = soundView !== "patch";
+    p.rack.hidden = soundView !== "rack";
+    if (soundView === "patch" && !soundPage.hidden) p.onSynthVisible();
   };
-  SEGMENTS.forEach((seg) => {
-    const b = btn(seg, "wa-seg");
-    b.classList.remove("wa-btn");
-    help(b, segHelp[seg]);
-    b.addEventListener("click", () => {
-      if (drawerOpen && activeSeg === seg) { drawerOpen = false; }
-      else { drawerOpen = true; activeSeg = seg; }
-      paintDrawer();
-    });
-    segBtns.set(seg, b);
-    segBar.append(b);
-  });
-  drawerZone.append(segBar, drawerHost);
+  patchChip.addEventListener("click", () => { soundView = "patch"; paintSound(); });
+  rackChip.addEventListener("click", () => { soundView = "rack"; paintSound(); });
+  paintSound();
 
-  // ── track switching (also retargets the keyboard + SOUND segment) ──
-  function paintTracks(): void {
-    trackTabBtns.forEach((b, i) => b.classList.toggle("active", TRACKS_UI[i].id === activeTrack));
-    (Object.keys(editors) as TrackId[]).forEach((t) => {
-      editors[t].style.display = t === activeTrack ? "" : "none";
-    });
-    if (activeTrack === "synth") p.onSynthVisible();
-    if (activeSeg === "SOUND") paintSound();
-    localStorage.setItem("vv_studio_track", activeTrack);
+  // ── SONG ── session grid re-homed at the top of the arrangement panel
+  const songPage = el("div", "wa-page wa-page-song");
+  p.song.prepend(p.sessionGrid, p.launchStatus);
+  songPage.append(p.song);
+
+  // ── MIX ── devices flex and scroll internally; mixer + export keep natural size
+  const mixPage = el("div", "wa-page wa-page-mix");
+  p.devicePanel.classList.add("wa-mix-flex");
+  mixPage.append(p.mixer, p.devicePanel, p.exp);
+
+  const pages: Record<ModeId, HTMLElement> = {
+    drums: drumsPage, pads: padsPage, keys: keysPage,
+    sound: soundPage, song: songPage, mix: mixPage,
+  };
+  workarea.append(drumsPage, padsPage, keysPage, soundPage, songPage, mixPage);
+
+  // ── chassis mode keys ──
+  const modeBar = el("div", "wa-modebar");
+  const modeKeyBtns: HTMLElement[] = [];
+  let activeMode = (localStorage.getItem("vv_studio_mode") as ModeId) || "drums";
+  if (!MODES.some((m) => m.id === activeMode)) activeMode = "drums";
+
+  function setMode(next: ModeId): void {
+    const from = activeMode;
+    activeMode = next;
+    closeOverlays();
+    modeKeyBtns.forEach((b, i) => b.classList.toggle("active", MODES[i].id === next));
+    (Object.keys(pages) as ModeId[]).forEach((id) => { pages[id].hidden = id !== next; });
+    if (next === "sound") {
+      // SOUND follows context: keys → patch, drums/pads → rack, else keep last
+      if (from === "keys") soundView = "patch";
+      else if (from === "drums" || from === "pads") soundView = "rack";
+      paintSound();
+    }
+    if (next === "keys") p.onSynthVisible();
+    if (next === "pads") fitDeck();
+    p.onModeChange(MODES.find((m) => m.id === next)!.label);
+    localStorage.setItem("vv_studio_mode", next);
   }
-  TRACKS_UI.forEach((t) => {
-    const b = btn(t.label, "wa-tab wa-tracktab");
+
+  MODES.forEach((m) => {
+    const b = btn("", "wa-modekey");
     b.classList.remove("wa-btn");
-    help(b, t.helpText);
-    b.addEventListener("click", () => { activeTrack = t.id; paintTracks(); });
-    trackTabBtns.push(b);
-    trackBar.append(b);
+    b.append(el("span", "wa-modekey-led"), document.createTextNode(m.label));
+    help(b, m.helpText);
+    b.addEventListener("click", () => setMode(m.id));
+    modeKeyBtns.push(b);
+    modeBar.append(b);
   });
-  editor.append(trackBar, editorHost);
+  setMode(activeMode);
 
-  workarea.append(rail, editor, p.inspector, drawerZone);
-  paintTracks();
-  paintDrawer();
-
-  // tutorial nav: composite actions standing in for the old 4 workspaces
+  // tutorial nav proxies — composite actions per tour stop:
+  // 0 pads/perform+inspector · 1 pads/chop · 2 pads/steps · 3 keys · 4 song · 5 mix · 6 sound/patch
   const nav = (fn: () => void): HTMLElement => {
     const b = el("button", "wa-nav-proxy") as HTMLButtonElement;
     b.type = "button";
     b.addEventListener("click", fn);
     return b;
   };
-  const setTrack = (t: TrackId) => { activeTrack = t; paintTracks(); };
-  const openSeg = (s: Segment) => { drawerOpen = true; activeSeg = s; paintDrawer(); };
   const navButtons = [
-    nav(() => { setTrack("pads"); openSeg("SOUND"); }),   // old Create
-    nav(() => { setTrack("drums"); }),                    // old Sequence
-    nav(() => { openSeg("SONG"); }),                      // old Arrange
-    nav(() => { openSeg("PROJECT"); }),                   // old Mix
+    nav(() => { setMode("pads"); padsView = "perform"; paintPadsView(); padsPage.classList.add("show-inspector"); }),
+    nav(() => { setMode("pads"); chopOverlay.open(); }),
+    nav(() => { setMode("pads"); padsView = "steps"; paintPadsView(); }),
+    nav(() => setMode("keys")),
+    nav(() => setMode("song")),
+    nav(() => setMode("mix")),
+    nav(() => { setMode("sound"); soundView = "patch"; paintSound(); }),
   ];
 
-  return { workarea, getActiveTrack: () => activeTrack, navButtons, trackTabBtns };
+  return { modeBar, workarea, getActiveMode: () => activeMode, navButtons, modeKeyBtns };
 }
