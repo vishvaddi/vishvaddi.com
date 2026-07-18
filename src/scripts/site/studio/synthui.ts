@@ -36,6 +36,8 @@ export interface SynthUI {
   keysHeader: HTMLElement;
   /** XY morph field + ORBIT/SILENCE (xyfield.ts, F) — layout places it */
   xyPanel: HTMLElement;
+  /** live output scope — layout parks it under the XY field (G) */
+  scope: HTMLElement;
 }
 
 // Stacked wavetable wireframe (Serum-style): the table's slices drawn as
@@ -472,10 +474,11 @@ export function buildSynth(): SynthUI {
   keysHeader.append(el("span", "wa-lbl", "KEYS — click, or Z-row / Q-row on the keyboard (− / = shift octave)"), keysRecBtn, holdBtn, octaveLabel);
   // Roll, keys and the keys header live on the KEYS page — layout.ts houses
   // them; appending them here too would just steal them back at boot.
+  // Scope lives in the side column beside the XY field (G) — it was a dead
+  // black strip up here when nothing played.
   synthPanel.append(
     presetBrowserRow,
     presetRow,
-    scopeCanvas,
     patchBox,
     el("div", "wa-sep-h"),
     el("div", "wa-lbl", "CHORD PLAYER"), chordRow,
@@ -498,5 +501,6 @@ export function buildSynth(): SynthUI {
     waveRedraws: () => waveRedraws,
     presetRow, pianoRoll, keysHeader,
     xyPanel: xy.root,
+    scope: scopeCanvas,
   };
 }

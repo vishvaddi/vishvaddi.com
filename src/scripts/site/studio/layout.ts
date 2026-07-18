@@ -16,6 +16,7 @@ export interface LayoutPanels {
   synthKeys: HTMLElement;
   keysHeader: HTMLElement;
   xyPanel: HTMLElement;
+  scope: HTMLElement;
   synthPanel: HTMLElement;          // patch editor + presets (roll/keys pulled out in synthui)
   sessionGrid: HTMLElement;
   launchStatus: HTMLElement;
@@ -147,7 +148,9 @@ export function buildLayout(p: LayoutPanels): Layout {
   // XY field column on the left of whichever view is up (LYSERGIC, F)
   const synthMain = el("div", "wa-synth-main");
   const synthSide = el("div", "wa-synth-side");
-  synthSide.append(p.xyPanel);
+  const scopeWrap = el("div", "wa-xy-wrap");
+  scopeWrap.append(el("div", "wa-fx-title", "SCOPE"), p.scope);
+  synthSide.append(p.xyPanel, scopeWrap);
   synthMain.append(synthSide, synthViewHost);
   soundPage.append(synthBar, synthMain, p.keysHeader, p.synthKeys);
   let synthView: "roll" | "patch" = localStorage.getItem("vv_studio_synthview") === "patch" ? "patch" : "roll";

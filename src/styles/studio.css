@@ -1549,3 +1549,28 @@
 .wa-combinator, .wa-device { padding: 9px; margin-bottom: 7px; }
 .wa-mixer { gap: 6px; }
 .wa-sd-item input[type="range"] { width: 110px; }
+
+/* ═══ G: dead-space + alignment pass — boxes line up, columns fill ═══ */
+/* SYNTH: patch blocks stretch to equal height per row; knobs on a tidy grid */
+.wa-vblock .wa-knob-row { min-width: 52px; }
+.wa-synth-side .wa-scope { width: 100%; height: 64px; margin: 0; }
+.wa-synth-side .wa-xy-wrap { gap: 5px; }
+/* presets condensed to one visual band */
+.wa-preset-search { height: 26px; font-size: 11px; }
+/* PADS: deck cluster fills its area instead of hugging the left */
+.wa-page-pads .wa-mpc-deck { justify-content: center; }
+.wa-page-pads .wa-mpc-pads { max-width: 880px; }
+/* MIX: device detail fills the pane, knobs flow horizontally */
+.wa-devdetail .wa-device, .wa-devdetail .wa-combinator { max-width: none; }
+.wa-devdetail .wa-device {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: flex-end;
+}
+.wa-devdetail .wa-device .wa-device-header { flex: 1 1 100%; }
+.wa-devdetail .wa-device .wa-export { flex: 1 1 100%; }
+/* MIX: mixer and export share the top row - no empty flanks */
+.wa-page-mix { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 12px; align-items: stretch; }
+.wa-page-mix > .wa-mix-flex { grid-column: 1 / -1; }
+/* CLIPS: grid fills width; launch column proportional */
+.wa-page-song .wa-session-row { grid-template-columns: 72px repeat(3, minmax(72px, 1fr)); }
+/* consistent panel chrome everywhere — one surface, one border, one radius */
+.wa-panel, .wa-xy-wrap, .wa-inspector { border-radius: var(--wa-radius-sm); }
