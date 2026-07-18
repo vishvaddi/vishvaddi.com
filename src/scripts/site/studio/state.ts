@@ -75,6 +75,8 @@ export interface HistoryState {
   padEvents: PadEvent[][];
   sampleParams: SamplerP[];
   sampleData: Array<string | null>;
+  padLayers?: PadLayer[][];
+  padLayerMode?: PadLayerMode[];
   songChain: number[];
   arrangement: Record<TrackId, ArrangeBlock[]>;
   fx: FxState;
@@ -191,6 +193,15 @@ export const songChain = Array.from({ length: SONG_SLOTS }, (_, i) => i % 4);
 export const padEvents: PadEvent[][] = Array.from({ length: SCENES }, () => []);
 
 // ─── Sampler / MPC ───────────────────────────────────────────────────────────
+// Poise-style pad layers (C4): up to 3 EXTRA samples per pad beside the main
+// one, picked by mode — velocity split, round robin, random, or all at once.
+export interface PadLayer { data: string | null; name: string; tune: number; gain: number; velLo: number; velHi: number; }
+export type PadLayerMode = "velocity" | "roundrobin" | "random" | "layered";
+export const PAD_LAYER_MAX = 3;
+export const padLayers: PadLayer[][] = Array.from({ length: PAD_COUNT }, () => []);
+export const padLayerBuffers: Array<Array<AudioBuffer | null>> = Array.from({ length: PAD_COUNT }, () => []);
+export const padLayerMode: PadLayerMode[] = Array.from({ length: PAD_COUNT }, () => "velocity");
+
 export const sampleParams: SamplerP[] = Array.from({ length: PAD_COUNT }, (_, i) => ({
   name: i < DRUMS.length ? DRUMS[i] : "",
   tune: 0, start: 0, end: 1, reverse: false, filter: 18000,

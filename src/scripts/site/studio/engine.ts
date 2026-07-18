@@ -4,6 +4,7 @@
 
 import {
   DRUMS, dp, fx, rackState, mpc, sampleParams, sampleBuffers, sampleData, transport,
+  padLayers, padLayerBuffers, padLayerMode,
 } from "./state";
 import type { SamplerP } from "./state";
 import { dataUrlToBytes } from "./helpers";
@@ -131,9 +132,9 @@ export function playSample(
   r: number,
   vol: number,
   when: number,
-  overrides: Partial<Pick<SamplerP, "tune" | "start" | "filter">> = {},
+  overrides: Partial<Pick<SamplerP, "tune" | "start" | "filter">> & { buffer?: AudioBuffer } = {},
 ): boolean {
-  const buffer = sampleBuffers[r]; if (!buffer) return false;
+  const buffer = overrides.buffer ?? sampleBuffers[r]; if (!buffer) return false;
   const p = sampleParams[r], src = a.createBufferSource(), g = a.createGain(), filter = a.createBiquadFilter();
   const playable = p.reverse ? reversedBuffer(a, buffer) : buffer;
   src.buffer = playable;
@@ -227,7 +228,38 @@ export function playPad(
   const tune = mode === "pitch" ? variation * 2 : sampleParams[pad].tune;
   const filter = mode === "filter" ? 300 + (variation + 1) * 550 : sampleParams[pad].filter;
   const start = mode === "start" ? Math.max(0, Math.min(0.95, variation / 15)) : sampleParams[pad].start;
-  if (!playSample(a, out, pad, scaled, when, { tune, filter, start })) playDrum(a, out, pad % DRUMS.length, scaled, when);
+  // Poise-style layers (C4): base = the pad's own sample (or synth drum);
+  // extras dispatch by the pad's layer mode.
+  const base = (gain = 1, extraTune = 0): void => {
+    if (!playSample(a, out, pad, scaled * gain, when, { tune: tune + extraTune, filter, start })) playDrum(a, out, pad % DRUMS.length, scaled * gain, when);
+  };
+  const extras = padLayers[pad]
+    .map((layer, i) => ({ layer, buffer: padLayerBuffers[pad]?.[i] ?? null }))
+    .filter((x): x is { layer: (typeof padLayers)[number][number]; buffer: AudioBuffer } => !!x.buffer);
+  if (!extras.length) { base(); return; }
+  const fireExtra = (x: (typeof extras)[number]): void => {
+    playSample(a, out, pad, scaled * x.layer.gain, when, { tune: tune + x.layer.tune, filter, start, buffer: x.buffer });
+  };
+  const lm = padLayerMode[pad];
+  if (lm === "layered") { base(); extras.forEach(fireExtra); }
+  else if (lm === "roundrobin") {
+    const total = extras.length + 1;
+    const k = (rrCounters[pad] = ((rrCounters[pad] ?? -1) + 1) % total);
+    if (k === 0) base(); else fireExtra(extras[k - 1]);
+  } else if (lm === "random") {
+    const k = Math.floor(Math.random() * (extras.length + 1));
+    if (k === 0) base(); else fireExtra(extras[k - 1]);
+  } else {
+    const match = extras.find((x) => velocity >= x.layer.velLo && velocity <= x.layer.velHi);
+    if (match) fireExtra(match); else base();
+  }
+}
+const rrCounters: Record<number, number> = {};
+
+export async function hydratePadLayer(pad: number, index: number): Promise<void> {
+  const layer = padLayers[pad][index];
+  if (!layer?.data) { if (padLayerBuffers[pad]) padLayerBuffers[pad][index] = null; return; }
+  padLayerBuffers[pad][index] = await ac().decodeAudioData(dataUrlToBytes(layer.data));
 }
 
 // ─── Buffers ─────────────────────────────────────────────────────────────────

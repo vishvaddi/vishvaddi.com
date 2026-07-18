@@ -3,13 +3,14 @@
 // pattern projects still load), undo history.
 
 import {
-  SCENES, STEPS, SONG_SLOTS, PAD_COUNT, PIANO_NOTES, TRACKS, clip, transport,
+  SCENES, STEPS, SONG_SLOTS, PAD_COUNT, PAD_LAYER_MAX, PIANO_NOTES, TRACKS, clip, transport,
   allPats, allVels, synthNotes, padEvents, songChain, arrangement, sampleParams, sampleData, sampleBuffers,
+  padLayers, padLayerBuffers, padLayerMode,
   dp, mpc, rackState, fx, vsynthPatch,
 } from "./state";
-import type { ArrangeBlock, HistoryState, PadEvent, SamplerP, DrumP, RackState, TrackId, VNote } from "./state";
+import type { ArrangeBlock, HistoryState, PadEvent, PadLayer, PadLayerMode, SamplerP, DrumP, RackState, TrackId, VNote } from "./state";
 import type { VPatch } from "./vsynth";
-import { applyFxState, hydrateSample } from "./engine";
+import { applyFxState, hydrateSample, hydratePadLayer } from "./engine";
 
 export function saveAll(): void {
   try {
@@ -82,6 +83,9 @@ export function projectState(includeSamples = true): object {
     sampleParams,
     samplePool,
     sampleRefs,
+    // layer audio rides only in project files (like the sample pool); autosave keeps the meta
+    padLayers: includeSamples ? padLayers : padLayers.map((ls) => ls.map((l) => ({ ...l, data: null }))),
+    padLayerMode,
     fx,
     padEvents,
     mpc,
@@ -127,7 +131,7 @@ export function applyProject(saved: Record<string, unknown>): void {
           if (i >= SCENES || !Array.isArray(notes)) return;
           synthNotes[i] = notes
             .filter((n) => n && typeof n.note === "string" && typeof n.step === "number")
-            .map((n) => ({ note: n.note, step: n.step % STEPS, len: Math.max(1, Math.min(STEPS, n.len || 1)), vel: Math.max(1, Math.min(127, n.vel || 100)) }));
+            .map((n) => ({ note: n.note, step: n.step % STEPS, len: Math.max(0.25, Math.min(STEPS, n.len || 1)), vel: Math.max(1, Math.min(127, n.vel || 100)) }));
         });
       } else if (saved.synthPats) {
         // v5 and older stored a 12-row on/off grid — convert to 1-step notes.
@@ -174,7 +178,7 @@ export function applyProject(saved: Record<string, unknown>): void {
         });
       }
       if (typeof saved.songMode === "boolean") transport.songMode = saved.songMode;
-      if (typeof saved.quantizeGrid === "number" && [4, 8, 16].includes(saved.quantizeGrid)) transport.quantizeGrid = saved.quantizeGrid;
+      if (typeof saved.quantizeGrid === "number" && [0, 4, 8, 16].includes(saved.quantizeGrid)) transport.quantizeGrid = saved.quantizeGrid;
       if (typeof saved.metroVolume === "number") transport.metroVolume = Math.max(0, Math.min(1, saved.metroVolume));
       if (saved.sampleParams) (saved.sampleParams as Partial<SamplerP>[]).forEach((p, i) => { if (i < PAD_COUNT) Object.assign(sampleParams[i], p); });
       if (saved.samplePool && saved.sampleRefs) {
@@ -183,6 +187,18 @@ export function applyProject(saved: Record<string, unknown>): void {
       } else if (saved.sampleData) {
         (saved.sampleData as Array<string | null>).forEach((v, i) => { if (i < PAD_COUNT) sampleData[i] = v; });
       }
+      if (saved.padLayers) (saved.padLayers as PadLayer[][]).forEach((ls, i) => {
+        if (i >= PAD_COUNT || !Array.isArray(ls)) return;
+        padLayers[i] = ls.slice(0, PAD_LAYER_MAX).map((l) => ({
+          data: l.data ?? null, name: l.name ?? "", tune: Number(l.tune) || 0, gain: Number(l.gain) || 1,
+          velLo: Math.max(0, Math.min(127, Number(l.velLo) || 0)), velHi: Math.max(0, Math.min(127, Number(l.velHi ?? 127))),
+        }));
+        padLayerBuffers[i] = padLayers[i].map(() => null);
+        padLayers[i].forEach((l, j) => { if (l.data) void hydratePadLayer(i, j); });
+      });
+      if (saved.padLayerMode) (saved.padLayerMode as PadLayerMode[]).forEach((m, i) => {
+        if (i < PAD_COUNT && ["velocity", "roundrobin", "random", "layered"].includes(m)) padLayerMode[i] = m;
+      });
       if (saved.fx) Object.assign(fx, saved.fx as object);
       if (saved.padEvents) (saved.padEvents as PadEvent[][]).forEach((events, i) => {
         if (i < SCENES) padEvents[i] = events.map((event) => ({ ...event }));

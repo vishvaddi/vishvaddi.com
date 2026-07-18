@@ -1,9 +1,9 @@
 // MPC performance deck + pad event lane — extracted verbatim from index.ts
 // (Phase 0 split). Playhead state comes from ctx; the offline renderBuffer is
 // injected because render.ts builds it during init.
-import { STEPS, PAD_BANK_SIZE, SCENE_LABELS, clip, stepDur, mpc, rackState, sampleParams, sampleBuffers, sampleData, padEvents } from "./state";
-import type { MpcState, PadEvent, SamplerP } from "./state";
-import { ac, ensureNodes, playPad, hydrateSample, crushBuffer } from "./engine";
+import { STEPS, PAD_BANK_SIZE, PAD_LAYER_MAX, SCENE_LABELS, clip, stepDur, mpc, rackState, sampleParams, sampleBuffers, sampleData, padEvents, padLayers, padLayerBuffers, padLayerMode } from "./state";
+import type { MpcState, PadEvent, PadLayerMode, SamplerP } from "./state";
+import { ac, ensureNodes, playPad, hydrateSample, hydratePadLayer, crushBuffer } from "./engine";
 import { saveAll } from "./persistence";
 import { el, btn, help, sliderRow, readAsDataUrl, blobAsDataUrl, encodeWav } from "./helpers";
 import { ctx, playhead, gridRepainters, isGridLine } from "./ctx";
@@ -133,6 +133,63 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
     reverseSelectedBtn, loopSelectedBtn, warpSelectedBtn, muteSelectedBtn, soloSelectedBtn,
   );
 
+  // ── Poise-style layers (C4, features only): up to 3 extra samples on the
+  // selected pad, dispatched by mode — velocity split / round robin / random /
+  // all together. Layer audio rides in project files; autosave keeps the meta.
+  const layersBlock = el("div", "wa-pad-layers");
+  layersBlock.append(el("div", "wa-fx-title", "LAYERS"));
+  const layerModeSel = document.createElement("select");
+  ([["velocity", "VELOCITY SPLIT"], ["roundrobin", "ROUND ROBIN"], ["random", "RANDOM"], ["layered", "LAYERED"]] as const)
+    .forEach(([v, label]) => { const o = document.createElement("option"); o.value = v; o.textContent = label; layerModeSel.append(o); });
+  help(layerModeSel, "How the pad picks between its main sample and the layers: by velocity range, alternating, at random, or all at once.");
+  layerModeSel.addEventListener("change", () => { padLayerMode[mpc.selectedPad] = layerModeSel.value as PadLayerMode; saveAll(); });
+  layersBlock.append(layerModeSel);
+  const layerRows = el("div", "wa-pad-layer-rows");
+  layersBlock.append(layerRows);
+  function paintLayers(): void {
+    const pad = mpc.selectedPad;
+    layerModeSel.value = padLayerMode[pad];
+    layerRows.replaceChildren();
+    padLayers[pad].forEach((layer, i) => {
+      const row = el("div", "wa-pad-layer-row");
+      const name = el("span", "wa-sample-name", layer.name || `Layer ${i + 2}`);
+      const lo = document.createElement("input"), hi = document.createElement("input");
+      [lo, hi].forEach((input) => { input.type = "number"; input.min = "0"; input.max = "127"; input.className = "wa-vel-in"; });
+      lo.value = String(layer.velLo); hi.value = String(layer.velHi);
+      help(lo, "Lowest velocity this layer answers to (velocity-split mode)."); help(hi, "Highest velocity this layer answers to.");
+      lo.addEventListener("change", () => { layer.velLo = Math.max(0, Math.min(127, Number(lo.value) || 0)); saveAll(); });
+      hi.addEventListener("change", () => { layer.velHi = Math.max(0, Math.min(127, Number(hi.value) || 127)); saveAll(); });
+      const tuneKnob = knob("Tune", -24, 24, layer.tune, 1, (v) => { layer.tune = v; saveAll(); });
+      const gainKnob = knob("Gain", 0, 1.5, layer.gain, 0.05, (v) => { layer.gain = v; saveAll(); });
+      const removeBtn = btn("✕", "wa-btn-sm");
+      help(removeBtn, "Remove this layer.");
+      removeBtn.addEventListener("click", () => {
+        padLayers[pad].splice(i, 1); padLayerBuffers[pad].splice(i, 1); paintLayers(); saveAll();
+      });
+      row.append(name, el("span", "wa-lbl", "VEL"), lo, hi, tuneKnob.root, gainKnob.root, removeBtn);
+      layerRows.append(row);
+    });
+    if (padLayers[pad].length < PAD_LAYER_MAX) {
+      const addBtn = btn("+ Add layer", "wa-btn-sm");
+      help(addBtn, "Load another sample onto this pad as a layer.");
+      addBtn.addEventListener("click", () => {
+        const input = document.createElement("input");
+        input.type = "file"; input.accept = "audio/*";
+        input.addEventListener("change", async () => {
+          const file = input.files?.[0]; if (!file) return;
+          const data = await readAsDataUrl(file);
+          padLayers[pad].push({ data, name: file.name, tune: 0, gain: 1, velLo: 0, velHi: 127 });
+          padLayerBuffers[pad].push(null);
+          await hydratePadLayer(pad, padLayers[pad].length - 1);
+          paintLayers(); saveAll();
+        });
+        input.click();
+      });
+      layerRows.append(addBtn);
+    }
+  }
+  selectedSampleEditor.append(layersBlock);
+
   function selectedGlobalPad(localPad: number): number { return mpc.bank * PAD_BANK_SIZE + localPad; }
   function paintMpcPads(): void {
     padButtons.forEach((button, localPad) => {
@@ -150,6 +207,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
     warpSelectedBtn.classList.toggle("active", selected.warp);
     muteSelectedBtn.classList.toggle("active", mpc.padMute[mpc.selectedPad]);
     soloSelectedBtn.classList.toggle("active", mpc.padSolo[mpc.selectedPad]);
+    paintLayers();
     paintEventLane();
   }
   function variationFor(localPad: number): number {

@@ -1344,6 +1344,13 @@
 .wa-page-mix .wa-device { min-width: 200px; }
 .wa-page-mix .wa-mixer { display: flex; gap: 8px; }
 
+/* Pad layers (Poise-style, C4) — plain functional rows in the inspector */
+.wa-pad-layers { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--wa-border); }
+.wa-pad-layers select { width: 100%; margin: 6px 0; }
+.wa-pad-layer-row { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; flex-wrap: wrap; }
+.wa-pad-layer-row .wa-sample-name { flex: 1 1 100%; margin-top: 0; }
+.wa-vel-in { width: 46px; font-family: inherit; background: var(--wa-surface-2); color: var(--wa-text); border: 1px solid var(--wa-border-2); border-radius: 4px; padding: 3px 4px; }
+
 /* Overlays (chop / scratch) cover the page area, hardware-service-hatch style */
 .wa-overlay {
   position: absolute;
