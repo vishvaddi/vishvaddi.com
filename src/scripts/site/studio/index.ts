@@ -112,7 +112,7 @@ export async function initStudio(): Promise<void> {
   const swingIn = document.createElement("input");
   swingIn.type = "range"; swingIn.min = "0"; swingIn.max = "0.6"; swingIn.step = "0.02"; swingIn.value = "0"; swingIn.className = "wa-swing-in";
   const swingWrap = el("span", "wa-swing"); swingWrap.append(el("span", "wa-lbl", "Swing"), swingIn);
-  const metroBtn = btn("Metro", "wa-toggle"), songBtn = btn(transport.songMode ? "Arrange" : "Session", "wa-toggle"), rotBtn = btn("⤢ Flip", "wa-btn-sm");
+  const metroBtn = btn("Metro", "wa-toggle"), songBtn = btn(transport.songMode ? "Arrange" : "Session", "wa-toggle");
   const countBtn = btn("Count-in", "wa-toggle");
   let countIn = localStorage.getItem("vv_studio_countin") === "1";
   countBtn.classList.toggle("active", countIn);
@@ -141,12 +141,11 @@ export async function initStudio(): Promise<void> {
   help(undoBtn, "Restore the previous destructive edit, including chops, fills and dropped samples.");
   help(redoBtn, "Reapply the last undone edit.");
   help(tutorialBtn, "Open the guided tour, or switch to Browse Help for a searchable reference and keyboard shortcuts.");
-  help(rotBtn, "Expand Studio to the viewport. On portrait phones this rotates the workstation.");
   songBtn.classList.toggle("active", transport.songMode);
   transportBar.append(
     playBtn, stopBtn, el("span", "wa-sep"), el("span", "wa-lbl", "BPM"), bpmDown, bpmInput, bpmUp, el("span", "wa-sep"),
     swingWrap, el("span", "wa-lbl", "Grid"), gridSel, metroBtn, metroVolIn, countBtn, songBtn, el("span", "wa-sep"),
-    undoBtn, redoBtn, tutorialBtn, rotBtn,
+    undoBtn, redoBtn, tutorialBtn,
   );
   const undoStack: HistoryState[] = [], redoStack: HistoryState[] = [];
   function checkpoint(): void {
@@ -275,17 +274,6 @@ export async function initStudio(): Promise<void> {
     transport.songMode = !transport.songMode; songBtn.textContent = transport.songMode ? "Arrange" : "Session"; songBtn.classList.toggle("active", transport.songMode);
     renderSel.value = transport.songMode ? "song" : "pattern"; saveAll();
   });
-  const flipBackdrop = el("div", "wa-flip-backdrop");
-  const flipExit = el("div", "wa-flip-exit"); flipExit.textContent = "✕ Exit";
-  document.body.append(flipBackdrop, flipExit);
-  function setFlip(on: boolean) {
-    win.classList.toggle("wa-rotated", on);
-    flipBackdrop.classList.toggle("on", on);
-    flipExit.classList.toggle("on", on);
-  }
-  rotBtn.addEventListener("click", () => setFlip(!win.classList.contains("wa-rotated")));
-  flipExit.addEventListener("click", () => setFlip(false));
-
   // ── Transport / scheduler ── (playback.ts — Phase 0 split)
   ctx.selectScene = selectScene;
   ctx.isPlaying = () => playhead.playing;

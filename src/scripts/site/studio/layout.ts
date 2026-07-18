@@ -109,19 +109,27 @@ export function buildLayout(p: LayoutPanels): Layout {
   // All 16 pads visible at once: square deck sized to min(availW, availH).
   // Height is measured from the deck's own top to the page host's bottom —
   // position-based, so a stale flex pass can't feed back a wrong size.
+  const deckStacked = window.matchMedia("(max-width: 700px)");
   const fitDeck = () => {
     const area = p.padGrid.parentElement;
     if (!area || padsPage.hidden) return;
+    if (deckStacked.matches) {
+      // stacked mobile layout: the narrow-viewport CSS flows the deck;
+      // an explicit square here paints over the toolbar stacked below it
+      p.padGrid.style.width = "";
+      p.padGrid.style.height = "";
+      return;
+    }
     const availH = workarea.getBoundingClientRect().bottom - p.padGrid.getBoundingClientRect().top - 10;
     const w = area.clientWidth;
-    // floor: below ~300px of height (tiny phones) the deck holds min(w, 300)
-    // and the panel scrolls — mobile transport condensing is R2's job
+    // floor: on short viewports the deck holds min(w, 300) and the panel scrolls
     const side = Math.max(Math.min(w, availH), Math.min(w, 300));
     if (side > 80) {
       p.padGrid.style.width = `${side}px`;
       p.padGrid.style.height = `${side}px`;
     }
   };
+  deckStacked.addEventListener("change", fitDeck);
   if (p.padGrid.parentElement) new ResizeObserver(fitDeck).observe(p.padGrid.parentElement);
 
   // ── KEYS ── roll fills the top and scrolls itself; keys never move

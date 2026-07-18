@@ -767,35 +767,6 @@
 .wa-help-topic-title { margin: 10px 0 4px; color: var(--wa-text); font-size: 13px; }
 .wa-help-topic .wa-help { margin: 0; }
 
-/* ── Fullscreen "Flip" — a fixed app frame like FL Studio Mobile / Cubasis:
-   pinned chrome (title, LCD, tabs, transport) up top, the work area scrolls
-   beneath it; the page itself never scrolls. Controls stay full size. ── */
-.wa-win.wa-rotated {
-  position: fixed; inset: 0; z-index: 9999; margin: 0;
-  width: 100vw; height: 100dvh; max-width: none; max-height: none; border-radius: 0;
-  display: flex; flex-direction: column; transform: none;
-}
-.wa-win.wa-rotated > .wa-title,
-.wa-win.wa-rotated > .wa-lcd,
-.wa-win.wa-rotated > .wa-tabs,
-.wa-win.wa-rotated > .wa-transport { flex: 0 0 auto; }
-/* the work area (panels + inspector) is the sole scroll container in fullscreen.
-   panels lives inside .wa-workarea, so scrolling .wa-panels alone did nothing —
-   the work area grew past the fixed window and got clipped. */
-.wa-win.wa-rotated .wa-workarea {
-  flex: 1 1 auto; min-height: 0;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-}
-.wa-flip-backdrop { position: fixed; inset: 0; z-index: 9998; background: #07070c; display: none; }
-.wa-flip-backdrop.on { display: block; }
-.wa-flip-exit {
-  position: fixed; top: 12px; right: 14px; z-index: 10000; display: none;
-  font: 600 14px/1 var(--font-sans, system-ui, sans-serif); color: var(--wa-text); cursor: pointer;
-  background: var(--wa-surface-2); border: 1px solid var(--wa-border-2); border-radius: var(--wa-radius-sm); padding: 11px 15px;
-}
-.wa-flip-exit.on { display: block; }
-
 /* ── Responsive containment. Wide editors scroll inside their own section
    instead of expanding the flex item and pushing the page off-screen. ── */
 .wa-wrap,
@@ -1259,9 +1230,15 @@
 .wa-page-pads .wa-mpc-pad { min-height: 0; }
 .wa-pads-main > .wa-panel { margin-bottom: 0; }
 .wa-page-pads .wa-mpc-side { overflow-y: auto; min-height: 0; }
+/* Stacked phones: back to natural block flow (the layout that worked
+   pre-rework) with the pads column as the one scroll container. */
 @media (max-width: 700px) {
-  .wa-page-pads .wa-mpc-deck { flex-direction: column; }
+  .wa-pads-main { overflow-y: auto; }
+  .wa-pads-main > .wa-panel { flex: none; overflow: visible; }
+  .wa-page-pads .wa-mpc-deck { display: grid; grid-template-columns: 1fr; flex: none; }
+  .wa-page-pads .wa-mpc-pad-area { display: block; flex: none; }
   .wa-page-pads .wa-mpc-side { overflow-y: visible; }
+  .wa-page-pads .wa-mpc-pad { min-height: 64px; }
 }
 .wa-page-pads .wa-inspector {
   width: 250px;
@@ -1315,7 +1292,7 @@
 /* MIX — devices flex and scroll internally; mixer + export natural size.
    Page-level scroll is a safety net until R2 compacts the mixer strips. */
 .wa-page-mix { overflow-y: auto; }
-.wa-page-mix .wa-mix-flex { flex: 1; min-height: 0; overflow-y: auto; }
+.wa-page-mix .wa-mix-flex { flex: 1 1 auto; min-height: min(240px, 32dvh); overflow-y: auto; }
 .wa-page-mix .wa-device-stack { display: flex; flex-wrap: wrap; gap: 6px; }
 .wa-page-mix .wa-device { min-width: 200px; }
 .wa-page-mix .wa-mixer { display: flex; gap: 8px; }
