@@ -30,6 +30,12 @@ export interface VPatch {
   matrix: ModSlot[];
   macros: number[];
   volume: number;
+  // LYSERGIC-style voice motion (F): portamento seconds, slow pitch wander
+  // 0–1, delayed 5.5Hz pitch vibrato 0–1. Older saved patches lack these —
+  // readers must treat undefined as 0.
+  glide?: number;
+  drift?: number;
+  vibrato?: number;
 }
 
 export const MOD_SRCS: ModSrc[] = ["lfo1", "lfo2", "env2", "vel", "macro1", "macro2", "macro3", "macro4"];
@@ -49,6 +55,7 @@ export function initPatch(): VPatch {
     matrix: [],
     macros: [0, 0, 0, 0],
     volume: 0.8,
+    glide: 0, drift: 0, vibrato: 0,
   };
 }
 
@@ -286,6 +293,9 @@ function scheduleAdsr(param: AudioParam, env: EnvPatch, peak: number, when: numb
 export interface VoiceHandle { release(atTime: number): void; stop(): void; }
 
 // Builds one note's full graph. `dur` null = held (live keys) — call release().
+// Glide memory — the last played MIDI note, so portamento knows where to slide from.
+let lastGlideMidi: number | null = null;
+
 export function playNote(
   ctx: BaseAudioContext,
   dest: AudioNode,
@@ -296,6 +306,9 @@ export function playNote(
   dur: number | null,
 ): VoiceHandle {
   const midi = noteToMidi(note);
+  const glideFrom = patch.glide && lastGlideMidi !== null && lastGlideMidi !== midi ? lastGlideMidi : null;
+  lastGlideMidi = midi;
+  const detuneTargets: AudioParam[] = [];
   const vel = Math.max(0, Math.min(1, velocity / 127));
   const releaseAt = dur !== null ? when + dur : null;
   const stopNodes: Array<{ stop(t?: number): void }> = [];
@@ -384,8 +397,15 @@ export function playNote(
       oscB.setPeriodicWave(waveFor(ctx, o.table, frameA + 1));
       [oscA, oscB].forEach((osc) => {
         osc.frequency.value = baseFreq;
+        if (glideFrom !== null) {
+          // portamento: slide in from the previous note's frequency for this section
+          const fromFreq = midiToFreq(glideFrom + o.octave * 12 + o.semi);
+          osc.frequency.setValueAtTime(Math.max(1, fromFreq), when);
+          osc.frequency.exponentialRampToValueAtTime(Math.max(1, baseFreq), when + Math.max(0.01, patch.glide ?? 0));
+        }
         osc.detune.value = detune + staticModTotal(patch, bus, "pitch") * 200;
         applyMatrix(ctx, patch, bus, "pitch", osc.detune, 200);
+        detuneTargets.push(osc.detune);
       });
       oscA.connect(gA); oscB.connect(gB);
       // Position modulation: inverse-linked crossfade gains
@@ -407,6 +427,26 @@ export function playNote(
     const ng = ctx.createGain(); ng.gain.value = patch.noise.level * 0.6;
     src.connect(nf); nf.connect(ng); ng.connect(filter);
     stopNodes.push(src); started.push(src);
+  }
+
+  // Drift + vibrato (LYSERGIC voice motion, F): drift is a slow ±12-cent
+  // wander at a randomized rate so voices never phase-lock; vibrato is a
+  // fixed 5.5Hz pitch wobble that fades in over half a second.
+  if (detuneTargets.length && (patch.drift ?? 0) > 0) {
+    const d = ctx.createOscillator();
+    d.type = "sine"; d.frequency.value = 0.15 + Math.random() * 0.35;
+    const dg = ctx.createGain(); dg.gain.value = (patch.drift ?? 0) * 12;
+    d.connect(dg); detuneTargets.forEach((t) => dg.connect(t));
+    stopNodes.push(d); started.push(d);
+  }
+  if (detuneTargets.length && (patch.vibrato ?? 0) > 0) {
+    const v = ctx.createOscillator();
+    v.type = "sine"; v.frequency.value = 5.5;
+    const vg = ctx.createGain();
+    vg.gain.setValueAtTime(0, when);
+    vg.gain.linearRampToValueAtTime((patch.vibrato ?? 0) * 30, when + 0.5);
+    v.connect(vg); detuneTargets.forEach((t) => vg.connect(t));
+    stopNodes.push(v); started.push(v);
   }
 
   started.forEach((node) => node.start(when));
@@ -442,4 +482,9 @@ export class LiveVoices {
     v.release(ctx.currentTime); this.held.delete(note);
   }
   panic(): void { this.held.forEach((v) => v.stop()); this.held.clear(); }
+  /** graceful all-notes-off (SILENCE): release envelopes rather than cutting */
+  releaseAll(ctx: AudioContext): void {
+    this.held.forEach((v) => v.release(ctx.currentTime));
+    this.held.clear();
+  }
 }

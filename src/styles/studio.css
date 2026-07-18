@@ -1288,14 +1288,70 @@
   }
 }
 
-/* SYNTH view host (D1 merge) — Roll or Patch above the keys, natural flow */
+/* SYNTH console (F): XY field column + Roll/Patch view, keys pinned below */
+.wa-synth-main { display: flex; gap: 10px; align-items: flex-start; }
+.wa-synth-side {
+  flex: 0 0 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: sticky;
+  top: 108px;
+}
 .wa-synth-viewhost {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
 .wa-synth-viewhost .wa-piano-roll {
-  height: 480px;
+  height: 420px;
   margin: 0;
+}
+/* XY morph field — the LYSERGIC "walk the tones" pad */
+.wa-xy-wrap {
+  background: var(--wa-surface);
+  border: 1px solid var(--wa-border);
+  border-radius: var(--wa-radius-sm);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wa-xy-field {
+  position: relative;
+  aspect-ratio: 1;
+  background:
+    linear-gradient(rgba(52, 226, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(52, 226, 255, 0.05) 1px, transparent 1px),
+    var(--wa-phos-bg);
+  background-size: 25% 25%, 25% 25%, auto;
+  border: 1px solid #123640;
+  border-radius: 4px;
+  cursor: crosshair;
+  overflow: hidden;
+  touch-action: none;
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.7);
+}
+.wa-xy-dot {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px;
+  border-radius: 50%;
+  background: var(--wa-phos);
+  box-shadow: 0 0 12px var(--wa-phos), 0 0 30px rgba(52, 226, 255, 0.45);
+  pointer-events: none;
+  transition: box-shadow 200ms ease;
+}
+.wa-xy-field.orbiting .wa-xy-dot { box-shadow: 0 0 16px var(--wa-phos), 0 0 46px rgba(52, 226, 255, 0.7); }
+.wa-xy-readout { font: 10px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--wa-phos); text-align: center; }
+.wa-xy-perf { display: flex; gap: 6px; }
+.wa-xy-perf .wa-btn-sm { flex: 1; }
+.wa-silence { color: var(--wa-red); border-color: color-mix(in srgb, var(--wa-red) 40%, var(--wa-border-2)); }
+@media (max-width: 900px) {
+  .wa-synth-main { flex-direction: column; }
+  .wa-synth-side { position: static; flex: none; width: 100%; max-width: 340px; }
 }
 /* Piano roll v2 — canvas editor (roll.ts): the note area scrolls inside the
    container, the velocity lane stays pinned beneath it */
@@ -1337,8 +1393,13 @@
 .wa-page-synth .wa-keys, .wa-page-synth .wa-key { height: 140px; }
 .wa-page-synth .wa-key-black { height: 88px; }
 .wa-sound-host > [hidden] { display: none; }
-.wa-sound-host .wa-vpatch { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
-.wa-sound-host .wa-vblock { min-width: 200px; }
+/* multi-column patch console — blocks sit side by side, minimal scroll */
+.wa-sound-host .wa-vpatch {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 8px;
+  align-items: start;
+}
 
 /* CLIPS — the launcher takes the page, Bitwig-style colour-filled cells */
 .wa-page-song .wa-panel { display: flex; flex-direction: column; }
@@ -1429,3 +1490,62 @@
   .wa-page-pads { flex-direction: column; }
   .wa-page-drums { flex-direction: column; }
 }
+
+/* ═══ Density pass (F): compact professional scale — small type is fine,
+   the whole studio targets one screen at fullscreen 1080p; windowed use
+   scrolls a little. Overrides ride the cascade at the end on purpose. ═══ */
+.wa-win { padding: 8px 10px; }
+.wa-title { height: 30px; margin-bottom: 4px; gap: 8px; }
+.wa-title-text { font-size: 11px; }
+.wa-lcd { min-height: 26px; padding: 3px 12px; margin-bottom: 4px; gap: 14px; }
+.wa-lcd-seg { font-size: 13px; }
+.wa-sticky-chrome { padding: 4px 0 6px; }
+.wa-modebar { gap: 5px; }
+.wa-modekey { padding: 7px 4px; font-size: 11px; letter-spacing: 0.12em; gap: 6px; }
+.wa-transport { padding: 4px 8px; gap: 5px; margin-top: 5px; }
+.wa-transport .wa-btn { height: 27px; min-width: 34px; font-size: 13px; padding: 0 9px; }
+.wa-transport .wa-btn-sm { height: 25px; min-width: 28px; font-size: 11px; padding: 0 7px; }
+.wa-bpm { font-size: 15px; width: 46px; padding: 2px; }
+.wa-sep { height: 20px; margin: 0 3px; }
+.wa-btn { height: 30px; font-size: 13px; }
+.wa-btn-sm { height: 25px; font-size: 11px; padding: 0 8px; }
+.wa-lbl { font-size: 9px; }
+.wa-panel { padding: 9px; margin-bottom: 8px; }
+.wa-page { gap: 8px; }
+.wa-fx-title { margin-bottom: 7px; font-size: 10px; }
+.wa-knob { width: 34px; height: 34px; padding: 4px; }
+.wa-knob-line { height: 10px; }
+.wa-knob-val { font-size: 8px; }
+.wa-knob-row { min-width: 46px; }
+.wa-slider-row { margin: 5px 0; }
+.wa-help { font-size: 10px; margin: 4px 0; }
+.wa-status { font-size: 10px; }
+
+/* per-mode density */
+.wa-page-drums .wa-grid .wa-cell { height: 25px; }
+.wa-drum { height: 25px; font-size: 11px; padding: 0 7px; width: 76px; flex: 0 0 76px; }
+.wa-ruler-spacer { width: 76px; flex: 0 0 76px; }
+.wa-pat-btn { padding: 4px 10px; font-size: 11px; min-width: 30px; }
+.wa-page-drums .wa-inspector, .wa-page-pads .wa-inspector { width: 250px; flex-basis: 250px; top: 100px; }
+.wa-lane-wave { height: 56px; }
+.wa-mpc-pad { min-height: 68px; padding: 7px; }
+.wa-mpc-pad-number { font-size: 13px; }
+.wa-mpc-pad-name { font-size: 10px; }
+.wa-pad-trigger { height: 40px; font-size: 11px; }
+.wa-page-synth .wa-keys, .wa-page-synth .wa-key { height: 100px; }
+.wa-page-synth .wa-key-black { height: 62px; }
+.wa-synth-viewhost .wa-piano-roll { height: 380px; }
+.wa-synth-side { flex-basis: 230px; top: 100px; }
+.wa-vblock { min-width: 165px; padding: 8px; }
+.wa-wave-mini { height: 34px; }
+.wa-vblock > .wa-wave-mini { height: 64px; }
+.wa-scope { height: 56px; margin: 6px 0; }
+.wa-page-song .wa-clip { height: 30px; }
+.wa-page-song .wa-scene-launch { min-width: 52px; padding: 4px 6px; }
+.wa-clip-stop { padding: 4px 6px; font-size: 11px; }
+.wa-fader { height: 110px; }
+.wa-devtabs { flex-basis: 128px; }
+.wa-devtab { padding: 6px 7px; font-size: 9px; }
+.wa-combinator, .wa-device { padding: 9px; margin-bottom: 7px; }
+.wa-mixer { gap: 6px; }
+.wa-sd-item input[type="range"] { width: 110px; }

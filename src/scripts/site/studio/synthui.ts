@@ -14,6 +14,7 @@ import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./c
 import { showVelocityPopup } from "./velpopup";
 import { buildKeys, setKeysLatch } from "./keys";
 import { buildRoll } from "./roll";
+import { buildXYField } from "./xyfield";
 
 export interface SynthUI {
   synthPanel: HTMLElement;
@@ -33,6 +34,8 @@ export interface SynthUI {
   pianoRoll: HTMLElement;
   /** KEYS-page strip: label + rec toggle + octave readout (layout re-houses it) */
   keysHeader: HTMLElement;
+  /** XY morph field + ORBIT/SILENCE (xyfield.ts, F) — layout places it */
+  xyPanel: HTMLElement;
 }
 
 // Stacked wavetable wireframe (Serum-style): the table's slices drawn as
@@ -294,6 +297,13 @@ export function buildSynth(): SynthUI {
     pSlider(filterAdvanced, "Key track", 0, 1, 0.05, () => vsynthPatch.filter.track, (v) => { vsynthPatch.filter.track = v; });
     filterBox.append(filterAdvanced);
     patchBox.append(filterBox);
+    // LYSERGIC voice motion (F) — always visible, these are performance knobs
+    const motionBox = el("div", "wa-vblock");
+    motionBox.append(el("div", "wa-fx-title", "MOTION"));
+    pSlider(motionBox, "Glide", 0, 0.5, 0.01, () => vsynthPatch.glide ?? 0, (v) => { vsynthPatch.glide = v; });
+    pSlider(motionBox, "Drift", 0, 1, 0.01, () => vsynthPatch.drift ?? 0, (v) => { vsynthPatch.drift = v; });
+    pSlider(motionBox, "Vibrato", 0, 1, 0.01, () => vsynthPatch.vibrato ?? 0, (v) => { vsynthPatch.vibrato = v; });
+    patchBox.append(motionBox);
     // Envelope: draggable shape (attack peak, decay/sustain point, release
     // end) above the same sliders for precise numeric entry — dragging and
     // sliders both write straight into the same EnvPatch fields and redraw
@@ -472,6 +482,14 @@ export function buildSynth(): SynthUI {
   );
 
 
+  // ── XY morph field + performance (xyfield.ts, F) ──
+  const xy = buildXYField({
+    onLight: () => waveRedraws.forEach((fn) => fn()),
+    onCommit: () => renderPatchEditor(),
+    onSilence: () => { liveKeys.releaseAll(ac()); setKeysLatch(false); },
+  });
+  waveRedraws.push(xy.syncFromPatch);
+
   return {
     synthPanel, synthKeys, liveKeys, rollPlayheadBar, paintRoll, renderPatchEditor,
     recordSynthOn, recordSynthOff,
@@ -479,5 +497,6 @@ export function buildSynth(): SynthUI {
     setOctaveShift, getOctaveShift: () => octaveShift,
     waveRedraws: () => waveRedraws,
     presetRow, pianoRoll, keysHeader,
+    xyPanel: xy.root,
   };
 }
