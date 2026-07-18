@@ -5,21 +5,10 @@ import Base from "../layouts/Base.astro";
 <Base
   title="Studio"
   description="VishAmp Studio — a browser drum machine, synth and mixer in a classic late-'90s skin. Web Audio; nothing is recorded or uploaded."
+  immersive={true}
 >
-  <div class="wa-wrap"><div id="studio"></div></div>
-
-  <h1>Studio</h1>
-  <p>
-    An MPC-style Web-Audio workstation for hip hop and jungle: perform on 16
-    pads, record or chop breaks, sequence variations, build songs and resample
-    through a modular device rack. Nothing is uploaded.
-  </p>
-  <p style="font-size:0.85rem;color:var(--muted)">
-    The mode keys under the display switch the whole screen, hardware style —
-    <strong>DRUMS</strong>, <strong>PADS</strong>, <strong>SYNTH</strong>,
-    <strong>ARRANGE</strong>, <strong>MIX</strong>. The
-    transport stays available in every mode. Audio starts on your first click.
-  </p>
+  <a class="wa-site-exit" href="/" aria-label="Exit Studio and return home">VISH VADDI ↗</a>
+  <div class="wa-wrap"><div id="studio" aria-label="VishAmp browser music workstation"></div></div>
 
   <script>
     import { initStudio } from "../scripts/site/studio";

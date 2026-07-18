@@ -2,14 +2,14 @@
 // scope), DOM piano roll, on-screen keys, key recording. Extracted verbatim
 // from index.ts (Phase 0 split). Playhead state reads from ctx.playhead
 // (already rewired before the cut).
-import { STEPS, SCENE_LABELS, ROLL_NOTES, clip, transport, stepDur, mpc, synthNotes, vsynthPatch } from "./state";
+import { STEPS, SCENE_LABELS, ROLL_NOTES, clip, transport, stepDur, patternStepDur, mpc, activeSynth, synthLaneNotes, patternLengths, vsynthPatch } from "./state";
 import type { VNote } from "./state";
 import { ac, ensureNodes } from "./engine";
 import * as engine from "./engine";
 import { playNote, LiveVoices, PRESETS, PRESET_CATEGORIES, TABLE_NAMES, MOD_SRCS, MOD_DESTS, sampleWaveform, noteToMidi, midiToNote } from "./vsynth";
 import type { ModSlot, VPatch } from "./vsynth";
 import { saveAll } from "./persistence";
-import { el, btn, help, sliderRow, drawScope, drawEnvelopeShape, SCREEN_BG, SCREEN_FG } from "./helpers";
+import { el, btn, help, sliderRow, drawScope, drawEnvelopeShape, download, askText, SCREEN_BG, SCREEN_FG } from "./helpers";
 import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
 import { showVelocityPopup } from "./velpopup";
 import { buildKeys, setKeysLatch } from "./keys";
@@ -105,6 +105,10 @@ export function buildSynth(): SynthUI {
   const presetSearch = document.createElement("input");
   presetSearch.type = "text"; presetSearch.placeholder = "Search presets…"; presetSearch.className = "wa-preset-search";
   const presetCategoryRow = el("div", "wa-preset-categories");
+  const userPatchKey = "vv_studio_user_patches";
+  let userPatches: Record<string, VPatch> = {};
+  try { userPatches = JSON.parse(localStorage.getItem(userPatchKey) || "{}"); } catch { userPatches = {}; }
+  const persistUserPatches = () => localStorage.setItem(userPatchKey, JSON.stringify(userPatches));
   const presetCategories = ["All", ...Array.from(new Set(Object.keys(PRESETS).map((name) => PRESET_CATEGORIES[name] ?? "Utility")))];
   let activePresetCategory = "All";
   const categoryBtns: HTMLButtonElement[] = [];
@@ -117,6 +121,10 @@ export function buildSynth(): SynthUI {
       if (activePresetCategory !== "All" && category !== activePresetCategory) return;
       if (query && !name.toLowerCase().includes(query)) return;
       const o = document.createElement("option"); o.value = name; o.textContent = name; presetSel.append(o);
+    });
+    Object.keys(userPatches).sort().forEach((name) => {
+      if (query && !name.toLowerCase().includes(query)) return;
+      const o = document.createElement("option"); o.value = `user:${name}`; o.textContent = `★ ${name}`; presetSel.append(o);
     });
     if (Array.from(presetSel.options).some((o) => o.value === prevValue)) presetSel.value = prevValue;
   }
@@ -134,6 +142,11 @@ export function buildSynth(): SynthUI {
   const loadPresetBtn = btn("Load preset", "wa-btn-sm");
   const auditionBtn = btn("♪ Audition", "wa-btn-sm");
   const randomizeBtn = btn("🎲 Randomize", "wa-btn-sm");
+  const savePatchBtn = btn("＋ Save", "wa-btn-sm");
+  const deletePatchBtn = btn("Delete", "wa-btn-sm");
+  const exportPatchBtn = btn("↓ Patch", "wa-btn-sm");
+  const importPatchBtn = btn("↑ Patch", "wa-btn-sm");
+  const patchInput = document.createElement("input"); patchInput.type = "file"; patchInput.accept = ".json,application/json"; patchInput.hidden = true;
   help(loadPresetBtn, "Replace the whole synth patch with the selected preset.");
   help(auditionBtn, "Play a short note with the current patch.");
   help(randomizeBtn, "Jitter the current patch's oscillators, filter, envelopes and modulation within musical ranges.");
@@ -179,7 +192,7 @@ export function buildSynth(): SynthUI {
   }
   randomizeBtn.addEventListener("click", randomizePatch);
   loadPresetBtn.addEventListener("click", () => {
-    const preset = PRESETS[presetSel.value]; if (!preset) return;
+    const preset = presetSel.value.startsWith("user:") ? userPatches[presetSel.value.slice(5)] : PRESETS[presetSel.value]; if (!preset) return;
     ctx.checkpoint();
     const copy = JSON.parse(JSON.stringify(preset)) as VPatch;
     (Object.keys(copy) as Array<keyof VPatch>).forEach((key) => {
@@ -190,6 +203,25 @@ export function buildSynth(): SynthUI {
     });
     ensureMatrixSlots();
     renderPatchEditor(); saveAll(); audition("C4");
+  });
+  savePatchBtn.addEventListener("click", async () => {
+    const name = await askText("Save patch", `${activeSynth.lane} patch`); if (!name) return;
+    userPatches[name] = JSON.parse(JSON.stringify(vsynthPatch)); persistUserPatches(); refreshPresetOptions(); presetSel.value = `user:${name}`;
+  });
+  deletePatchBtn.addEventListener("click", () => {
+    if (!presetSel.value.startsWith("user:")) return;
+    delete userPatches[presetSel.value.slice(5)]; persistUserPatches(); refreshPresetOptions();
+  });
+  exportPatchBtn.addEventListener("click", () => download(`vishamp-${activeSynth.lane}-patch.json`, new Blob([JSON.stringify({ format: "vishamp-patch", version: 1, patch: vsynthPatch }, null, 2)], { type: "application/json" })));
+  importPatchBtn.addEventListener("click", () => patchInput.click());
+  patchInput.addEventListener("change", async () => {
+    const file = patchInput.files?.[0]; if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text()) as { patch?: VPatch } | VPatch;
+      const incoming = "patch" in parsed ? parsed.patch : parsed; if (!incoming || typeof incoming !== "object") return;
+      Object.assign(vsynthPatch, JSON.parse(JSON.stringify(incoming))); ensureMatrixSlots(); renderPatchEditor(); saveAll();
+    } catch { /* invalid imports leave the active patch untouched */ }
+    patchInput.value = "";
   });
   auditionBtn.addEventListener("click", () => audition("C4"));
   // Patch editor — rebuilt whenever a preset load replaces the patch wholesale.
@@ -212,7 +244,7 @@ export function buildSynth(): SynthUI {
   });
   applySimpleMode();
   presetBrowserRow.append(presetSearch, presetCategoryRow);
-  presetRow.append(el("span", "wa-lbl", "PRESET"), presetSel, loadPresetBtn, auditionBtn, randomizeBtn, simpleBtn);
+  presetRow.append(el("span", "wa-lbl", "PRESET"), presetSel, loadPresetBtn, savePatchBtn, deletePatchBtn, exportPatchBtn, importPatchBtn, patchInput, auditionBtn, randomizeBtn, simpleBtn);
   // Live oscilloscope — taps synthGain via an analyser. Stays a flat line
   // until audio has actually started (ensureNodes() runs on first pad/key
   // press), matching the rest of the app's "audio starts on first click" rule.
@@ -436,7 +468,7 @@ export function buildSynth(): SynthUI {
   const heldRec = new Map<string, number>();   // note -> start step
   function currentStepFloat(): number {
     if (!playhead.playing || playhead.lastHi < 0) return -1;
-    return playhead.lastHi + Math.min(1, (performance.now() - playhead.lastStepStartedMs) / (stepDur() * 1000));
+    return playhead.lastHi + Math.min(1, (performance.now() - playhead.lastStepStartedMs) / (patternStepDur(synthRecTarget()) * 1000));
   }
   function synthRecTarget(): number { return (playhead.playing ? clip.play.synth : null) ?? clip.sel; }
   // Unquantized capture (C3): notes land exactly where they were played;
@@ -444,18 +476,19 @@ export function buildSynth(): SynthUI {
   function recordSynthOn(note: string): void {
     if (!synthRec || !playhead.playing) return;
     const pos = currentStepFloat(); if (pos < 0) return;
-    heldRec.set(note, pos % STEPS);
+    heldRec.set(note, pos % patternLengths[synthRecTarget()]);
   }
   function recordSynthOff(note: string): void {
     const start = heldRec.get(note); if (start === undefined) return;
     heldRec.delete(note);
     if (!synthRec || !playhead.playing) return;
     const pos = currentStepFloat(); if (pos < 0) return;
-    let len = pos % STEPS - start;
-    if (len <= 0) len += STEPS;
-    len = Math.max(0.25, Math.min(STEPS - start, len));
+    const patternLength = patternLengths[synthRecTarget()];
+    let len = pos % patternLength - start;
+    if (len <= 0) len += patternLength;
+    len = Math.max(0.25, Math.min(patternLength - start, len));
     const target = synthRecTarget();
-    synthNotes[target].push({ note, step: start, len, vel: 100 });
+    synthLaneNotes[activeSynth.lane][target].push({ note, step: start, len, vel: 100 });
     if (target === clip.sel) paintRoll();
     saveAll();
   }
@@ -472,8 +505,23 @@ export function buildSynth(): SynthUI {
     holdBtn.classList.toggle("active", on);
     setKeysLatch(on);
   });
+  const midiBtn = btn("MIDI", "wa-toggle wa-btn-sm");
+  help(midiBtn, "Connect every available Web MIDI input to the active synth lane.");
+  midiBtn.addEventListener("click", async () => {
+    const nav = navigator as Navigator & { requestMIDIAccess?: () => Promise<{ inputs: Map<unknown, { onmidimessage: ((event: { data: Uint8Array }) => void) | null }> }> };
+    if (!nav.requestMIDIAccess) { midiBtn.textContent = "MIDI unavailable"; return; }
+    try {
+      const access = await nav.requestMIDIAccess();
+      access.inputs.forEach((input) => { input.onmidimessage = (event) => {
+        const [status, midi, velocity] = event.data, command = status & 0xf0, note = midiToNote(midi);
+        if (command === 0x90 && velocity > 0) { ensureNodes(); liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, note, velocity); recordSynthOn(note); }
+        else if (command === 0x80 || (command === 0x90 && velocity === 0)) { liveKeys.noteOff(ac(), note); recordSynthOff(note); }
+      }; });
+      midiBtn.classList.add("active"); midiBtn.textContent = `MIDI ${access.inputs.size}`;
+    } catch { midiBtn.textContent = "MIDI blocked"; }
+  });
   const keysHeader = el("div", "wa-export");
-  keysHeader.append(el("span", "wa-lbl", "KEYS — click, or Z-row / Q-row on the keyboard (− / = shift octave)"), keysRecBtn, holdBtn, octaveLabel);
+  keysHeader.append(el("span", "wa-lbl", "KEYS — click, or Z-row / Q-row on the keyboard (− / = shift octave)"), keysRecBtn, holdBtn, midiBtn, octaveLabel);
   // Roll, keys and the keys header live on the KEYS page — layout.ts houses
   // them; appending them here too would just steal them back at boot.
   // Scope + chord player live in the side column beside the XY field (G/H) —
@@ -490,6 +538,9 @@ export function buildSynth(): SynthUI {
     onSilence: () => { liveKeys.releaseAll(ac()); setKeysLatch(false); },
   });
   waveRedraws.push(xy.syncFromPatch);
+  window.addEventListener("vv-synth-lane-change", () => {
+    ensureMatrixSlots(); renderPatchEditor(); xy.syncFromPatch();
+  });
 
   return {
     synthPanel, synthKeys, liveKeys, rollPlayheadBar, paintRoll, renderPatchEditor,

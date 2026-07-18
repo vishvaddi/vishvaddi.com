@@ -1,7 +1,7 @@
 // MPC performance deck + pad event lane — extracted verbatim from index.ts
 // (Phase 0 split). Playhead state comes from ctx; the offline renderBuffer is
 // injected because render.ts builds it during init.
-import { STEPS, PAD_BANK_SIZE, PAD_LAYER_MAX, SCENE_LABELS, clip, stepDur, mpc, rackState, sampleParams, sampleBuffers, sampleData, padEvents, padLayers, padLayerBuffers, padLayerMode } from "./state";
+import { STEPS, PAD_BANK_SIZE, PAD_LAYER_MAX, SCENE_LABELS, clip, stepDur, mpc, rackState, sampleParams, sampleBuffers, sampleData, padEvents, padLayers, padLayerBuffers, padLayerMode, patternLengths } from "./state";
 import type { MpcState, PadEvent, PadLayerMode, SamplerP } from "./state";
 import { ac, ensureNodes, playPad, hydrateSample, hydratePadLayer, crushBuffer } from "./engine";
 import { saveAll } from "./persistence";
@@ -221,11 +221,12 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   function recordPadEvent(pad: number, velocity: number): void {
     if (!mpc.recording || !playhead.playing) return;
     const target = recordTarget();
+    const patternLength = patternLengths[target];
     const rawStep = playhead.lastHi >= 0 ? playhead.lastHi : playhead.schStep;
-    const grid = mpc.quantize || STEPS;
-    const snapped = Math.round(rawStep / (STEPS / grid)) * (STEPS / grid);
+    const grid = mpc.quantize || patternLength;
+    const snapped = Math.round(rawStep / (patternLength / grid)) * (patternLength / grid);
     const strength = mpc.quantizeStrength / 100;
-    const step = Math.round(rawStep + (snapped - rawStep) * strength) % STEPS;
+    const step = Math.round(rawStep + (snapped - rawStep) * strength) % patternLength;
     if (!mpc.overdub) padEvents[target] = padEvents[target].filter((event) => event.step !== step);
     else padEvents[target] = padEvents[target].filter((event) => !(event.step === step && event.pad === pad));
     const playedOffset = playhead.lastStepStartedMs > 0 ? Math.max(-60, Math.min(60, performance.now() - playhead.lastStepStartedMs)) : 0;
@@ -322,14 +323,14 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   rotateBtn.addEventListener("click", () => {
     if (!padEvents[clip.sel].length) { performanceStatus.textContent = "Pattern is empty — nothing to rotate"; return; }
     ctx.checkpoint();
-    padEvents[clip.sel].forEach((event) => { event.step = (event.step + 1) % STEPS; }); paintEventLane(); saveAll();
+    padEvents[clip.sel].forEach((event) => { event.step = (event.step + 1) % patternLengths[clip.sel]; }); paintEventLane(); saveAll();
     performanceStatus.textContent = "Pattern rotated one step later";
   });
   mutateBtn.addEventListener("click", () => {
     if (!padEvents[clip.sel].length) { performanceStatus.textContent = "Pattern is empty — nothing to mutate"; return; }
     ctx.checkpoint();
     padEvents[clip.sel].forEach((event) => {
-      if (Math.random() < 0.35) event.step = (event.step + (Math.random() < 0.5 ? -1 : 1) + STEPS) % STEPS;
+      if (Math.random() < 0.35) event.step = (event.step + (Math.random() < 0.5 ? -1 : 1) + patternLengths[clip.sel]) % patternLengths[clip.sel];
       event.velocity = Math.max(20, Math.min(127, event.velocity + Math.round((Math.random() * 2 - 1) * 18)));
       if (Math.random() < 0.2) event.ratchets = 1 + Math.floor(Math.random() * 4);
     });
@@ -339,9 +340,10 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   fillBtn.addEventListener("click", () => {
     ctx.checkpoint();
     const pad = mpc.selectedPad;
-    for (let step = 12; step < 16; step++) {
+    for (let step = Math.max(0, patternLengths[clip.sel] - 4); step < patternLengths[clip.sel]; step++) {
       padEvents[clip.sel] = padEvents[clip.sel].filter((event) => !(event.pad === pad && event.step === step));
-      padEvents[clip.sel].push({ pad, step, velocity: 72 + (step - 12) * 14, offset: 0, probability: 100, ratchets: step === 15 ? 4 : 1 });
+      const fillIndex = step - Math.max(0, patternLengths[clip.sel] - 4);
+      padEvents[clip.sel].push({ pad, step, velocity: 72 + fillIndex * 14, offset: 0, probability: 100, ratchets: step === patternLengths[clip.sel] - 1 ? 4 : 1 });
     }
     paintEventLane(); saveAll();
     performanceStatus.textContent = `Fill written for ${sampleParams[pad].name || `pad ${pad + 1}`}`;
@@ -350,7 +352,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
     ctx.checkpoint();
     const pad = mpc.selectedPad;
     let added = 0;
-    [3, 7, 11, 15].forEach((step, i) => {
+    Array.from({ length: Math.floor(patternLengths[clip.sel] / 4) }, (_, i) => i * 4 + 3).forEach((step, i) => {
       if (!padEvents[clip.sel].some((event) => event.pad === pad && event.step === step)) {
         padEvents[clip.sel].push({ pad, step, velocity: 34 + i * 5, offset: i % 2 ? 12 : -8, probability: 72, ratchets: 1 });
         added++;
@@ -441,7 +443,9 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
     eventCells.push(rowCells); eventRows.push(rowEl); eventRowLabels.push(label);
     eventLane.append(rowEl);
   }
-  gridRepainters.push(() => eventCells.forEach((row) => row.forEach((cell, step) => cell.classList.toggle("wa-beat", isGridLine(step)))));
+  gridRepainters.push(() => eventCells.forEach((row) => row.forEach((cell, step) => {
+    cell.classList.toggle("wa-beat", isGridLine(step)); cell.hidden = step >= patternLengths[clip.sel]; cell.disabled = step >= patternLengths[clip.sel];
+  })));
   window.addEventListener("pointerup", () => { paintingEvents = false; });
   const eventEditor = el("div", "wa-event-editor");
   eventEditor.append(

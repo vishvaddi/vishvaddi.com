@@ -3,10 +3,10 @@
 // and a DOM playhead overlay so playback.ts keeps its existing contract.
 // Unquantized by default: positions/lengths are float steps; snapping applies
 // only when the transport Grid selector is set (transport.quantizeGrid > 0).
-import { el } from "./helpers";
+import { el, btn, help } from "./helpers";
 import { SCREEN_BG, SCREEN_FG } from "./helpers";
-import { STEPS, ROLL_NOTES, clip, transport, synthNotes } from "./state";
-import type { VNote } from "./state";
+import { ROLL_NOTES, clip, transport, activeSynth, activeSynthNotes, SYNTH_LANES, SYNTH_LANE_LABELS, synthLaneNotes, patternLengths, patternDivisions } from "./state";
+import type { VNote, SynthLane } from "./state";
 import { ctx, gridRepainters } from "./ctx";
 import { showVelocityPopup } from "./velpopup";
 
@@ -36,6 +36,36 @@ type Drag =
 
 export function buildRoll(deps: RollDeps): Roll {
   const pianoRoll = el("div", "wa-piano-roll wa-roll2");
+  const toolbar = el("div", "wa-roll-toolbar");
+  const laneGroup = el("div", "wa-roll-lanes");
+  const laneButtons = new Map<SynthLane, HTMLButtonElement>();
+  SYNTH_LANES.forEach((lane) => {
+    const button = btn(SYNTH_LANE_LABELS[lane], "wa-btn-sm wa-roll-lane") as HTMLButtonElement;
+    button.addEventListener("click", () => {
+      activeSynth.lane = lane; selected = null;
+      laneButtons.forEach((item, id) => item.classList.toggle("active", id === lane));
+      window.dispatchEvent(new CustomEvent("vv-synth-lane-change", { detail: lane }));
+      paintRoll();
+    });
+    laneButtons.set(lane, button); laneGroup.append(button);
+  });
+  const lengthSelect = document.createElement("select");
+  lengthSelect.setAttribute("aria-label", "Pattern length");
+  [4, 8, 12, 16, 24, 32].forEach((value) => lengthSelect.append(new Option(`${value} steps`, String(value))));
+  lengthSelect.value = String(patternLengths[clip.sel]);
+  lengthSelect.addEventListener("change", () => { patternLengths[clip.sel] = Number(lengthSelect.value); deps.saveAll(); paintRoll(); });
+  const divisionSelect = document.createElement("select");
+  divisionSelect.setAttribute("aria-label", "Steps per beat");
+  [[3, "1/8 triplet"], [4, "1/16"], [6, "1/16 triplet"], [8, "1/32"], [12, "1/32 triplet"]].forEach(([value, label]) => divisionSelect.append(new Option(String(label), String(value))));
+  divisionSelect.value = String(patternDivisions[clip.sel]);
+  divisionSelect.addEventListener("change", () => { patternDivisions[clip.sel] = Number(divisionSelect.value); deps.saveAll(); });
+  const accentBtn = btn("Accent", "wa-btn-sm wa-note-expression") as HTMLButtonElement;
+  const slideBtn = btn("Slide", "wa-btn-sm wa-note-expression") as HTMLButtonElement;
+  help(accentBtn, "Toggle an accented note. Accents play louder and brighter.");
+  help(slideBtn, "Glide into this note from the previous note in the lane.");
+  accentBtn.addEventListener("click", () => { if (selected) { selected.accent = !selected.accent; deps.saveAll(); paintRoll(); } });
+  slideBtn.addEventListener("click", () => { if (selected) { selected.slide = !selected.slide; deps.saveAll(); paintRoll(); } });
+  toolbar.append(laneGroup, el("span", "wa-roll-spacer"), lengthSelect, divisionSelect, accentBtn, slideBtn);
   const scrollWrap = el("div", "wa-roll2-scroll");
   const canvas = document.createElement("canvas");
   canvas.className = "wa-roll2-canvas";
@@ -45,21 +75,22 @@ export function buildRoll(deps: RollDeps): Roll {
   scrollWrap.append(canvas, rollPlayhead);
   const velCanvas = document.createElement("canvas");
   velCanvas.className = "wa-roll2-vel";
-  pianoRoll.append(scrollWrap, velCanvas);
+  pianoRoll.append(toolbar, scrollWrap, velCanvas);
 
   let selected: VNote | null = null;
   let drag: Drag = null;
   let lastLen = 1;
 
-  const notes = (): VNote[] => synthNotes[clip.sel];
-  const grid = (): number => (transport.quantizeGrid ? STEPS / transport.quantizeGrid : 0);
+  const notes = (): VNote[] => activeSynthNotes();
+  const steps = (): number => patternLengths[clip.sel];
+  const grid = (): number => (transport.quantizeGrid ? steps() / transport.quantizeGrid : 0);
   const snap = (v: number): number => { const g = grid(); return g ? Math.round(v / g) * g : v; };
   const minLen = (): number => grid() || MIN_LEN_FREE;
   const rowOf = (n: VNote): number => ROLL_NOTES.indexOf(n.note);
 
   const geom = () => {
     const w = scrollWrap.clientWidth || 720;
-    return { w, stepW: (w - GUTTER) / STEPS };
+    return { w, stepW: (w - GUTTER) / steps() };
   };
 
   function paintRoll(): void {
@@ -83,7 +114,7 @@ export function buildRoll(deps: RollDeps): Roll {
       }
     });
     // vertical lines: quarters bright, grid (or 16ths) faint
-    for (let s = 0; s <= STEPS; s++) {
+    for (let s = 0; s <= steps(); s++) {
       const x = GUTTER + s * stepW;
       const quarter = s % 4 === 0;
       g.strokeStyle = quarter ? "rgba(52,226,255,0.22)" : "rgba(52,226,255,0.07)";
@@ -99,6 +130,10 @@ export function buildRoll(deps: RollDeps): Roll {
       g.shadowBlur = sel ? 8 : 0; g.shadowColor = SCREEN_FG;
       g.fillStyle = `rgba(52,226,255,${(0.35 + 0.55 * (n.vel / 127)).toFixed(3)})`;
       g.beginPath(); g.roundRect(x, y, nw, nh, 3); g.fill();
+      if (n.accent || n.slide) {
+        g.fillStyle = "rgba(255,255,255,.92)"; g.font = "8px monospace";
+        g.fillText(`${n.accent ? "A" : ""}${n.slide ? "↗" : ""}`, x + 3, y + 9);
+      }
       g.shadowBlur = 0;
       g.strokeStyle = sel ? "#ffffff" : "rgba(0,0,0,0.55)";
       g.lineWidth = sel ? 1.4 : 1;
@@ -117,6 +152,11 @@ export function buildRoll(deps: RollDeps): Roll {
       }
     });
     paintVel();
+    laneButtons.forEach((item, id) => item.classList.toggle("active", id === activeSynth.lane));
+    lengthSelect.value = String(patternLengths[clip.sel]);
+    divisionSelect.value = String(patternDivisions[clip.sel]);
+    accentBtn.classList.toggle("active", !!selected?.accent); slideBtn.classList.toggle("active", !!selected?.slide);
+    accentBtn.disabled = !selected; slideBtn.disabled = !selected;
   }
 
   function paintVel(): void {
@@ -128,7 +168,7 @@ export function buildRoll(deps: RollDeps): Roll {
     g.fillStyle = SCREEN_BG; g.fillRect(0, 0, w, VEL_H);
     g.fillStyle = "#0a0f13"; g.fillRect(0, 0, GUTTER, VEL_H);
     g.fillStyle = "#41505b"; g.font = "8px monospace"; g.fillText("VEL", 6, VEL_H / 2 + 3);
-    for (let s = 0; s <= STEPS; s += 4) {
+    for (let s = 0; s <= steps(); s += 4) {
       const x = GUTTER + s * stepW;
       g.strokeStyle = "rgba(52,226,255,0.12)";
       g.beginPath(); g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, VEL_H); g.stroke();
@@ -189,10 +229,10 @@ export function buildRoll(deps: RollDeps): Roll {
       else if (found.zone === "l") drag = { kind: "resize-l", note: found.note, origStep: found.note.step, origLen: found.note.len };
       else drag = { kind: "resize-r", note: found.note, origLen: found.note.len };
     } else {
-      if (row < 0 || row >= ROLL_NOTES.length || step < 0 || step >= STEPS) return;
+      if (row < 0 || row >= ROLL_NOTES.length || step < 0 || step >= steps()) return;
       ctx.checkpoint();
-      const start = Math.max(0, Math.min(STEPS - minLen(), snap(step)));
-      const fresh: VNote = { note: ROLL_NOTES[row], step: start, len: Math.min(lastLen, STEPS - start), vel: 100 };
+      const start = Math.max(0, Math.min(steps() - minLen(), snap(step)));
+      const fresh: VNote = { note: ROLL_NOTES[row], step: start, len: Math.min(lastLen, steps() - start), vel: 100 };
       notes().push(fresh);
       selected = fresh;
       drag = { kind: "create", note: fresh };
@@ -207,14 +247,14 @@ export function buildRoll(deps: RollDeps): Roll {
     const { step, row } = pos(ev);
     const n = drag.note;
     if (drag.kind === "create" || drag.kind === "resize-r") {
-      n.len = Math.max(minLen(), Math.min(STEPS - n.step, (grid() ? snap(step) : step) - n.step));
+      n.len = Math.max(minLen(), Math.min(steps() - n.step, (grid() ? snap(step) : step) - n.step));
       if (drag.kind === "create") lastLen = n.len;
     } else if (drag.kind === "resize-l") {
       const origEnd = drag.origStep + drag.origLen;
       const ns = Math.max(0, Math.min(origEnd - minLen(), grid() ? snap(step) : step));
       n.step = ns; n.len = origEnd - ns;
     } else {
-      const ns = Math.max(0, Math.min(STEPS - n.len, (grid() ? snap(step - drag.grabOffset) : step - drag.grabOffset)));
+      const ns = Math.max(0, Math.min(steps() - n.len, (grid() ? snap(step - drag.grabOffset) : step - drag.grabOffset)));
       n.step = ns;
       const newRow = Math.max(0, Math.min(ROLL_NOTES.length - 1, row));
       if (ROLL_NOTES[newRow] !== n.note) { n.note = ROLL_NOTES[newRow]; deps.audition(n.note, n.vel, 1); }
@@ -235,7 +275,7 @@ export function buildRoll(deps: RollDeps): Roll {
     const found = hit(ev);
     if (!found) return;
     ctx.checkpoint();
-    synthNotes[clip.sel] = notes().filter((n) => n !== found.note);
+    synthLaneNotes[activeSynth.lane][clip.sel] = notes().filter((n) => n !== found.note);
     if (selected === found.note) selected = null;
     paintRoll(); ctx.paintSession(); deps.saveAll();
   });
@@ -257,7 +297,7 @@ export function buildRoll(deps: RollDeps): Roll {
     if (!selected || !pianoRoll.offsetParent) return;
     ev.preventDefault();
     ctx.checkpoint();
-    synthNotes[clip.sel] = notes().filter((n) => n !== selected);
+    synthLaneNotes[activeSynth.lane][clip.sel] = notes().filter((n) => n !== selected);
     selected = null;
     paintRoll(); ctx.paintSession(); deps.saveAll();
   });

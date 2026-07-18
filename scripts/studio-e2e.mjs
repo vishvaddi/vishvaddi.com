@@ -43,6 +43,7 @@ try {
   check('boot: LCD shows BPM + STOP', /BPM/.test(lcd ?? '') && /STOP/.test(lcd ?? ''), (lcd ?? '').slice(0, 30))
 
   // ── toggle a drum step ──
+  await page.click('.wa-modekey:has-text("DRUMS")')
   const cell = page.locator('.wa-grid .wa-row .wa-cell').nth(0)
   await cell.click()
   check('grid: step toggles on', await cell.evaluate((n) => n.classList.contains('on')))

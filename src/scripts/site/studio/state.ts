@@ -59,6 +59,7 @@ export interface RackState {
   grooveRandom: number;
   noteEcho: number;
   echoDecay: number;
+  glitch: number;
   macros: number[];
   devices: Record<string, boolean>;
 }
@@ -67,11 +68,20 @@ export interface VNote {
   step: number;   // 0–15 start step
   len: number;    // steps, ≥1
   vel: number;    // 1–127
+  accent?: boolean;
+  slide?: boolean;
 }
+export type SynthLane = "bass" | "lead" | "harmony";
+export const SYNTH_LANES: SynthLane[] = ["bass", "lead", "harmony"];
+export const SYNTH_LANE_LABELS: Record<SynthLane, string> = { bass: "Bass", lead: "Lead", harmony: "Harmony" };
 export interface HistoryState {
   pats: boolean[][][];
   vels: number[][][];
   synthNotes: VNote[][];
+  synthLaneNotes?: Record<SynthLane, VNote[][]>;
+  synthPatches?: Record<SynthLane, VPatch>;
+  patternLengths?: number[];
+  patternDivisions?: number[];
   padEvents: PadEvent[][];
   sampleParams: SamplerP[];
   sampleData: Array<string | null>;
@@ -97,7 +107,8 @@ export interface FxState {
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-export const STEPS = 16;
+export const STEPS = 32;
+export const DEFAULT_STEPS = 16;
 export const SCENES = 8;
 export const SCENE_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 export const SONG_SLOTS = 8;
@@ -160,6 +171,7 @@ export const transport = {
   quantizeGrid: 0,
 };
 export const stepDur = (): number => 60 / transport.bpm / 4;
+export const patternStepDur = (scene: number): number => 60 / transport.bpm / (patternDivisions[scene] || 4);
 
 // ─── Session clips ───────────────────────────────────────────────────────────
 // Ableton-style: each track (drums grid / MPC pads / synth) plays its own clip,
@@ -178,7 +190,9 @@ export const clip = {
 // Ableton-Arrangement-style (C5): each track holds blocks placed on a shared
 // bar timeline — explicit startBar, gaps are silence. One global song
 // position replaces the old per-track sequential walk.
-export interface ArrangeBlock { scene: number; bars: number; startBar: number; }
+export type AutomationParam = "cutoff" | "volume" | "reverb";
+export interface AutomationRamp { lane: SynthLane | "master"; param: AutomationParam; from: number; to: number; }
+export interface ArrangeBlock { scene: number; bars: number; startBar: number; automation?: AutomationRamp[]; }
 export const arrangement: Record<TrackId, ArrangeBlock[]> = { drums: [], pads: [], synth: [] };
 export const songPos = { bar: 0 };
 export const songLoop = { on: false, startBar: 0, endBar: 8 };
@@ -193,6 +207,19 @@ export function songEndBar(): number {
 export const allPats: boolean[][][] = Array.from({ length: SCENES }, () => DRUMS.map(() => new Array(STEPS).fill(false)));
 export const allVels: number[][][] = Array.from({ length: SCENES }, () => DRUMS.map(() => new Array(STEPS).fill(100)));
 export const synthNotes: VNote[][] = Array.from({ length: SCENES }, () => []);
+export const synthLaneNotes: Record<SynthLane, VNote[][]> = {
+  bass: synthNotes,
+  lead: Array.from({ length: SCENES }, () => []),
+  harmony: Array.from({ length: SCENES }, () => []),
+};
+export const activeSynth = { lane: "bass" as SynthLane };
+export const activeSynthNotes = (): VNote[] => synthLaneNotes[activeSynth.lane][clip.sel];
+// Pattern length is independent per scene. The current editors remain a
+// 16-step surface; shorter patterns are first-class and longer divisions can
+// be represented by note lengths and arrangement repeats without breaking
+// older projects.
+export const patternLengths = Array.from({ length: SCENES }, () => DEFAULT_STEPS);
+export const patternDivisions = Array.from({ length: SCENES }, () => 4);
 export const songChain = Array.from({ length: SONG_SLOTS }, (_, i) => i % 4);
 export const padEvents: PadEvent[][] = Array.from({ length: SCENES }, () => []);
 
@@ -223,7 +250,7 @@ export const mpc: MpcState = {
 };
 export const rackState: RackState = {
   grooveTiming: 0, grooveVelocity: 0, grooveRandom: 0,
-  noteEcho: 0, echoDecay: 0.65, macros: [0, 0, 0, 0],
+  noteEcho: 0, echoDecay: 0.65, glitch: 0, macros: [0, 0, 0, 0],
   devices: { player: true, eq: true, compressor: true, delay: true, reverb: true, limiter: true },
 };
 export const fx: FxState = {
@@ -233,8 +260,18 @@ export const fx: FxState = {
 };
 
 // ─── Synth ───────────────────────────────────────────────────────────────────
-// The VV-1 wavetable synth patch (see vsynth.ts). One patch per project.
-export const vsynthPatch: VPatch = initPatch();
+// Three independently editable instruments share the existing VV-1 editor.
+// The proxy preserves the old `vsynthPatch` API while switching the editor's
+// target when a lane tab changes, avoiding a second synth implementation.
+export const synthPatches: Record<SynthLane, VPatch> = {
+  bass: initPatch(), lead: initPatch(), harmony: initPatch(),
+};
+export const vsynthPatch = new Proxy({} as VPatch, {
+  get: (_target, key) => synthPatches[activeSynth.lane][key as keyof VPatch],
+  set: (_target, key, value) => { (synthPatches[activeSynth.lane] as unknown as Record<PropertyKey, unknown>)[key] = value; return true; },
+  ownKeys: () => Reflect.ownKeys(synthPatches[activeSynth.lane]),
+  getOwnPropertyDescriptor: (_target, key) => ({ configurable: true, enumerable: true, writable: true, value: synthPatches[activeSynth.lane][key as keyof VPatch] }),
+});
 
 // ─── Mixer ───────────────────────────────────────────────────────────────────
 export const mute = new Array(8).fill(false);

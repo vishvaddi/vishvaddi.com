@@ -8,6 +8,7 @@ interface Props {
   updatedDate?: Date;
   siteNav?: boolean;
   noindex?: boolean;
+  immersive?: boolean;
 }
 
 const {
@@ -17,6 +18,7 @@ const {
   updatedDate,
   siteNav = false,
   noindex = false,
+  immersive = false,
 } = Astro.props;
 
 const siteTools: [string, string][] = [
@@ -108,8 +110,8 @@ const updatedFmt = updatedDate
     <meta name="twitter:image" content={ogImageUrl} />
     <title>{fullTitle}</title>
   </head>
-  <body>
-    <header>
+  <body class={immersive ? "immersive-page" : undefined}>
+    {!immersive && <header>
       <nav class="topnav" aria-label="Primary">
         <a class="brand" href="/"><strong>Vish Vaddi</strong></a>
         <div class="navlinks">
@@ -140,7 +142,7 @@ const updatedFmt = updatedDate
         >◐</button>
       </nav>
       <hr />
-    </header>
+    </header>}
     <main>
       {showRail && (
         <>
@@ -158,13 +160,13 @@ const updatedFmt = updatedDate
         </>
       )}
       <slot />
-      <aside class="site-quote" aria-live="polite">
+      {!immersive && <aside class="site-quote" aria-live="polite">
         <span class="quote-mark" aria-hidden="true">“</span>
         <span id="site-quote-text">Prevention beats repair.</span>
         <span class="quote-mark quote-mark-close" aria-hidden="true">”</span>
-      </aside>
+      </aside>}
     </main>
-    <footer>
+    {!immersive && <footer>
       <hr />
       {updatedFmt && (
         <p style="font-size: 0.875rem; color: var(--muted);">
@@ -176,7 +178,7 @@ const updatedFmt = updatedDate
         <a href="mailto:vishvaddi@gmail.com">vishvaddi@gmail.com</a> ·
         <a href="/privacy">Privacy</a>
       </p>
-    </footer>
+    </footer>}
     <script src="/scripts/chrome.js" defer></script>
     <script src="/scripts/reveal.js" defer></script>
     <script src="/scripts/standby.js" defer></script>

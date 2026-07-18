@@ -1,7 +1,7 @@
 // Beat editor — scene selector row, 8×16 drum step grid. Lane names select
 // the lane for the sampler sidebar (laneui.ts, D2) — the old inline
 // sound-design panels moved there.
-import { STEPS, SCENES, SCENE_LABELS, DRUMS, clip, allPats, allVels, synthNotes, padEvents } from "./state";
+import { STEPS, SCENES, SCENE_LABELS, DRUMS, clip, allPats, allVels, synthLaneNotes, SYNTH_LANES, patternLengths, patternDivisions, padEvents } from "./state";
 import { ac, ensureNodes, trackGain, playDrum } from "./engine";
 import { saveAll } from "./persistence";
 import { el, btn, stepRuler } from "./helpers";
@@ -35,7 +35,8 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
       allPats[next][r][c] = allPats[clip.sel][r][c];
       allVels[next][r][c] = allVels[clip.sel][r][c];
     }
-    synthNotes[next] = synthNotes[clip.sel].map((note) => ({ ...note }));
+    SYNTH_LANES.forEach((lane) => { synthLaneNotes[lane][next] = synthLaneNotes[lane][clip.sel].map((note) => ({ ...note })); });
+    patternLengths[next] = patternLengths[clip.sel]; patternDivisions[next] = patternDivisions[clip.sel];
     padEvents[next] = padEvents[clip.sel].map((event) => ({ ...event }));
     ctx.paintSession();
     saveAll(); const orig = copyBtn.textContent; copyBtn.textContent = "Copied ✓";
@@ -45,7 +46,7 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
   beat.append(patRow);
 
   const grid = el("div", "wa-grid");
-  grid.append(stepRuler());
+  const ruler = stepRuler(STEPS); grid.append(ruler);
   const cells: HTMLElement[][] = [];
   const laneBtns: HTMLElement[] = [];
 
@@ -92,9 +93,27 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
     cells.push(rowCells); grid.append(rowEl);
   });
   laneBtns[0]?.classList.add("active");
-  gridRepainters.push(() => cells.forEach((row) => row.forEach((cell, c) => cell.classList.toggle("wa-beat", isGridLine(c)))));
+  gridRepainters.push(() => cells.forEach((row) => row.forEach((cell, c) => {
+    cell.classList.toggle("wa-beat", isGridLine(c));
+    cell.classList.toggle("outside-pattern", c >= patternLengths[clip.sel]);
+    (cell as HTMLButtonElement).disabled = c >= patternLengths[clip.sel];
+    cell.hidden = c >= patternLengths[clip.sel];
+  })));
+  gridRepainters.push(() => Array.from(ruler.children).slice(1).forEach((tick, c) => { (tick as HTMLElement).hidden = c >= patternLengths[clip.sel]; }));
 
   const clearBtn = btn("CLEAR", "wa-btn-sm");
+  const randomBtn = btn("RANDOM", "wa-btn-sm");
+  randomBtn.addEventListener("click", () => {
+    ctx.checkpoint();
+    for (let r = 0; r < 8; r++) for (let c = 0; c < STEPS; c++) {
+      const density = r === 0 ? 0.22 : r === 1 || r === 4 ? 0.14 : r < 4 ? 0.32 : 0.08;
+      allPats[clip.sel][r][c] = c < patternLengths[clip.sel] && Math.random() < density;
+      allVels[clip.sel][r][c] = 72 + Math.floor(Math.random() * 55);
+      cells[r][c].classList.toggle("on", allPats[clip.sel][r][c]);
+      if (allPats[clip.sel][r][c]) setCellOpacity(cells[r][c], allVels[clip.sel][r][c]); else cells[r][c].style.opacity = "";
+    }
+    ctx.paintSession(); saveAll();
+  });
   clearBtn.addEventListener("click", () => {
     ctx.checkpoint();
     for (let r = 0; r < 8; r++) for (let c = 0; c < STEPS; c++) {
@@ -103,7 +122,7 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
     ctx.paintSession();
     saveAll();
   });
-  const rowTools = el("div", "wa-row-tools"); rowTools.append(clearBtn);
+  const rowTools = el("div", "wa-row-tools"); rowTools.append(randomBtn, clearBtn);
   beat.append(grid, rowTools);
 
   return { beat, cells, sceneBtns };

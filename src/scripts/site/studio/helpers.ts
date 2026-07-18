@@ -28,6 +28,21 @@ export function download(name: string, blob: Blob): void {
   const a = document.createElement("a"); a.href = url; a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
+export function askText(title: string, initial: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog"); dialog.className = "wa-name-dialog";
+    const form = document.createElement("form"); form.method = "dialog";
+    const heading = el("h2", "wa-name-title", title);
+    const input = document.createElement("input"); input.value = initial; input.maxLength = 60; input.autocomplete = "off";
+    const actions = el("div", "wa-name-actions");
+    const cancel = btn("Cancel", "wa-btn-sm"), save = btn("Save", "wa-btn-sm active"); save.type = "submit";
+    cancel.addEventListener("click", () => dialog.close("cancel"));
+    actions.append(cancel, save); form.append(heading, input, actions); dialog.append(form); document.body.append(dialog);
+    dialog.addEventListener("close", () => { const value = dialog.returnValue === "cancel" ? null : input.value.trim() || null; dialog.remove(); resolve(value); }, { once: true });
+    dialog.addEventListener("cancel", () => { dialog.returnValue = "cancel"; });
+    dialog.showModal(); input.focus(); input.select();
+  });
+}
 
 // ─── Data URLs / files ───────────────────────────────────────────────────────
 // Decode a data: URL straight to bytes. We must NOT fetch() data: URLs — the
@@ -98,10 +113,10 @@ export const SCREEN_FG = "#34e2ff";
 
 /** Beat ruler row for the 16-step grids: 1 2 3 4 at the quarters, ticks
  *  between. Lives INSIDE the scrolling grid so it tracks horizontal scroll. */
-export function stepRuler(): HTMLElement {
+export function stepRuler(steps = 16): HTMLElement {
   const ruler = el("div", "wa-step-ruler");
   ruler.append(el("span", "wa-ruler-spacer"));
-  for (let c = 0; c < 16; c++) {   // STEPS — kept literal so helpers stays dependency-free
+  for (let c = 0; c < steps; c++) {
     ruler.append(el("span", "wa-step-tick" + (c % 4 === 0 ? " major" : ""), c % 4 === 0 ? String(c / 4 + 1) : "·"));
   }
   return ruler;

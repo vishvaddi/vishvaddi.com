@@ -6,9 +6,9 @@ import {
   SCENES, STEPS, SONG_SLOTS, PAD_COUNT, PAD_LAYER_MAX, PIANO_NOTES, TRACKS, clip, transport,
   allPats, allVels, synthNotes, padEvents, songChain, arrangement, songLoop, sampleParams, sampleData, sampleBuffers,
   padLayers, padLayerBuffers, padLayerMode,
-  dp, mpc, rackState, fx, vsynthPatch,
+  dp, mpc, rackState, fx, vsynthPatch, synthLaneNotes, synthPatches, patternLengths, patternDivisions, SYNTH_LANES,
 } from "./state";
-import type { ArrangeBlock, HistoryState, PadEvent, PadLayer, PadLayerMode, SamplerP, DrumP, RackState, TrackId, VNote } from "./state";
+import type { ArrangeBlock, HistoryState, PadEvent, PadLayer, PadLayerMode, SamplerP, DrumP, RackState, TrackId, VNote, SynthLane } from "./state";
 import type { VPatch } from "./vsynth";
 import { applyFxState, hydrateSample, hydratePadLayer } from "./engine";
 
@@ -23,6 +23,10 @@ export function historyState(): HistoryState {
     pats: allPats.map((pattern) => pattern.map((row) => [...row])),
     vels: allVels.map((pattern) => pattern.map((row) => [...row])),
     synthNotes: synthNotes.map((notes) => notes.map((note) => ({ ...note }))),
+    synthLaneNotes: Object.fromEntries(SYNTH_LANES.map((lane) => [lane, synthLaneNotes[lane].map((notes) => notes.map((note) => ({ ...note })))])) as Record<SynthLane, VNote[][]>,
+    synthPatches: Object.fromEntries(SYNTH_LANES.map((lane) => [lane, JSON.parse(JSON.stringify(synthPatches[lane]))])) as Record<SynthLane, VPatch>,
+    patternLengths: [...patternLengths],
+    patternDivisions: [...patternDivisions],
     padEvents: padEvents.map((events) => events.map((event) => ({ ...event }))),
     sampleParams: sampleParams.map((params) => ({ ...params })),
     sampleData: [...sampleData],
@@ -41,6 +45,12 @@ export function restoreHistory(state: HistoryState): void {
   state.pats.forEach((pattern, pi) => pattern.forEach((row, ri) => row.forEach((value, step) => { allPats[pi][ri][step] = value; })));
   state.vels.forEach((pattern, pi) => pattern.forEach((row, ri) => row.forEach((value, step) => { allVels[pi][ri][step] = value; })));
   state.synthNotes.forEach((notes, i) => { synthNotes[i] = notes.map((note) => ({ ...note })); });
+  if (state.synthLaneNotes) SYNTH_LANES.forEach((lane) => {
+    state.synthLaneNotes![lane].forEach((notes, i) => { synthLaneNotes[lane][i] = notes.map((note) => ({ ...note })); });
+  });
+  if (state.synthPatches) SYNTH_LANES.forEach((lane) => Object.assign(synthPatches[lane], JSON.parse(JSON.stringify(state.synthPatches![lane]))));
+  state.patternLengths?.forEach((value, i) => { if (i < SCENES) patternLengths[i] = value; });
+  state.patternDivisions?.forEach((value, i) => { if (i < SCENES) patternDivisions[i] = value; });
   state.padEvents.forEach((events, i) => { padEvents[i] = events.map((event) => ({ ...event })); });
   state.sampleParams.forEach((params, i) => Object.assign(sampleParams[i], params));
   state.sampleData.forEach((data, i) => { sampleData[i] = data; sampleBuffers[i] = null; if (data) void hydrateSample(i); });
@@ -66,7 +76,7 @@ export function projectState(includeSamples = true): object {
     return index;
   });
   return {
-    version: 9, // v8: float VNote steps; v9: timeline arrangement (startBar) + songLoop + pad layers
+    version: 10, // v10: bass/lead/harmony lanes, expressive notes and per-scene pattern settings
     pats: allPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
     vels: allVels,
     dp,
@@ -74,7 +84,11 @@ export function projectState(includeSamples = true): object {
     clipSel: clip.sel,
     clipPlay: clip.play,
     synthNotes,
-    vsynth: vsynthPatch,
+    synthLaneNotes,
+    synthPatches,
+    patternLengths,
+    patternDivisions,
+    vsynth: synthPatches.bass,
     songChain, // kept read-only for one version so older saves aren't stranded
     arrangement,
     songLoop,
@@ -132,7 +146,7 @@ export function applyProject(saved: Record<string, unknown>): void {
           if (i >= SCENES || !Array.isArray(notes)) return;
           synthNotes[i] = notes
             .filter((n) => n && typeof n.note === "string" && typeof n.step === "number")
-            .map((n) => ({ note: n.note, step: n.step % STEPS, len: Math.max(0.25, Math.min(STEPS, n.len || 1)), vel: Math.max(1, Math.min(127, n.vel || 100)) }));
+            .map((n) => ({ note: n.note, step: n.step % STEPS, len: Math.max(0.25, Math.min(STEPS, n.len || 1)), vel: Math.max(1, Math.min(127, n.vel || 100)), accent: !!n.accent, slide: !!n.slide }));
         });
       } else if (saved.synthPats) {
         // v5 and older stored a 12-row on/off grid — convert to 1-step notes.
@@ -146,6 +160,18 @@ export function applyProject(saved: Record<string, unknown>): void {
           synthNotes[pi] = notes;
         });
       }
+      if (saved.synthLaneNotes && typeof saved.synthLaneNotes === "object") {
+        const incoming = saved.synthLaneNotes as Partial<Record<SynthLane, VNote[][]>>;
+        SYNTH_LANES.forEach((lane) => incoming[lane]?.forEach((notes, i) => {
+          if (i >= SCENES || !Array.isArray(notes)) return;
+          synthLaneNotes[lane][i] = notes.filter((n) => n && typeof n.note === "string" && typeof n.step === "number").map((n) => ({
+            note: n.note, step: Math.max(0, Math.min(STEPS - 0.25, n.step)), len: Math.max(0.25, Math.min(STEPS, n.len || 1)),
+            vel: Math.max(1, Math.min(127, n.vel || 100)), accent: !!n.accent, slide: !!n.slide,
+          }));
+        }));
+      } else {
+        synthLaneNotes.bass = synthNotes;
+      }
       if (saved.vsynth && typeof saved.vsynth === "object") {
         const incoming = saved.vsynth as Partial<VPatch>;
         (Object.keys(incoming) as Array<keyof VPatch>).forEach((key) => {
@@ -156,6 +182,16 @@ export function applyProject(saved: Record<string, unknown>): void {
           else (vsynthPatch[key] as unknown) = value;
         });
       }
+      if (saved.synthPatches && typeof saved.synthPatches === "object") {
+        const incoming = saved.synthPatches as Partial<Record<SynthLane, VPatch>>;
+        SYNTH_LANES.forEach((lane) => { if (incoming[lane]) Object.assign(synthPatches[lane], JSON.parse(JSON.stringify(incoming[lane]))); });
+      }
+      if (Array.isArray(saved.patternLengths)) (saved.patternLengths as number[]).forEach((value, i) => {
+        if (i < SCENES) patternLengths[i] = [4, 8, 12, 16, 24, 32].includes(value) ? value : 16;
+      });
+      if (Array.isArray(saved.patternDivisions)) (saved.patternDivisions as number[]).forEach((value, i) => {
+        if (i < SCENES) patternDivisions[i] = [3, 4, 6, 8, 12, 16].includes(value) ? value : 4;
+      });
       if (saved.songChain) (saved.songChain as number[]).forEach((v, i) => {
         if (i < SONG_SLOTS) songChain[i] = Math.max(0, Math.min(SCENES - 1, Number(v) || 0));
       });
@@ -173,7 +209,10 @@ export function applyProject(saved: Record<string, unknown>): void {
                 const bars = Math.max(1, Math.min(128, b.bars));
                 const startBar = typeof b.startBar === "number" ? Math.max(0, b.startBar) : cursor;
                 cursor = startBar + bars;
-                return { scene: Math.max(0, Math.min(SCENES - 1, b.scene)), bars, startBar };
+                return {
+                  scene: Math.max(0, Math.min(SCENES - 1, b.scene)), bars, startBar,
+                  automation: Array.isArray(b.automation) ? b.automation.filter((r) => r && typeof r.from === "number" && typeof r.to === "number").map((r) => ({ ...r })) : [],
+                };
               });
           }
         });

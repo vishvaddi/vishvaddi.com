@@ -2,7 +2,7 @@
 // EQ / compressor / delay / reverb / limiter device cards. Extracted verbatim
 // from index.ts (Phase 0 split). (Combinator deletion is a Phase 2 item —
 // kept as-is here.)
-import { STEPS, clip, mpc, rackState, fx, sampleParams, padEvents } from "./state";
+import { clip, mpc, rackState, fx, sampleParams, padEvents, patternLengths } from "./state";
 import { ensureNodes, applyFxState, initReverb, initDelay } from "./engine";
 import { saveAll } from "./persistence";
 import { el, btn, help, sliderRow, euclideanPattern } from "./helpers";
@@ -63,22 +63,23 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
 
   const playerRack = el("div", "wa-device");
   const euclidControls = el("div", "wa-export");
-  const euclidPulses = document.createElement("input"); euclidPulses.type = "number"; euclidPulses.min = "1"; euclidPulses.max = "16"; euclidPulses.value = "7";
-  const euclidRotate = document.createElement("input"); euclidRotate.type = "number"; euclidRotate.min = "0"; euclidRotate.max = "15"; euclidRotate.value = "0";
+  const euclidPulses = document.createElement("input"); euclidPulses.type = "number"; euclidPulses.min = "1"; euclidPulses.max = "32"; euclidPulses.value = "7";
+  const euclidRotate = document.createElement("input"); euclidRotate.type = "number"; euclidRotate.min = "0"; euclidRotate.max = "31"; euclidRotate.value = "0";
   const euclidBtn = btn("Write Euclidean", "wa-btn-sm");
   help(euclidBtn, "Distribute a chosen number of hits evenly across the 16-step pattern.");
   euclidBtn.addEventListener("click", () => {
-    const pattern = euclideanPattern(STEPS, Number(euclidPulses.value), Number(euclidRotate.value)), pad = mpc.selectedPad;
+    const pattern = euclideanPattern(patternLengths[clip.sel], Number(euclidPulses.value), Number(euclidRotate.value)), pad = mpc.selectedPad;
     padEvents[clip.sel] = padEvents[clip.sel].filter((event) => event.pad !== pad);
     pattern.forEach((on, step) => { if (on) padEvents[clip.sel].push({ pad, step, velocity: step % 4 === 0 ? 115 : 86, offset: 0, probability: 100, ratchets: 1 }); });
     deps.paintEventLane(); saveAll();
   });
   euclidControls.append(el("span", "wa-lbl", "Pulses"), euclidPulses, el("span", "wa-lbl", "Rotate"), euclidRotate, euclidBtn);
   playerRack.append(
-    deviceHeader("player", "PLAYER · GROOVE + NOTE ECHO"),
+    deviceHeader("player", "PLAYER · GROOVE + GLITCH"),
     sliderRow("Timing", 0, 0.75, rackState.grooveTiming, 0.01, (v) => { rackState.grooveTiming = v; saveAll(); }),
     sliderRow("Velocity", 0, 0.5, rackState.grooveVelocity, 0.01, (v) => { rackState.grooveVelocity = v; saveAll(); }),
     sliderRow("Random", 0, 40, rackState.grooveRandom, 1, (v) => { rackState.grooveRandom = v; saveAll(); }),
+    sliderRow("Glitch", 0, 100, rackState.glitch, 1, (v) => { rackState.glitch = v; saveAll(); }),
     sliderRow("Echoes", 0, 8, rackState.noteEcho, 1, (v) => { rackState.noteEcho = v; saveAll(); }),
     sliderRow("Echo decay", 0.1, 0.95, rackState.echoDecay, 0.01, (v) => { rackState.echoDecay = v; saveAll(); }),
     euclidControls,

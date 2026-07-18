@@ -96,7 +96,21 @@ export async function initStudio(): Promise<void> {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void win.requestFullscreen();
   });
-  titleBar.append(el("span", "wa-title-text", "VISHAMP — STUDIO"), projectName, el("span", "wa-title-dots"), fsBtn, powerBtn, masterKnob.root);
+  const densityBtn = btn("COMPACT", "wa-btn-sm wa-density-btn");
+  const densities = ["compact", "comfortable"] as const;
+  let density = localStorage.getItem("vv_studio_density") === "comfortable" ? "comfortable" : "compact";
+  const applyDensity = (): void => {
+    win.dataset.density = density;
+    densityBtn.textContent = density.toUpperCase();
+  };
+  applyDensity();
+  densityBtn.addEventListener("click", () => {
+    density = densities[(densities.indexOf(density) + 1) % densities.length];
+    localStorage.setItem("vv_studio_density", density);
+    applyDensity();
+  });
+  help(densityBtn, "Switch between a space-efficient workstation and larger, more relaxed controls. This preference is remembered.");
+  titleBar.append(el("span", "wa-title-text", "VISHAMP — STUDIO"), projectName, el("span", "wa-title-dots"), densityBtn, fsBtn, powerBtn, masterKnob.root);
   const lcd = el("div", "wa-lcd");
   const lcdBpm = el("span", "wa-lcd-seg", `${transport.bpm} BPM`);
   const lcdState = el("span", "wa-lcd-seg", "■ STOP");

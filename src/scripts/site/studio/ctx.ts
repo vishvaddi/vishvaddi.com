@@ -3,7 +3,7 @@
 // modules only READ fields inside event handlers / repaints, which all run
 // post-init, so late assignment is safe (same used-before-declared pattern
 // the original closures relied on). Grown field-by-field as sections move out.
-import { STEPS, transport } from "./state";
+import { transport, clip, patternLengths } from "./state";
 
 export interface StudioCtx {
   checkpoint: () => void
@@ -28,7 +28,7 @@ export const gridRepainters: Array<() => void> = [];
 // Grid 0 = Off (no snapping); the step grids still shade quarters for reading.
 // 1/32 and 1/64 give FRACTIONAL steps-per-line (0.5 / 0.25) — only the roll
 // can snap that fine, so the 16-cell grids clamp their shading to whole steps.
-export function stepsPerGridLine(): number { return transport.quantizeGrid ? STEPS / transport.quantizeGrid : 4; }
+export function stepsPerGridLine(): number { return transport.quantizeGrid ? patternLengths[clip.sel] / transport.quantizeGrid : 4; }
 export function isGridLine(step: number): boolean { return step % Math.max(1, stepsPerGridLine()) === 0; }
 
 // One color per scene (A-H), distinct from the accent/amber/blue already

@@ -7,7 +7,7 @@ import { DRUMS, dp, DP_DEF, DP_SPECS, sampleParams, sampleBuffers, sampleData } 
 import type { SamplerP } from "./state";
 import { ac, ensureNodes, trackGain, playDrum, hydrateSample } from "./engine";
 import { saveAll } from "./persistence";
-import { el, btn, help, readAsDataUrl, drawWaveform } from "./helpers";
+import { el, btn, help, readAsDataUrl, drawWaveform, download, askText } from "./helpers";
 import { knob } from "./knob";
 import { ctx } from "./ctx";
 
@@ -20,6 +20,39 @@ export interface LaneInspector {
 export function buildLaneInspector(): LaneInspector {
   let lane = 0;
   const panel = el("div", "wa-selected-sample wa-lane-inspector");
+
+  type Kit = { dp: typeof DP_DEF; params: SamplerP[] };
+  const kitKey = "vv_studio_user_kits";
+  const kitFromState = (): Kit => ({ dp: dp.map((item) => ({ ...item })), params: sampleParams.slice(0, DRUMS.length).map((item) => ({ ...item, name: item.name || "" })) });
+  const factoryKits: Record<string, Kit> = {
+    "VISHAMP DEFAULT": { dp: DP_DEF.map((item) => ({ ...item })), params: sampleParams.slice(0, DRUMS.length).map((item) => ({ ...item })) },
+    "HOUSE 909": { dp: DP_DEF.map((item, i) => ({ ...item, decay: i === 0 ? 0.34 : item.decay, filter: i === 2 ? 9800 : item.filter })), params: sampleParams.slice(0, DRUMS.length).map((item) => ({ ...item })) },
+    "DUST & TAPE": { dp: DP_DEF.map((item) => ({ ...item, filter: item.filter ? item.filter * 0.72 : 0, decay: item.decay * 0.82 })), params: sampleParams.slice(0, DRUMS.length).map((item) => ({ ...item, filter: 9200 })) },
+    "WAREHOUSE": { dp: DP_DEF.map((item, i) => ({ ...item, decay: i === 0 || i === 7 ? item.decay * 1.4 : item.decay, toneLevel: Math.min(1, item.toneLevel + 0.15) })), params: sampleParams.slice(0, DRUMS.length).map((item) => ({ ...item })) },
+  };
+  let userKits: Record<string, Kit> = {};
+  try { userKits = JSON.parse(localStorage.getItem(kitKey) || "{}"); } catch { userKits = {}; }
+  const kitRow = el("div", "wa-kit-library");
+  const kitSelect = document.createElement("select"); kitSelect.setAttribute("aria-label", "Drum kit");
+  const refreshKits = () => {
+    const current = kitSelect.value; kitSelect.replaceChildren();
+    Object.keys(factoryKits).forEach((name) => kitSelect.append(new Option(name, `factory:${name}`)));
+    Object.keys(userKits).sort().forEach((name) => kitSelect.append(new Option(`★ ${name}`, `user:${name}`)));
+    if (Array.from(kitSelect.options).some((option) => option.value === current)) kitSelect.value = current;
+  };
+  const loadKit = (kit: Kit) => {
+    ctx.checkpoint(); kit.dp.forEach((item, i) => Object.assign(dp[i], item)); kit.params.forEach((item, i) => Object.assign(sampleParams[i], item));
+    saveAll(); paint();
+  };
+  const loadKitBtn = btn("Load", "wa-btn-sm"), saveKitBtn = btn("＋", "wa-btn-sm"), deleteKitBtn = btn("Delete", "wa-btn-sm"), exportKitBtn = btn("↓", "wa-btn-sm"), importKitBtn = btn("↑", "wa-btn-sm");
+  const kitInput = document.createElement("input"); kitInput.type = "file"; kitInput.accept = ".json,application/json"; kitInput.hidden = true;
+  loadKitBtn.addEventListener("click", () => { const value = kitSelect.value; const kit = value.startsWith("user:") ? userKits[value.slice(5)] : factoryKits[value.slice(8)]; if (kit) loadKit(kit); });
+  saveKitBtn.addEventListener("click", async () => { const name = await askText("Save drum kit", "My kit"); if (!name) return; userKits[name] = kitFromState(); localStorage.setItem(kitKey, JSON.stringify(userKits)); refreshKits(); kitSelect.value = `user:${name}`; });
+  deleteKitBtn.addEventListener("click", () => { if (!kitSelect.value.startsWith("user:")) return; delete userKits[kitSelect.value.slice(5)]; localStorage.setItem(kitKey, JSON.stringify(userKits)); refreshKits(); });
+  exportKitBtn.addEventListener("click", () => download("vishamp-kit.json", new Blob([JSON.stringify({ format: "vishamp-kit", version: 1, kit: kitFromState() }, null, 2)], { type: "application/json" })));
+  importKitBtn.addEventListener("click", () => kitInput.click());
+  kitInput.addEventListener("change", async () => { const file = kitInput.files?.[0]; if (!file) return; try { const parsed = JSON.parse(await file.text()) as { kit?: Kit }; if (parsed.kit) loadKit(parsed.kit); } catch { /* keep current kit */ } kitInput.value = ""; });
+  refreshKits(); kitRow.append(el("span", "wa-lbl", "KIT"), kitSelect, loadKitBtn, saveKitBtn, deleteKitBtn, exportKitBtn, importKitBtn, kitInput);
 
   const title = el("div", "wa-inspector-title", "KICK");
   const testBtn = btn("▶", "wa-btn-sm");
@@ -143,7 +176,7 @@ export function buildLaneInspector(): LaneInspector {
     paint(); saveAll(); audition();
   });
 
-  panel.append(titleRow, waveCanvas, waveEmpty, fileName, actions, knobRow, sdBlock);
+  panel.append(kitRow, titleRow, waveCanvas, waveEmpty, fileName, actions, knobRow, sdBlock);
   paint();
 
   return {

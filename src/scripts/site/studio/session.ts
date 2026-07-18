@@ -2,11 +2,11 @@
 // index.ts (Phase 0 split). Cross-section wiring goes through ctx.
 import {
   TRACKS, TRACK_LABELS, SCENE_LABELS, clip, transport,
-  allPats, synthNotes, padEvents,
+  allPats, synthLaneNotes, SYNTH_LANES, padEvents, arrangement,
 } from "./state";
-import type { TrackId } from "./state";
-import { saveAll } from "./persistence";
-import { el, btn, help } from "./helpers";
+import type { TrackId, ArrangeBlock, AutomationRamp } from "./state";
+import { saveAll, projectState, pendingProjectStore } from "./persistence";
+import { el, btn, help, download, askText } from "./helpers";
 import { ctx, SCENE_COLORS } from "./ctx";
 
 export interface SessionView {
@@ -27,7 +27,7 @@ export function buildSession(): SessionView {
   function clipHasContent(track: TrackId, scene: number): boolean {
     if (track === "drums") return allPats[scene].some((row) => row.some(Boolean));
     if (track === "pads") return padEvents[scene].length > 0;
-    return synthNotes[scene].length > 0;
+    return SYNTH_LANES.some((lane) => synthLaneNotes[lane][scene].length > 0);
   }
   function paintSession(): void {
     sessionCells.forEach((row, scene) => row.forEach((cell, ti) => {
@@ -94,11 +94,110 @@ export function buildSession(): SessionView {
     sessionCells.push(rowCells);
     sessionGrid.append(row);
   });
-  // Arrangement timeline removed (E) — clips only, per Vish. The paint list
-  // survives (empty) so index.ts's repaint hooks stay untouched.
-  const arrangeLanePaints: Array<() => void> = [];
+  // Compact pattern-chain composer. It maps Anchor's repeat/reorder workflow
+  // onto the existing shared arrangement timeline instead of maintaining a
+  // second song format.
+  const composer = el("div", "wa-composer");
+  const composerHead = el("div", "wa-composer-head");
+  const chain = el("div", "wa-chainstrip");
+  const addBtn = btn("＋ Add selected", "wa-btn-sm"), leftBtn = btn("←", "wa-btn-sm"), rightBtn = btn("→", "wa-btn-sm"), shorterBtn = btn("− Repeat", "wa-btn-sm"), longerBtn = btn("＋ Repeat", "wa-btn-sm"), deleteBtn = btn("Delete", "wa-btn-sm"), clearBtn = btn("Clear", "wa-btn-sm");
+  let selectedBlock = -1;
+  const canonical = (): ArrangeBlock[] => arrangement.drums;
+  const normaliseStarts = () => {
+    let cursor = 0;
+    canonical().forEach((block) => { block.startBar = cursor; cursor += block.bars; });
+    TRACKS.slice(1).forEach((track) => { arrangement[track] = canonical().map((block) => ({ ...block, automation: block.automation?.map((r) => ({ ...r })) })); });
+  };
+  const paintChain = () => {
+    chain.replaceChildren();
+    if (!canonical().length) chain.append(el("span", "wa-chain-empty", "Add scenes to build an arrangement"));
+    canonical().forEach((block, index) => {
+      const item = btn(`${SCENE_LABELS[block.scene]} ×${block.bars}`, "wa-chain-block") as HTMLButtonElement;
+      item.classList.remove("wa-btn"); item.classList.toggle("active", index === selectedBlock);
+      if (block.automation?.length) item.classList.add("automated");
+      item.addEventListener("click", () => { selectedBlock = index; paintChain(); paintAutomation(); });
+      chain.append(item);
+    });
+  };
+  const commitChain = () => { normaliseStarts(); saveAll(); paintChain(); };
+  addBtn.addEventListener("click", () => { canonical().push({ scene: clip.sel, bars: 1, startBar: 0, automation: [] }); selectedBlock = canonical().length - 1; commitChain(); });
+  leftBtn.addEventListener("click", () => { if (selectedBlock <= 0) return; [canonical()[selectedBlock - 1], canonical()[selectedBlock]] = [canonical()[selectedBlock], canonical()[selectedBlock - 1]]; selectedBlock--; commitChain(); });
+  rightBtn.addEventListener("click", () => { if (selectedBlock < 0 || selectedBlock >= canonical().length - 1) return; [canonical()[selectedBlock + 1], canonical()[selectedBlock]] = [canonical()[selectedBlock], canonical()[selectedBlock + 1]]; selectedBlock++; commitChain(); });
+  shorterBtn.addEventListener("click", () => { const block = canonical()[selectedBlock]; if (!block) return; block.bars = Math.max(1, block.bars - 1); commitChain(); });
+  longerBtn.addEventListener("click", () => { const block = canonical()[selectedBlock]; if (!block) return; block.bars = Math.min(128, block.bars + 1); commitChain(); });
+  deleteBtn.addEventListener("click", () => { if (selectedBlock < 0) return; canonical().splice(selectedBlock, 1); selectedBlock = Math.min(selectedBlock, canonical().length - 1); commitChain(); paintAutomation(); });
+  clearBtn.addEventListener("click", () => { TRACKS.forEach((track) => { arrangement[track] = []; }); selectedBlock = -1; saveAll(); paintChain(); paintAutomation(); });
+
+  const automation = el("div", "wa-automation-editor");
+  const laneSel = document.createElement("select"); [["bass", "Bass"], ["lead", "Lead"], ["harmony", "Harmony"], ["master", "Master"]].forEach(([v, l]) => laneSel.append(new Option(l, v)));
+  const paramSel = document.createElement("select"); [["cutoff", "Cutoff"], ["volume", "Volume"], ["reverb", "Reverb"]].forEach(([v, l]) => paramSel.append(new Option(l, v)));
+  const fromInput = document.createElement("input"), toInput = document.createElement("input");
+  [fromInput, toInput].forEach((input) => { input.type = "number"; input.min = "0"; input.max = "100"; input.value = input === fromInput ? "20" : "80"; input.setAttribute("aria-label", input === fromInput ? "Automation start percent" : "Automation end percent"); });
+  const addRampBtn = btn("＋ Ramp", "wa-btn-sm"), ramps = el("div", "wa-ramp-list");
+  const paintAutomation = () => {
+    ramps.replaceChildren(); const block = canonical()[selectedBlock];
+    block?.automation?.forEach((ramp, index) => {
+      const row = el("div", "wa-ramp-row", `${ramp.lane} ${ramp.param} ${Math.round(ramp.from * 100)}→${Math.round(ramp.to * 100)}%`);
+      const remove = btn("×", "wa-btn-sm"); remove.addEventListener("click", () => { block.automation!.splice(index, 1); commitChain(); paintAutomation(); }); row.append(remove); ramps.append(row);
+    });
+  };
+  addRampBtn.addEventListener("click", () => {
+    const block = canonical()[selectedBlock]; if (!block) return;
+    const ramp: AutomationRamp = { lane: laneSel.value as AutomationRamp["lane"], param: paramSel.value as AutomationRamp["param"], from: Number(fromInput.value) / 100, to: Number(toInput.value) / 100 };
+    block.automation ??= []; block.automation.push(ramp); commitChain(); paintAutomation();
+  });
+  automation.append(el("span", "wa-lbl", "AUTOMATION"), laneSel, paramSel, el("span", "wa-lbl", "FROM"), fromInput, el("span", "wa-lbl", "TO"), toInput, addRampBtn, ramps);
+
+  const songLibrary = el("div", "wa-song-library");
+  const songKey = "vv_studio_user_songs"; let songs: Record<string, Record<string, unknown>> = {};
+  try { songs = JSON.parse(localStorage.getItem(songKey) || "{}"); } catch { songs = {}; }
+  const factorySong = (name: string): Record<string, unknown> => {
+    const state = JSON.parse(JSON.stringify(projectState(false))) as Record<string, unknown> & {
+      pats: number[][][]; vels: number[][][]; synthLaneNotes: Record<string, Array<Array<Record<string, unknown>>>>;
+      arrangement: Record<string, ArrangeBlock[]>; bpm: number;
+    };
+    state.pats = Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => Array(16).fill(0)));
+    state.vels = Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => Array(16).fill(96)));
+    const put = (scene: number, row: number, steps: number[]) => steps.forEach((step) => { state.pats[scene][row][step] = 1; });
+    [0, 1, 2, 3].forEach((scene) => {
+      put(scene, 0, name === "MIDNIGHT ACID" ? [0, 4, 8, 12] : [0, 6, 8, 14]);
+      put(scene, 1, [4, 12]); put(scene, 2, [2, 6, 10, 14]);
+      if (scene % 2) put(scene, 3, [7, 15]);
+    });
+    const note = (noteName: string, step: number, len = 1, accent = false, slide = false) => ({ note: noteName, step, len, vel: accent ? 116 : 94, accent, slide });
+    state.synthLaneNotes = { bass: Array.from({ length: 8 }, () => []), lead: Array.from({ length: 8 }, () => []), harmony: Array.from({ length: 8 }, () => []) };
+    state.synthLaneNotes.bass[0] = [note("C3", 0, 2, true), note("C3", 3), note("D#3", 6, 1, false, true), note("G3", 10), note("A#2", 14)];
+    state.synthLaneNotes.bass[1] = [note("F2", 0, 2, true), note("F2", 4), note("G#2", 8, 1, false, true), note("C3", 12)];
+    state.synthLaneNotes.lead[2] = [note("C4", 0), note("D#4", 2), note("G4", 4, 2, true), note("A#4", 8), note("G4", 12, 2)];
+    state.synthLaneNotes.harmony[3] = [note("C4", 0, 16)];
+    const blocks = [0, 1, 2, 3].map((scene, index) => ({ scene, bars: name === "NEON HORIZON" ? 2 : 1, startBar: index * (name === "NEON HORIZON" ? 2 : 1), automation: index === 2 ? [{ lane: "lead" as const, param: "cutoff" as const, from: .2, to: .9 }] : [] }));
+    state.arrangement = { drums: blocks, pads: blocks.map((b) => ({ ...b })), synth: blocks.map((b) => ({ ...b })) };
+    state.bpm = name === "MIDNIGHT ACID" ? 122 : name === "NEON HORIZON" ? 138 : 92;
+    return state;
+  };
+  const factorySongs = ["MIDNIGHT ACID", "NEON HORIZON", "DUST BREAK"];
+  const songSel = document.createElement("select"); songSel.setAttribute("aria-label", "Saved song");
+  const refreshSongs = () => {
+    const current = songSel.value; songSel.replaceChildren();
+    factorySongs.forEach((name) => songSel.append(new Option(name, `factory:${name}`)));
+    Object.keys(songs).sort().forEach((name) => songSel.append(new Option(`★ ${name}`, `user:${name}`)));
+    if (Array.from(songSel.options).some((option) => option.value === current)) songSel.value = current;
+  };
+  const saveSongBtn = btn("Save song", "wa-btn-sm"), loadSongBtn = btn("Load", "wa-btn-sm"), deleteSongBtn = btn("Delete", "wa-btn-sm"), exportSongBtn = btn("↓ Song", "wa-btn-sm"), importSongBtn = btn("↑ Song", "wa-btn-sm");
+  const songInput = document.createElement("input"); songInput.type = "file"; songInput.accept = ".json,application/json"; songInput.hidden = true;
+  saveSongBtn.addEventListener("click", async () => { const name = await askText("Save song", "Untitled song"); if (!name) return; songs[name] = projectState(false) as Record<string, unknown>; localStorage.setItem(songKey, JSON.stringify(songs)); refreshSongs(); songSel.value = `user:${name}`; });
+  loadSongBtn.addEventListener("click", async () => { const saved = songSel.value.startsWith("factory:") ? factorySong(songSel.value.slice(8)) : songs[songSel.value.slice(5)]; if (!saved) return; await pendingProjectStore("put", saved); location.reload(); });
+  deleteSongBtn.addEventListener("click", () => { if (!songSel.value.startsWith("user:")) return; delete songs[songSel.value.slice(5)]; localStorage.setItem(songKey, JSON.stringify(songs)); refreshSongs(); });
+  exportSongBtn.addEventListener("click", () => download("vishamp-song.json", new Blob([JSON.stringify({ format: "vishamp-song", version: 1, song: projectState(false) }, null, 2)], { type: "application/json" })));
+  importSongBtn.addEventListener("click", () => songInput.click());
+  songInput.addEventListener("change", async () => { const file = songInput.files?.[0]; if (!file) return; try { const parsed = JSON.parse(await file.text()) as { song?: Record<string, unknown> }; if (parsed.song?.pats) { await pendingProjectStore("put", parsed.song); location.reload(); } } catch { launchStatus.textContent = "Song file is invalid"; } songInput.value = ""; });
+  refreshSongs(); songLibrary.append(el("span", "wa-lbl", "SONGS"), songSel, loadSongBtn, saveSongBtn, deleteSongBtn, exportSongBtn, importSongBtn, songInput);
+
+  composerHead.append(el("span", "wa-fx-title", "ARRANGEMENT"), addBtn, leftBtn, rightBtn, shorterBtn, longerBtn, deleteBtn, clearBtn);
+  composer.append(composerHead, chain, automation, songLibrary); paintChain(); paintAutomation();
+  const arrangeLanePaints: Array<() => void> = [paintChain];
   help(sessionGrid, "Each column is a track, each row a scene — launch single clips or whole scenes; changes land on the next bar so transitions stay in time.");
-  song.append(launchStatus, sessionGrid);
+  song.append(launchStatus, sessionGrid, composer);
 
   return { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid };
 }

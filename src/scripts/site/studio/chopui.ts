@@ -1,7 +1,7 @@
 // Chop / sample capture — break loading, mic capture, slicing (equal /
 // transient / manual), BPM guess + sync, assign-to-bank and break replay.
 // Extracted verbatim from index.ts (Phase 0 split).
-import { STEPS, PAD_BANK_SIZE, SCENE_LABELS, clip, transport, mpc, sampleParams, sampleBuffers, sampleData, padEvents } from "./state";
+import { PAD_BANK_SIZE, SCENE_LABELS, clip, transport, mpc, sampleParams, sampleBuffers, sampleData, padEvents, patternLengths } from "./state";
 import { ac, ensureNodes } from "./engine";
 import * as engine from "./engine";
 import { saveAll } from "./persistence";
@@ -137,7 +137,7 @@ export function buildChop(deps: { paintMpcPads: () => void; paintEventLane: () =
     const bankStart = mpc.bank * PAD_BANK_SIZE;
     const count = Math.min(PAD_BANK_SIZE, slices.length);
     padEvents[clip.sel] = Array.from({ length: count }, (_, i) => ({
-      pad: bankStart + i, step: Math.round((i * STEPS) / count) % STEPS,
+      pad: bankStart + i, step: Math.round((i * patternLengths[clip.sel]) / count) % patternLengths[clip.sel],
       velocity: 110, offset: 0, probability: 100, ratchets: 1,
     }));
     if (clip.play.pads === null) clip.play.pads = clip.sel;
