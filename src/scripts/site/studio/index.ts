@@ -90,7 +90,13 @@ export async function initStudio(): Promise<void> {
     if (powerBtn.classList.contains("on")) engine.master!.gain.value = v;
   });
   help(masterKnob.root, "Master output level — the same gain the mixer's MASTER fader controls.");
-  titleBar.append(el("span", "wa-title-text", "VISHAMP — STUDIO"), projectName, el("span", "wa-title-dots"), powerBtn, masterKnob.root);
+  const fsBtn = btn("⛶", "wa-btn-sm wa-fs-btn");
+  help(fsBtn, "Fullscreen — the studio takes the whole display; Esc exits.");
+  fsBtn.addEventListener("click", () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void win.requestFullscreen();
+  });
+  titleBar.append(el("span", "wa-title-text", "VISHAMP — STUDIO"), projectName, el("span", "wa-title-dots"), fsBtn, powerBtn, masterKnob.root);
   const lcd = el("div", "wa-lcd");
   const lcdBpm = el("span", "wa-lcd-seg", `${transport.bpm} BPM`);
   const lcdState = el("span", "wa-lcd-seg", "■ STOP");
@@ -212,11 +218,13 @@ export async function initStudio(): Promise<void> {
   // Fit the chassis to the viewport remainder below the site nav — the CSS
   // 100dvh height assumed the win started at the top of the document.
   const fitWin = () => {
+    if (document.fullscreenElement === win) { win.style.height = "100dvh"; return; }
     const top = Math.round(win.getBoundingClientRect().top + window.scrollY);
     win.style.height = `max(480px, calc(100dvh - ${top}px - 8px))`;
   };
   fitWin();
   window.addEventListener("resize", fitWin);
+  document.addEventListener("fullscreenchange", fitWin);
 
   // ── Help and tutorial ── (tutorial.ts — Phase 0 split)
   const { showTutorialStep } = buildTutorial({

@@ -9,7 +9,7 @@ import * as engine from "./engine";
 import { playNote, LiveVoices, PRESETS, PRESET_CATEGORIES, TABLE_NAMES, MOD_SRCS, MOD_DESTS, sampleWaveform, noteToMidi, midiToNote } from "./vsynth";
 import type { ModSlot, VPatch } from "./vsynth";
 import { saveAll } from "./persistence";
-import { el, btn, help, sliderRow, drawScope, drawEnvelopeShape } from "./helpers";
+import { el, btn, help, sliderRow, drawScope, drawEnvelopeShape, SCREEN_BG, SCREEN_FG } from "./helpers";
 import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
 import { showVelocityPopup } from "./velpopup";
 import { buildKeys } from "./keys";
@@ -32,6 +32,41 @@ export interface SynthUI {
   pianoRoll: HTMLElement;
   /** KEYS-page strip: label + rec toggle + octave readout (layout re-houses it) */
   keysHeader: HTMLElement;
+}
+
+// Stacked wavetable wireframe (Serum-style): the table's slices drawn as
+// perspective-offset polylines, the slice under the POSITION knob lit with a
+// cyan halo, neighbours ghosted by distance. Pure look — audio path untouched.
+const WT_SLICES = 12;
+function drawWavetableStack(canvas: HTMLCanvasElement, table: string, pos: number): void {
+  const scale = window.devicePixelRatio || 1, width = canvas.clientWidth || 200, height = canvas.clientHeight || 92;
+  canvas.width = Math.floor(width * scale); canvas.height = Math.floor(height * scale);
+  const g = canvas.getContext("2d"); if (!g) return;
+  g.scale(scale, scale);
+  g.fillStyle = SCREEN_BG; g.fillRect(0, 0, width, height);
+  const spanX = width * 0.2, spanY = height * 0.42;
+  const plotW = width - spanX - 10, amp = (height - spanY - 12) * 0.5;
+  const current = Math.round(pos * (WT_SLICES - 1));
+  const slice = (index: number): void => {
+    const t = index / (WT_SLICES - 1);
+    const wave = sampleWaveform(table, t);
+    const ox = 5 + t * spanX, oy = height - 8 - amp - t * spanY;
+    const isCurrent = index === current;
+    g.strokeStyle = isCurrent ? SCREEN_FG : `rgba(52, 226, 255, ${(0.08 + 0.16 * (1 - Math.abs(t - pos))).toFixed(3)})`;
+    g.lineWidth = isCurrent ? 1.8 : 0.8;
+    g.shadowBlur = isCurrent ? 9 : 0;
+    g.shadowColor = SCREEN_FG;
+    g.beginPath();
+    for (let i = 0; i < wave.length; i++) {
+      const x = ox + (i / (wave.length - 1)) * plotW;
+      const y = oy - wave[i] * amp;
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.stroke();
+  };
+  for (let i = WT_SLICES - 1; i >= 0; i--) if (i !== current) slice(i);
+  slice(current);
+  g.shadowBlur = 0;
 }
 
 export function buildSynth(): SynthUI {
@@ -183,7 +218,7 @@ export function buildSynth(): SynthUI {
     scopeAnalyser.getByteTimeDomainData(data);
     const floats = new Float32Array(data.length);
     for (let i = 0; i < data.length; i++) floats[i] = (data[i] - 128) / 128;
-    drawScope(scopeCanvas, floats, "#33ff99");
+    drawScope(scopeCanvas, floats, SCREEN_FG);
   }
   drawSynthScope();
   function renderPatchEditor(): void {
@@ -212,7 +247,7 @@ export function buildSynth(): SynthUI {
       box.append(el("div", "wa-fx-title", `OSC ${i + 1}`));
       const waveCanvas = document.createElement("canvas"); waveCanvas.className = "wa-wave-mini";
       box.append(waveCanvas);
-      const redrawWave = () => drawScope(waveCanvas, sampleWaveform(o.table, o.pos));
+      const redrawWave = () => drawWavetableStack(waveCanvas, o.table, o.pos);
       waveRedraws.push(redrawWave);
       const tableOptions: Array<[string, string]> = TABLE_NAMES.map((n) => [n, n.toUpperCase()]);
       if (o.table.startsWith("text:")) tableOptions.push([o.table, `TEXT "${o.table.slice(5)}"`]);

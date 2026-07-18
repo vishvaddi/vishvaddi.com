@@ -5,7 +5,7 @@
 // This module RE-HOUSES panels built elsewhere — it builds no instruments.
 import { el, btn, help } from "./helpers";
 
-export type ModeId = "drums" | "pads" | "keys" | "sound" | "song" | "mix";
+export type ModeId = "drums" | "pads" | "keys" | "synth" | "song" | "mix";
 
 export interface LayoutPanels {
   beat: HTMLElement;
@@ -43,7 +43,7 @@ const MODES: Array<{ id: ModeId; label: string; helpText: string }> = [
   { id: "drums", label: "DRUMS", helpText: "Program the eight drum lanes on the step grid." },
   { id: "pads", label: "PADS", helpText: "Perform on the 16 pads, edit the selected pad, chop breaks and scratch." },
   { id: "keys", label: "KEYS", helpText: "Play the VV-1 keys and sequence notes in the piano roll." },
-  { id: "sound", label: "SOUND", helpText: "Sound design — the VV-1 patch editor and the sample rack." },
+  { id: "synth", label: "SYNTH", helpText: "Sound design — the VV-1 patch editor and the sample rack." },
   { id: "song", label: "SONG", helpText: "Launch scenes and arrange the full song." },
   { id: "mix", label: "MIX", helpText: "Mixer, master devices, project save and export." },
 ];
@@ -151,7 +151,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   keysPage.append(p.pianoRoll, p.keysHeader, p.synthKeys);
 
   // ── SOUND ── the browse page: patch editor or sample rack behind chips
-  const soundPage = el("div", "wa-page wa-page-sound");
+  const soundPage = el("div", "wa-page wa-page-synth");
   const soundChips = el("div", "wa-subtabs");
   const patchChip = btn("SYNTH PATCH", "wa-subtab");
   const rackChip = btn("SAMPLE RACK", "wa-subtab");
@@ -186,7 +186,7 @@ export function buildLayout(p: LayoutPanels): Layout {
 
   const pages: Record<ModeId, HTMLElement> = {
     drums: drumsPage, pads: padsPage, keys: keysPage,
-    sound: soundPage, song: songPage, mix: mixPage,
+    synth: soundPage, song: songPage, mix: mixPage,
   };
   workarea.append(drumsPage, padsPage, keysPage, soundPage, songPage, mixPage);
 
@@ -202,7 +202,7 @@ export function buildLayout(p: LayoutPanels): Layout {
     closeOverlays();
     modeKeyBtns.forEach((b, i) => b.classList.toggle("active", MODES[i].id === next));
     (Object.keys(pages) as ModeId[]).forEach((id) => { pages[id].hidden = id !== next; });
-    if (next === "sound") {
+    if (next === "synth") {
       // SOUND follows context: keys → patch, drums/pads → rack, else keep last
       if (from === "keys") soundView = "patch";
       else if (from === "drums" || from === "pads") soundView = "rack";
@@ -240,7 +240,7 @@ export function buildLayout(p: LayoutPanels): Layout {
     nav(() => setMode("keys")),
     nav(() => setMode("song")),
     nav(() => setMode("mix")),
-    nav(() => { setMode("sound"); soundView = "patch"; paintSound(); }),
+    nav(() => { setMode("synth"); soundView = "patch"; paintSound(); }),
   ];
 
   return { modeBar, workarea, getActiveMode: () => activeMode, navButtons, modeKeyBtns };

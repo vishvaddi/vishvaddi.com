@@ -4,29 +4,29 @@
    /_astro cache cleanly. DOM + class names match the TS; only the look changed. */
 
 .wa-win {
-  /* CV-80 hardware chassis: warm near-black panels, cream engraving, orange
-     master accent - with LYSERGIC phosphor green reserved for "screens"
-     (LCD, scope, waveforms, roll). Synth Parity Plan, Phase 1. */
-  --wa-bg: #201913;
-  --wa-surface: #2a221a;
-  --wa-surface-2: #342a20;
-  --wa-surface-3: #3f3327;
-  --wa-border: #4a3b2c;
-  --wa-border-2: #5c4936;
-  --wa-text: #f0e6d2;
-  --wa-muted: #a8977f;
-  --wa-accent: #ff9f43;
-  --wa-accent-dim: #c77b2e;
-  --wa-blue: #6ea8d8;
-  --wa-amber: #ffb422;
-  --wa-red: #ff5d4e;
-  --wa-teal: #4fd1b5;
-  --wa-purple: #b98bff;
-  --wa-phos: #33ff99;
-  --wa-phos-dim: #1d9a5f;
-  --wa-phos-bg: #0a120c;
-  --wa-wood-1: #5a3d26;
-  --wa-wood-2: #3d2917;
+  /* Cyan-terminal cyberpunk chassis: gunmetal grey panels, cool engraving,
+     neon cyan accent, amber warnings - screens (LCD, scope, waveforms, roll)
+     run cyan-on-black with the scanlines kept. Studio v2, C1. */
+  --wa-bg: #101216;
+  --wa-surface: #17191d;
+  --wa-surface-2: #1e2126;
+  --wa-surface-3: #262a30;
+  --wa-border: #2e343b;
+  --wa-border-2: #3d444d;
+  --wa-text: #d8dde3;
+  --wa-muted: #7d868f;
+  --wa-accent: #00e5ff;
+  --wa-accent-dim: #0092a8;
+  --wa-blue: #58b6ff;
+  --wa-amber: #ff9e2c;
+  --wa-red: #ff4757;
+  --wa-teal: #2fe0c0;
+  --wa-purple: #8f7bff;
+  --wa-phos: #34e2ff;
+  --wa-phos-dim: #14778c;
+  --wa-phos-bg: #050a0c;
+  --wa-wood-1: #3a4048;
+  --wa-wood-2: #23272d;
   --wa-radius: 9px;
   --wa-radius-sm: 6px;
   --wa-font: var(--font-sans, system-ui, -apple-system, "Segoe UI", sans-serif);
@@ -47,7 +47,7 @@
   position: relative;
   user-select: none;
 }
-/* Wood side rails */
+/* Brushed steel side rails with a faint cyan edge-light */
 .wa-win::before,
 .wa-win::after {
   content: "";
@@ -56,9 +56,10 @@
   bottom: -1px;
   width: 14px;
   background:
-    repeating-linear-gradient(175deg, rgba(0, 0, 0, 0.16) 0 2px, transparent 2px 5px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 3px),
     linear-gradient(90deg, var(--wa-wood-1), var(--wa-wood-2));
-  border: 1px solid #2a1c0f;
+  border: 1px solid #0c0e11;
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.5), inset 0 0 1px rgba(0, 229, 255, 0.25);
 }
 .wa-win::before { left: -14px; border-radius: var(--wa-radius) 0 0 var(--wa-radius); }
 .wa-win::after { right: -14px; border-radius: 0 var(--wa-radius) var(--wa-radius) 0; }
@@ -117,7 +118,7 @@
   background: var(--wa-surface-2); border: 1px solid var(--wa-border); border-radius: 999px;
   transition: color 200ms ease, background 200ms ease;
 }
-.wa-save-state.flash { color: var(--wa-accent); background: rgba(47, 227, 166, 0.12); }
+.wa-save-state.flash { color: var(--wa-accent); background: rgba(0, 229, 255, 0.12); }
 
 /* ── Transport ── */
 .wa-transport {
@@ -306,7 +307,7 @@
 }
 .wa-cell:hover { filter: brightness(1.35); }
 .wa-cell.wa-beat { background: var(--wa-surface-3); }
-.wa-cell.on { background: var(--wa-accent); border-color: var(--wa-accent-dim); box-shadow: 0 0 7px rgba(47, 227, 166, 0.35); }
+.wa-cell.on { background: var(--wa-accent); border-color: var(--wa-accent-dim); box-shadow: 0 0 7px rgba(0, 229, 255, 0.35); }
 .wa-cell.play { outline: 2px solid var(--wa-amber); outline-offset: -2px; }
 .wa-cell.on.play { background: var(--wa-amber); }
 .wa-row-tools { margin-top: 10px; }
@@ -343,7 +344,7 @@
 }
 .wa-mpc-pad.selected {
   border-color: var(--wa-accent);
-  box-shadow: 0 0 0 2px rgba(47, 227, 166, 0.35);
+  box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.35);
 }
 .wa-mpc-pad.drop { border-color: var(--wa-amber); background: rgba(255, 180, 34, 0.12); }
 .wa-mpc-pad-number { font-size: 17px; font-weight: 700; color: var(--wa-accent); }
@@ -386,10 +387,11 @@
 }
 .wa-pad-trigger {
   width: 100%; height: 58px;
-  color: #062018; background: var(--wa-accent); border-color: var(--wa-accent-dim);
+  color: var(--wa-accent); background: var(--wa-surface-2); border-color: var(--wa-accent-dim);
   text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.4), inset 0 0 1px rgba(0, 229, 255, 0.4);
 }
-.wa-pad-trigger:hover { filter: brightness(1.08); background: var(--wa-accent); }
+.wa-pad-trigger:hover { filter: brightness(1.2); background: var(--wa-surface-3); }
 .wa-sample-name {
   display: block; overflow: hidden; margin-top: 8px;
   color: var(--wa-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap;
@@ -432,7 +434,7 @@
   position: absolute; box-sizing: border-box;
   background: var(--wa-accent); border: 1px solid var(--wa-accent-dim); border-radius: 3px;
   pointer-events: auto; cursor: grab; touch-action: none;
-  box-shadow: 0 0 5px rgba(47, 227, 166, 0.35);
+  box-shadow: 0 0 5px rgba(0, 229, 255, 0.35);
 }
 .wa-roll-note:active { cursor: grabbing; }
 .wa-roll-playhead-bar { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--wa-amber); display: none; }
@@ -446,6 +448,12 @@
 .wa-wave-mini {
   display: block; width: 100%; height: 40px; margin-bottom: 8px;
   border: 1px solid var(--wa-border-2); border-radius: 4px;
+}
+/* Osc wavetable display: taller stacked-wireframe screen with a cyan halo */
+.wa-vblock > .wa-wave-mini {
+  height: 92px;
+  border-color: #123640;
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.7), 0 0 10px rgba(52, 226, 255, 0.10);
 }
 .wa-mod-badge {
   font-size: 9px; letter-spacing: 0.06em; white-space: nowrap;
@@ -492,7 +500,7 @@
 .wa-swing { display: flex; align-items: center; gap: 6px; }
 .wa-swing-in { width: 90px; accent-color: var(--wa-accent); }
 .wa-toggle.active {
-  color: var(--wa-accent); background: rgba(47, 227, 166, 0.12); border-color: var(--wa-accent-dim);
+  color: var(--wa-accent); background: rgba(0, 229, 255, 0.12); border-color: var(--wa-accent-dim);
 }
 
 /* ── Mixer mute / solo ── */
@@ -933,7 +941,7 @@
 .wa-clip.has::before { background: var(--wa-muted); border-color: var(--wa-muted); opacity: 0.9; }
 .wa-clip.sel { border-color: var(--wa-accent-dim); }
 .wa-clip.armed.has::before { background: var(--wa-amber); border-color: var(--wa-amber); }
-.wa-clip.playing { border-color: var(--wa-accent); background: rgba(47, 227, 166, 0.12); }
+.wa-clip.playing { border-color: var(--wa-accent); background: rgba(0, 229, 255, 0.12); }
 .wa-clip.playing.has::before { background: var(--wa-accent); border-color: var(--wa-accent); }
 .wa-clip.queued { border-color: var(--wa-amber); animation: wa-clip-blink 0.7s linear infinite alternate; }
 .wa-clip.queued::before { background: var(--wa-amber); border-color: var(--wa-amber); }
@@ -979,8 +987,8 @@
 /* Phosphor screens: LCD, scope, waveforms, piano roll */
 .wa-lcd {
   background: var(--wa-phos-bg);
-  border: 1px solid #1f3327;
-  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.75), inset 0 0 4px rgba(51, 255, 153, 0.12);
+  border: 1px solid #123640;
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.75), inset 0 0 4px rgba(52, 226, 255, 0.12);
   position: relative;
   overflow: hidden;
 }
@@ -988,7 +996,7 @@
 .wa-lcd .wa-save-state {
   color: var(--wa-phos);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  text-shadow: 0 0 6px rgba(51, 255, 153, 0.65);
+  text-shadow: 0 0 6px rgba(52, 226, 255, 0.65);
 }
 .wa-lcd::after {
   content: "";
@@ -1002,13 +1010,13 @@
 .wa-env-canvas,
 .wa-waveform {
   background: var(--wa-phos-bg);
-  border: 1px solid #1f3327;
+  border: 1px solid #123640;
   border-radius: 4px;
-  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.7), 0 0 6px rgba(51, 255, 153, 0.08);
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.7), 0 0 6px rgba(52, 226, 255, 0.08);
 }
 .wa-piano-roll {
   background: var(--wa-phos-bg);
-  border-color: #1f3327;
+  border-color: #123640;
 }
 
 /* ----- Rotary knobs (knob.ts) ----- */
@@ -1126,7 +1134,7 @@
 .wa-power.on { color: var(--wa-text); }
 .wa-power.on .wa-power-led {
   background: var(--wa-phos);
-  box-shadow: 0 0 7px rgba(51, 255, 153, 0.8);
+  box-shadow: 0 0 7px rgba(52, 226, 255, 0.8);
 }
 .wa-title .wa-knob-row { padding: 0 4px; min-width: 52px; }
 .wa-title .wa-knob { width: 34px; height: 34px; padding: 3px; }
@@ -1283,8 +1291,8 @@
 .wa-page-keys .wa-export { flex: none; }
 .wa-page-keys .wa-keys { flex: none; }
 
-/* SOUND — the one browse page: internal scroll by design */
-.wa-page-sound { overflow: hidden; }
+/* SYNTH — the one browse page: internal scroll by design */
+.wa-page-synth { overflow: hidden; }
 .wa-sound-host { flex: 1; min-height: 0; overflow-y: auto; }
 .wa-sound-host > [hidden] { display: none; }
 .wa-sound-host .wa-vpatch { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
@@ -1320,6 +1328,17 @@
 .wa-overlay-body { flex: 1; min-height: 0; overflow-y: auto; }
 
 .wa-transport { position: static; }
+
+/* Fullscreen: the chassis IS the display — rails clip offscreen, so drop them */
+.wa-win:fullscreen {
+  border-radius: 0;
+  border-left-width: 0;
+  border-right-width: 0;
+  margin: 0;
+  overflow: hidden;
+}
+.wa-win:fullscreen::before,
+.wa-win:fullscreen::after { display: none; }
 
 /* Mobile tiers — same six keys, tighter engraving */
 @media (max-width: 900px) {
