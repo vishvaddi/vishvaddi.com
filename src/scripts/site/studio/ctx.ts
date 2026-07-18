@@ -26,8 +26,10 @@ export const playhead = { playing: false, schStep: 0, lastHi: -1, lastStepStarte
 // repaint their "wa-beat" line grouping to match.
 export const gridRepainters: Array<() => void> = [];
 // Grid 0 = Off (no snapping); the step grids still shade quarters for reading.
+// 1/32 and 1/64 give FRACTIONAL steps-per-line (0.5 / 0.25) — only the roll
+// can snap that fine, so the 16-cell grids clamp their shading to whole steps.
 export function stepsPerGridLine(): number { return transport.quantizeGrid ? STEPS / transport.quantizeGrid : 4; }
-export function isGridLine(step: number): boolean { return step % stepsPerGridLine() === 0; }
+export function isGridLine(step: number): boolean { return step % Math.max(1, stepsPerGridLine()) === 0; }
 
 // One color per scene (A-H), distinct from the accent/amber/blue already
 // used for state (playing/queued/selected) — identity, not status.

@@ -193,7 +193,7 @@ export function applyProject(saved: Record<string, unknown>): void {
         if (typeof incoming.endBar === "number") songLoop.endBar = Math.max(songLoop.startBar + 1, incoming.endBar);
       }
       if (typeof saved.songMode === "boolean") transport.songMode = saved.songMode;
-      if (typeof saved.quantizeGrid === "number" && [0, 4, 8, 16].includes(saved.quantizeGrid)) transport.quantizeGrid = saved.quantizeGrid;
+      if (typeof saved.quantizeGrid === "number" && [0, 4, 8, 16, 32, 64].includes(saved.quantizeGrid)) transport.quantizeGrid = saved.quantizeGrid;
       if (typeof saved.metroVolume === "number") transport.metroVolume = Math.max(0, Math.min(1, saved.metroVolume));
       if (saved.sampleParams) (saved.sampleParams as Partial<SamplerP>[]).forEach((p, i) => { if (i < PAD_COUNT) Object.assign(sampleParams[i], p); });
       if (saved.samplePool && saved.sampleRefs) {

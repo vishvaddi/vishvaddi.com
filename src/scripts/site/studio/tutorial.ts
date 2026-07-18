@@ -30,9 +30,9 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
     ["Ctrl+Z", "Undo"],
     ["Ctrl+Shift+Z or Ctrl+Y", "Redo"],
     ["1-4, Q-R, A-F, Z-V", "Play MPC pads (DRUMS & PADS modes)"],
-    ["Z–M row", "Play synth notes C3–B3 (KEYS mode)"],
-    ["Q–P row", "Play synth notes C4–E5 (KEYS mode)"],
-    ["− / =", "Shift synth keyboard octave (KEYS mode)"],
+    ["Z–M row", "Play synth notes C3–B3 (SYNTH mode)"],
+    ["Q–P row", "Play synth notes C4–E5 (SYNTH mode)"],
+    ["− / =", "Shift synth keyboard octave (SYNTH mode)"],
     ["Enter", "Confirm the typed BPM"],
   ] as const).forEach(([key, desc]) => {
     const row = el("div", "wa-help-shortcut-row");
@@ -113,7 +113,7 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
     { workspace: 2, target: eventLane, title: "Sequence pad events", text: "Drag across the lane to paint or erase hits. Use velocity, chance, microtiming and ratchets to make the pattern move." },
     { workspace: 3, target: pianoRoll, title: "Add musical parts", text: "Program synth notes in the piano roll or play them from the always-visible keys below. Drag a note to move it, its right edge to resize, or click without dragging to delete it." },
     { workspace: 3, target: gridSel, title: "Grid & quantize", text: "Sets the snap resolution for the piano roll, and the beat-line grouping shown on the drum and pad grids. Coarser (1/4) locks notes to the beat; 1/16 allows free placement." },
-    { workspace: 6, target: presetRow, title: "The VV-1 synth", text: "SYNTH mode holds the full patch editor. Search or randomize a patch, or drag the envelope shape and watch the live waveform preview react. Simple view collapses the editor to the essentials — Advanced view reveals the full mod matrix." },
+    { workspace: 6, target: presetRow, title: "The VV-1 synth", text: "The Patch view holds the full editor. Search or randomize a patch, or drag the envelope shape and watch the live waveform preview react. Simple view collapses the editor to the essentials — Advanced view reveals the full mod matrix." },
     { workspace: 4, target: sessionGrid, title: "Launch clips and scenes", text: "Each column is a track and each row a scene. Launch single clips or a whole row — changes wait for the next bar so transitions stay in time." },
     { workspace: 4, target: arrangeLanes, title: "Arrange the song", text: "Each track keeps its own list of blocks (scene + bar length) — add, resize or reassign them, then enable Arrange mode in the transport to play them back independently." },
     { workspace: 5, target: devicePanel, title: "Process the sound", text: "Use macros, groove controls and device bypass switches to shape the complete signal chain." },

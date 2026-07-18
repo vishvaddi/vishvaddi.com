@@ -5,7 +5,7 @@
 // This module RE-HOUSES panels built elsewhere — it builds no instruments.
 import { el, btn, help } from "./helpers";
 
-export type ModeId = "drums" | "pads" | "keys" | "synth" | "song" | "mix";
+export type ModeId = "drums" | "pads" | "synth" | "song" | "mix";
 
 export interface LayoutPanels {
   beat: HTMLElement;
@@ -42,8 +42,7 @@ export interface Layout {
 const MODES: Array<{ id: ModeId; label: string; helpText: string }> = [
   { id: "drums", label: "DRUMS", helpText: "Program the eight drum lanes on the step grid." },
   { id: "pads", label: "PADS", helpText: "Perform on the 16 pads, edit the selected pad, chop breaks and scratch." },
-  { id: "keys", label: "KEYS", helpText: "Play the VV-1 keys and sequence notes in the piano roll." },
-  { id: "synth", label: "SYNTH", helpText: "Sound design — the VV-1 patch editor and the sample rack." },
+  { id: "synth", label: "SYNTH", helpText: "The VV-1: piano roll or patch editor above always-playable keys." },
   { id: "song", label: "SONG", helpText: "Launch scenes and arrange the full song." },
   { id: "mix", label: "MIX", helpText: "Mixer, master devices, project save and export." },
 ];
@@ -150,17 +149,33 @@ export function buildLayout(p: LayoutPanels): Layout {
   deckStacked.addEventListener("change", fitDeck);
   if (p.padGrid.parentElement) new ResizeObserver(fitDeck).observe(p.padGrid.parentElement);
 
-  // ── KEYS ── roll fills the top and scrolls itself; keys never move
-  const keysPage = el("div", "wa-page wa-page-keys");
-  keysPage.append(p.pianoRoll, p.keysHeader, p.synthKeys);
-
-  // ── SYNTH ── pure patch editor (browse page, internal scroll by design);
-  // the keys strip migrates here from KEYS so patches are playable while edited
+  // ── SYNTH ── one instrument page (D1 merge): Roll ⇄ Patch views above the
+  // always-pinned keys strip, so the VV-1 is playable whichever view is up
   const soundPage = el("div", "wa-page wa-page-synth");
+  const synthBar = el("div", "wa-subtabs");
+  const rollTab = btn("Roll", "wa-subtab");
+  const patchTab = btn("Patch", "wa-subtab");
+  help(rollTab, "The piano roll — sequence VV-1 notes over the keys.");
+  help(patchTab, "The patch editor — oscillators, filter, envelopes, LFOs, mod matrix.");
+  synthBar.append(rollTab, patchTab);
   const soundHost = el("div", "wa-sound-host");
   soundHost.append(p.synthPanel);
-  soundPage.append(soundHost);
   p.synthPanel.hidden = false;
+  const synthViewHost = el("div", "wa-synth-viewhost");
+  synthViewHost.append(p.pianoRoll, soundHost);
+  soundPage.append(synthBar, synthViewHost, p.keysHeader, p.synthKeys);
+  let synthView: "roll" | "patch" = localStorage.getItem("vv_studio_synthview") === "patch" ? "patch" : "roll";
+  const paintSynthView = () => {
+    rollTab.classList.toggle("active", synthView === "roll");
+    patchTab.classList.toggle("active", synthView === "patch");
+    p.pianoRoll.style.display = synthView === "roll" ? "" : "none";
+    soundHost.style.display = synthView === "patch" ? "" : "none";
+    if (!soundPage.hidden) p.onSynthVisible();
+    localStorage.setItem("vv_studio_synthview", synthView);
+  };
+  rollTab.addEventListener("click", () => { synthView = "roll"; paintSynthView(); });
+  patchTab.addEventListener("click", () => { synthView = "patch"; paintSynthView(); });
+  paintSynthView();
   const rackOverlay = makeOverlay("SAMPLE RACK", p.rack);
   p.rack.hidden = false;
   rackBtn.addEventListener("click", rackOverlay.open);
@@ -177,33 +192,24 @@ export function buildLayout(p: LayoutPanels): Layout {
   mixPage.append(p.mixer, p.exp, p.devicePanel);
 
   const pages: Record<ModeId, HTMLElement> = {
-    drums: drumsPage, pads: padsPage, keys: keysPage,
+    drums: drumsPage, pads: padsPage,
     synth: soundPage, song: songPage, mix: mixPage,
   };
-  workarea.append(drumsPage, padsPage, keysPage, soundPage, songPage, mixPage);
+  workarea.append(drumsPage, padsPage, soundPage, songPage, mixPage);
 
   // ── chassis mode keys ──
   const modeBar = el("div", "wa-modebar");
   const modeKeyBtns: HTMLElement[] = [];
   let activeMode = (localStorage.getItem("vv_studio_mode") as ModeId) || "drums";
+  if ((activeMode as string) === "keys") activeMode = "synth";   // pre-D1 saved mode
   if (!MODES.some((m) => m.id === activeMode)) activeMode = "drums";
 
   function setMode(next: ModeId): void {
-    const from = activeMode;
     activeMode = next;
     closeOverlays();
     modeKeyBtns.forEach((b, i) => b.classList.toggle("active", MODES[i].id === next));
     (Object.keys(pages) as ModeId[]).forEach((id) => { pages[id].hidden = id !== next; });
-    // The keys strip lives on whichever synth-facing page is active —
-    // a DOM move keeps every listener and the octave/rec state intact.
-    if (next === "synth") {
-      soundPage.append(p.keysHeader, p.synthKeys);
-      p.onSynthVisible();
-    }
-    if (next === "keys") {
-      keysPage.append(p.keysHeader, p.synthKeys);
-      p.onSynthVisible();
-    }
+    if (next === "synth") p.onSynthVisible();
     if (next === "pads") fitDeck();
     p.onModeChange(MODES.find((m) => m.id === next)!.label);
     localStorage.setItem("vv_studio_mode", next);
@@ -221,7 +227,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   setMode(activeMode);
 
   // tutorial nav proxies — composite actions per tour stop:
-  // 0 pads/perform+inspector · 1 pads/chop · 2 pads/steps · 3 keys · 4 song · 5 mix · 6 synth
+  // 0 pads/perform+inspector · 1 pads/chop · 2 pads/steps · 3 synth/roll · 4 song · 5 mix · 6 synth/patch
   const nav = (fn: () => void): HTMLElement => {
     const b = el("button", "wa-nav-proxy") as HTMLButtonElement;
     b.type = "button";
@@ -232,10 +238,10 @@ export function buildLayout(p: LayoutPanels): Layout {
     nav(() => { setMode("pads"); padsView = "perform"; paintPadsView(); padsPage.classList.add("show-inspector"); }),
     nav(() => { setMode("pads"); chopOverlay.open(); }),
     nav(() => { setMode("pads"); padsView = "steps"; paintPadsView(); }),
-    nav(() => setMode("keys")),
+    nav(() => { setMode("synth"); synthView = "roll"; paintSynthView(); }),
     nav(() => setMode("song")),
     nav(() => setMode("mix")),
-    nav(() => setMode("synth")),
+    nav(() => { setMode("synth"); synthView = "patch"; paintSynthView(); }),
   ];
 
   return { modeBar, workarea, getActiveMode: () => activeMode, navButtons, modeKeyBtns };

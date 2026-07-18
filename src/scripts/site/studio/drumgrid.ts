@@ -3,7 +3,7 @@
 import { STEPS, SCENES, SCENE_LABELS, DRUMS, clip, allPats, allVels, synthNotes, padEvents, dp, DP_DEF, DP_SPECS } from "./state";
 import { ac, ensureNodes, trackGain, playDrum } from "./engine";
 import { saveAll } from "./persistence";
-import { el, btn } from "./helpers";
+import { el, btn, stepRuler } from "./helpers";
 import { ctx, gridRepainters, isGridLine } from "./ctx";
 import { setCellOpacity, showVelPopup } from "./velpopup";
 
@@ -44,6 +44,7 @@ export function buildDrumGrid(): DrumGrid {
   beat.append(patRow);
 
   const grid = el("div", "wa-grid");
+  grid.append(stepRuler());
   const cells: HTMLElement[][] = [];
   const sdPanels: HTMLElement[] = [];
 

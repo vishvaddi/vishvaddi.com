@@ -90,7 +90,7 @@ export async function initStudio(): Promise<void> {
     if (powerBtn.classList.contains("on")) engine.master!.gain.value = v;
   });
   help(masterKnob.root, "Master output level — the same gain the mixer's MASTER fader controls.");
-  const fsBtn = btn("⛶", "wa-btn-sm wa-fs-btn");
+  const fsBtn = btn("⛶ FULL SCREEN", "wa-btn-sm wa-fs-btn");
   help(fsBtn, "Fullscreen — the studio takes the whole display; Esc exits.");
   fsBtn.addEventListener("click", () => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -132,7 +132,7 @@ export async function initStudio(): Promise<void> {
   metroVolIn.type = "range"; metroVolIn.min = "0"; metroVolIn.max = "1"; metroVolIn.step = "0.05"; metroVolIn.value = String(transport.metroVolume); metroVolIn.className = "wa-swing-in";
   help(metroVolIn, "Metronome click volume.");
   const gridSel = document.createElement("select");
-  [["0", "Off"], ["4", "1/4"], ["8", "1/8"], ["16", "1/16"]].forEach(([value, label]) => {
+  [["0", "Off"], ["4", "1/4"], ["8", "1/8"], ["16", "1/16"], ["32", "1/32"], ["64", "1/64"]].forEach(([value, label]) => {
     const o = document.createElement("option"); o.value = value; o.textContent = label; gridSel.append(o);
   });
   gridSel.value = String(transport.quantizeGrid);

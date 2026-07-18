@@ -96,6 +96,17 @@ export function euclideanPattern(steps: number, pulses: number, rotation: number
 export const SCREEN_BG = "#050a0c";
 export const SCREEN_FG = "#34e2ff";
 
+/** Beat ruler row for the 16-step grids: 1 2 3 4 at the quarters, ticks
+ *  between. Lives INSIDE the scrolling grid so it tracks horizontal scroll. */
+export function stepRuler(): HTMLElement {
+  const ruler = el("div", "wa-step-ruler");
+  ruler.append(el("span", "wa-ruler-spacer"));
+  for (let c = 0; c < 16; c++) {   // STEPS — kept literal so helpers stays dependency-free
+    ruler.append(el("span", "wa-step-tick" + (c % 4 === 0 ? " major" : ""), c % 4 === 0 ? String(c / 4 + 1) : "·"));
+  }
+  return ruler;
+}
+
 export function drawWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer, slices: Array<[number, number]>, selected = -1): void {
   const scale = window.devicePixelRatio || 1, width = canvas.clientWidth || 900, height = canvas.clientHeight || 220;
   canvas.width = Math.floor(width * scale); canvas.height = Math.floor(height * scale);

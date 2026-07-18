@@ -286,6 +286,20 @@
 
 /* ── Step grid ── */
 .wa-grid { display: flex; flex-direction: column; gap: 5px; }
+/* Beat ruler above the 16-step grids (D1b) */
+.wa-step-ruler { display: flex; align-items: flex-end; gap: 5px; flex: none; }
+.wa-ruler-spacer { width: 84px; flex: 0 0 84px; }
+.wa-step-tick {
+  flex: 1 1 0; min-width: 0; padding-left: 4px;
+  font: 600 10px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color: rgba(52, 226, 255, 0.3);
+  user-select: none;
+}
+.wa-step-tick.major {
+  color: var(--wa-phos);
+  font-size: 11px;
+  text-shadow: 0 0 5px rgba(52, 226, 255, 0.5);
+}
 .wa-row { display: flex; align-items: center; gap: 5px; }
 .wa-drum {
   width: 84px; flex: 0 0 84px;
@@ -1315,8 +1329,14 @@
   }
 }
 
-/* KEYS — roll fills and scrolls itself; strip + keys pinned below, always visible */
-.wa-page-keys .wa-piano-roll {
+/* SYNTH view host (D1 merge) — Roll or Patch fills the space over the keys */
+.wa-synth-viewhost {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.wa-synth-viewhost .wa-piano-roll {
   flex: 1 1 auto;
   height: auto;
   min-height: 0;
@@ -1351,8 +1371,6 @@
   touch-action: none;
 }
 .wa-roll2 .wa-roll-playhead { left: 37px; bottom: auto; }
-.wa-page-keys .wa-export { flex: none; }
-.wa-page-keys .wa-keys { flex: none; }
 
 /* SYNTH — the one browse page: internal scroll by design.
    The keys strip migrates here from KEYS (compact) so patches stay playable. */

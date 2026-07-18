@@ -5,7 +5,7 @@ import { STEPS, PAD_BANK_SIZE, PAD_LAYER_MAX, SCENE_LABELS, clip, stepDur, mpc, 
 import type { MpcState, PadEvent, PadLayerMode, SamplerP } from "./state";
 import { ac, ensureNodes, playPad, hydrateSample, hydratePadLayer, crushBuffer } from "./engine";
 import { saveAll } from "./persistence";
-import { el, btn, help, sliderRow, readAsDataUrl, blobAsDataUrl, encodeWav } from "./helpers";
+import { el, btn, help, sliderRow, stepRuler, readAsDataUrl, blobAsDataUrl, encodeWav } from "./helpers";
 import { ctx, playhead, gridRepainters, isGridLine } from "./ctx";
 import { showVelocityPopup } from "./velpopup";
 import { knob } from "./knob";
@@ -386,6 +386,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   // drum grid's UX — switching the selected pad no longer swaps the lane's
   // contents out from under you, it just moves which row is highlighted.
   const eventLane = el("div", "wa-event-grid");
+  eventLane.append(stepRuler());
   let paintingEvents = false, paintEventsOn = true;
   function paintEventLane(): void {
     eventRowLabels.forEach((label, localPad) => {

@@ -64,7 +64,7 @@ export function bindKeyboard(deps: KeyboardDeps): void {
         ev.preventDefault(); deps.triggerPerformancePad(localPad, mpc.fullLevel ? 127 : 105); deps.padButtons[localPad].classList.add("down"); return;
       }
     }
-    if (mode !== "keys") return;
+    if (mode !== "synth") return;
     const key = ev.key.toLowerCase();
     if (!ev.repeat && !ev.metaKey && !ev.ctrlKey) {
       if (key === "-") { deps.synth.setOctaveShift(deps.synth.getOctaveShift() - 1); return; }
