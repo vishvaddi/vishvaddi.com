@@ -2,12 +2,7 @@
 import Base from "../../layouts/Base.astro";
 import "../../styles/prepping.css";
 
-const AFFILIATE_TAG = import.meta.env.PUBLIC_AMAZON_ASSOCIATE_TAG || "";
-const az = (q: string) =>
-  `https://www.amazon.com.au/s?k=${encodeURIComponent(q)}` +
-  (AFFILIATE_TAG ? `&tag=${AFFILIATE_TAG}` : "");
-
-type Item = { name: string; why: string; q: string };
+type Item = { name: string; why: string };
 type Bag = { id: string; title: string; blurb: string; items: Item[] };
 
 const bags: Bag[] = [
@@ -16,15 +11,15 @@ const bags: Bag[] = [
     title: "Get Home Bag (GHB)",
     blurb: "Small, light, lives in your car or at work. One job: get you home on foot if transport and phones go down. Think one day, urban.",
     items: [
-      { name: "Comfortable walking shoes + spare socks", why: "You can't walk 20 km home in dress shoes. The single most-skipped item.", q: "trail running shoes" },
-      { name: "1 L water + compact filter", why: "Refill from any tap or creek on the way.", q: "water bottle filter compact" },
-      { name: "Energy bars / nuts", why: "Keep moving without stopping to find food.", q: "energy bars" },
-      { name: "Power bank + charging cable", why: "Phone is your map and comms — keep it alive.", q: "10000mah power bank" },
-      { name: "Compact first-aid kit + personal meds", why: "Blisters and minor injuries on a long walk.", q: "compact first aid kit" },
-      { name: "Headtorch", why: "If the walk runs into the night.", q: "headtorch led" },
-      { name: "Multi-tool + small cash", why: "Fix problems; pay when EFTPOS is down.", q: "leatherman multi tool" },
-      { name: "N95 mask + light rain shell", why: "Smoke, dust, weather on the route.", q: "packable rain jacket" },
-      { name: "Paper map of your city / route home", why: "No battery, no signal needed.", q: "city street map" },
+      { name: "Comfortable walking shoes + spare socks", why: "You can't walk 20 km home in dress shoes. The single most-skipped item." },
+      { name: "1 L water + compact filter", why: "Refill from any tap or creek on the way." },
+      { name: "Energy bars / nuts", why: "Keep moving without stopping to find food." },
+      { name: "Power bank + charging cable", why: "Phone is your map and comms — keep it alive." },
+      { name: "Compact first-aid kit + personal meds", why: "Blisters and minor injuries on a long walk." },
+      { name: "Headtorch", why: "If the walk runs into the night." },
+      { name: "Multi-tool + small cash", why: "Fix problems; pay when EFTPOS is down." },
+      { name: "N95 mask + light rain shell", why: "Smoke, dust, weather on the route." },
+      { name: "Paper map of your city / route home", why: "No battery, no signal needed." },
     ],
   },
   {
@@ -32,17 +27,17 @@ const bags: Bag[] = [
     title: "Bug Out Bag (BOB)",
     blurb: "72-hour evacuation kit — grab it and go when you have to leave home (fire, flood). Organised by the survival “Cs”. Tuned for Australian conditions.",
     items: [
-      { name: "Fixed-blade knife (full tang)", why: "The one tool you can't improvise. Cutting, batoning, food.", q: "morakniv companion fixed blade knife" },
-      { name: "Ferro rod + stormproof lighter", why: "Two ignition methods; ferro works wet.", q: "ferro rod fire starter" },
-      { name: "Tarp (3×3 m) + emergency bivvy", why: "Shelter and warmth, lighter than a tent.", q: "3x3 ripstop tarp" },
-      { name: "Steel water bottle + squeeze filter + tablets", why: "Carry, boil, filter, chemically treat — redundancy.", q: "single wall steel bottle sawyer filter" },
-      { name: "35–45 L pack", why: "72 hrs of kit, still light enough to move fast.", q: "40l hiking backpack" },
-      { name: "Paracord (550, 30 m) + gorilla tape", why: "Shelter, repairs, a hundred uses.", q: "550 paracord 30m" },
-      { name: "First-aid kit + snake bandages", why: "AU essential — pressure-immobilisation for snake bite.", q: "snake bite bandage first aid kit australia" },
-      { name: "Headtorch + spare batteries", why: "Hands-free light after dark.", q: "rechargeable headtorch" },
-      { name: "Compass + paper map", why: "Navigate without signal or battery.", q: "baseplate compass" },
-      { name: "3 days food + merino layer + rain shell", why: "Calories and core temperature.", q: "freeze dried meals" },
-      { name: "PLB (personal locator beacon)", why: "Gets rescue to you when you're remote.", q: "personal locator beacon plb" },
+      { name: "Fixed-blade knife (full tang)", why: "The one tool you can't improvise. Cutting, batoning, food." },
+      { name: "Ferro rod + stormproof lighter", why: "Two ignition methods; ferro works wet." },
+      { name: "Tarp (3×3 m) + emergency bivvy", why: "Shelter and warmth, lighter than a tent." },
+      { name: "Steel water bottle + squeeze filter + tablets", why: "Carry, boil, filter, chemically treat — redundancy." },
+      { name: "35–45 L pack", why: "72 hrs of kit, still light enough to move fast." },
+      { name: "Paracord (550, 30 m) + gorilla tape", why: "Shelter, repairs, a hundred uses." },
+      { name: "First-aid kit + snake bandages", why: "AU essential — pressure-immobilisation for snake bite." },
+      { name: "Headtorch + spare batteries", why: "Hands-free light after dark." },
+      { name: "Compass + paper map", why: "Navigate without signal or battery." },
+      { name: "3 days food + merino layer + rain shell", why: "Calories and core temperature." },
+      { name: "PLB (personal locator beacon)", why: "Gets rescue to you when you're remote." },
     ],
   },
   {
@@ -50,18 +45,18 @@ const bags: Bag[] = [
     title: "INCH Bag (I'm Never Coming Home)",
     blurb: "The worst-case load: you're not returning. Long-term, self-sufficient living out of one pack. Heavier and bigger — capability over weight.",
     items: [
-      { name: "65 L+ pack with frame", why: "Carries weeks of kit and the means to make more.", q: "65l hiking backpack frame" },
-      { name: "Full bushcraft knife + hatchet + folding saw", why: "Process wood for shelter, fire and tools indefinitely.", q: "bushcraft axe hatchet" },
-      { name: "Tent or hammock + season-rated sleeping bag", why: "Durable shelter for the long haul, not just a night.", q: "lightweight tent 2 person" },
-      { name: "Stove + pot + extra fuel / cook kit", why: "Cook and purify daily without burning yourself out.", q: "camping stove cook set" },
-      { name: "High-capacity gravity filter + tablets", why: "Water for weeks, not days.", q: "gravity water filter" },
-      { name: "Fishing kit + snare wire + repair kit", why: "Procure food once your supplies run out.", q: "survival fishing kit" },
-      { name: "Heirloom seed pack + foraging guide", why: "Grow food where you settle — the long game.", q: "heirloom vegetable seeds" },
-      { name: "Extended first aid + antibiotics + sutures", why: "No hospital is coming. Austere medicine.", q: "tactical trauma first aid kit" },
-      { name: "Foldable solar panel + power bank + AA/AAA rechargeables", why: "Keep light, comms and navigation running off-grid.", q: "foldable solar panel usb" },
-      { name: "Radio (UHF/AM) + compass + maps + PLB", why: "Information and rescue without the grid.", q: "uhf handheld radio" },
-      { name: "Documents (encrypted USB + hard copies) + cash", why: "Identity, records and barter when systems are down.", q: "encrypted usb drive" },
-      { name: "Spare boots + clothing + sewing kit", why: "Clothing wears out; you have to maintain it.", q: "hiking boots" },
+      { name: "65 L+ pack with frame", why: "Carries weeks of kit and the means to make more." },
+      { name: "Full bushcraft knife + hatchet + folding saw", why: "Process wood for shelter, fire and tools indefinitely." },
+      { name: "Tent or hammock + season-rated sleeping bag", why: "Durable shelter for the long haul, not just a night." },
+      { name: "Stove + pot + extra fuel / cook kit", why: "Cook and purify daily without burning yourself out." },
+      { name: "High-capacity gravity filter + tablets", why: "Water for weeks, not days." },
+      { name: "Fishing kit + snare wire + repair kit", why: "Procure food once your supplies run out." },
+      { name: "Heirloom seed pack + foraging guide", why: "Grow food where you settle — the long game." },
+      { name: "Extended first aid + antibiotics + sutures", why: "No hospital is coming. Austere medicine." },
+      { name: "Foldable solar panel + power bank + AA/AAA rechargeables", why: "Keep light, comms and navigation running off-grid." },
+      { name: "Radio (UHF/AM) + compass + maps + PLB", why: "Information and rescue without the grid." },
+      { name: "Documents (encrypted USB + hard copies) + cash", why: "Identity, records and barter when systems are down." },
+      { name: "Spare boots + clothing + sewing kit", why: "Clothing wears out; you have to maintain it." },
     ],
   },
 ];
@@ -104,7 +99,7 @@ const bags: Bag[] = [
         <ul class="gear-list">
           {b.items.map((it) => (
             <li>
-              <a href={az(it.q)} target="_blank" rel="sponsored nofollow noopener">{it.name} ↗</a>
+              <strong>{it.name}</strong>
               <span class="gear-why">{it.why}</span>
             </li>
           ))}
@@ -112,12 +107,6 @@ const bags: Bag[] = [
       </section>
     ))}
 
-    <p class="gear-disclosure">
-      Links go to Amazon AU search so you can compare current options.
-      {AFFILIATE_TAG
-        ? " As an Amazon Associate I may earn from qualifying purchases, at no cost to you."
-        : " These are plain recommendations — no affiliate tracking yet."}
-    </p>
   </article>
 
   <style>
@@ -128,8 +117,6 @@ const bags: Bag[] = [
     .bag-blurb { color: var(--muted); font-size: 0.95rem; margin-top: 0.25rem; }
     .gear-list { list-style: none; padding: 0; margin: 0.75rem 0 0; }
     .gear-list li { padding: 0.6rem 0; border-bottom: 1px solid var(--rule); }
-    .gear-list a { font-weight: 600; }
     .gear-why { display: block; color: var(--muted); font-size: 0.92rem; margin-top: 0.15rem; }
-    .gear-disclosure { margin-top: 2.5rem; font-size: 0.82rem; color: var(--muted); font-style: italic; }
   </style>
 </Base>
