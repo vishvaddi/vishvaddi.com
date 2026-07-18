@@ -487,7 +487,7 @@ const NOTE_GROUPS: { title: string; slugs: string[] }[] = [
   { title: "Field skills", slugs: ["six-knots-that-cover-most-situations", "sharp-tools-briefly", "natural-navigation-in-the-southern-hemisphere"] },
   { title: "Gear & kits", slugs: ["the-5cs", "the-10cs", "the-urban-10cs"] },
   { title: "Australian context", slugs: ["seasonal-threat-calendar-nsw", "australian-specific"] },
-  { title: "Home resilience", slugs: ["the-everyday-baseline", "self-sufficiency-at-home-four-pillars", "gardening-principles", "diy-and-the-case-for-traditional-skills", "future-proofing-the-2026-angle"] },
+  { title: "Home resilience", slugs: ["the-everyday-baseline", "bug-in-bug-out", "stocking-deeper-the-ladder-past-two-weeks", "self-sufficiency-at-home-four-pillars", "gardening-principles", "diy-and-the-case-for-traditional-skills", "future-proofing-the-2026-angle"] },
   { title: "Maintenance", slugs: ["the-52-week-prep-routine"] },
 ];
 

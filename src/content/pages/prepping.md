@@ -2,7 +2,7 @@
 title: Prepping
 description: Bushcraft, survival, first aid, and self-sufficiency notes — written from an Australian context.
 ogImage: /og/prepping.png
-updatedDate: 2026-06-08
+updatedDate: 2026-07-18
 ---
 
 # Prepping and survival
@@ -263,6 +263,28 @@ Not bunkers. Just enough that a disruption doesn't force you into bad choices:
 - Encrypted USB with copies of the documents you'd hate to lose. Plus cloud backup.
 - A basic first aid kit. Bunnings, $30. Most people don't have one.
 - One person in the household with a current first aid certificate.
+
+## Bug in, bug out
+
+Everything in the field-skills half of this page assumes you left home. Most Australian disruptions are the opposite — you stay. The house already provides shelter, water plumbing, cooking, storage and security, which makes stocking it the higher-leverage plan. The go-bag is the exception, for the hazards that force you out: bushfire, flood, cyclone. Fund the pantry first, the pack second.
+
+## Stocking deeper — the ladder past two weeks
+
+The everyday baseline covers two weeks, which is roughly where official guidance (Red Cross RediPlan) stops. Past that it's a judgement call about how long systems stay broken. This ladder is adapted from a six-month phased plan published by Survival Supplies Australia — a prepping retailer, so the top rung is sized to sell storage drums; the structure is still sound. Treat depth as a dial, finish each rung before starting the next, and buy nothing that changes how you eat day to day.
+
+The two numbers that size everything:
+
+- **Calories** — 2,000–2,400 kcal per adult per day. Six months is 360,000–430,000 kcal per adult; that's the scale of the top rung.
+- **Water** — 3–4 L per person per day for drinking and cooking, closer to 5 L once hygiene counts. Two weeks for one person is about 60 L: three 20 L food-grade jerry cans.
+
+The rungs:
+
+1. **Two weeks** — the everyday baseline above, plus 60 L of stored water per person.
+2. **One month** — the four-pillars rotating reserve, plus grid-independent cooking (butane stove and a box of canisters, or the BBQ with a spare bottle), a hygiene stock (soap, toilet paper, bin bags, sanitiser, bleach), and a battery or hand-crank radio.
+3. **Three months** — bulk staples take over. For scale, the retailer plan's full six-month household numbers are 40–60 kg rice, 15–20 kg pasta, 10–15 kg oats, 15–20 kg flour — run your own calorie maths rather than adopting theirs. Add a proper water filter on top of storage, 20 L of vehicle fuel in a jerry can (state law caps home fuel storage — check yours), and FIFO shelving so rotation happens as you cook.
+4. **Six months** — protein depth (lentils, split peas, tinned fish, peanut butter), freeze-dried meals as a cooking-independent backup, and redundancy for anything critical. At this depth rotation is the actual job — if you won't do it, stop at three months.
+
+Two habits from the same plan worth keeping at any depth: never let the car drop below half a tank, and stock morale deliberately — books, games, comfort food, things for kids. Boredom and misery degrade decision-making as surely as hunger does.
 
 ## The 52-week prep routine
 
