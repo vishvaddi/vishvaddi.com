@@ -104,7 +104,7 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
   help(browseHelpBtn, "Switch to a searchable reference covering every section, plus keyboard shortcuts.");
   help(takeTourBtn, "Switch back to the guided step-by-step tour.");
   const tutorialSteps: Array<{ workspace: number; target: HTMLElement; title: string; text: string }> = [
-    { workspace: 0, target: tabBtns[0], title: "Create", text: "This is the sampling and performance workspace. Start here whenever you are building a new beat." },
+    { workspace: 0, target: padGrid, title: "Create", text: "This is the sampling and performance workspace. Start here whenever you are building a new beat." },
     { workspace: 0, target: padGrid, title: "Play the pads", text: "Use the mouse, touch, computer keyboard or MIDI controller. Drop an audio file directly onto any pad to replace it." },
     { workspace: 0, target: selectedSampleEditor, title: "Shape the selected pad", text: "The inspector follows your selected pad across every workspace. Trim, tune, filter, choke, reverse, loop or warp it here." },
     { workspace: 0, target: waveform, title: "Chop a break", text: "Load or record audio, choose equal, transient or manual slicing, then assign the slices to the active pad bank." },

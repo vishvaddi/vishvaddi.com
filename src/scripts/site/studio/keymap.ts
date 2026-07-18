@@ -4,13 +4,14 @@
 import { ensureNodes, ac } from "./engine";
 import * as engine from "./engine";
 import { vsynthPatch, mpc } from "./state";
+import type { TrackId } from "./state";
 import { noteToMidi, midiToNote } from "./vsynth";
 import { playhead } from "./ctx";
 import { highlightKey } from "./keys";
 import type { SynthUI } from "./synthui";
 
 export interface KeyboardDeps {
-  getActiveTab: () => number;
+  getActiveTrack: () => TrackId;
   padButtons: HTMLButtonElement[];
   triggerPerformancePad: (localPad: number, velocity: number) => void;
   synth: SynthUI;
@@ -56,13 +57,13 @@ export function bindKeyboard(deps: KeyboardDeps): void {
   // releases the right note even if the octave changed while it was held.
   const downMap = new Map<string, string>();
   window.addEventListener("keydown", (ev) => {
-    if (deps.getActiveTab() === 0) {
+    if (deps.getActiveTrack() !== "synth") {
       const localPad = padKeyMap[ev.key.toLowerCase()];
       if (localPad != null && !ev.repeat && !ev.metaKey && !ev.ctrlKey) {
         ev.preventDefault(); deps.triggerPerformancePad(localPad, mpc.fullLevel ? 127 : 105); deps.padButtons[localPad].classList.add("down"); return;
       }
     }
-    if (deps.getActiveTab() !== 1) return;
+    if (deps.getActiveTrack() !== "synth") return;
     const key = ev.key.toLowerCase();
     if (!ev.repeat && !ev.metaKey && !ev.ctrlKey) {
       if (key === "-") { deps.synth.setOctaveShift(deps.synth.getOctaveShift() - 1); return; }
@@ -77,7 +78,7 @@ export function bindKeyboard(deps: KeyboardDeps): void {
   window.addEventListener("keyup", (ev) => {
     const localPad = padKeyMap[ev.key.toLowerCase()];
     if (localPad != null) deps.padButtons[localPad].classList.remove("down");
-    if (deps.getActiveTab() !== 1) return;
+    if (deps.getActiveTrack() !== "synth") return;
     const key = ev.key.toLowerCase();
     const n = downMap.get(key); if (!n) return;
     downMap.delete(key); deps.synth.liveKeys.noteOff(ac(), n); highlightKey(deps.synth.synthKeys, keyMap[key], false);

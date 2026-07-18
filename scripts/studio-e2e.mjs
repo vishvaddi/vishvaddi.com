@@ -42,10 +42,6 @@ try {
   const lcd = await page.textContent('.wa-lcd')
   check('boot: LCD shows BPM + STOP', /BPM/.test(lcd ?? '') && /STOP/.test(lcd ?? ''), (lcd ?? '').slice(0, 30))
 
-  // the drum grid lives on the Sequence tab
-  await page.click('.wa-tabs button:has-text("Sequence"), .wa-tab:has-text("Sequence")')
-  await page.waitForTimeout(200)
-
   // ── toggle a drum step ──
   const cell = page.locator('.wa-grid .wa-row .wa-cell').nth(0)
   await cell.click()
@@ -72,13 +68,11 @@ try {
   await page.waitForTimeout(900) // autosave debounce
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.wa-transport', { timeout: 15000 })
-  await page.click('.wa-tabs button:has-text("Sequence"), .wa-tab:has-text("Sequence")')
-  await page.waitForTimeout(200)
   const cellAfter = page.locator('.wa-grid .wa-row .wa-cell').nth(0)
   check('autosave: step survives reload', await cellAfter.evaluate((n) => n.classList.contains('on')))
 
-  // ── export WAV is non-trivial (Project/Export lives on the Mix tab) ──
-  await page.click('.wa-tab:has-text("Mix")')
+  // ── export WAV is non-trivial (export lives in the PROJECT drawer segment) ──
+  await page.click('.wa-seg:has-text("PROJECT")')
   await page.waitForTimeout(200)
   const dl = page.waitForEvent('download', { timeout: 60000 }).catch(() => null)
   await page.click('button:has-text("Export WAV")')

@@ -47,6 +47,7 @@ import { buildTutorial } from "./tutorial";
 import { buildPlayback } from "./playback";
 import { knob } from "./knob";
 import { bindKeyboard } from "./keymap";
+import { buildLayout } from "./layout";
 
 // One color per scene (A-H), distinct from the accent/amber/blue already
 // used for state (playhead.playing/queued/selected) — identity, not status.
@@ -156,30 +157,6 @@ export async function initStudio(): Promise<void> {
   undoBtn.disabled = true; redoBtn.disabled = true;
   ctx.checkpoint = checkpoint;
 
-  // ── Workspaces ──
-  const tabbar = el("div", "wa-tabs"), panels = el("div", "wa-panels");
-  const tabNames = ["Create", "Sequence", "Arrange", "Mix"];
-  const tabBtns: HTMLElement[] = [], panelEls: HTMLElement[] = [];
-  let activeTab = Math.max(0, Math.min(3, Number(localStorage.getItem("vv_studio_workspace")) || 0));
-  tabNames.forEach((t, i) => {
-    const b = btn(t, "wa-tab"); b.classList.remove("wa-btn");
-    const descriptions = [
-      "Load or record samples, chop breaks and perform on the pads.",
-      "Program drums and synth notes with step and piano-roll editors.",
-      "Launch clips and scenes live, or order scenes into a complete song.",
-      "Shape the sound, balance tracks and save or export the project.",
-    ];
-    help(b, descriptions[i]);
-    b.addEventListener("click", () => { activeTab = i; localStorage.setItem("vv_studio_workspace", String(i)); paintTabs(); });
-    tabBtns.push(b); tabbar.append(b);
-  });
-  function paintTabs(): void {
-    tabBtns.forEach((b, i) => b.classList.toggle("active", i === activeTab));
-    panelEls.forEach((p, i) => { p.style.display = i === activeTab ? "block" : "none"; });
-    // Canvases drawn while their tab is hidden measure 0 width — redraw once
-    // the Sequence tab (synth waveform previews) actually becomes visible.
-    if (activeTab === 1) synth.waveRedraws().forEach((fn) => fn());
-  }
   // ── Shared velocity popup ── (velpopup.ts — Phase 0 split)
 
   // ── Beat ── (drumgrid.ts — Phase 0 split)
@@ -215,76 +192,21 @@ export async function initStudio(): Promise<void> {
 
   // Project/export built earlier (render.ts) — panel mounted here.
 
-  const createWorkspace = el("div", "wa-workspace");
-  const sequenceWorkspace = el("div", "wa-workspace");
-  const arrangeWorkspace = el("div", "wa-workspace");
-  const mixWorkspace = el("div", "wa-workspace");
-  const hint = (title: string, text: string): HTMLElement => {
-    const box = el("div", "wa-hint");
-    box.append(el("strong", "", title), document.createTextNode(` ${text}`)); return box;
-  };
-  const section = (title: string, content: HTMLElement): HTMLElement => {
-    const host = el("section", "wa-workspace-section");
-    const descriptions: Record<string, string> = {
-      Pads: "Perform, record and edit the current 16-pad bank.",
-      Chop: "Load or record longer audio and divide it into playable slices.",
-      "Sample Rack": "Quick controls for the original drum voices and loaded samples.",
-      "Drum Sequence": "Program the legacy eight-lane drum grid and adjust generated drum sounds.",
-      "Synth + Piano Roll": "Design and sequence the VV-1 wavetable synth.",
-      "Session + Song": "Launch clips and scenes live, or order scenes into a linear song.",
-      Devices: "Apply groove, macros and the modular master processing chain.",
-      Mixer: "Set drum, synth and master levels, mute or solo channels, and adjust effects.",
-      "Project + Export": "Save editable project data or render finished audio.",
-      Scratch: "Drag the vinyl to scratch the selected pad's sample over the beat.",
-    };
-    help(host, descriptions[title] ?? title);
-    host.append(el("h2", "wa-section-title", title), content); return host;
-  };
-  // Sample Rack now opens in a slide-in drawer rather than always sitting in view.
-  const rackDrawer = el("aside", "wa-drawer");
-  const rackOverlay = el("div", "wa-drawer-overlay");
-  const rackClose = btn("✕ Close", "wa-btn-sm");
-  const rackHead = el("div", "wa-drawer-head");
-  rackHead.append(el("span", "wa-drawer-title", "SAMPLE RACK"), rackClose);
-  rackDrawer.append(rackHead, rack);
-  const closeRack = (): void => { rackDrawer.classList.remove("open"); rackOverlay.classList.remove("open"); };
-  rackClose.addEventListener("click", closeRack);
-  rackOverlay.addEventListener("click", closeRack);
-
-  const openRackBtn = btn("⊞ Sample Rack", "wa-btn-sm");
-  help(openRackBtn, "Open the drum and sample voice controls in a side panel.");
-  openRackBtn.addEventListener("click", () => { rackDrawer.classList.add("open"); rackOverlay.classList.add("open"); });
-  const createBar = el("div", "wa-mpc-toolbar"); createBar.append(openRackBtn);
-
+  // ── Layout ── (layout.ts — one-screen frame; rail/editor/inspector/drawer)
+  const inspector = el("aside", "wa-inspector");
+  inspector.append(el("div", "wa-inspector-title", "SELECTED PAD"), selectedPadLabel, selectedSampleEditor);
   // ── Vinyl scratchpad ── (scratch.ts — Phase 0 split)
   const scratchPanel = buildScratchpad(getChopBuffer);
 
-  createWorkspace.append(
-    hint("Start here.", "Drop audio onto a pad, or load a break in Chop. Use Z–V, A–F, Q–R and 1–4 to play the 16 pads."),
-    createBar,
-    section("Pads", mpcPanel), section("Chop", chop), section("Scratch", scratchPanel),
-  );
-  sequenceWorkspace.append(
-    hint("Build the loop.", "Drag across the selected-pad lane to paint or erase hits. Right-click drum steps to edit velocity."),
-    section("Drum Sequence", beat), section("Pad Sequence", padSeqPanel), section("Synth + Piano Roll", synthPanel),
-  );
-  arrangeWorkspace.append(
-    hint("Turn loops into a track.", "Launch clips per track or whole scenes, then chain scenes and enable Song mode."),
-    section("Session + Song", song),
-  );
-  mixWorkspace.append(
-    hint("Finish and preserve it.", "Shape the device chain, set levels, save an editable project, then export the audio."),
-    section("Mixer", mixer), section("Devices", devicePanel), section("Project + Export", exp),
-  );
-  panelEls.push(createWorkspace, sequenceWorkspace, arrangeWorkspace, mixWorkspace);
-  panels.append(createWorkspace, sequenceWorkspace, arrangeWorkspace, mixWorkspace);
-
-  const inspector = el("aside", "wa-inspector");
-  inspector.append(el("div", "wa-inspector-title", "SELECTED PAD"), selectedPadLabel, selectedSampleEditor);
-  const workarea = el("div", "wa-workarea"); workarea.append(panels, inspector);
-  win.append(titleBar, lcd, tabbar, transportBar, workarea, rackOverlay, rackDrawer);
+  const layout = buildLayout({
+    beat, mpcPanel, padSeqPanel, pianoRoll, synthKeys, synthPanel,
+    sessionGrid, launchStatus, song, mixer, devicePanel, exp,
+    rack, chop, scratchPanel, inspector,
+    onSynthVisible: () => synth.waveRedraws().forEach((fn) => fn()),
+  });
+  const tabBtns = layout.navButtons;
+  win.append(titleBar, lcd, transportBar, layout.workarea);
   root.append(win);
-  paintTabs();
 
   // ── Help and tutorial ── (tutorial.ts — Phase 0 split)
   const { showTutorialStep } = buildTutorial({
@@ -359,7 +281,7 @@ export async function initStudio(): Promise<void> {
   buildPlayback({ cells, rollPlayheadBar, launchStatus, lcdState, playBtn, stopBtn, getCountIn: () => countIn, isSynthRec: synth.isSynthRec });
 
   // ── Keyboard ── (keymap.ts — Phase 0 split)
-  bindKeyboard({ getActiveTab: () => activeTab, padButtons, triggerPerformancePad, synth, playBtn, stopBtn, undoBtn, redoBtn });
+  bindKeyboard({ getActiveTrack: layout.getActiveTrack, padButtons, triggerPerformancePad, synth, playBtn, stopBtn, undoBtn, redoBtn });
 
   // Initial paint reflects loaded project state (scene selection, session grid).
   selectScene(clip.sel);
