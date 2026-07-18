@@ -1590,3 +1590,63 @@
 .wa-chords { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
 .wa-chords .wa-btn, .wa-chords .wa-btn-sm { width: 100%; height: 26px; font-size: 10px; padding: 0 4px; }
 .wa-synth-side .wa-xy-wrap { padding: 8px; }
+
+/* ═══ I: fluid fill — element sizes track the viewport so fullscreen fills,
+   windowed stays dense, landscape phones compress. clamp(min, fluid, max)
+   everywhere a fixed size left dead space. ═══ */
+.wa-page-drums .wa-grid .wa-cell { height: clamp(25px, calc((100dvh - 530px) / 8), 56px); }
+.wa-drum { height: clamp(25px, calc((100dvh - 530px) / 8), 56px); display: flex; align-items: center; }
+.wa-page-song .wa-clip { height: clamp(30px, calc((100dvh - 430px) / 8), 62px); }
+.wa-page-song .wa-scene-launch { display: flex; align-items: center; justify-content: center; }
+.wa-synth-viewhost .wa-piano-roll { height: clamp(300px, calc(100dvh - 590px), 700px); }
+.wa-page-synth .wa-keys, .wa-page-synth .wa-key { height: clamp(88px, 13dvh, 150px); }
+.wa-page-synth .wa-key-black { height: clamp(55px, 8dvh, 94px); }
+.wa-mpc-pad { min-height: clamp(64px, calc((100dvh - 500px) / 4), 140px); }
+.wa-page-pads .wa-mpc-pads { max-width: min(1150px, 100%); }
+.wa-synth-side { flex-basis: clamp(220px, 15vw, 300px); }
+.wa-lane-wave { height: clamp(56px, 9dvh, 100px); }
+.wa-fader { height: clamp(100px, 19dvh, 180px); }
+.wa-sound-host .wa-vpatch { columns: clamp(230px, 16vw, 300px); }
+.wa-devdetail .wa-knob { width: clamp(34px, 4dvh, 48px); height: clamp(34px, 4dvh, 48px); }
+
+/* landscape phones / short viewports: everything compresses, chrome unsticks */
+@media (max-height: 540px) {
+  .wa-sticky-chrome { position: static; box-shadow: none; padding: 2px 0; }
+  .wa-title { height: 26px; margin-bottom: 3px; }
+  .wa-lcd { min-height: 20px; padding: 2px 10px; margin-bottom: 3px; }
+  .wa-lcd-seg { font-size: 11px; }
+  .wa-modekey { padding: 5px 3px; font-size: 10px; letter-spacing: 0.08em; }
+  .wa-transport { flex-wrap: nowrap; overflow-x: auto; }
+  .wa-transport > * { flex: 0 0 auto; }
+  .wa-page-synth .wa-keys, .wa-page-synth .wa-key { height: 78px; }
+  .wa-page-synth .wa-key-black { height: 48px; }
+  .wa-synth-viewhost .wa-piano-roll { height: 240px; }
+  /* landscape keeps the field BESIDE the roll - stacking it above tripled the page */
+  .wa-synth-main { flex-direction: row; }
+  .wa-synth-side { position: static; flex: 0 0 170px; width: auto; max-width: none; }
+  .wa-page-drums .wa-inspector, .wa-page-pads .wa-inspector { position: static; max-height: none; }
+}
+
+/* I2: the synth side column was taller than the roll — cap the field, let
+   the chord list scroll, and the column now tracks the view height */
+.wa-xy-field { max-height: 240px; aspect-ratio: auto; height: clamp(160px, 24dvh, 240px); }
+.wa-synth-side { flex-basis: clamp(210px, 13vw, 260px); }
+.wa-synth-side .wa-chords { max-height: clamp(90px, calc(100dvh - 720px), 230px); overflow-y: auto; }
+
+/* I3: the roll stretches to the side column's height — the tallest column
+   sets the pace and the roll (the workspace) absorbs the space */
+.wa-synth-main { align-items: stretch; }
+.wa-synth-viewhost { display: flex; flex-direction: column; }
+.wa-synth-viewhost .wa-piano-roll { height: auto; flex: 1 1 0; min-height: clamp(300px, calc(100dvh - 590px), 700px); }
+.wa-sound-host { flex: 1; min-height: 0; overflow-y: auto; }
+@media (max-height: 540px) {
+  /* landscape: field only in the side column — scope + chords would stack it tall */
+  .wa-synth-side > :not(:first-child) { display: none; }
+  .wa-synth-viewhost .wa-piano-roll { min-height: 240px; }
+}
+
+/* I4: final synth trims — field/scope/keys track viewport tighter */
+.wa-xy-field { height: clamp(150px, 20dvh, 220px); }
+.wa-synth-side .wa-scope { height: clamp(40px, 6dvh, 60px); }
+.wa-page-synth .wa-keys, .wa-page-synth .wa-key { height: clamp(84px, 12dvh, 140px); }
+.wa-page-synth .wa-key-black { height: clamp(52px, 7.4dvh, 86px); }
