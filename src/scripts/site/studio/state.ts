@@ -153,8 +153,9 @@ export const DP_SPECS: ParamSpec[][] = [
 export const transport = {
   bpm: 120, swing: 0, metro: false, metroVolume: 1, songMode: false,
   // Snap/grid resolution shared by the drum, pad-event and piano-roll
-  // editors — 4/8/16 subdivisions per 16-step bar (16 = every step, finest).
-  quantizeGrid: 4,
+  // editors — 4/8/16 subdivisions per 16-step bar; 0 = Off (free placement,
+  // the Cubase-style default for the roll).
+  quantizeGrid: 0,
 };
 export const stepDur = (): number => 60 / transport.bpm / 4;
 

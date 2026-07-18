@@ -72,7 +72,8 @@ export function buildPlayback(deps: PlaybackDeps): void {
     }
     if (synthClip !== null) {
       synthNotes[synthClip].forEach((n) => {
-        if (n.step === s) playNote(a, engine.synthGain!, vsynthPatch, n.note, n.vel, when, stepDur() * n.len * 0.98);
+        // float steps (unquantized roll): schedule anything landing inside this step window
+        if (n.step >= s && n.step < s + 1) playNote(a, engine.synthGain!, vsynthPatch, n.note, n.vel, when + (n.step - s) * stepDur(), stepDur() * n.len * 0.98);
       });
     }
     if (transport.metro && s % 4 === 0) metroClick(a, engine.master!, baseWhen, s === 0);

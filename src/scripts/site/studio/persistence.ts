@@ -65,7 +65,7 @@ export function projectState(includeSamples = true): object {
     return index;
   });
   return {
-    version: 7,
+    version: 8, // v8: VNote.step/len are floats (unquantized roll) — v7 ints load unchanged
     pats: allPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
     vels: allVels,
     dp,

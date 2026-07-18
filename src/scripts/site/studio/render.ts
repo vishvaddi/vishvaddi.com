@@ -106,7 +106,7 @@ export function buildProjectExport(): ProjectExport {
         }
       });
       if (synthClip !== null) synthNotes[synthClip].forEach((n) => {
-        if (n.step === s) playNote(off, osg, vsynthPatch, n.note, n.vel, when, sd * n.len * 0.98);
+        if (n.step >= s && n.step < s + 1) playNote(off, osg, vsynthPatch, n.note, n.vel, when + (n.step - s) * sd, sd * n.len * 0.98);
       });
       if (transport.metro && s % 4 === 0) metroClick(off, om, base, s === 0);
     } }

@@ -25,7 +25,8 @@ export const playhead = { playing: false, schStep: 0, lastHi: -1, lastStepStarte
 // themselves; re-run whenever the Grid selector changes so all three
 // repaint their "wa-beat" line grouping to match.
 export const gridRepainters: Array<() => void> = [];
-export function stepsPerGridLine(): number { return STEPS / transport.quantizeGrid; }
+// Grid 0 = Off (no snapping); the step grids still shade quarters for reading.
+export function stepsPerGridLine(): number { return transport.quantizeGrid ? STEPS / transport.quantizeGrid : 4; }
 export function isGridLine(step: number): boolean { return step % stepsPerGridLine() === 0; }
 
 // One color per scene (A-H), distinct from the accent/amber/blue already

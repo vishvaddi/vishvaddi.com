@@ -13,6 +13,7 @@ import { el, btn, help, sliderRow, drawScope, drawEnvelopeShape, SCREEN_BG, SCRE
 import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
 import { showVelocityPopup } from "./velpopup";
 import { buildKeys, setKeysLatch } from "./keys";
+import { buildRoll } from "./roll";
 
 export interface SynthUI {
   synthPanel: HTMLElement;
@@ -392,113 +393,9 @@ export function buildSynth(): SynthUI {
     button.addEventListener("click", () => { notes.forEach((note) => audition(note, 90, 3.5)); });
     chordRow.append(button);
   });
-  // Piano roll — 3 octaves, notes with length + velocity, rendered as
-  // draggable/resizable blocks over a background grid (Ableton-style):
-  // drag empty space to draw a note and set its length; drag a note's body
-  // to move it (drag vertically to change pitch); drag its right edge to
-  // resize; click without dragging deletes it; right-click sets velocity.
-  // Still keyed off the same 16-step/1-bar note model, so the scheduler and
-  // offline render (which key off n.step/n.len) are untouched.
-  const pianoRoll = el("div", "wa-piano-roll wa-vroll");
-  const rollNotesLayer = el("div", "wa-roll-notes");
-  const rollPlayhead = el("div", "wa-roll-playhead");
-  const rollPlayheadBar = el("div", "wa-roll-playhead-bar");
-  rollPlayhead.append(rollPlayheadBar);
-  const rollNoteAt = (row: number, step: number): VNote | undefined =>
-    synthNotes[clip.sel].find((n) => n.note === ROLL_NOTES[row] && step >= n.step && step < n.step + n.len);
-  const ROLL_RESIZE_PX = 8;
-  const snapStep = (step: number): number => { const g = stepsPerGridLine(); return Math.round(step / g) * g; };
-  const snapLen = (len: number): number => { const g = stepsPerGridLine(); return Math.max(g, Math.round(len / g) * g); };
-  function paintRoll(): void {
-    rollNotesLayer.replaceChildren();
-    synthNotes[clip.sel].forEach((n) => {
-      const row = ROLL_NOTES.indexOf(n.note); if (row < 0) return;
-      const block = el("div", "wa-roll-note");
-      block.style.left = `${(n.step / STEPS) * 100}%`;
-      block.style.width = `${(n.len / STEPS) * 100}%`;
-      block.style.top = `${(row / ROLL_NOTES.length) * 100}%`;
-      block.style.height = `${(1 / ROLL_NOTES.length) * 100}%`;
-      block.style.opacity = String(0.45 + 0.55 * (n.vel / 127));
-      block.title = `${n.note}, step ${n.step + 1}`;
-      block.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0) return;
-        event.preventDefault(); event.stopPropagation();
-        ctx.checkpoint();
-        const rect = rollNotesLayer.getBoundingClientRect();
-        const stepWidth = rect.width / STEPS, rowHeight = rect.height / ROLL_NOTES.length;
-        const blockRect = block.getBoundingClientRect();
-        const resizing = event.clientX - blockRect.left > blockRect.width - ROLL_RESIZE_PX;
-        const startX = event.clientX, startY = event.clientY;
-        const origStep = n.step, origLen = n.len, origRow = row;
-        let moved = false;
-        const onMove = (moveEvent: PointerEvent) => {
-          const dx = moveEvent.clientX - startX, dy = moveEvent.clientY - startY;
-          if (!moved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
-          moved = true;
-          const deltaSteps = Math.round((dx / stepWidth) / stepsPerGridLine()) * stepsPerGridLine();
-          if (resizing) {
-            n.len = Math.max(stepsPerGridLine(), Math.min(STEPS - origStep, origLen + deltaSteps));
-            block.style.width = `${(n.len / STEPS) * 100}%`;
-          } else {
-            n.step = Math.max(0, Math.min(STEPS - n.len, origStep + deltaSteps));
-            const newRow = Math.max(0, Math.min(ROLL_NOTES.length - 1, origRow + Math.round(dy / rowHeight)));
-            n.note = ROLL_NOTES[newRow];
-            block.style.left = `${(n.step / STEPS) * 100}%`;
-            block.style.top = `${(newRow / ROLL_NOTES.length) * 100}%`;
-          }
-        };
-        const onUp = () => {
-          window.removeEventListener("pointermove", onMove);
-          window.removeEventListener("pointerup", onUp);
-          if (!resizing && !moved) { synthNotes[clip.sel] = synthNotes[clip.sel].filter((existing) => existing !== n); paintRoll(); }
-          ctx.paintSession(); saveAll();
-        };
-        window.addEventListener("pointermove", onMove);
-        window.addEventListener("pointerup", onUp);
-      });
-      block.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        showVelocityPopup(n.vel, (event as MouseEvent).clientX, (event as MouseEvent).clientY, (v) => {
-          n.vel = v; block.style.opacity = String(0.45 + 0.55 * (v / 127)); saveAll();
-        });
-      });
-      rollNotesLayer.append(block);
-    });
-  }
-  let dragNote: VNote | null = null, dragRow = -1;
-  const rollBackgroundCells: HTMLButtonElement[][] = [];
-  ROLL_NOTES.forEach((note, r) => {
-    const row = el("div", "wa-piano-row" + (note.startsWith("C") && !note.startsWith("C#") ? " wa-roll-oct" : ""));
-    row.append(el("span", "wa-piano-note", note));
-    const track = el("div", "wa-piano-track");
-    const bgCells: HTMLButtonElement[] = [];
-    for (let c = 0; c < STEPS; c++) {
-      const cell = el("button", "wa-cell wa-piano-cell" + (isGridLine(c) ? " wa-beat" : "")) as HTMLButtonElement;
-      cell.type = "button";
-      cell.title = `${note}, step ${c + 1}`;
-      cell.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0 || rollNoteAt(r, c)) return; // existing notes are handled by their own block, on top
-        event.preventDefault();
-        ctx.checkpoint();
-        const fresh: VNote = { note, step: Math.min(STEPS - stepsPerGridLine(), snapStep(c)), len: stepsPerGridLine(), vel: 100 };
-        synthNotes[clip.sel].push(fresh);
-        dragNote = fresh; dragRow = r;
-        audition(note, 100, 1);
-        paintRoll(); ctx.paintSession(); saveAll();
-      });
-      cell.addEventListener("pointerenter", () => {
-        if (!dragNote || dragRow !== r) return;
-        if (c >= dragNote.step) { dragNote.len = Math.min(STEPS - dragNote.step, snapLen(c - dragNote.step + 1)); paintRoll(); }
-      });
-      bgCells.push(cell); track.append(cell);
-    }
-    rollBackgroundCells.push(bgCells);
-    row.append(track);
-    pianoRoll.append(row);
-  });
-  gridRepainters.push(() => rollBackgroundCells.forEach((row) => row.forEach((cell, c) => cell.classList.toggle("wa-beat", isGridLine(c)))));
-  pianoRoll.append(rollNotesLayer, rollPlayhead);
-  window.addEventListener("pointerup", () => { if (dragNote) saveAll(); dragNote = null; dragRow = -1; });
+  // Piano roll v2 — canvas Cubase-style editor, extracted to roll.ts (C3).
+  const roll = buildRoll({ audition, saveAll });
+  const { pianoRoll, rollPlayheadBar, paintRoll } = roll;
   const synthKeys = el("div", "wa-keys");
   let octaveShift = 0;
   const octaveLabel = el("span", "wa-status", "OCT 0");
@@ -528,19 +425,21 @@ export function buildSynth(): SynthUI {
     return playhead.lastHi + Math.min(1, (performance.now() - playhead.lastStepStartedMs) / (stepDur() * 1000));
   }
   function synthRecTarget(): number { return (playhead.playing ? clip.play.synth : null) ?? clip.sel; }
+  // Unquantized capture (C3): notes land exactly where they were played;
+  // set the transport Grid to quantize instead.
   function recordSynthOn(note: string): void {
     if (!synthRec || !playhead.playing) return;
     const pos = currentStepFloat(); if (pos < 0) return;
-    heldRec.set(note, Math.round(pos) % STEPS);
+    heldRec.set(note, pos % STEPS);
   }
   function recordSynthOff(note: string): void {
     const start = heldRec.get(note); if (start === undefined) return;
     heldRec.delete(note);
     if (!synthRec || !playhead.playing) return;
     const pos = currentStepFloat(); if (pos < 0) return;
-    let len = Math.round(pos) - start;
+    let len = pos % STEPS - start;
     if (len <= 0) len += STEPS;
-    len = Math.max(1, Math.min(STEPS - start, len));
+    len = Math.max(0.25, Math.min(STEPS - start, len));
     const target = synthRecTarget();
     synthNotes[target].push({ note, step: start, len, vel: 100 });
     if (target === clip.sel) paintRoll();

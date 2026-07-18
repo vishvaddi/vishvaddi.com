@@ -1288,6 +1288,34 @@
   overflow-y: auto;
   margin: 0;
 }
+/* Piano roll v2 — canvas editor (roll.ts): the note area scrolls inside the
+   container, the velocity lane stays pinned beneath it */
+.wa-piano-roll.wa-roll2 {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  border: 1px solid #123640;
+  border-radius: var(--wa-radius-sm);
+  background: var(--wa-phos-bg);
+}
+.wa-roll2-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.wa-roll2-canvas { display: block; width: 100%; touch-action: none; }
+.wa-roll2-vel {
+  display: block;
+  width: 100%;
+  height: 52px;
+  flex: none;
+  border-top: 1px solid #123640;
+  touch-action: none;
+}
+.wa-roll2 .wa-roll-playhead { left: 37px; bottom: auto; }
 .wa-page-keys .wa-export { flex: none; }
 .wa-page-keys .wa-keys { flex: none; }
 

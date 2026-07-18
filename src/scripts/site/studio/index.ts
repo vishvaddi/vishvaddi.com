@@ -132,11 +132,11 @@ export async function initStudio(): Promise<void> {
   metroVolIn.type = "range"; metroVolIn.min = "0"; metroVolIn.max = "1"; metroVolIn.step = "0.05"; metroVolIn.value = String(transport.metroVolume); metroVolIn.className = "wa-swing-in";
   help(metroVolIn, "Metronome click volume.");
   const gridSel = document.createElement("select");
-  [["4", "1/4"], ["8", "1/8"], ["16", "1/16 (off)"]].forEach(([value, label]) => {
+  [["0", "Off"], ["4", "1/4"], ["8", "1/8"], ["16", "1/16"]].forEach(([value, label]) => {
     const o = document.createElement("option"); o.value = value; o.textContent = label; gridSel.append(o);
   });
   gridSel.value = String(transport.quantizeGrid);
-  help(gridSel, "Snap/grid resolution for the drum, pad-event and piano-roll editors.");
+  help(gridSel, "Snap/grid for the editors. Off = free, unquantized placement in the piano roll (Cubase-style); 1/4–1/16 snap to the grid.");
   const undoBtn = btn("Undo", "wa-btn-sm"), redoBtn = btn("Redo", "wa-btn-sm");
   const tutorialBtn = btn("? Tutorial", "wa-btn-sm");
   help(playBtn, "Start playback from the beginning of the current clips or song.");
