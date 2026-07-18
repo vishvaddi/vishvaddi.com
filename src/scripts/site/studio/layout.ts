@@ -22,10 +22,10 @@ export interface LayoutPanels {
   mixer: HTMLElement;
   devicePanel: HTMLElement;
   exp: HTMLElement;
-  rack: HTMLElement;
   chop: HTMLElement;
   scratchPanel: HTMLElement;
   inspector: HTMLElement;
+  laneInspector: HTMLElement;
   onSynthVisible: () => void;       // canvases need a redraw once measurable
   onModeChange: (label: string) => void;
 }
@@ -68,13 +68,16 @@ export function buildLayout(p: LayoutPanels): Layout {
   };
   const closeOverlays = () => overlays.forEach((o) => { o.hidden = true; });
 
-  // ── DRUMS ── grid + a slim bar opening the sample rack as an overlay
+  // ── DRUMS ── grid + the per-lane sampler sidebar (click a drum name)
   const drumsPage = el("div", "wa-page wa-page-drums");
+  const drumsMain = el("div", "wa-drums-main");
   const drumsBar = el("div", "wa-subtabs");
-  const rackBtn = btn("Rack", "wa-subtab");
-  help(rackBtn, "The drum sampler rack — per-lane sample loading and shaping.");
-  drumsBar.append(rackBtn);
-  drumsPage.append(drumsBar, p.beat);
+  const editLaneBtn = btn("Edit drum", "wa-subtab wa-editpad-toggle");
+  help(editLaneBtn, "Show or hide the selected drum's sampler.");
+  editLaneBtn.addEventListener("click", () => drumsPage.classList.toggle("show-inspector"));
+  drumsBar.append(editLaneBtn);
+  drumsMain.append(drumsBar, p.beat);
+  drumsPage.append(drumsMain, p.laneInspector);
 
   // ── PADS ── deck + toolbar row; inspector column right (toggle on small screens)
   const padsPage = el("div", "wa-page wa-page-pads");
@@ -176,9 +179,6 @@ export function buildLayout(p: LayoutPanels): Layout {
   rollTab.addEventListener("click", () => { synthView = "roll"; paintSynthView(); });
   patchTab.addEventListener("click", () => { synthView = "patch"; paintSynthView(); });
   paintSynthView();
-  const rackOverlay = makeOverlay("SAMPLE RACK", p.rack);
-  p.rack.hidden = false;
-  rackBtn.addEventListener("click", rackOverlay.open);
 
   // ── SONG ── session grid re-homed at the top of the arrangement panel
   const songPage = el("div", "wa-page wa-page-song");

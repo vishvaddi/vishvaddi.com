@@ -1,6 +1,7 @@
-// Beat editor — scene selector row, 8×16 drum step grid, per-drum sound
-// design panels. Extracted verbatim from index.ts (Phase 0 split).
-import { STEPS, SCENES, SCENE_LABELS, DRUMS, clip, allPats, allVels, synthNotes, padEvents, dp, DP_DEF, DP_SPECS } from "./state";
+// Beat editor — scene selector row, 8×16 drum step grid. Lane names select
+// the lane for the sampler sidebar (laneui.ts, D2) — the old inline
+// sound-design panels moved there.
+import { STEPS, SCENES, SCENE_LABELS, DRUMS, clip, allPats, allVels, synthNotes, padEvents } from "./state";
 import { ac, ensureNodes, trackGain, playDrum } from "./engine";
 import { saveAll } from "./persistence";
 import { el, btn, stepRuler } from "./helpers";
@@ -13,7 +14,7 @@ export interface DrumGrid {
   sceneBtns: HTMLButtonElement[];
 }
 
-export function buildDrumGrid(): DrumGrid {
+export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): DrumGrid {
   const beat = el("div", "wa-panel");
 
   // Scene selector row — chooses which scene every editor edits.
@@ -46,18 +47,17 @@ export function buildDrumGrid(): DrumGrid {
   const grid = el("div", "wa-grid");
   grid.append(stepRuler());
   const cells: HTMLElement[][] = [];
-  const sdPanels: HTMLElement[] = [];
+  const laneBtns: HTMLElement[] = [];
 
   DRUMS.forEach((name, r) => {
-    // Drum row
+    // Drum row — clicking the name selects the lane in the sampler sidebar
     const rowEl = el("div", "wa-row");
     const lab = btn(name, "wa-drum"); lab.classList.remove("wa-btn");
-    let sdOpen = false;
     lab.addEventListener("click", () => {
-      sdOpen = !sdOpen;
-      sdPanels[r].style.display = sdOpen ? "block" : "none";
-      lab.classList.toggle("active", sdOpen);
+      laneBtns.forEach((b, i) => b.classList.toggle("active", i === r));
+      deps.onSelectLane(r);
     });
+    laneBtns.push(lab);
     rowEl.append(lab);
 
     const rowCells: HTMLElement[] = [];
@@ -90,39 +90,8 @@ export function buildDrumGrid(): DrumGrid {
       rowCells.push(cell); rowEl.append(cell);
     }
     cells.push(rowCells); grid.append(rowEl);
-
-    // Sound design panel (below each row, hidden by default)
-    const sdPanel = el("div", "wa-sd-panel"); sdPanel.style.display = "none";
-    const sdRow = el("div", "wa-sd-row");
-    const specs = DP_SPECS[r];
-    specs.forEach((spec) => {
-      const item = el("div", "wa-sd-item");
-      const inp = document.createElement("input");
-      inp.type = "range"; inp.min = String(spec.min); inp.max = String(spec.max); inp.step = String(spec.step); inp.value = String(dp[r][spec.key]);
-      const vout = el("span", "wa-sd-val", `${dp[r][spec.key]}${spec.unit ?? ""}`);
-      inp.addEventListener("input", () => {
-        const v = Number(inp.value); (dp[r][spec.key] as number) = v; vout.textContent = `${v}${spec.unit ?? ""}`; saveAll();
-      });
-      item.append(el("span", "wa-sd-lbl", spec.label), inp, vout);
-      sdRow.append(item);
-    });
-    const testBtn = btn("▶ Test", "wa-btn-sm");
-    testBtn.addEventListener("click", () => { ensureNodes(); playDrum(ac(), trackGain[r], r, 1, ac().currentTime); });
-    const resetBtn = btn("Reset", "wa-btn-sm");
-    resetBtn.addEventListener("click", () => {
-      Object.assign(dp[r], DP_DEF[r]);
-      sdPanel.querySelectorAll<HTMLInputElement>("input[type=range]").forEach((inp, i) => {
-        if (i >= specs.length) return;
-        inp.value = String(dp[r][specs[i].key]);
-        const vout = inp.nextElementSibling as HTMLElement;
-        if (vout) vout.textContent = `${dp[r][specs[i].key]}${specs[i].unit ?? ""}`;
-      });
-      saveAll();
-    });
-    const actions = el("div", "wa-sd-actions"); actions.append(testBtn, resetBtn);
-    sdPanel.append(sdRow, actions);
-    sdPanels.push(sdPanel); grid.append(sdPanel);
   });
+  laneBtns[0]?.classList.add("active");
   gridRepainters.push(() => cells.forEach((row) => row.forEach((cell, c) => cell.classList.toggle("wa-beat", isGridLine(c)))));
 
   const clearBtn = btn("CLEAR", "wa-btn-sm");

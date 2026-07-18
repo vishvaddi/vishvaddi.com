@@ -33,13 +33,13 @@ import { initTooltips } from "./tooltip";
 import { buildKeys, highlightKey } from "./keys";
 import { buildProjectExport } from "./render";
 import { buildScratchpad } from "./scratch";
+import { buildLaneInspector } from "./laneui";
 import { buildSession } from "./session";
 import { buildMixer } from "./mixerui";
 import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
 import { setCellOpacity, showVelPopup, showVelocityPopup } from "./velpopup";
 import { buildDrumGrid } from "./drumgrid";
 import { buildPads } from "./padsui";
-import { buildRack } from "./rackui";
 import { buildChop } from "./chopui";
 import { buildSynth } from "./synthui";
 import { buildDeviceRack } from "./fxrack";
@@ -165,8 +165,10 @@ export async function initStudio(): Promise<void> {
 
   // ── Shared velocity popup ── (velpopup.ts — Phase 0 split)
 
-  // ── Beat ── (drumgrid.ts — Phase 0 split)
-  const { beat, cells, sceneBtns } = buildDrumGrid();
+  // ── Drum lane sampler sidebar ── (laneui.ts — D2)
+  const laneInsp = buildLaneInspector();
+  // ── Beat ── (drumgrid.ts — Phase 0 split; lane names select into the sidebar)
+  const { beat, cells, sceneBtns } = buildDrumGrid({ onSelectLane: laneInsp.selectLane });
 
   // ── Project / export ── (render.ts — Phase 0 split; built before pads so
   // the resample feature can take renderBuffer directly)
@@ -175,9 +177,6 @@ export async function initStudio(): Promise<void> {
 
   // ── MPC performance ── (padsui.ts — Phase 0 split)
   const { mpcPanel, padSeqPanel, padButtons, paintMpcPads, paintEventLane, triggerPerformancePad, padGrid, eventLane, selectedPadLabel, selectedSampleEditor } = buildPads({ renderBuffer });
-
-  // ── Drum rack / sampler ── (rackui.ts — Phase 0 split)
-  const rack = buildRack();
 
   // ── Chop / sample capture ── (chopui.ts — Phase 0 split)
   const { chop, getChopBuffer, waveform } = buildChop({ paintMpcPads, paintEventLane });
@@ -201,6 +200,8 @@ export async function initStudio(): Promise<void> {
   // ── Layout ── (layout.ts — one-screen frame; rail/editor/inspector/drawer)
   const inspector = el("aside", "wa-inspector");
   inspector.append(el("div", "wa-inspector-title", "SELECTED PAD"), selectedPadLabel, selectedSampleEditor);
+  const laneInspector = el("aside", "wa-inspector wa-lane-aside");
+  laneInspector.append(laneInsp.panel);
   // ── Vinyl scratchpad ── (scratch.ts — Phase 0 split)
   const scratchPanel = buildScratchpad(getChopBuffer);
 
@@ -208,7 +209,7 @@ export async function initStudio(): Promise<void> {
     beat, mpcPanel, padSeqPanel, padGrid, pianoRoll, synthKeys,
     keysHeader: synth.keysHeader, synthPanel,
     sessionGrid, launchStatus, song, mixer, devicePanel, exp,
-    rack, chop, scratchPanel, inspector,
+    chop, scratchPanel, inspector, laneInspector,
     onSynthVisible: () => synth.waveRedraws().forEach((fn) => fn()),
     onModeChange: (label) => { lcdMode.textContent = label; },
   });

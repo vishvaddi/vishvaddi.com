@@ -1271,7 +1271,30 @@
 }
 .wa-subtab.active { color: var(--wa-text); background: var(--wa-surface-2); border-color: var(--wa-accent-dim); }
 
-/* DRUMS — the grid is the page's flexible element (16 steps always visible) */
+/* DRUMS — grid main + per-lane sampler sidebar (D2) */
+.wa-page-drums { flex-direction: row; }
+.wa-drums-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+.wa-page-drums .wa-inspector {
+  width: 265px;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  position: static;
+  max-height: none;
+}
+.wa-lane-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.wa-lane-wave {
+  display: block; width: 100%; height: 72px; margin-bottom: 6px;
+  border: 1px solid #123640; border-radius: 4px;
+  background: var(--wa-phos-bg);
+}
+.wa-lane-wave-empty {
+  padding: 14px 8px; margin-bottom: 6px;
+  border: 1px dashed var(--wa-border-2); border-radius: 4px;
+  color: var(--wa-muted); font-size: 10px; letter-spacing: 0.08em; text-align: center;
+}
+.wa-lane-knobs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.wa-lane-sd { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--wa-border); }
 .wa-page-drums .wa-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
 .wa-page-drums .wa-grid { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 3px; }
 .wa-page-drums .wa-grid .wa-row { flex: 1; min-height: 26px; max-height: 44px; align-items: stretch; }
@@ -1313,8 +1336,10 @@
 }
 @media (min-width: 1101px) { .wa-editpad-toggle { display: none; } }
 @media (max-width: 1100px) {
-  .wa-page-pads .wa-inspector { display: none; }
-  .wa-page-pads.show-inspector .wa-inspector {
+  .wa-page-pads .wa-inspector,
+  .wa-page-drums .wa-inspector { display: none; }
+  .wa-page-pads.show-inspector .wa-inspector,
+  .wa-page-drums.show-inspector .wa-inspector {
     display: block;
     position: absolute;
     top: 0;
@@ -1439,4 +1464,5 @@
   .wa-modebar { gap: 3px; }
   .wa-modekey { gap: 4px; font-size: 9px; letter-spacing: 0.06em; padding: 8px 2px; }
   .wa-page-pads { flex-direction: column; }
+  .wa-page-drums { flex-direction: column; }
 }
