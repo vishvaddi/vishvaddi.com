@@ -110,7 +110,7 @@ export async function initStudio(): Promise<void> {
     applyDensity();
   });
   help(densityBtn, "Switch between a space-efficient workstation and larger, more relaxed controls. This preference is remembered.");
-  titleBar.append(el("span", "wa-title-text", "VISHAMP — STUDIO"), projectName, el("span", "wa-title-dots"), densityBtn, fsBtn, powerBtn, masterKnob.root);
+  titleBar.append(el("span", "wa-title-text", "VISHVADDI / STUDIO"), projectName, el("span", "wa-title-dots"), densityBtn, fsBtn, powerBtn, masterKnob.root);
   const lcd = el("div", "wa-lcd");
   const lcdBpm = el("span", "wa-lcd-seg", `${transport.bpm} BPM`);
   const lcdState = el("span", "wa-lcd-seg", "■ STOP");

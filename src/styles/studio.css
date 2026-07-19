@@ -1766,3 +1766,416 @@
 @media (prefers-reduced-motion: reduce) {
   .wa-win *, .wa-win *::before, .wa-win *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }
+
+/* ── Studio v4: modern DAW workspace ────────────────────────────────────── */
+.immersive-page {
+  --studio-canvas: #090b0e;
+  background: var(--studio-canvas);
+}
+
+.immersive-page .wa-win {
+  --wa-bg: #0b0e12;
+  --wa-surface: #11151a;
+  --wa-surface-2: #171c22;
+  --wa-surface-3: #20262d;
+  --wa-border: #252c34;
+  --wa-border-2: #343d47;
+  --wa-text: #eef2f4;
+  --wa-muted: #87919c;
+  --wa-accent: #9bf56d;
+  --wa-accent-dim: #57a73a;
+  --wa-blue: #5bc8ff;
+  --wa-amber: #ffad42;
+  --wa-phos: #9bf56d;
+  --wa-phos-dim: #447532;
+  --wa-phos-bg: #0b0e12;
+  --wa-purple: #aa8cff;
+  --wa-radius: 5px;
+  --wa-radius-sm: 4px;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--wa-bg);
+}
+
+.immersive-page .wa-win::before,
+.immersive-page .wa-win::after { display: none; }
+
+.immersive-page .wa-title {
+  height: 46px;
+  margin: 0;
+  padding: 0 13px;
+  gap: 9px;
+  border: 0;
+  border-bottom: 1px solid var(--wa-border);
+  border-radius: 0;
+  background: #0d1014;
+  box-shadow: 0 1px 0 rgba(255,255,255,.025);
+}
+
+.immersive-page .wa-title-text {
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  white-space: nowrap;
+}
+
+.immersive-page .wa-title-text::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 9px;
+  border-radius: 2px;
+  background: var(--wa-accent);
+  box-shadow: 0 0 14px rgba(155,245,109,.42);
+}
+
+.immersive-page .wa-project-name {
+  width: clamp(150px, 22vw, 320px);
+  height: 30px;
+  padding: 0 10px;
+  color: var(--wa-text);
+  background: #080a0d;
+  border-color: #20262c;
+}
+
+.immersive-page .wa-title .wa-btn-sm,
+.immersive-page .wa-power {
+  min-height: 30px;
+  padding: 0 10px;
+  background: transparent;
+  border-color: var(--wa-border);
+}
+
+.immersive-page .wa-title .wa-btn-sm:hover,
+.immersive-page .wa-power:hover { background: var(--wa-surface-2); }
+
+.immersive-page .wa-power-led { background: #47515b; box-shadow: none; }
+.immersive-page .wa-power.on .wa-power-led { background: var(--wa-accent); box-shadow: 0 0 8px rgba(155,245,109,.6); }
+
+.immersive-page .wa-lcd {
+  border: 0;
+  border-radius: 0;
+  background: #0b0e12;
+  box-shadow: none;
+}
+
+.immersive-page .wa-lcd::after { display: none; }
+.immersive-page .wa-lcd .wa-lcd-seg { color: var(--wa-text); text-shadow: none; }
+.immersive-page .wa-lcd .wa-lcd-mode { color: var(--wa-accent); }
+.immersive-page .wa-save-state { color: var(--wa-muted); background: transparent; border: 0; }
+
+.immersive-page .wa-transport {
+  margin: 0;
+  padding: 4px 9px;
+  gap: 5px;
+  min-height: 38px;
+  border: 0;
+  border-bottom: 1px solid var(--wa-border);
+  border-radius: 0;
+  background: #11151a;
+  box-shadow: none;
+}
+
+.immersive-page .wa-transport .wa-btn,
+.immersive-page .wa-transport .wa-btn-sm {
+  height: 28px;
+  min-height: 28px;
+  border-color: #303842;
+  border-radius: 4px;
+  background: #1a2027;
+  box-shadow: none;
+}
+
+.immersive-page .wa-transport > .wa-btn:first-child {
+  color: #0a1007;
+  background: var(--wa-accent);
+  border-color: var(--wa-accent);
+}
+
+.immersive-page .wa-transport > .wa-btn:nth-child(2) {
+  color: #dce1e4;
+  background: #242b33;
+}
+
+.immersive-page .wa-sep { height: 20px; margin: 0 3px; background: #303740; }
+
+.immersive-page .wa-pagehost {
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  overflow: auto;
+  background:
+    linear-gradient(rgba(255,255,255,.014) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px),
+    #0c0f13;
+  background-size: 28px 28px;
+  scrollbar-color: #3c4650 #0c0f13;
+}
+
+.immersive-page .wa-page { gap: 9px; }
+.immersive-page .wa-panel,
+.immersive-page .wa-inspector,
+.immersive-page .wa-session,
+.immersive-page .wa-device,
+.immersive-page .wa-xy-wrap {
+  border-color: #28313a;
+  border-radius: 5px;
+  background: rgba(18,22,27,.96);
+  box-shadow: 0 8px 28px rgba(0,0,0,.14);
+}
+
+.immersive-page .wa-fx-title {
+  color: #cbd2d7;
+  font-size: 10px;
+  letter-spacing: .11em;
+}
+
+.immersive-page .wa-fx-title::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 10px;
+  margin-right: 7px;
+  border-radius: 2px;
+  vertical-align: -1px;
+  background: var(--wa-accent);
+}
+
+.immersive-page .wa-subtabs {
+  min-height: 34px;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--wa-border);
+  border-radius: 5px;
+  background: #101419;
+}
+
+.immersive-page .wa-subtab {
+  min-height: 26px;
+  padding: 0 11px;
+  border: 0;
+  background: transparent;
+}
+
+.immersive-page .wa-subtab.active {
+  color: #0c1209;
+  border: 0;
+  background: var(--wa-accent);
+}
+
+.immersive-page .wa-btn,
+.immersive-page .wa-btn-sm,
+.immersive-page select,
+.immersive-page input {
+  box-shadow: none;
+}
+
+.immersive-page .wa-btn:hover,
+.immersive-page .wa-btn-sm:hover { border-color: #47525e; background: #262e36; }
+
+.immersive-page .wa-cell {
+  border-color: #283039;
+  border-radius: 3px;
+  background: #161b21;
+  box-shadow: inset 0 1px rgba(255,255,255,.018);
+}
+
+.immersive-page .wa-cell.wa-beat { background: #1c232a; }
+.immersive-page .wa-cell.on {
+  border-color: #8de863;
+  background: var(--wa-accent);
+  box-shadow: 0 0 0 1px rgba(155,245,109,.18), 0 0 12px rgba(155,245,109,.16);
+}
+
+.immersive-page .wa-drum {
+  border: 0;
+  border-left: 3px solid #3b4650;
+  border-radius: 3px;
+  background: #171c22;
+}
+.immersive-page .wa-drum.active { color: var(--wa-text); border-left-color: var(--wa-accent); background: #20272e; }
+
+.immersive-page .wa-mpc-pad {
+  border-color: #313a44;
+  border-radius: 6px;
+  background: linear-gradient(145deg, #252c34, #171c22);
+  box-shadow: inset 0 1px rgba(255,255,255,.055), 0 5px 14px rgba(0,0,0,.3);
+}
+.immersive-page .wa-mpc-pad:hover { border-color: #52606d; background: linear-gradient(145deg, #2d3640, #1c2229); }
+.immersive-page .wa-mpc-pad.selected { border-color: var(--wa-accent); box-shadow: 0 0 0 1px var(--wa-accent), 0 8px 24px rgba(0,0,0,.35); }
+.immersive-page .wa-mpc-pad-number { color: var(--wa-accent); }
+
+.immersive-page .wa-roll-note { color: #0b1108; border-color: #76ca50; background: var(--wa-accent); }
+
+.immersive-page .wa-page-song .wa-session {
+  padding: 7px;
+  background: #0d1014;
+}
+.immersive-page .wa-page-song .wa-session-row { gap: 6px; }
+.immersive-page .wa-page-song .wa-session-head { color: var(--wa-muted); }
+.immersive-page .wa-page-song .wa-scene-launch {
+  color: #101316;
+  border: 0;
+  border-radius: 4px;
+  background: #ffad42;
+}
+.immersive-page .wa-page-song .wa-clip {
+  border: 0;
+  border-left: 3px solid color-mix(in srgb, var(--scene-color, var(--wa-muted)) 70%, #fff);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--scene-color, #58616b) 11%, #151a20);
+  box-shadow: inset 0 1px rgba(255,255,255,.025);
+}
+.immersive-page .wa-page-song .wa-clip.has {
+  background: color-mix(in srgb, var(--scene-color, #58616b) 27%, #171c22);
+}
+.immersive-page .wa-page-song .wa-clip.playing {
+  border-left-color: var(--wa-accent);
+  background: color-mix(in srgb, var(--wa-accent) 20%, #171c22);
+}
+.immersive-page .wa-chainstrip { background: #090c0f; border-color: #29323a; }
+.immersive-page .wa-chain-block.active { color: #0b1108; background: var(--wa-accent); }
+
+.immersive-page .wa-device {
+  border-top: 2px solid #3a444e;
+  background: #14191f;
+}
+.immersive-page .wa-device:has(.wa-device-on.active) { border-top-color: var(--wa-accent); }
+
+@media (min-width: 701px) {
+  .immersive-page .wa-win {
+    display: grid;
+    grid-template-columns: 78px minmax(0, 1fr);
+    grid-template-rows: 46px 38px minmax(0, 1fr);
+  }
+
+  .immersive-page .wa-title { grid-column: 1 / -1; grid-row: 1; }
+  .immersive-page .wa-sticky-chrome { display: contents; }
+
+  .immersive-page .wa-modebar {
+    position: static;
+    inset: auto;
+    grid-column: 1;
+    grid-row: 2 / 4;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    width: auto;
+    height: auto;
+    gap: 3px;
+    padding: 8px 6px;
+    border-right: 1px solid var(--wa-border);
+    background: #0f1317;
+  }
+
+  .immersive-page .wa-modekey {
+    flex: 0 0 62px;
+    width: 66px;
+    min-width: 0;
+    padding: 7px 2px 6px;
+    gap: 4px;
+    border: 0;
+    border-radius: 5px;
+    color: #77818b;
+    background: transparent;
+    font-size: 9px;
+    letter-spacing: .08em;
+  }
+
+  .immersive-page .wa-modekey::before {
+    display: block;
+    color: #9ca6af;
+    font: 600 18px/1 system-ui, sans-serif;
+  }
+  .immersive-page .wa-modekey:nth-child(1)::before { content: "▦"; }
+  .immersive-page .wa-modekey:nth-child(2)::before { content: "◆"; }
+  .immersive-page .wa-modekey:nth-child(3)::before { content: "〽"; }
+  .immersive-page .wa-modekey:nth-child(4)::before { content: "▤"; }
+  .immersive-page .wa-modekey:nth-child(5)::before { content: "≡"; }
+
+  .immersive-page .wa-modekey-led { display: none; }
+  .immersive-page .wa-modekey:hover { color: var(--wa-text); background: #171d23; }
+  .immersive-page .wa-modekey.active {
+    color: var(--wa-accent);
+    border: 0;
+    background: #1d252b;
+    box-shadow: inset 3px 0 var(--wa-accent);
+  }
+  .immersive-page .wa-modekey.active::before { color: var(--wa-accent); }
+
+  .immersive-page .wa-transport { grid-column: 2; grid-row: 2; }
+  .immersive-page .wa-pagehost { grid-column: 2; grid-row: 3; }
+
+  .immersive-page .wa-lcd {
+    position: absolute;
+    z-index: 30;
+    top: 8px;
+    left: clamp(330px, 41vw, 590px);
+    width: auto;
+    min-height: 29px;
+    margin: 0;
+    padding: 0 10px;
+    gap: 12px;
+    border-left: 1px solid var(--wa-border);
+  }
+  .immersive-page .wa-lcd-seg { font-size: 11px; letter-spacing: .06em; }
+  .immersive-page .wa-save-state { font-size: 9px; }
+}
+
+@media (max-width: 700px) {
+  .immersive-page .wa-win {
+    display: flex;
+    flex-direction: column;
+    padding: 0 0 calc(58px + env(safe-area-inset-bottom));
+  }
+
+  .immersive-page .wa-title { flex: 0 0 42px; height: 42px; padding: 0 7px; }
+  .immersive-page .wa-title-text { display: inline-flex; align-items: center; width: 21px; overflow: hidden; font-size: 0; }
+  .immersive-page .wa-title-text::before { width: 10px; height: 10px; margin-right: 12px; flex: 0 0 auto; }
+  .immersive-page .wa-project-name { flex: 1 1 auto; width: 80px; min-width: 0; }
+  .immersive-page .wa-density-btn { display: none; }
+
+  .immersive-page .wa-lcd {
+    flex: 0 0 27px;
+    min-height: 27px;
+    margin: 0;
+    padding: 0 8px;
+    gap: 10px;
+    border-bottom: 1px solid var(--wa-border);
+  }
+  .immersive-page .wa-lcd-seg { font-size: 10px; letter-spacing: .05em; }
+  .immersive-page .wa-save-state { margin-left: auto; }
+
+  .immersive-page .wa-sticky-chrome { flex: 0 0 auto; padding: 0; background: var(--wa-bg); }
+  .immersive-page .wa-transport { min-height: 42px; overflow-x: auto; }
+  .immersive-page .wa-pagehost { flex: 1 1 auto; padding: 6px; }
+
+  .immersive-page .wa-modebar {
+    height: calc(58px + env(safe-area-inset-bottom));
+    padding: 4px 5px env(safe-area-inset-bottom);
+    gap: 2px;
+    border-top-color: #303841;
+    background: rgba(13,16,20,.98);
+    box-shadow: 0 -10px 28px rgba(0,0,0,.42);
+  }
+  .immersive-page .wa-modekey {
+    min-height: 50px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+  }
+  .immersive-page .wa-modekey.active {
+    color: var(--wa-accent);
+    border: 0;
+    background: #1c2329;
+    box-shadow: inset 0 -3px var(--wa-accent);
+  }
+}

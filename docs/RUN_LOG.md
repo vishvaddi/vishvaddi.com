@@ -1,5 +1,13 @@
 # Run Log
 
+## 2026-07-19 — Studio visual redesign
+
+- Replaced the retained retro VishAmp chassis with a materially different modern DAW workspace inspired by Ableton and Bitwig rather than merely reskinning the existing controls.
+- Added a vertical desktop mode rail, unified flat transport, high-density grid canvas, clearer active/inactive hierarchy and track-coloured clip/arrangement surfaces.
+- Rebuilt the phone frame around a compact project/status header, horizontally scrollable transport and persistent bottom mode navigation; retained a vertical rail in short landscape view.
+- Rebranded the application shell as `VISHVADDI / STUDIO` and moved the primary palette to graphite with a high-contrast lime action colour.
+- Verified the production build and responsive browser suite at desktop, laptop, phone and landscape sizes with clean consoles and no document overflow.
+
 ## 2026-07-18 — Studio workstation parity rebuild
 
 - Reworked `/studio/` into an immersive full-viewport application with compact and comfortable densities, sticky workstation controls and responsive phone/landscape navigation.
