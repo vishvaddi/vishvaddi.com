@@ -510,46 +510,81 @@
     }).slice(0, 6);
   }
 
-  function containsTwo(set) {
-    return set.some(function (card) { return card.r === 15; });
+  function topRank(set) {
+    return set.reduce(function (max, card) { return Math.max(max, card.r); }, 0);
   }
+  function isControl(card) { return card.r >= 14; } // Ace or 2
+  function setHasControl(set) { return set.some(isControl); }
+  function othersMinCards(player) {
+    var min = 99;
+    for (var p = 0; p < 4; p++) {
+      if (p !== player) min = Math.min(min, hands[p].length);
+    }
+    return min;
+  }
+
+  // Per-seat temperament — all competent, but they hoard/spend control cards
+  // at different rival-pressure thresholds so the table feels like three people.
+  var AI_PROFILE = {
+    1: { spendAt: 1, chaos: 0 },     // Auntie hoards 2s and aces
+    2: { spendAt: 3, chaos: 0 },     // Uncle spends early to deny
+    3: { spendAt: 2, chaos: 0.25 }   // Cousin plays loose
+  };
 
   function chooseLead(candidates, player) {
     var pool = candidates.slice();
     if (isFirstTrick()) pool = pool.filter(function (candidate) { return hasStartCard(candidate.set); });
     if (!pool.length) return null;
 
-    pool.sort(function (a, b) {
-      return a.combo.count - b.combo.count ||
-        a.combo.cat - b.combo.cat ||
-        a.combo.key - b.combo.key;
-    });
+    var hand = hands[player];
+    var profile = AI_PROFILE[player] || AI_PROFILE[3];
+    var pressure = othersMinCards(player) <= 3;
+    var endgame = hand.length <= 6;
 
-    if (player === 1 && hands[player].length > 4) {
-      var withoutTwos = pool.filter(function (candidate) { return !containsTwo(candidate.set); });
-      if (withoutTwos.length) return withoutTwos[0];
+    var finisher = pool.filter(function (c) { return c.set.length === hand.length; })[0];
+    if (finisher) return finisher; // leading out the whole hand wins
+
+    pool.forEach(function (c) {
+      var score = c.set.length * 6;            // shed more cards per lead
+      score -= topRank(c.set) * 2;             // lead low, keep highs in reserve
+      if (setHasControl(c.set) && !pressure && !endgame) score -= 40; // hoard 2s/aces
+      if (c.combo.count === 5 && c.combo.cat >= 3 && !endgame) score -= 30; // save quads/straight-flush
+      c._lead = score;
+    });
+    pool.sort(function (a, b) { return b._lead - a._lead; });
+
+    if (profile.chaos && pool.length > 2 && rand() < profile.chaos) {
+      return pool[Math.floor(rand() * Math.min(3, pool.length))];
     }
-    if (player === 2 && hands[player].length <= 5) return pool[pool.length - 1];
-    if (player === 3 && pool.length > 2 && rand() < 0.35) return pool[Math.floor(rand() * Math.min(3, pool.length))];
     return pool[0];
   }
 
-  function chooseResponse(candidates, player) {
-    var beating = candidates.filter(function (candidate) { return pile && beats(candidate.combo, pile.combo); });
-    beating.sort(function (a, b) {
-      return a.combo.cat - b.combo.cat || a.combo.key - b.combo.key;
-    });
-    if (!beating.length) return null;
+  function chooseResponse(candidates, player, mustMove) {
+    if (!candidates.length) return null; // legalPlays already beat the pile
+    var hand = hands[player];
+    var profile = AI_PROFILE[player] || AI_PROFILE[3];
 
-    if (player === 1 && hands[player].length > 4) {
-      var cheap = beating.filter(function (candidate) { return !containsTwo(candidate.set); });
-      if (cheap.length) return cheap[0];
+    var finisher = candidates.filter(function (c) { return c.set.length === hand.length; })[0];
+    if (finisher) return finisher; // go out if this response empties the hand
+
+    var beating = candidates.slice().sort(function (a, b) {
+      return topRank(a.set) - topRank(b.set) ||
+        a.combo.cat - b.combo.cat || a.combo.key - b.combo.key;
+    });
+    var cheapest = beating[0]; // minimum winning response — least overpay
+
+    if (!mustMove) {
+      var deny = othersMinCards(player) <= profile.spendAt;
+      var endgame = hand.length <= 5;
+      if (!deny && !endgame && setHasControl(cheapest.set) && topRank(pile.cards) < 14) {
+        return null; // conserve: don't waste a 2/ace to beat a low pile with no rival threat
+      }
     }
-    if (player === 2 && hands[player].length <= 5) return beating[beating.length - 1];
-    if (player === 3 && beating.length > 1 && rand() < 0.3) {
-      return beating[Math.floor(rand() * Math.min(3, beating.length))];
+
+    if (profile.chaos && beating.length > 1 && rand() < profile.chaos) {
+      return beating[1];
     }
-    return beating[0];
+    return cheapest;
   }
 
   function selectionState() {
@@ -1039,7 +1074,7 @@
   function showHint() {
     if (current !== 0 || over) return;
     var options = legalPlays(hands[0]);
-    var choice = pile ? chooseResponse(options, 1) : chooseLead(options, 0);
+    var choice = pile ? chooseResponse(options, 1, true) : chooseLead(options, 0);
     if (!choice) {
       selected = [];
       render();
