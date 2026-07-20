@@ -1062,13 +1062,13 @@
         tableStats.livePoints += pts;
         floatScore("+" + pts.toLocaleString() + " · " + combo.name, bigHand);
       }
-      if (bigHand) shake();
     } else {
       if (hand.length && hand.length <= 2) speak(player, "low", true);
       else if (cards.some(function (card) { return card.r === 15; })) speak(player, "bomb", true);
       else if (combo.count === 5 && combo.cat >= 3) speak(player, "rare", true);
       else speak(player, "play");
     }
+    if (bigHand) shake();
 
     if (!hand.length) {
       finish(player);
