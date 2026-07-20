@@ -69,6 +69,51 @@
   var tableStats;
   var marketItems = [];
   var marketRerolls = 0;
+  var handCardEls = {};
+  var pileCardEls = {};
+  var oppEls = null;
+
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  // FLIP: measure persistent elements before `mutate`, then transition them from
+  // their old box to the new one. Selection clicks don't reorder, so dx/dy is 0
+  // and nothing animates; sort/deal reflows do.
+  function flip(els, mutate) {
+    if (prefersReducedMotion() || !els.length) { mutate(); return; }
+    var first = new Map();
+    els.forEach(function (el) { if (el.isConnected) first.set(el, el.getBoundingClientRect()); });
+    mutate();
+    els.forEach(function (el) {
+      if (!el.isConnected || !first.has(el)) return;
+      var f = first.get(el);
+      var l = el.getBoundingClientRect();
+      var dx = f.left - l.left;
+      var dy = f.top - l.top;
+      if (!dx && !dy) return;
+      el.style.transition = "none";
+      el.style.transform = "translate(" + dx + "px," + dy + "px)";
+      el.getBoundingClientRect();
+      el.style.transition = "transform .3s var(--ease, ease)";
+      el.style.transform = "";
+      var done = function () {
+        el.style.transition = "";
+        el.style.transform = "";
+        el.removeEventListener("transitionend", done);
+      };
+      el.addEventListener("transitionend", done);
+    });
+  }
+
+  function resetBoards() {
+    handCardEls = {};
+    pileCardEls = {};
+    var hand = $("b2-hand");
+    var pileBoard = $("b2-pile");
+    if (hand) hand.textContent = "";
+    if (pileBoard) pileBoard.textContent = "";
+  }
 
   function freshRun(daily) {
     return {
@@ -414,62 +459,9 @@
     }
     $("b2-new").textContent = isRogueMode() ? "New run" : "New deal";
 
-    var opponents = $("b2-opponents");
-    opponents.textContent = "";
-    for (var player = 1; player <= 3; player++) {
-      var box = document.createElement("div");
-      box.className = "b2-opp" + (current === player ? " turn" : "");
-      var name = document.createElement("div");
-      name.className = "b2-opp-name";
-      name.textContent = AI_NAMES[player] + (current === player ? " · playing" : "");
-      var cards = document.createElement("div");
-      cards.className = "b2-opp-cards";
-      cards.textContent = hands[player].length + " cards";
-      var backs = document.createElement("div");
-      backs.className = "b2-card-backs";
-      for (var back = 0; back < Math.min(hands[player].length, 10); back++) {
-        var backCard = document.createElement("span");
-        backCard.className = "b2-card-back";
-        backs.appendChild(backCard);
-      }
-      box.append(name, cards, backs);
-      opponents.appendChild(box);
-    }
-
-    var pileElement = $("b2-pile");
-    pileElement.textContent = "";
-    if (pile) {
-      pile.cards.slice().sort(function (a, b) { return cardValue(a) - cardValue(b); }).forEach(function (card) {
-        pileElement.appendChild(cardElement(card, false));
-      });
-      $("b2-pile-by").textContent = playerName(pile.player) + " played " + pile.combo.name.toLowerCase();
-    } else {
-      $("b2-pile-by").textContent = over ? "" : playerName(current) + " lead";
-    }
-
-    var playableCards = new Set();
-    if (current === 0 && !over) {
-      legalPlays(hands[0]).forEach(function (candidate) {
-        candidate.set.forEach(function (card) { playableCards.add(card); });
-      });
-    }
-
-    var handElement = $("b2-hand");
-    handElement.textContent = "";
-    hands[0].forEach(function (card, index) {
-      var element = cardElement(card, true);
-      if (selected.indexOf(index) >= 0) element.classList.add("sel");
-      if (playableCards.has(card)) element.classList.add("playable");
-      element.setAttribute("aria-pressed", selected.indexOf(index) >= 0 ? "true" : "false");
-      element.addEventListener("click", function () {
-        if (current !== 0 || over) return;
-        var at = selected.indexOf(index);
-        if (at >= 0) selected.splice(at, 1);
-        else selected.push(index);
-        render();
-      });
-      handElement.appendChild(element);
-    });
+    renderOpponents();
+    renderPile();
+    renderHand();
 
     var state = selectionState();
     $("b2-selection").textContent = state.text;
@@ -557,6 +549,124 @@
         message(candidate.combo.name + " selected. Press Play selected to confirm.");
       });
       target.appendChild(button);
+    });
+  }
+
+  function ensureOpponents() {
+    if (oppEls) return;
+    oppEls = [];
+    var root = $("b2-opponents");
+    root.textContent = "";
+    for (var player = 1; player <= 3; player++) {
+      var box = document.createElement("div");
+      box.className = "b2-opp";
+      var name = document.createElement("div");
+      name.className = "b2-opp-name";
+      var cards = document.createElement("div");
+      cards.className = "b2-opp-cards";
+      var backs = document.createElement("div");
+      backs.className = "b2-card-backs";
+      box.append(name, cards, backs);
+      root.appendChild(box);
+      oppEls.push({ box: box, name: name, cards: cards, backs: backs });
+    }
+  }
+
+  function renderOpponents() {
+    ensureOpponents();
+    for (var player = 1; player <= 3; player++) {
+      var refs = oppEls[player - 1];
+      refs.box.classList.toggle("turn", current === player);
+      refs.name.textContent = AI_NAMES[player] + (current === player ? " · playing" : "");
+      refs.cards.textContent = hands[player].length + " cards";
+      var want = Math.min(hands[player].length, 10);
+      while (refs.backs.children.length > want) refs.backs.removeChild(refs.backs.lastChild);
+      while (refs.backs.children.length < want) {
+        var backCard = document.createElement("span");
+        backCard.className = "b2-card-back";
+        refs.backs.appendChild(backCard);
+      }
+    }
+  }
+
+  function renderPile() {
+    var pileElement = $("b2-pile");
+    if (!pile) {
+      pileElement.textContent = "";
+      pileCardEls = {};
+      $("b2-pile-by").textContent = over ? "" : playerName(current) + " lead";
+      return;
+    }
+    var sorted = pile.cards.slice().sort(function (a, b) { return cardValue(a) - cardValue(b); });
+    var seen = {};
+    sorted.forEach(function (card) {
+      var key = cardValue(card);
+      seen[key] = true;
+      var el = pileCardEls[key];
+      if (!el) {
+        el = cardElement(card, false);
+        pileCardEls[key] = el;
+      }
+      pileElement.appendChild(el);
+    });
+    Object.keys(pileCardEls).forEach(function (key) {
+      if (seen[key]) return;
+      var el = pileCardEls[key];
+      if (el.parentNode) el.parentNode.removeChild(el);
+      delete pileCardEls[key];
+    });
+    $("b2-pile-by").textContent = playerName(pile.player) + " played " + pile.combo.name.toLowerCase();
+  }
+
+  function onHandCardClick() {
+    if (current !== 0 || over) return;
+    var index = hands[0].indexOf(this._card);
+    if (index < 0) return;
+    var at = selected.indexOf(index);
+    if (at >= 0) selected.splice(at, 1);
+    else selected.push(index);
+    render();
+  }
+
+  function renderHand() {
+    var handElement = $("b2-hand");
+    var playableCards = new Set();
+    if (current === 0 && !over) {
+      legalPlays(hands[0]).forEach(function (candidate) {
+        candidate.set.forEach(function (card) { playableCards.add(card); });
+      });
+    }
+
+    var seen = {};
+    var persistent = [];
+    hands[0].forEach(function (card) {
+      var key = cardValue(card);
+      seen[key] = true;
+      if (handCardEls[key]) persistent.push(handCardEls[key]);
+    });
+
+    flip(persistent, function () {
+      hands[0].forEach(function (card, index) {
+        var key = cardValue(card);
+        var el = handCardEls[key];
+        if (!el) {
+          el = cardElement(card, true);
+          el._card = card;
+          el.addEventListener("click", onHandCardClick);
+          handCardEls[key] = el;
+        }
+        var isSel = selected.indexOf(index) >= 0;
+        el.classList.toggle("sel", isSel);
+        el.classList.toggle("playable", playableCards.has(card));
+        el.setAttribute("aria-pressed", isSel ? "true" : "false");
+        handElement.appendChild(el);
+      });
+      Object.keys(handCardEls).forEach(function (key) {
+        if (seen[key]) return;
+        var el = handCardEls[key];
+        if (el.parentNode) el.parentNode.removeChild(el);
+        delete handCardEls[key];
+      });
     });
   }
 
@@ -781,6 +891,7 @@
     round++;
     if (isRogueMode()) seededState = (run.seed + run.table * 1009 + round * 9176) | 0;
     tableStats = freshTableStats();
+    resetBoards();
 
     var deck = newDeck();
     hands = [[], [], [], []];
