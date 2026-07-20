@@ -250,6 +250,9 @@
     var pileBoard = $("b2-pile");
     if (hand) hand.textContent = "";
     if (pileBoard) pileBoard.textContent = "";
+    if (oppEls) oppEls.forEach(function (refs) {
+      if (refs.tell) { refs.tell.textContent = ""; refs.tell.classList.remove("show"); }
+    });
   }
 
   function freshRun(daily) {
@@ -726,6 +729,52 @@
     });
   }
 
+  // Character voice. Cosmetic only — uses Math.random, never the seeded gameplay
+  // RNG, so tells can't shift the deal or AI decisions in daily runs.
+  var TELLS = {
+    1: { // Auntie — warm, nagging
+      bomb: ["Aiyah, take that!", "Don't say Auntie never warned you."],
+      rare: ["Been saving this one.", "Patience, always patience."],
+      play: ["Mm. Your turn.", "Eat more, play better."],
+      pass: ["I'll wait, thank you.", "Not yet, not yet."],
+      low: ["Nearly done, dear.", "Almost home."],
+      win: ["Told you. Listen to Auntie."]
+    },
+    2: { // Uncle — boastful, gruff
+      bomb: ["Boom! Big two!", "That's how it's done."],
+      rare: ["Watch and learn.", "Textbook, this."],
+      play: ["Too easy.", "Next."],
+      pass: ["Hmph. Pass.", "I let you have that one."],
+      low: ["One more and I'm out.", "Almost got it."],
+      win: ["Uncle always wins."]
+    },
+    3: { // Cousin — cheeky, chaotic
+      bomb: ["YOLO, two!", "Chaos reigns!"],
+      rare: ["No way that worked.", "Did you SEE that?"],
+      play: ["Yeet.", "Vibes."],
+      pass: ["Nah, pass.", "Skip, skip."],
+      low: ["I'm cooking here.", "Nearly cracked it."],
+      win: ["GG easy!"]
+    }
+  };
+
+  function speak(player, category, force) {
+    if (player === 0 || !oppEls) return;
+    var byCat = TELLS[player];
+    var lines = byCat && byCat[category];
+    if (!lines || !lines.length) return;
+    if (!force && Math.random() > 0.45) return; // sparse for generic chatter
+    var refs = oppEls[player - 1];
+    if (!refs || !refs.tell) return;
+    refs.tell.textContent = lines[Math.floor(Math.random() * lines.length)];
+    refs.tell.classList.add("show");
+    refs._tellToken = (refs._tellToken || 0) + 1;
+    var token = refs._tellToken;
+    window.setTimeout(function () {
+      if (refs._tellToken === token) refs.tell.classList.remove("show");
+    }, 2600);
+  }
+
   function ensureOpponents() {
     if (oppEls) return;
     oppEls = [];
@@ -738,11 +787,13 @@
       name.className = "b2-opp-name";
       var cards = document.createElement("div");
       cards.className = "b2-opp-cards";
+      var tell = document.createElement("div");
+      tell.className = "b2-opp-tell";
       var backs = document.createElement("div");
       backs.className = "b2-card-backs";
-      box.append(name, cards, backs);
+      box.append(name, tell, cards, backs);
       root.appendChild(box);
-      oppEls.push({ box: box, name: name, cards: cards, backs: backs });
+      oppEls.push({ box: box, name: name, tell: tell, cards: cards, backs: backs });
     }
   }
 
@@ -942,7 +993,7 @@
     over = true;
     clearAITimer();
     if (player === 0) stats.wins++;
-    else stats.losses++;
+    else { stats.losses++; speak(player, "win", true); }
     saveStats();
 
     if (!isRogueMode()) {
@@ -1005,6 +1056,11 @@
         floatScore("+" + pts.toLocaleString() + " · " + combo.name, bigHand);
       }
       if (bigHand) shake();
+    } else {
+      if (hand.length && hand.length <= 2) speak(player, "low", true);
+      else if (cards.some(function (card) { return card.r === 15; })) speak(player, "bomb", true);
+      else if (combo.count === 5 && combo.cat >= 3) speak(player, "rare", true);
+      else speak(player, "play");
     }
 
     if (!hand.length) {
@@ -1017,6 +1073,7 @@
   function pass(player) {
     tableStats.started = true;
     if (player === 0) tableStats.playerPasses++;
+    else speak(player, "pass");
     sfx("pass");
     passes++;
     if (passes >= 3) {

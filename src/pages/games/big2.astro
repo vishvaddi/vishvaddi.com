@@ -208,6 +208,11 @@ import Base from "../../layouts/Base.astro";
     .b2-opp { min-width: 0; border: 1px solid var(--rule); border-radius: 12px; padding: 0.7rem 0.75rem; text-align: center; transition: border-color .2s var(--ease, ease), background .2s, box-shadow .2s; }
     .b2-opp.turn { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
     .b2-opp-name { font-weight: 600; font-size: 0.9rem; }
+    .b2-opp-tell {
+      max-height: 0; overflow: hidden; opacity: 0; font-size: 0.74rem; line-height: 1.25;
+      color: var(--accent); font-style: italic; transition: opacity .2s var(--ease, ease), max-height .2s var(--ease, ease);
+    }
+    .b2-opp-tell.show { max-height: 2.6em; opacity: 1; margin: 0.15rem 0; }
     .b2-opp-cards { font-size: 0.8rem; color: var(--muted); }
     .b2-card-backs { display: flex; justify-content: center; gap: 2px; height: 18px; margin-top: 0.35rem; overflow: hidden; }
     .b2-card-back { width: 12px; height: 17px; border-radius: 2px; background: linear-gradient(135deg, #253d66, #476b9c); border: 1px solid #7d9bc0; }
