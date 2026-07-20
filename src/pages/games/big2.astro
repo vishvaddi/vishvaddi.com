@@ -79,6 +79,7 @@ import Base from "../../layouts/Base.astro";
     <div id="b2-opponents" class="b2-opponents"></div>
 
     <div class="b2-table">
+      <div class="b2-live-badge b2-rogue-only" id="b2-live-badge" aria-hidden="true">Table points · 0</div>
       <div class="b2-pile-by" id="b2-pile-by"></div>
       <div class="b2-pile" id="b2-pile"></div>
     </div>
@@ -104,6 +105,7 @@ import Base from "../../layouts/Base.astro";
       <button class="btn btn-ghost" id="b2-hint">Suggest move</button>
       <button class="btn btn-ghost" id="b2-clear">Clear</button>
       <button class="btn btn-ghost" id="b2-sort">Sort hand</button>
+      <button class="btn btn-ghost" id="b2-sound" aria-pressed="true">Sound: on</button>
       <button class="btn btn-ghost" id="b2-feedback">Feedback packet</button>
       <button class="btn btn-ghost" id="b2-new">New deal</button>
     </div>
@@ -210,6 +212,7 @@ import Base from "../../layouts/Base.astro";
     .b2-card-backs { display: flex; justify-content: center; gap: 2px; height: 18px; margin-top: 0.35rem; overflow: hidden; }
     .b2-card-back { width: 12px; height: 17px; border-radius: 2px; background: linear-gradient(135deg, #253d66, #476b9c); border: 1px solid #7d9bc0; }
     .b2-table {
+      position: relative;
       margin: 0.75rem 0; min-height: 150px; border-radius: 18px; padding: 1rem;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem;
       background:
@@ -219,6 +222,33 @@ import Base from "../../layouts/Base.astro";
     }
     .b2-pile-by { font-size: 0.78rem; color: rgba(255,255,255,0.65); letter-spacing: 0.03em; }
     .b2-pile { display: flex; gap: 7px; min-height: 72px; align-items: center; }
+    .b2-live-badge {
+      position: absolute; top: 0.55rem; right: 0.6rem; padding: 0.25rem 0.55rem;
+      border-radius: 999px; background: rgba(0,0,0,0.28); color: rgba(255,255,255,0.9);
+      font: 0.66rem var(--font-mono); letter-spacing: 0.06em; border: 1px solid rgba(255,255,255,0.16);
+    }
+    .b2-float {
+      position: fixed; z-index: 40; transform: translateX(-50%); pointer-events: none;
+      font-weight: 800; font-size: 1.05rem; color: #2b9b55; text-shadow: 0 1px 3px rgba(0,0,0,0.35);
+      animation: b2-float-up 1.05s var(--ease, ease) forwards;
+    }
+    .b2-float.big { font-size: 1.5rem; color: #e0a53a; }
+    @keyframes b2-float-up {
+      0% { opacity: 0; transform: translate(-50%, 6px) scale(0.9); }
+      15% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -46px) scale(1.02); }
+    }
+    .b2-shake { animation: b2-shake 0.32s var(--ease, ease); }
+    @keyframes b2-shake {
+      0%, 100% { transform: translate(0, 0); }
+      20% { transform: translate(-4px, 1px); }
+      40% { transform: translate(4px, -1px); }
+      60% { transform: translate(-3px, 1px); }
+      80% { transform: translate(3px, 0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .b2-float, .b2-shake { animation: none; }
+    }
     .b2-msg { min-height: 1.4em; margin: 0.65rem 0; padding: 0.55rem 0.7rem; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--fg); font-size: 0.9rem; font-weight: 600; }
     .b2-selection { padding: 0.16rem 0.48rem; border-radius: 999px; background: var(--code-bg); }
     .b2-selection.valid { color: #1b6c3b; background: color-mix(in srgb, #2b9b55 14%, transparent); }

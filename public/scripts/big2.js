@@ -24,6 +24,94 @@
   var $ = function (id) { return document.getElementById(id); };
   if (!$("b2-hand")) return;
 
+  // Procedural WebAudio SFX — no asset files, lazy context unlocked on first gesture.
+  var Sound = (function () {
+    var ctx = null;
+    var master = null;
+    var noiseBuf = null;
+    var muted = false;
+    try { muted = localStorage.getItem("vv_big2_muted") === "1"; } catch (_) {}
+
+    function ensure() {
+      if (ctx) return;
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = 0.5;
+      master.connect(ctx.destination);
+      var len = Math.floor(ctx.sampleRate * 0.4);
+      noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+      var data = noiseBuf.getChannelData(0);
+      for (var i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    }
+
+    function tone(freq, start, dur, type, gain, glideTo) {
+      var t0 = ctx.currentTime + start;
+      var o = ctx.createOscillator();
+      var g = ctx.createGain();
+      o.type = type || "sine";
+      o.frequency.setValueAtTime(freq, t0);
+      if (glideTo) o.frequency.exponentialRampToValueAtTime(glideTo, t0 + dur);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(gain || 0.25, t0 + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(master);
+      o.start(t0); o.stop(t0 + dur + 0.03);
+    }
+
+    function noise(start, dur, filterFreq, gain) {
+      var t0 = ctx.currentTime + start;
+      var src = ctx.createBufferSource();
+      src.buffer = noiseBuf;
+      var f = ctx.createBiquadFilter();
+      f.type = "bandpass"; f.frequency.value = filterFreq || 2000; f.Q.value = 0.7;
+      var g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(gain || 0.2, t0 + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      src.connect(f); f.connect(g); g.connect(master);
+      src.start(t0); src.stop(t0 + dur + 0.03);
+    }
+
+    var recipes = {
+      select: function () { tone(880, 0, 0.06, "triangle", 0.16); },
+      deselect: function () { tone(560, 0, 0.06, "triangle", 0.12); },
+      deal: function () { noise(0, 0.09, 3200, 0.16); noise(0.06, 0.07, 2500, 0.1); },
+      play: function () { noise(0, 0.08, 1700, 0.2); tone(300, 0, 0.1, "sine", 0.13, 170); },
+      pass: function () { tone(200, 0, 0.14, "sine", 0.13, 140); },
+      invalid: function () { tone(160, 0, 0.12, "square", 0.1, 120); tone(150, 0.05, 0.1, "square", 0.09); },
+      trick: function () { tone(523, 0, 0.14, "triangle", 0.16); tone(784, 0.08, 0.18, "triangle", 0.14); },
+      coin: function () { tone(1320, 0, 0.05, "square", 0.1); tone(1760, 0.04, 0.08, "square", 0.09); },
+      tableClear: function () { [523, 659, 784, 1047].forEach(function (fr, i) { tone(fr, i * 0.07, 0.2, "triangle", 0.15); }); },
+      win: function () { [523, 659, 784, 1047, 1319].forEach(function (fr, i) { tone(fr, i * 0.09, 0.3, "triangle", 0.17); }); },
+      lose: function () { tone(330, 0, 0.4, "sine", 0.16, 110); tone(220, 0.12, 0.5, "sine", 0.13, 90); }
+    };
+
+    return {
+      play: function (name) {
+        if (muted) return;
+        ensure();
+        if (!ctx) return;
+        if (ctx.state === "suspended") ctx.resume();
+        var recipe = recipes[name];
+        if (recipe) { try { recipe(); } catch (_) {} }
+      },
+      toggle: function () {
+        muted = !muted;
+        try { localStorage.setItem("vv_big2_muted", muted ? "1" : "0"); } catch (_) {}
+        if (!muted) this.play("select");
+        return muted;
+      },
+      isMuted: function () { return muted; }
+    };
+  })();
+
+  function sfx(name) { Sound.play(name); }
+  function haptic(ms) {
+    if (navigator.vibrate && !Sound.isMuted()) { try { navigator.vibrate(ms); } catch (_) {} }
+  }
+
   var CHARM_LIBRARY = [
     { id: "dragonPair", name: "Dragon Pair", kind: "Charm", price: 7, text: "Pairs score +40%.", build: "Pair" },
     { id: "redEnvelope", name: "Red Envelope", kind: "Charm", price: 6, text: "Each diamond you play adds +6 score.", build: "Suit" },
@@ -80,6 +168,21 @@
   // FLIP: measure persistent elements before `mutate`, then transition them from
   // their old box to the new one. Selection clicks don't reorder, so dx/dy is 0
   // and nothing animates; sort/deal reflows do.
+  function slideFrom(el, dx, dy, dur) {
+    if (!dx && !dy) return;
+    el.style.transition = "none";
+    el.style.transform = "translate(" + dx + "px," + dy + "px)";
+    el.getBoundingClientRect();
+    el.style.transition = "transform " + (dur || 0.3) + "s var(--ease, ease)";
+    el.style.transform = "";
+    var done = function () {
+      el.style.transition = "";
+      el.style.transform = "";
+      el.removeEventListener("transitionend", done);
+    };
+    el.addEventListener("transitionend", done);
+  }
+
   function flip(els, mutate) {
     if (prefersReducedMotion() || !els.length) { mutate(); return; }
     var first = new Map();
@@ -89,21 +192,55 @@
       if (!el.isConnected || !first.has(el)) return;
       var f = first.get(el);
       var l = el.getBoundingClientRect();
-      var dx = f.left - l.left;
-      var dy = f.top - l.top;
-      if (!dx && !dy) return;
-      el.style.transition = "none";
-      el.style.transform = "translate(" + dx + "px," + dy + "px)";
-      el.getBoundingClientRect();
-      el.style.transition = "transform .3s var(--ease, ease)";
-      el.style.transform = "";
-      var done = function () {
-        el.style.transition = "";
-        el.style.transform = "";
-        el.removeEventListener("transitionend", done);
-      };
-      el.addEventListener("transitionend", done);
+      slideFrom(el, f.left - l.left, f.top - l.top, 0.3);
     });
+  }
+
+  // Record where played cards start (hand card for the player, opponent box for AI)
+  // so renderPile can fly the new pile cards in from source.
+  var pendingFlight = null;
+  function captureFlight(player, cards) {
+    if (prefersReducedMotion()) { pendingFlight = null; return; }
+    var from = {};
+    if (player === 0) {
+      cards.forEach(function (card) {
+        var el = handCardEls[cardValue(card)];
+        if (el && el.isConnected) from[cardValue(card)] = el.getBoundingClientRect();
+      });
+    } else if (oppEls && oppEls[player - 1]) {
+      var rect = oppEls[player - 1].box.getBoundingClientRect();
+      cards.forEach(function (card) { from[cardValue(card)] = rect; });
+    }
+    pendingFlight = { from: from };
+  }
+
+  function floatScore(text, big) {
+    if (prefersReducedMotion()) return;
+    var pileEl = $("b2-pile");
+    if (!pileEl) return;
+    var rect = pileEl.getBoundingClientRect();
+    var el = document.createElement("div");
+    el.className = "b2-float" + (big ? " big" : "");
+    el.textContent = text;
+    el.style.left = (rect.left + rect.width / 2) + "px";
+    el.style.top = (rect.top + 6) + "px";
+    document.body.appendChild(el);
+    window.setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 1100);
+  }
+
+  function updateLiveBadge() {
+    var el = $("b2-live-badge");
+    if (!el) return;
+    el.textContent = "Table points · " + (tableStats.livePoints || 0).toLocaleString();
+  }
+
+  function shake() {
+    if (prefersReducedMotion()) return;
+    var el = $("big2");
+    if (!el) return;
+    el.classList.remove("b2-shake");
+    void el.offsetWidth;
+    el.classList.add("b2-shake");
   }
 
   function resetBoards() {
@@ -140,6 +277,7 @@
       twosPlayed: 0,
       playerPasses: 0,
       tricksWon: 0,
+      livePoints: 0,
       score: 0,
       coins: 0
     };
@@ -456,6 +594,7 @@
       $("b2-wager-copy").textContent = wager().text;
       renderWagers();
       renderCharms();
+      updateLiveBadge();
     }
     $("b2-new").textContent = isRogueMode() ? "New run" : "New deal";
 
@@ -615,6 +754,19 @@
       if (el.parentNode) el.parentNode.removeChild(el);
       delete pileCardEls[key];
     });
+
+    if (pendingFlight) {
+      sorted.forEach(function (card) {
+        var key = cardValue(card);
+        var fromRect = pendingFlight.from[key];
+        var el = pileCardEls[key];
+        if (!fromRect || !el) return;
+        var to = el.getBoundingClientRect();
+        slideFrom(el, fromRect.left - to.left, fromRect.top - to.top, 0.32);
+      });
+      pendingFlight = null;
+    }
+
     $("b2-pile-by").textContent = playerName(pile.player) + " played " + pile.combo.name.toLowerCase();
   }
 
@@ -623,8 +775,9 @@
     var index = hands[0].indexOf(this._card);
     if (index < 0) return;
     var at = selected.indexOf(index);
-    if (at >= 0) selected.splice(at, 1);
-    else selected.push(index);
+    if (at >= 0) { selected.splice(at, 1); sfx("deselect"); }
+    else { selected.push(index); sfx("select"); }
+    haptic(6);
     render();
   }
 
@@ -794,19 +947,29 @@
   function play(player, cards) {
     tableStats.started = true;
     var combo = classify(cards);
+    captureFlight(player, cards);
     var hand = hands[player];
     cards.forEach(function (card) { hand.splice(hand.indexOf(card), 1); });
     pile = { cards: cards, combo: combo, player: player };
     lastPlayer = player;
     passes = 0;
+    sfx("play");
+    var bigHand = combo.count === 5 && combo.cat >= 2;
 
     if (player === 0) {
+      haptic(18);
       tableStats.playerPlays.push({ combo: combo, cards: cards.slice() });
       tableStats.comboCounts[combo.name] = (tableStats.comboCounts[combo.name] || 0) + 1;
       cards.forEach(function (card) {
         if (card.s === 0) tableStats.diamondCards++;
         if (card.r === 15) tableStats.twosPlayed++;
       });
+      if (isRogueMode()) {
+        var pts = Math.round(scoreCombo(combo, cards));
+        tableStats.livePoints += pts;
+        floatScore("+" + pts.toLocaleString() + " · " + combo.name, bigHand);
+      }
+      if (bigHand) shake();
     }
 
     if (!hand.length) {
@@ -819,9 +982,11 @@
   function pass(player) {
     tableStats.started = true;
     if (player === 0) tableStats.playerPasses++;
+    sfx("pass");
     passes++;
     if (passes >= 3) {
       if (lastPlayer === 0) tableStats.tricksWon++;
+      sfx("trick");
       pile = null;
       passes = 0;
       current = lastPlayer;
@@ -862,6 +1027,7 @@
     if (current !== 0 || over) return;
     var state = selectionState();
     if (!state.valid) {
+      sfx("invalid");
       message(state.text + ".");
       return;
     }
@@ -892,6 +1058,7 @@
     if (isRogueMode()) seededState = (run.seed + run.table * 1009 + round * 9176) | 0;
     tableStats = freshTableStats();
     resetBoards();
+    sfx("deal");
 
     var deck = newDeck();
     hands = [[], [], [], []];
@@ -982,6 +1149,8 @@
   }
 
   function showMarket(result) {
+    sfx("tableClear");
+    shake();
     marketRerolls = 0;
     rollMarket();
     $("b2-market-kicker").textContent = "Table " + run.table + " cleared";
@@ -994,6 +1163,7 @@
   }
 
   function showRunOver(result) {
+    sfx("lose");
     saveBestScore();
     var gap = Math.max(0, tableTarget() - result.score);
     var played = tableStats.playerPlays.map(function (entry) { return entry.combo.name; }).join(", ") || "no scoring plays";
@@ -1007,6 +1177,8 @@
   }
 
   function showRunWin(result) {
+    sfx("win");
+    shake();
     saveBestScore();
     $("b2-market-kicker").textContent = "Run cleared";
     $("b2-market-title").textContent = "You beat the house";
@@ -1042,6 +1214,7 @@
   function buyMarketItem(item) {
     if (item.bought || run.coins < item.price) return;
     if (item.type === "charm" && run.charms.length >= MAX_CHARMS) return;
+    sfx("coin");
     run.coins -= item.price;
     item.bought = true;
     if (item.type === "charm") run.charms.push(item.id);
@@ -1114,6 +1287,15 @@
   });
   $("b2-new").addEventListener("click", newDeal);
   $("b2-feedback").addEventListener("click", showFeedback);
+  var soundBtn = $("b2-sound");
+  if (soundBtn) {
+    var syncSound = function () {
+      soundBtn.textContent = Sound.isMuted() ? "Sound: off" : "Sound: on";
+      soundBtn.setAttribute("aria-pressed", Sound.isMuted() ? "false" : "true");
+    };
+    soundBtn.addEventListener("click", function () { Sound.toggle(); syncSound(); });
+    syncSound();
+  }
   $("b2-copy-feedback").addEventListener("click", function () {
     var text = $("b2-feedback-text").value || feedbackPacket();
     if (navigator.clipboard?.writeText) {
