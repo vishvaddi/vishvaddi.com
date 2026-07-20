@@ -12,6 +12,11 @@ import Base from "../../layouts/Base.astro";
   </p>
 
   <div id="big2">
+    <div class="b2-banner" aria-hidden="true">
+      <span class="b2-lantern">🏮</span>
+      <span class="b2-banner-title">The Family Table</span>
+      <span class="b2-lantern">🏮</span>
+    </div>
     <div class="b2-mode-panel">
       <div>
         <span class="b2-kicker">Mode</span>
@@ -337,6 +342,41 @@ import Base from "../../layouts/Base.astro";
       .b2-market-grid { grid-template-columns: 1fr; }
       .b2-market-actions { flex-direction: column; }
     }
+
+    /* ── Family-table identity (appended = overrides the neutral base above) ── */
+    #big2 { --b2-gold: #c9962e; --b2-red: #b3122a; }
+    .b2-banner {
+      display: flex; align-items: center; justify-content: center; gap: 0.7rem;
+      margin: 0 0 0.9rem; padding: 0.5rem 1rem; border-radius: 12px;
+      background: linear-gradient(90deg, #7a0f1e, var(--b2-red) 50%, #7a0f1e);
+      color: #f6e3b0; font-weight: 700; letter-spacing: 0.06em; border: 1px solid var(--b2-gold);
+    }
+    .b2-banner-title { font-size: 0.92rem; text-shadow: 0 1px 2px rgba(0,0,0,0.45); }
+    .b2-lantern { font-size: 1.05rem; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35)); }
+    .b2-opp-avatar { font-size: 1.5rem; line-height: 1; margin-bottom: 0.15rem; }
+    .b2-kicker { color: color-mix(in srgb, var(--b2-gold) 65%, var(--muted)); }
+    .b2-run-panel strong, #b2-coins, #b2-run-score { color: var(--b2-gold); }
+    .b2-pile-by { color: #f0d488; }
+    .b2-card { position: relative; }
+    .b2-card-corner {
+      position: absolute; right: 5px; bottom: 4px; font-size: 0.6rem; font-weight: 800;
+      line-height: 1; transform: rotate(180deg); color: inherit; pointer-events: none;
+    }
+    .b2-card.sm .b2-card-corner { font-size: 0.52rem; right: 4px; bottom: 3px; }
+    .b2-card.sel {
+      border-color: var(--b2-gold);
+      box-shadow: 0 8px 18px rgba(0,0,0,0.3), 0 0 0 2px color-mix(in srgb, var(--b2-gold) 60%, transparent);
+    }
+    .b2-mode-actions button.active, .b2-wager.active {
+      border-color: var(--b2-gold); background: color-mix(in srgb, var(--b2-gold) 16%, transparent);
+    }
+    .b2-table {
+      box-shadow: inset 0 2px 20px rgba(0,0,0,0.42),
+        inset 0 0 0 2px color-mix(in srgb, var(--b2-gold) 28%, transparent),
+        0 8px 24px rgba(0,0,0,0.12);
+    }
+    .b2-play-btn { background: linear-gradient(160deg, #d8a63a, #b3831f); color: #241a06; border: 1px solid #8a6417; }
+    .b2-play-btn:hover:not(:disabled) { background: linear-gradient(160deg, #e4b348, #c08f24); }
   </style>
 
   <script src="/scripts/big2.js" defer></script>

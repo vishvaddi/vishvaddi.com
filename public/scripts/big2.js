@@ -3,6 +3,7 @@
   var SUITS = ["♦", "♣", "♥", "♠"];
   var RANK_LABEL = { 11: "J", 12: "Q", 13: "K", 14: "A", 15: "2" };
   var AI_NAMES = ["", "Auntie", "Uncle", "Cousin"];
+  var AI_AVATARS = ["", "👵", "🧔", "🧑"];
   var MODE_LABELS = {
     standard: ["Standard Big 2", "A clean single-deal game against three AI opponents."],
     roguelike: ["Roguelike Big 2", "A 12-table run with targets, wagers, Charms, Mastery and Markets."],
@@ -783,6 +784,9 @@
     for (var player = 1; player <= 3; player++) {
       var box = document.createElement("div");
       box.className = "b2-opp";
+      var avatar = document.createElement("div");
+      avatar.className = "b2-opp-avatar";
+      avatar.textContent = AI_AVATARS[player];
       var name = document.createElement("div");
       name.className = "b2-opp-name";
       var cards = document.createElement("div");
@@ -791,7 +795,7 @@
       tell.className = "b2-opp-tell";
       var backs = document.createElement("div");
       backs.className = "b2-card-backs";
-      box.append(name, tell, cards, backs);
+      box.append(avatar, name, tell, cards, backs);
       root.appendChild(box);
       oppEls.push({ box: box, name: name, tell: tell, cards: cards, backs: backs });
     }
@@ -921,7 +925,10 @@
     var suit = document.createElement("span");
     suit.className = "b2-card-suit";
     suit.textContent = SUITS[card.s];
-    element.append(rank, suit);
+    var corner = document.createElement("span");
+    corner.className = "b2-card-corner";
+    corner.textContent = label(card.r) + SUITS[card.s];
+    element.append(rank, suit, corner);
     return element;
   }
 
