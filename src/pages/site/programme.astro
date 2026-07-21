@@ -38,6 +38,12 @@ import "../../styles/site.css";
       --prog-today: #58c97a;
     }
     /* the tool needs more width than the 38rem prose column */
+    .programme :global(#programme-root) {
+      position: relative;
+      left: 50%;
+      width: min(90rem, calc(100vw - 2rem));
+      transform: translateX(-50%);
+    }
     .programme :global(.prog-split),
     .programme :global(.prog-toolbar),
     .programme :global(.prog-stats) { max-width: none; }
@@ -146,7 +152,7 @@ import "../../styles/site.css";
       .programme :global(.prog-date) { max-width: 8.5rem; }
     }
     /* fullscreen: the chart gets the screen */
-    .programme :global(#programme-root:fullscreen) { background: var(--bg); padding: 0.5rem 0.75rem; overflow: auto; }
+    .programme :global(#programme-root:fullscreen) { left: auto; width: 100%; transform: none; background: var(--bg); padding: 0.5rem 0.75rem; overflow: auto; }
     .programme :global(#programme-root:fullscreen .prog-split) { grid-template-columns: minmax(280px, 30%) 1fr; }
     .programme :global(#programme-root:fullscreen.prog-narrow .prog-split) { grid-template-columns: 1fr; }
     .programme :global(#programme-root:fullscreen .prog-gantt-wrap) { max-height: none; }
@@ -157,6 +163,7 @@ import "../../styles/site.css";
       .programme :global(.prog-toolbar), .programme :global(.prog-card:has(.prog-tpl)),
       .programme :global(.pc-x), .programme :global(.pg-linkdot) { display: none !important; }
       .programme :global(.prog-split) { grid-template-columns: 34% 1fr; border: none; }
+      .programme :global(#programme-root) { left: auto; width: 100%; transform: none; }
       .programme :global(.prog-gantt-wrap), .programme :global(.prog-table-wrap) { overflow: visible; }
       :global(body) { max-width: none; padding: 0; }
     }

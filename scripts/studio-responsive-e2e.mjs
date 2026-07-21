@@ -42,6 +42,30 @@ for (const [name, width, height] of viewports) {
     for (const mode of ['DRUMS', 'PADS', 'SYNTH', 'CLIPS', 'MIX']) {
       await page.locator('.wa-modekey', { hasText: mode }).click()
       check(`${name}: ${mode} opens`, await page.locator('.wa-modekey', { hasText: mode }).evaluate((node) => node.classList.contains('active')))
+      if ((name === 'desktop' || name === 'laptop') && mode === 'PADS') {
+        const fill = await page.evaluate(() => {
+          const active = document.querySelector('.wa-page:not([hidden])')?.getBoundingClientRect()
+          const host = document.querySelector('.wa-pagehost')?.getBoundingClientRect()
+          return active && host ? host.bottom - active.bottom : 999
+        })
+        check(`${name}: ${mode} uses workspace height`, fill <= 20, `${Math.round(fill)}px unused`)
+      }
+      if ((name === 'desktop' || name === 'laptop') && mode === 'MIX') {
+        const mixLayout = await page.evaluate(() => {
+          const gap = (panelSelector, contentSelector) => {
+            const panel = document.querySelector(panelSelector)?.getBoundingClientRect()
+            const content = document.querySelector(contentSelector)?.getBoundingClientRect()
+            return panel && content ? Math.round(panel.bottom - content.bottom) : 999
+          }
+          const channelTops = [...document.querySelectorAll('.wa-mixer .wa-ch')].map((channel) => Math.round(channel.getBoundingClientRect().top))
+          return {
+            gaps: [gap('.wa-mix-export', '.wa-mix-export .wa-export:last-child'), gap('.wa-mix-flex', '.wa-devbrowser')],
+            channelRows: new Set(channelTops).size,
+          }
+        })
+        check(`${name}: MIX panels are compact`, mixLayout.gaps.every((gap) => gap <= 20), `${mixLayout.gaps.join('/')}px trailing space`)
+        check(`${name}: MIX channels stay on one row`, mixLayout.channelRows === 1, `${mixLayout.channelRows} rows`)
+      }
     }
 
     await page.locator('.wa-modekey', { hasText: 'SYNTH' }).click()

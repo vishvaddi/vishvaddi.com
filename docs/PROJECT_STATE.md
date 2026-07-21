@@ -1,12 +1,14 @@
 # Project State
 
-_Last updated: 2026-07-19 — Studio's workstation shell replaced with a modern responsive DAW interface; Carromancy remains published under the main site._
+_Last updated: 2026-07-21 — Programme Builder now uses the landscape viewport; Studio PADS and MIX layouts no longer waste their desktop workspace._
 
 ## Current Position
 
 - `/studio/` is now an immersive, viewport-filling browser workstation with a modern flat DAW shell: vertical desktop workspace rail, unified transport, track-coloured clip matrix and persistent mobile navigation. Its primary modes are drums, pads, synth, clips/arrangement and mix.
 - Studio supports 4–32-step straight/triplet patterns; drums and sliced/recorded samples; Bass, Lead and Harmony synth lanes; accent/slide; Web MIDI; patch, kit and song libraries; scene chains; automation; effects; Morph/Terrain performance; project persistence; WAV/MP3 and stem export.
 - Studio source and responsive browser suites cover core edit/undo/autosave/playback/export plus the five modes, three synth lanes, Terrain keyboard control, arrangement automation, viewport fit and touch target sizing.
+- `/site/programme/` keeps its prose introduction in the editorial column but breaks the interactive editor out to near-full viewport width, including Android landscape; a focused Chrome regression checks width, overflow and chart-first mode.
+- Studio PADS expands its performance grid to the available desktop height. MIX keeps all ten channels on one row and stacks compact export/device panels beside them; the responsive suite measures these layout contracts.
 - `/games/carromancy/` hosts the production Carromancy build and is listed on `/games`.
 - Carromancy remains developed in its own `vishvaddi/carromancy` repository; the site carries a built snapshot under `public/games/carromancy/`.
 - The current snapshot uses a dual Power-and-clearance victory model: rivals require 5/7/9 own-colour coins, Guardians require a settled Queen, and misses act as the limited life economy. Successful own-colour pots retain the table; opponent coins and foul debts are respotted.

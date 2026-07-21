@@ -1,5 +1,13 @@
 # Run Log
 
+## 2026-07-21 — Programme landscape and Studio density
+
+- Broke the Programme Builder editor out of the 38 rem prose column while preserving fullscreen and print layouts; Android landscape now uses 812 px of an 844 px viewport without document overflow.
+- Expanded Studio's 4×4 performance pads to use the available desktop/laptop height.
+- Repacked MIX into one unwrapped ten-channel bank with compact export and device panels alongside it.
+- Added Programme landscape coverage and strengthened Studio responsive checks for workspace use, compact panels and channel wrapping.
+- Verified Programme landscape, Studio responsive and Studio functional browser suites with clean consoles. `astro check` remains blocked by pre-existing `astro.config.mjs` typing errors and then exhausts the default Node heap while scanning the generated Carromancy bundle.
+
 ## 2026-07-19 — Studio visual redesign
 
 - Replaced the retained retro VishAmp chassis with a materially different modern DAW workspace inspired by Ableton and Bitwig rather than merely reskinning the existing controls.

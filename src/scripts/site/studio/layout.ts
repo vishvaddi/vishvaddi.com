@@ -174,6 +174,8 @@ export function buildLayout(p: LayoutPanels): Layout {
   // ── MIX ── mixer + export up front (export must not need a scroll to find),
   // devices flex below and scroll internally
   const mixPage = el("div", "wa-page wa-page-mix");
+  p.mixer.classList.add("wa-mix-channels");
+  p.exp.classList.add("wa-mix-export");
   p.devicePanel.classList.add("wa-mix-flex");
   mixPage.append(p.mixer, p.exp, p.devicePanel);
 
