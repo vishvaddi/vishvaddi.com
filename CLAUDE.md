@@ -1,12 +1,15 @@
 # vishvaddi.com — Claude Code context
 
-## ALWAYS DO FIRST
+## Session start
 
 ```bash
-git pull origin master
+git status --short --branch
+git pull --ff-only origin master
 ```
 
-Run this before reading any file or making any change. This repo is actively worked on across sessions. Never assume local state matches remote.
+Run the pull only when the tree is clean; preserve and investigate unfamiliar changes. Before adding any function, type, helper, page or data structure, search with `rg` for an existing implementation and follow the nearest page/tool plus its test. State the affected pages, shared layout, service worker and deployment impact before changing cross-site code; stop if that blast radius is uncertain.
+
+After meaningful work, update `docs/PROJECT_STATE.md` and append `docs/RUN_LOG.md`; add a decision record only when alternatives were actually decided.
 
 ## Stack
 
@@ -22,7 +25,7 @@ Run this before reading any file or making any change. This repo is actively wor
 npm run build && npx wrangler deploy
 ```
 
-Always build before deploying. Check build passes before touching wrangler.
+Always build before deploying. Deploy only a clean commit already pushed to `origin/master`, then run the live smoke tests and confirm the tree remains clean.
 
 ## Project structure
 
