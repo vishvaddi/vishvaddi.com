@@ -13,7 +13,6 @@ const pages = {
 };
 
 const route = await OGImageRoute({
-  param: "page",
   pages,
   getImageOptions: (_path: string, page: { title: string; description: string }) => ({
     title: page.title,

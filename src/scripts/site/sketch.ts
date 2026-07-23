@@ -92,7 +92,7 @@ export function initSketch() {
       const page = doc.addPage([w, h]);
       page.drawImage(png, { x: 0, y: 0, width: w, height: h });
       const out = await doc.save();
-      download(`sketch-${new Date().toISOString().slice(0, 10)}.pdf`, URL.createObjectURL(new Blob([out], { type: "application/pdf" })));
+      download(`sketch-${new Date().toISOString().slice(0, 10)}.pdf`, URL.createObjectURL(new Blob([new Uint8Array(out).buffer], { type: "application/pdf" })));
     }, "image/png");
   });
 

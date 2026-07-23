@@ -1,5 +1,14 @@
 # Run Log
 
+## 2026-07-23 — Credential containment, Astro 7 security and Programme rail clearance
+
+- Revoked the historical GitHub personal access token and confirmed the historical ElevenLabs key was already inactive; both now return HTTP 401.
+- Scanned 19,960 profile files for credential patterns with no findings. The vault privacy audit passed its `_private/`, Git ignore, tracked-file, hook, repository-visibility and filesystem checks; the canonical credential file remains restricted to the user, Administrators and SYSTEM.
+- Upgraded Astro 6 to Astro 7 and `astro-og-canvas` to its compatible release, restored the global type gate and reduced `npm audit` from nine findings to zero.
+- Excluded independently built static game snapshots from the Astro source scan, added Playwright as an explicit development dependency and resolved migration and latent type/runtime faults exposed by the stricter check.
+- Kept the Programme Builder clear of the desktop tools rail: at 1,440 px the rail ends at 384 px and the 1,024 px editor begins at 400 px. Android landscape still uses 812 px of an 844 px viewport without document overflow.
+- Verified the production build, Programme responsive suite, Studio responsive suite and Studio functional suite with clean browser consoles.
+
 ## 2026-07-21 — Programme landscape and Studio density
 
 - Broke the Programme Builder editor out of the 38 rem prose column while preserving fullscreen and print layouts; Android landscape now uses 812 px of an 844 px viewport without document overflow.

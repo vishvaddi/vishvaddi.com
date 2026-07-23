@@ -8,6 +8,7 @@ function localBookProxy() {
   return {
     name: 'local-book-proxy',
     configureServer(server) {
+      /** @param {string} raw */
       const decodeHtml = (raw) => raw
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
@@ -15,11 +16,13 @@ function localBookProxy() {
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'");
 
+      /** @param {string} source @param {RegExp} pattern */
       const textMatch = (source, pattern) => {
         const match = source.match(pattern);
         return match?.[1] ? decodeHtml(match[1].trim()) : '';
       };
 
+      /** @param {string} xml */
       const parseOpds = (xml) => {
         return xml.split(/<entry>/i).slice(1).map((entry) => {
           const idUrl = textMatch(entry, /<id>([^<]+)<\/id>/i);
@@ -40,6 +43,7 @@ function localBookProxy() {
         }).filter(Boolean);
       };
 
+      /** @param {string} html */
       const htmlToReadableText = (html) => decodeHtml((html.match(/<main[\s\S]*?<\/main>/i)?.[0] || html)
         .replace(/<head[\s\S]*?<\/head>/gi, ' ')
         .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -54,6 +58,7 @@ function localBookProxy() {
         .replace(/\n{3,}/g, '\n\n')
         .trim());
 
+      /** @param {string} html @param {string} [base] */
       const parseStandardEbooksList = (html, base = 'https://standardebooks.org') => {
         return html.split(/<li[^>]+typeof="schema:Book"[^>]*>/i).slice(1).map((entry) => {
           const about = textMatch(entry, /about="([^"]+)"/i);
@@ -74,6 +79,7 @@ function localBookProxy() {
         }).filter(Boolean);
       };
 
+      /** @param {string} html @param {string} base */
       const standardEbooksNext = (html, base) => {
         const next = textMatch(html, /<a[^>]+href="([^"]+)"[^>]*>\s*Next/i);
         if (!next) return null;
@@ -81,6 +87,7 @@ function localBookProxy() {
         return nextUrl.hostname === 'standardebooks.org' && nextUrl.pathname === '/ebooks' ? nextUrl.toString() : null;
       };
 
+      /** @param {string} target */
       const fetchOpdsPage = async (target) => {
         const upstream = await fetch(target, {
           headers: {
@@ -151,6 +158,7 @@ function localBookProxy() {
 
         try {
           const results = [];
+          /** @type {string | null} */
           let next = opds.toString();
           let pages = 0;
           while (next && results.length < 100 && pages < 4) {
@@ -221,6 +229,7 @@ function localBookProxy() {
 // https://astro.build/config
 export default defineConfig({
   site: 'https://vishvaddi.com',
+  devToolbar: { enabled: false },
   // /site/lattice is deliberately unlisted — reachable only by direct URL
   integrations: [sitemap({ filter: (page) => !page.includes('/site/lattice') })],
   vite: {

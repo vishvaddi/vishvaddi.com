@@ -20,9 +20,10 @@ export function initPlantingCalendar(): void {
   const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".month-tab"));
   const cards = Array.from(document.querySelectorAll<HTMLElement>(".plant-card"));
   if (!zoneSelect || !tabs.length || !cards.length) return;
+  const zoneControl = zoneSelect;
 
   const params = new URLSearchParams(location.search);
-  const availableZones = new Set(Array.from(zoneSelect.options, (option) => option.value));
+  const availableZones = new Set(Array.from(zoneControl.options, (option) => option.value));
   const requestedZone = params.get("zone") || localStorage.getItem(STORAGE_KEY) || DEFAULT_ZONE;
   let zone = availableZones.has(requestedZone) ? requestedZone : DEFAULT_ZONE;
   const monthParam = params.get("month");
@@ -37,8 +38,8 @@ export function initPlantingCalendar(): void {
   }
 
   function render(): void {
-    zoneSelect.value = zone;
-    const selectedOption = zoneSelect.selectedOptions[0];
+    zoneControl.value = zone;
+    const selectedOption = zoneControl.selectedOptions[0];
     if (blurb) blurb.textContent = selectedOption?.dataset.blurb || "";
 
     tabs.forEach((tab) => {

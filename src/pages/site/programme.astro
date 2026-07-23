@@ -44,6 +44,14 @@ import "../../styles/site.css";
       width: min(90rem, calc(100vw - 2rem));
       transform: translateX(-50%);
     }
+    @media (min-width: 1200px) {
+      .programme :global(#programme-root) {
+        --prog-rail-left: max(1rem, calc((100vw - 38rem) / 2 - 14rem));
+        left: calc(var(--prog-rail-left) + 13rem - (50vw - 19rem) - 1.5rem);
+        width: min(90rem, calc(100vw - var(--prog-rail-left) - 14rem));
+        transform: none;
+      }
+    }
     .programme :global(.prog-split),
     .programme :global(.prog-toolbar),
     .programme :global(.prog-stats) { max-width: none; }

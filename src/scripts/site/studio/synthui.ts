@@ -513,6 +513,7 @@ export function buildSynth(): SynthUI {
     try {
       const access = await nav.requestMIDIAccess();
       access.inputs.forEach((input) => { input.onmidimessage = (event) => {
+        if (!event.data) return;
         const [status, midi, velocity] = event.data, command = status & 0xf0, note = midiToNote(midi);
         if (command === 0x90 && velocity > 0) { ensureNodes(); liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, note, velocity); recordSynthOn(note); }
         else if (command === 0x80 || (command === 0x90 && velocity === 0)) { liveKeys.noteOff(ac(), note); recordSynthOff(note); }

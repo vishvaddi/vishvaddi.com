@@ -98,7 +98,7 @@ export async function initStudio(): Promise<void> {
   });
   const densityBtn = btn("COMPACT", "wa-btn-sm wa-density-btn");
   const densities = ["compact", "comfortable"] as const;
-  let density = localStorage.getItem("vv_studio_density") === "comfortable" ? "comfortable" : "compact";
+  let density: (typeof densities)[number] = localStorage.getItem("vv_studio_density") === "comfortable" ? "comfortable" : "compact";
   const applyDensity = (): void => {
     win.dataset.density = density;
     densityBtn.textContent = density.toUpperCase();

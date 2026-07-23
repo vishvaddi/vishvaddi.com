@@ -256,6 +256,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
       const access = await nav.requestMIDIAccess();
       access.inputs.forEach((input) => {
         input.onmidimessage = (event) => {
+          if (!event.data) return;
           const [status, note, velocity] = event.data, command = status & 0xf0;
           if (command !== 0x90 || velocity === 0) return;
           const localPad = ((note - 36) % PAD_BANK_SIZE + PAD_BANK_SIZE) % PAD_BANK_SIZE;
