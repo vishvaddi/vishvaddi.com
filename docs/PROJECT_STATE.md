@@ -1,6 +1,6 @@
 # Project State
 
-_Last updated: 2026-07-26 — Deep Swarm's dive systems are stable and legible._
+_Last updated: 2026-07-26 — Deep Swarm's combat and rendering hotfix is live._
 
 ## Current Position
 
@@ -14,6 +14,7 @@ _Last updated: 2026-07-26 — Deep Swarm's dive systems are stable and legible._
 - Deep Swarm has six degradable submersible systems with an event-only interactive bathysphere damage blueprint and hands-on repairs, spatial shaped cargo, readable Module Bay feedback, destructible rubble, event-specific interaction grammars, additional biome pockets and five utility weapons. Render faults reset leaked canvas clipping and offer an in-dive resume instead of leaving a black frozen viewport; deployable weapons now initialise their run state defensively.
 - Its persistent expedition campaign now spans five ecological sectors and five story acts. A six-section field PDA joins dive history, four-tier xenobiology for six keystone species, distinct animated scientific plates, geology, component fabrication, recovered audio logs and the NEREID-II’s current blueprint.
 - Power Junctions are rarer and start two or three moves from a valid circuit. Routine NEREID observations are paced through a dialogue queue, while depth drives a lo-fi-to-jungle music arc with genre-specific procedural rhythm layers.
+- Dynamic effect colours now fall back safely instead of crashing the flight computer, and Electric Field applies its intended damage on each half-second pulse.
 - Surveyed mineral deposits can be extracted with a fabricated mining laser. Extraction and disturbance persist per sector and alter later population pressure, while authored wreck sites carry the campaign’s evidence and archive fragments.
 - A canonical vessel-assembly manifest drives both the in-game submarine attachments and PDA drawing. The matching Blender socket/action contract and validator-export script define the path to animated GLB assemblies without duplicating upgrade placement rules.
 - `/games/carromancy/` hosts the production Carromancy build and is listed on `/games`.

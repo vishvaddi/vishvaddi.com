@@ -1,5 +1,11 @@
 # Run Log
 
+## 2026-07-26 — Deep Swarm colour and Electric Field hotfix
+
+- Prevented dynamic effects with missing colour metadata from crashing the renderer while converting a hex colour to alpha.
+- Fixed Electric Field damage being multiplied by a single frame interval despite firing only once per half-second cooldown; it now applies the intended three damage per pulse at level one.
+- Added production-browser regressions for malformed dynamic colours and measurable Electric Field damage, plus Android portrait/landscape canvas, overflow, repair-blueprint and console coverage.
+
 ## 2026-07-26 — Deep Swarm bathysphere and dive pacing
 
 - Fixed the reported flight-computer fault by initialising deployable-weapon state in every run and defensively recovering old or malformed sessions before a weapon fires.

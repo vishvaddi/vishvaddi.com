@@ -26,7 +26,7 @@ try {
   await page.goto(`${BASE}/games/deep-swarm/`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => window.__deepSwarm?.build, null, { timeout: 15000 })
   const build = await page.evaluate(() => window.__deepSwarm.build)
-  check('boot: blueprint build exposed', /blueprint/.test(build), build)
+  check('boot: field hotfix build exposed', /field-hotfix/.test(build), build)
 
   await page.evaluate(() => window.__deepSwarm.startSeeded('boundary-soak'))
   await page.keyboard.down('s')
@@ -91,6 +91,18 @@ try {
   check('runtime: deployable weapons initialise their state',
     deployableState.phase === 'playing' && deployableState.game.deployables === 1 && !deployableState.error,
     `${deployableState.phase} · deployables ${deployableState.game.deployables}`)
+
+  const fieldState = await page.evaluate(() => window.__deepSwarm.testElectricField())
+  check('weapons: Electric Field applies its full pulse damage',
+    fieldState.phase === 'playing' && fieldState.damage >= 2.9 && !fieldState.error,
+    `${fieldState.damage.toFixed(2)} damage`)
+
+  await page.evaluate(() => window.__deepSwarm.triggerMissingColourRender())
+  await page.waitForTimeout(120)
+  const colourState = await page.evaluate(() => window.__deepSwarm.getState())
+  check('runtime: missing dynamic colours use a safe fallback',
+    colourState.phase === 'playing' && !colourState.error,
+    colourState.error || colourState.phase)
 
   const junctionState = await page.evaluate(() => window.__deepSwarm.openJunctionTest())
   check('junction: scramble is limited to two or three moves',
@@ -164,8 +176,64 @@ try {
     canvas: !!document.querySelector('#c'),
   })).catch(() => null)
   check('suite completed', false, `${String(error).slice(0, 180)}${errors.length ? ` | ${errors.slice(0, 3).join(' | ')}` : ''} | ${JSON.stringify(boot)}`)
-} finally {
-  await browser.close()
 }
+
+await context.close()
+for (const [name, width, height] of [
+  ['android portrait', 412, 915],
+  ['android landscape', 915, 412],
+]) {
+  const mobileContext = await browser.newContext({
+    viewport: { width, height },
+    hasTouch: true,
+    isMobile: true,
+  })
+  const mobilePage = await mobileContext.newPage()
+  const mobileErrors = []
+  mobilePage.on('pageerror', error => mobileErrors.push(String(error)))
+  mobilePage.on('console', message => {
+    if (message.type() === 'error' && !/sw\.js|favicon|cloudflareinsights|ERR_FAILED/i.test(message.text())) mobileErrors.push(message.text())
+  })
+  try {
+    await mobilePage.goto(`${BASE}/games/deep-swarm/`, { waitUntil: 'domcontentloaded' })
+    await mobilePage.waitForFunction(() => window.__deepSwarm?.build, null, { timeout: 15000 })
+    await mobilePage.evaluate(() => window.__deepSwarm.startSeeded('android-fit'))
+    await mobilePage.waitForTimeout(120)
+    const geometry = await mobilePage.evaluate(() => {
+      const canvas = document.querySelector('#c').getBoundingClientRect()
+      return {
+        docWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        canvasWidth: Math.round(canvas.width),
+        canvasHeight: Math.round(canvas.height),
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      }
+    })
+    check(`${name}: no horizontal overflow`, geometry.docWidth <= geometry.clientWidth + 1, `${geometry.docWidth}/${geometry.clientWidth}`)
+    check(`${name}: canvas fits the viewport`,
+      Math.abs(geometry.canvasWidth - geometry.viewportWidth) <= 1 && Math.abs(geometry.canvasHeight - geometry.viewportHeight) <= 1,
+      `${geometry.canvasWidth}×${geometry.canvasHeight}/${geometry.viewportWidth}×${geometry.viewportHeight}`)
+
+    await mobilePage.evaluate(() => window.__deepSwarm.triggerMissingColourRender())
+    await mobilePage.waitForTimeout(120)
+    const runtimeState = await mobilePage.evaluate(() => window.__deepSwarm.getState())
+    check(`${name}: dive remains live`, runtimeState.phase === 'playing' && !runtimeState.error, runtimeState.error || runtimeState.phase)
+
+    await mobilePage.evaluate(() => window.__deepSwarm.triggerSystemIncident('reactor', 45))
+    await mobilePage.waitForTimeout(120)
+    const systemsState = await mobilePage.evaluate(() => window.__deepSwarm.getState())
+    check(`${name}: repair blueprint opens`, systemsState.phase === 'systems' && !systemsState.error, systemsState.error || systemsState.phase)
+    if (process.env.DEEP_SWARM_SCREENSHOTS) {
+      await mobilePage.screenshot({ path: `.tmp-deep-swarm-${name.replace(' ', '-')}.png`, fullPage: false })
+    }
+    check(`${name}: console clean`, mobileErrors.length === 0, mobileErrors.slice(0, 2).join(' | '))
+  } catch (error) {
+    check(`${name}: responsive run completed`, false, String(error).slice(0, 180))
+  } finally {
+    await mobileContext.close()
+  }
+}
+await browser.close()
 
 if (failures) process.exit(1)

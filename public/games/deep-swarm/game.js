@@ -223,6 +223,7 @@ function lerpColor(hex1, hex2, t) {
 
 // Hex color to rgba string helper (avoids 8-char hex compat issues)
 function hexA(hex, alpha) {
+    if (typeof hex !== 'string') hex = '#000000';
     const r = parseInt(hex.slice(1,3), 16) || 0;
     const g = parseInt(hex.slice(3,5), 16) || 0;
     const b = parseInt(hex.slice(5,7), 16) || 0;
@@ -1394,7 +1395,7 @@ function mulberry32(a) {
 }
 function seedFromString(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return h >>> 0; }
 function RND() { return dailyRng ? dailyRng() : Math.random(); }
-const DEEP_SWARM_BUILD = '2026.07.26-blueprint';
+const DEEP_SWARM_BUILD = '2026.07.26-field-hotfix';
 const RUN_TRACE_LIMIT = 30;
 let runTrace = [];
 let lastRuntimeError = null;
@@ -3260,6 +3261,7 @@ function getSpawnableTypes(wave, g) {
 // INDIVIDUAL VARIANCE — hue-shift a hex colour by degrees (HSL round trip).
 // No two of a species read as the same animal.
 function varyColor(hex, deg) {
+    if (typeof hex !== 'string') hex = '#7ACEDC';
     const n = parseInt(hex.slice(1), 16);
     let r = (n >> 16) / 255, gC = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
     const mx = Math.max(r, gC, b), mn = Math.min(r, gC, b);
@@ -3491,11 +3493,12 @@ function fireWeapons(g, dt) {
             }
         }
         if (w.id === 'field') {
-            // Passive — damage nearby enemies
+            // Cooldown already defines the pulse interval; multiplying by frame
+            // time here made a 6 DPS aura deal roughly 0.3 DPS at 60 fps.
             for (const e of g.enemies) {
                 const d = dist(g.player, e);
                 if (d < area) {
-                    damageEnemy(g, e, dmg * dt * 3);
+                    damageEnemy(g, e, dmg);
                 }
             }
         }
@@ -14257,6 +14260,28 @@ window.__deepSwarm = {
         addNereidLog(game, 'Routine survey observation one.');
         addNereidLog(game, 'Routine survey observation two.');
         addNereidLog(game, 'Routine survey observation three.');
+        return this.getState();
+    },
+    testElectricField() {
+        if (!game) this.startSeeded('electric-field');
+        const target = {
+            x: game.player.x + 20, y: game.player.y, hp: 20, maxHp: 20,
+            size: 8, color: '#5ADFCF', typeId: 'jellyfish', role: 'prey',
+            ai: 'drift', state: 'chase', flash: 0,
+        };
+        game.enemies = [target];
+        game.player.weapons = [{ id: 'field', level: 1, cooldown: 0 }];
+        game.player.dmgMult = 1;
+        const before = target.hp;
+        fireWeapons(game, 1 / 60);
+        return { ...this.getState(), damage: before - target.hp };
+    },
+    triggerMissingColourRender() {
+        if (!game) this.startSeeded('missing-colour');
+        game.floatingTexts.push({
+            x: game.player.x, y: game.player.y, text: 'COLOUR FALLBACK',
+            color: undefined, life: 1, vy: 0,
+        });
         return this.getState();
     },
     prepareCampaignTest() {
