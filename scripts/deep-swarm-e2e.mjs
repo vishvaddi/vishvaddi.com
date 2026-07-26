@@ -26,7 +26,7 @@ try {
   await page.goto(`${BASE}/games/deep-swarm/`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => window.__deepSwarm?.build, null, { timeout: 15000 })
   const build = await page.evaluate(() => window.__deepSwarm.build)
-  check('boot: overhaul build exposed', /overhaul/.test(build), build)
+  check('boot: campaign build exposed', /campaign/.test(build), build)
 
   await page.evaluate(() => window.__deepSwarm.startSeeded('boundary-soak'))
   await page.keyboard.down('s')
@@ -85,6 +85,34 @@ try {
   const recoveredState = await page.evaluate(() => window.__deepSwarm.getState())
   check('runtime: resume returns to the interrupted dive', recoveredState.phase === 'playing' && !recoveredState.error, recoveredState.phase)
   errors.splice(expectedErrors)
+
+  await page.evaluate(() => {
+    window.__deepSwarm.startSeeded('campaign-pda')
+    window.__deepSwarm.prepareCampaignTest()
+    window.__deepSwarm.showPDA(1)
+  })
+  await page.waitForTimeout(120)
+  const pdaState = await page.evaluate(() => window.__deepSwarm.getState())
+  check('campaign: PDA exposes structured research state',
+    pdaState.phase === 'codex' && pdaState.campaign.pdaTab === 1 && pdaState.campaign.geology.includes('conductive_vein'),
+    `${pdaState.phase} · tab ${pdaState.campaign.pdaTab}`)
+  await page.evaluate(() => window.__deepSwarm.showPDA(3))
+  await page.keyboard.press('f')
+  const fabricatedState = await page.evaluate(() => window.__deepSwarm.getState())
+  check('campaign: PDA fabricates analysed components', fabricatedState.campaign.components.conductive_lens >= 2,
+    `conductive lens ×${fabricatedState.campaign.components.conductive_lens || 0}`)
+  await page.evaluate(() => {
+    window.__deepSwarm.startSeeded('campaign-mining')
+    window.__deepSwarm.prepareCampaignTest()
+    window.__deepSwarm.spawnTestDeposit('conductive_vein')
+  })
+  await page.keyboard.down('e')
+  await page.waitForTimeout(4400)
+  await page.keyboard.up('e')
+  const miningState = await page.evaluate(() => window.__deepSwarm.getState())
+  check('campaign: installed mining laser extracts surveyed rock',
+    miningState.phase === 'playing' && miningState.game.minedDeposits === 1 && miningState.campaign.equipped.includes('mining_laser'),
+    `${miningState.phase} · deposits ${miningState.game.minedDeposits}`)
 
   await page.evaluate(() => window.__deepSwarm.giveTestCargo())
   await page.waitForTimeout(100)

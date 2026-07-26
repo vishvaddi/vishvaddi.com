@@ -1,5 +1,15 @@
 # Run Log
 
+## 2026-07-26 — Deep Swarm expedition campaign
+
+- Added a five-act, five-sector expedition spine built around authored physical discovery sites, persistent survey evidence and a biosphere that changes under repeated extraction and disturbance.
+- Replaced the old Codex route with a unified field PDA covering expedition progress, four-tier scientific records for six keystone species, surveyed geology, fabrication, playable archive transcripts and the NEREID-II’s installed configuration.
+- Added three fabricated components, a research- and geology-gated mining laser, sonar-surveyed deposits and held-interaction extraction with battery, noise, resource and ecological consequences.
+- Made installed upgrades visible on the playable submarine and in its blueprint from one canonical assembly manifest.
+- Added a Blender socket/action contract plus a validator-export script for future animated GLB assemblies.
+- Extended the production-browser suite through PDA state, component fabrication and mining extraction; retained passing coverage for all depth boundaries, random system incidents, render-fault recovery, cargo and Module Bay behaviour.
+- Bumped the scoped offline cache so installed copies receive the campaign build.
+
 ## 2026-07-26 — Deep Swarm render-fault recovery
 
 - Reset the Canvas 2D drawing state after an animation-loop fault so a leaked porthole clip or transform cannot hide the diagnostic screen behind a black frozen viewport.

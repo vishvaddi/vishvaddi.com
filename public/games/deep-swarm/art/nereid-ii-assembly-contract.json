@@ -1,0 +1,34 @@
+{
+  "vessel": "NEREID-II",
+  "units": "metres",
+  "forwardAxis": "+X",
+  "upAxis": "+Z",
+  "sockets": {
+    "hull_skin": "SOCKET_HULL_SKIN",
+    "hull_ring": "SOCKET_HULL_RING",
+    "aft_drive": "SOCKET_AFT_DRIVE",
+    "sensor_mast": "SOCKET_SENSOR_MAST",
+    "power_bay": "SOCKET_POWER_BAY",
+    "weapon_mount": "SOCKET_WEAPON_MOUNT",
+    "prow_tool": "SOCKET_PROW_TOOL"
+  },
+  "animations": [
+    "idle_thrusters",
+    "ballast_vent",
+    "deploy_manipulator",
+    "deploy_mining_arm",
+    "mining_beam_recoil",
+    "damage_panel_hull",
+    "damage_panel_reactor"
+  ],
+  "exports": {
+    "interactive": "nereid-ii.glb",
+    "spriteAngles": 8,
+    "spriteSize": 256,
+    "spriteAnimations": [
+      "idle_thrusters",
+      "deploy_manipulator",
+      "deploy_mining_arm"
+    ]
+  }
+}

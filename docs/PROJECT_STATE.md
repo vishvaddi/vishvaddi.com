@@ -1,6 +1,6 @@
 # Project State
 
-_Last updated: 2026-07-26 — Deep Swarm has a recoverable systems-and-horror overhaul._
+_Last updated: 2026-07-26 — Deep Swarm has a persistent expedition campaign._
 
 ## Current Position
 
@@ -11,7 +11,10 @@ _Last updated: 2026-07-26 — Deep Swarm has a recoverable systems-and-horror ov
 - Studio PADS expands its performance grid to the available desktop height. MIX keeps all ten channels on one row and stacks compact export/device panels beside them; the responsive suite measures these layout contracts.
 - The site runs on Astro 7 with zero known npm vulnerabilities and a global type check with zero errors. Independently built game snapshots under `public/games/` are excluded from the Astro source scan.
 - `/games/deep-swarm/` now exposes deterministic diagnostics and explicit loss causes, with automated boundary coverage through 6,000 m.
-- Deep Swarm has six degradable submersible systems with an event-only interactive 3D damage blueprint and hands-on repairs, spatial shaped cargo, readable Module Bay feedback, destructible rubble, event-specific interaction grammars, additional biome pockets and five utility weapons. Render faults now reset leaked canvas clipping and offer an in-dive resume instead of leaving a black frozen viewport.
+- Deep Swarm has six degradable submersible systems with an event-only interactive 3D damage blueprint and hands-on repairs, spatial shaped cargo, readable Module Bay feedback, destructible rubble, event-specific interaction grammars, additional biome pockets and five utility weapons. Render faults reset leaked canvas clipping and offer an in-dive resume instead of leaving a black frozen viewport.
+- Its persistent expedition campaign now spans five ecological sectors and five story acts. A six-section field PDA joins dive history, four-tier xenobiology for six keystone species, geology, component fabrication, recovered audio logs and the NEREID-II’s current blueprint.
+- Surveyed mineral deposits can be extracted with a fabricated mining laser. Extraction and disturbance persist per sector and alter later population pressure, while authored wreck sites carry the campaign’s evidence and archive fragments.
+- A canonical vessel-assembly manifest drives both the in-game submarine attachments and PDA drawing. The matching Blender socket/action contract and validator-export script define the path to animated GLB assemblies without duplicating upgrade placement rules.
 - `/games/carromancy/` hosts the production Carromancy build and is listed on `/games`.
 - Carromancy remains developed in its own `vishvaddi/carromancy` repository; the site carries a built snapshot under `public/games/carromancy/`.
 - The current snapshot uses a dual Power-and-clearance victory model: rivals require 5/7/9 own-colour coins, Guardians require a settled Queen, and misses act as the limited life economy. Successful own-colour pots retain the table; opponent coins and foul debts are respotted.
@@ -27,7 +30,7 @@ _Last updated: 2026-07-26 — Deep Swarm has a recoverable systems-and-horror ov
 
 ## Next Actions
 
-- Playtest Deep Swarm’s new cargo shapes, repair timing and utility-weapon balance across desktop and Android landscape; use the session trace if a long run fails.
+- Playtest Deep Swarm’s expedition pacing, mining yields, sector disturbance and PDA readability across desktop and Android landscape; use the session trace if a long run fails.
 - Playtest Carromancy on the live domain across mouse and landscape touch, then tune cushion restitution and spin against filmed real-board references.
 - Play 10-20 real runs and review the local telemetry before changing target curves, rewards or Charm prices again.
 - Add a visible post-run summary card once enough balance feedback exists.

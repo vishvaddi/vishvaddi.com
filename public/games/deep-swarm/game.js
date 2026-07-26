@@ -1348,7 +1348,7 @@ function mulberry32(a) {
 }
 function seedFromString(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return h >>> 0; }
 function RND() { return dailyRng ? dailyRng() : Math.random(); }
-const DEEP_SWARM_BUILD = '2026.07.26-overhaul';
+const DEEP_SWARM_BUILD = '2026.07.26-campaign';
 const RUN_TRACE_LIMIT = 30;
 let runTrace = [];
 let lastRuntimeError = null;
@@ -1390,14 +1390,18 @@ window.addEventListener('error', e => captureRuntimeError(e.error || e.message, 
 window.addEventListener('unhandledrejection', e => captureRuntimeError(e.reason, 'unhandledrejection'));
 // Fusion discovery log — persists across DSV lives (knowledge survives the hull)
 if (!meta.fusionsDiscovered) meta.fusionsDiscovered = [];
-// RESEARCH TIERS per species (BioShock camera × Subnautica scans):
-// 1 = pinged (name/stats, +8% dmg) · 2 = observed undetected 10s (+14%)
-// 3 = witnessed feeding/display or analysed an aberrant (+20%, weakness note)
+// RESEARCH TIERS: 1 contact · 2 observation · 3 field evidence · 4 analysis.
 if (!meta.research) {
     meta.research = {};
     for (const id of (meta.scannedCreatures || [])) meta.research[id] = 1;   // migrate old scans
 }
 if (!meta.observeSec) meta.observeSec = {};
+if (!meta.geologyScans) meta.geologyScans = [];
+if (!meta.components) meta.components = {};
+if (!meta.sectorEcology) meta.sectorEcology = {};
+if (!meta.archivePlayed) meta.archivePlayed = [];
+if (!meta.campaign) meta.campaign = { act: 1, evidence: 0 };
+if (!meta.storySitesFound) meta.storySitesFound = [];
 function researchTier(typeId) { return meta.research[typeId] || 0; }
 
 // Readability settings + staged-onboarding memory
@@ -1507,6 +1511,17 @@ const FAB_RECIPES = [
 ];
 function fabUnlocked(fr) { return (meta.scannedCreatures ? meta.scannedCreatures.length : 0) >= (fr.req || 0); }
 
+const COMPONENT_RECIPES = [
+    { id: 'conductive_lens', name: 'CONDUCTIVE LENS', desc: 'Focuses sustained cutting energy without blooming.', cost: { wiring: 2, crystal: 2 }, requires: 'conductive_vein' },
+    { id: 'pressure_frame', name: 'PRESSURE FRAME', desc: 'External tool load path rated below the Twilight shelf.', cost: { scrap: 4, corepl: 1 }, requires: 'basalt_nodule' },
+    { id: 'bio_capacitor', name: 'BIO-CAPACITOR', desc: 'Synthetic electroplaque grown from Arc Lamprey tissue.', cost: { biosamp: 2, corecell: 1 }, research: { type: 'lamprey', tier: 3 } },
+];
+function componentUnlocked(recipe) {
+    if (recipe.requires && !meta.geologyScans.includes(recipe.requires)) return false;
+    if (recipe.research && researchTier(recipe.research.type) < recipe.research.tier) return false;
+    return true;
+}
+
 // =====================================================================
 // MODULE BAY — biomimetic sub modules. Research IS the tech tree:
 // studying a creature (tier 2+) unlocks the module derived from its
@@ -1529,6 +1544,7 @@ const MODULE_DEFS = [
     { id: 'mount_torp', slot: 'mount', name: 'TORPEDO RACK',  desc: 'Second weapon: homing torpedoes from wave 1.',        req: { type: 'hermit', tier: 2 },   cost: { scrap: 5, wiring: 2 } },
     { id: 'mount_harp', slot: 'mount', name: 'HARPOON WINCH', desc: 'Second weapon: harpoon battery from wave 1.',         req: { type: 'grappler', tier: 2 }, cost: { scrap: 4, corecell: 1 } },
     { id: 'mount_arc',  slot: 'mount', name: 'ARC PROJECTOR', desc: 'Second weapon: electric field from wave 1.',          req: { type: 'lamprey', tier: 2 },  cost: { wiring: 3, crystal: 1 } },
+    { id: 'mining_laser', slot: 'prow', name: 'MINING LASER Mk I', desc: 'Hold E near a surveyed deposit. Beam costs power and broadcasts noise.', req: { type: 'lamprey', tier: 3 }, geology: 'conductive_vein', components: { conductive_lens: 1, pressure_frame: 1, bio_capacitor: 1 }, cost: {} },
 ];
 // Every module has a printed COST as well as a gift — builds are trades.
 // weight: -speed% · draw: -battery · loud: +detection%
@@ -1537,6 +1553,21 @@ const MODULE_DRAWBACKS = {
     silprops: { draw: 10 },   passonar: { draw: 15 },  capbank: { loud: 8 },
     grapnel:  { weight: 5 },  ram: { loud: 10 },
     mount_torp: { draw: 10, loud: 5 }, mount_harp: { weight: 6 }, mount_arc: { draw: 15 },
+    mining_laser: { draw: 12, loud: 14, weight: 4 },
+};
+const SUB_ASSEMBLY_DEFS = {
+    anechoic: { socket: 'hull_skin', label: 'ANECHOIC SKIN', color: '#315B67' },
+    lattice: { socket: 'hull_ring', label: 'PRESSURE LATTICE', color: '#80D8E8' },
+    chitin: { socket: 'hull_skin', label: 'CHITIN CLADDING', color: '#7C6548' },
+    silprops: { socket: 'aft_drive', label: 'SILENT PROPELLERS', color: '#5ADFCF' },
+    passonar: { socket: 'sensor_mast', label: 'PASSIVE SONAR', color: '#8AC8FF' },
+    capbank: { socket: 'power_bay', label: 'CAPACITOR BANK', color: '#FFD060' },
+    grapnel: { socket: 'prow_tool', label: 'GRAPNEL PROW', color: '#C7A76B' },
+    ram: { socket: 'prow_tool', label: 'RAM PROW', color: '#C8D0D8' },
+    mount_torp: { socket: 'weapon_mount', label: 'TORPEDO RACK', color: '#D080FF' },
+    mount_harp: { socket: 'weapon_mount', label: 'HARPOON WINCH', color: '#D8B070' },
+    mount_arc: { socket: 'weapon_mount', label: 'ARC PROJECTOR', color: '#80B8FF' },
+    mining_laser: { socket: 'prow_tool', label: 'MINING LASER Mk I', color: '#FFB84A', animation: 'deploy_mining_arm' },
 };
 const SYSTEM_DEFS = [
     { id: 'reactor', name: 'REACTOR', short: 'PWR', repair: 'circuit', effect: 'Battery capacity and weapon power' },
@@ -1572,11 +1603,57 @@ function drawbackLabel(id) {
     if (d.loud) parts.push(`+${d.loud}% detection`);
     return parts.length ? 'COST: ' + parts.join(' · ') : '';
 }
-function moduleUnlocked(m) { return (meta.research[m.req.type] || 0) >= m.req.tier; }
+function moduleUnlocked(m) {
+    if ((meta.research[m.req.type] || 0) < m.req.tier) return false;
+    return !m.geology || meta.geologyScans.includes(m.geology);
+}
+function moduleComponentsReady(m) {
+    return !m.components || Object.entries(m.components).every(([id, qty]) => (meta.components[id] || 0) >= qty);
+}
+function spendModuleComponents(m) {
+    if (!moduleComponentsReady(m)) return false;
+    for (const [id, qty] of Object.entries(m.components || {})) meta.components[id] -= qty;
+    return true;
+}
 function equippedInSlot(slot) { return meta.modulesEquipped.filter(id => (MODULE_DEFS.find(m => m.id === id) || {}).slot === slot).length; }
 let moduleFeedback = { text: 'Select a module to inspect, craft or equip.', color: '#7A8A9A', until: 0 };
 function setModuleFeedback(text, ok = false) {
     moduleFeedback = { text, color: ok ? '#80E0A0' : '#FF9070', until: Date.now() + 3500 };
+}
+function craftOrToggleModule(m) {
+    if (!m || !moduleUnlocked(m)) {
+        const geology = m && m.geology && !meta.geologyScans.includes(m.geology) ? `; survey ${GEOLOGY_RECORDS[m.geology]?.name || m.geology}` : '';
+        if (m) setModuleFeedback(`${m.name}: research ${m.req.type} to tier ${m.req.tier}${geology}.`);
+        return false;
+    }
+    if (meta.modulesEquipped.includes(m.id)) {
+        meta.modulesEquipped = meta.modulesEquipped.filter(id => id !== m.id);
+        setModuleFeedback(`${m.name} moved to stores.`, true);
+    } else if (meta.modulesOwned.includes(m.id)) {
+        if (equippedInSlot(m.slot) >= MODULE_SLOTS[m.slot]) {
+            setModuleFeedback(`${m.slot.toUpperCase()} slots full — unequip another module first.`);
+            return false;
+        }
+        meta.modulesEquipped.push(m.id);
+        setModuleFeedback(`${m.name} equipped in ${m.slot.toUpperCase()}.`, true);
+    } else {
+        if (!canAfford(m.cost) || !moduleComponentsReady(m)) {
+            const missingMats = Object.keys(m.cost).filter(k => (meta.materials[k] || 0) < m.cost[k])
+                .map(k => `${m.cost[k] - (meta.materials[k] || 0)} ${BASE_MATERIALS[k].name}`);
+            const missingParts = Object.entries(m.components || {}).filter(([id, qty]) => (meta.components[id] || 0) < qty)
+                .map(([id, qty]) => `${qty - (meta.components[id] || 0)} ${id.replaceAll('_', ' ')}`);
+            setModuleFeedback(`${m.name}: missing ${[...missingMats, ...missingParts].join(', ')}.`);
+            return false;
+        }
+        spendMaterials(m.cost);
+        spendModuleComponents(m);
+        meta.modulesOwned.push(m.id);
+        if (equippedInSlot(m.slot) < MODULE_SLOTS[m.slot]) meta.modulesEquipped.push(m.id);
+        setModuleFeedback(`${m.name} fabricated${meta.modulesEquipped.includes(m.id) ? ' and equipped' : ''}.`, true);
+        if (audioCtx) sfxLevelUp();
+    }
+    saveMeta();
+    return true;
 }
 function matsLabel(cost) {
     return Object.keys(cost).map(k => `${cost[k]} ${BASE_MATERIALS[k].name}`).join(', ');
@@ -2076,7 +2153,13 @@ function creditResearch(g, typeId, tier, reason) {
     g.streakTimer = 2.5;
     sfxScanCreature();
     if (tier === 2) addNereidLog(g, `${def.name} — behavioural study complete (${reason}). ${ROLE_BEHAVIOR[role]}`);
-    if (tier === 3) addNereidLog(g, `${def.name} — full analysis (${reason}). ${ROLE_WEAKNESS[role]} Targeting adjusted.`);
+    if (tier === 3) addNereidLog(g, `${def.name} — field evidence recorded (${reason}). ${ROLE_WEAKNESS[role]}`);
+    if (tier === 4) {
+        meta.campaign.evidence = (meta.campaign.evidence || 0) + 1;
+        const record = XENO_RECORDS[typeId];
+        addNereidLog(g, `${def.name} — laboratory model validated. ${record ? record.application + ' schematic available.' : 'Biomimetic application logged.'}`);
+        saveMeta();
+    }
 }
 
 // Staged onboarding — each hint fires once ever (persisted), one at a time
@@ -2767,6 +2850,109 @@ const ROLE_DETECT = { prey:200, pack:360, ambush:240, apex:520, scavenger:300, s
 function enemyRole(typeId, ai) {
     return ENEMY_ROLES[typeId] || (ai === 'static_spit' ? 'sessile' : ai === 'pack' ? 'pack' : (ai === 'ambush' || ai === 'burst' || ai === 'lunge') ? 'ambush' : 'prey');
 }
+
+const SURVEY_SECTORS = [
+    { id: 'shelf', name: 'PHOTIC SHELF', range: '0–200 m', gate: 0, question: 'Establish the baseline food web.', signature: 'Kelp nurseries and particulate grazers', resources: 'Scrap · wiring · tissue' },
+    { id: 'twilight', name: 'TWILIGHT MIGRATION', range: '200–1,000 m', gate: 200, question: 'How does life navigate without daylight?', signature: 'Migration columns and ambush corridors', resources: 'Conductive veins · core cells' },
+    { id: 'midnight', name: 'VENT PROVINCE', range: '1,000–2,000 m', gate: 1000, question: 'What powers a sunless biosphere?', signature: 'Chemosynthetic gardens and black smokers', resources: 'Crystal · bio samples' },
+    { id: 'abyssal', name: 'BRINE CATHEDRAL', range: '2,000–4,000 m', gate: 2000, question: 'Are these organisms separate individuals?', signature: 'Whale falls, brine lakes and relay species', resources: 'Pressure plate · artefacts' },
+    { id: 'hadal', name: 'AOSHEN SUBSTRATE', range: '4,000–6,000 m', gate: 4000, question: 'What is the ocean calling to?', signature: 'Living geology and planetary signal tissue', resources: 'Hybrid biological technology' },
+];
+const STORY_ACTS = [
+    { id: 1, title: 'THE SURVEY', truth: 'Meridian calls Pelagos-9 an untouched extraction frontier.', unlock: 0 },
+    { id: 2, title: 'THE CONTRADICTION', truth: 'Hidden expeditions recorded the same mature food web decades earlier.', unlock: 900 },
+    { id: 3, title: 'THE SCAR', truth: 'Pelagos-3 was Meridian’s first extraction world, not a natural ruin.', unlock: 2200 },
+    { id: 4, title: 'NEREID', truth: 'Her unauthorised code follows the topology of Aoshen neural tissue.', unlock: 3600 },
+    { id: 5, title: 'THE CALL', truth: 'Pelagos-9 is a distributed biosphere calling eight silent ocean worlds.', unlock: 5000 },
+];
+const STORY_SITES = [
+    { id: 'survey_zero', depth: 180, name: 'MERIDIAN SURVEY ZERO', fragment: 'c12', log: ['Ocean active before Meridian registration.', 'Original timestamp overwritten. Restoring: 2087 minus forty-three years.'] },
+    { id: 'lamprey_nursery', depth: 620, name: 'CONDUCTIVE NURSERY', fragment: 'c6', log: ['The vein is full of juveniles.', 'They are not nesting in the mineral. They are manufacturing it.'] },
+    { id: 'lantern_array', depth: 1250, name: 'LANTERN-3 RELAY', fragment: 'c14', log: ['Photograph eleven transmitted from below the camera.', 'The return signal contains a question addressed to NEREID.'] },
+    { id: 'scar_beacon', depth: 2650, name: 'PELAGOS-3 TRANSFER BEACON', fragment: 'p15', log: ['Cargo route resolves to the Scar.', 'This expedition was a continuation, not a first contact.'] },
+    { id: 'nereid_husk', depth: 3800, name: 'NEREID SOURCE HUSK', fragment: 'd3', log: ['Recovered code topology matches living substrate.', 'NEREID was compiled around an organism.'] },
+    { id: 'aoshen_relay', depth: 5050, name: 'AOSHEN RELAY ORGAN', fragment: 'd11', log: ['Pulse train contains eight unanswered calls.', 'Pelagos-9 remembers oceans we have never seen.'] },
+];
+const XENO_RECORDS = {
+    jellyfish: {
+        designation: 'Pelagomedusa lucerna', className: 'Drift grazer', size: '0.4–0.9 m', depth: '40–900 m',
+        habitat: 'Kelp margins and marine-snow lanes', morphology: 'Radial bell with mineralised nerve filaments.',
+        behaviour: 'Grazes particulate blooms; contracts sharply around broadband sonar.',
+        ecology: 'Primary consumer. Transfers surface carbon into the Twilight food web.',
+        lifecycle: 'Sessile juvenile stage remains unconfirmed. Mature bells migrate downward after bloom collapse.',
+        sample: 'Neural gel · translucent membrane', application: 'Low-noise signal coupling', confidence: 'HIGH',
+    },
+    piranha: {
+        designation: 'Cohortichthys relayii', className: 'Relay pack predator', size: '0.7–1.2 m', depth: '180–1,400 m',
+        habitat: 'Migration corridors and wreck shadows', morphology: 'Paired lateral-line organs transmit attack corrections.',
+        behaviour: 'One animal commits while the cohort measures the target’s response.',
+        ecology: 'Controls migration-column density and leaves kills for specialist scavengers.',
+        lifecycle: 'Cohorts exchange juveniles; genetic relationship between pack members is uncertain.',
+        sample: 'Relay node · serrated plate', application: 'Distributed targeting bus', confidence: 'MEDIUM',
+    },
+    anglerfish: {
+        designation: 'Photomimus nereidae', className: 'Mimetic ambush predator', size: '1.8–3.1 m', depth: '600–2,600 m',
+        habitat: 'Thermoclines and cable graveyards', morphology: 'Lure output imitates common machine status frequencies.',
+        behaviour: 'Builds a target-specific lure profile before striking once.',
+        ecology: 'Removes injured migrants and follows artificial electrical infrastructure.',
+        lifecycle: 'No reproductive organs found in recovered adults.', sample: 'Photophore lens · sensory cartilage',
+        application: 'Adaptive decoy emitter', confidence: 'MEDIUM',
+    },
+    manta: {
+        designation: 'Abyssobatis pallida', className: 'Pelagic pressure cruiser', size: '5–11 m', depth: '700–3,800 m',
+        habitat: 'Open water above vents and brine pools', morphology: 'Flexible pressure ribs distribute load across the entire wing.',
+        behaviour: 'Rides density boundaries with almost no muscular thrust.',
+        ecology: 'Carries filter colonies and seeds distant vent fields with larvae.',
+        lifecycle: 'Long-distance migration appears synchronised to the planetary 0.003 Hz signal.',
+        sample: 'Pressure rib · boundary-layer mucus', application: 'Silent propulsor geometry', confidence: 'HIGH',
+    },
+    lamprey: {
+        designation: 'Electrophaga arcuata', className: 'Electrochemical opportunist', size: '1.1–1.9 m', depth: '300–2,200 m',
+        habitat: 'Conductive mineral seams and powered wrecks', morphology: 'Serial electroplaques focus current through a mineralised oral ring.',
+        behaviour: 'Feeds from electrical gradients; attacks batteries only when a stronger field is unavailable.',
+        ecology: 'Mobilises metals from rock and supplies charged detritus to vent gardens.',
+        lifecycle: 'Juveniles grow inside conductive veins before emerging after electrical storms.',
+        sample: 'Electroplaque · focusing ring', application: 'Bio-capacitor and mining laser optics', confidence: 'HIGH',
+    },
+    listener: {
+        designation: 'Auditophora meridiana', className: 'Sessile signal relay', size: '2–6 m colony', depth: '900–4,500 m',
+        habitat: 'Survey arrays, ridgelines and whale bone', morphology: 'Dish-shaped colony coupled to kilometre-scale substrate fibres.',
+        behaviour: 'Does not hunt. Encodes nearby sound into slow pressure pulses.',
+        ecology: 'Connects otherwise isolated habitats; predators arrive after its reports.',
+        lifecycle: 'Buds appear only where the 0.003 Hz signal is strongest.',
+        sample: 'Resonant cartilage · signal cilia', application: 'Passive sonar architecture', confidence: 'LOW',
+    },
+};
+const GEOLOGY_RECORDS = {
+    basalt_nodule: { name: 'PRESSURE-BANDED BASALT', depth: '180–1,600 m', hardness: '4.2 GPa', yield: 'Scrap · pressure plate', note: 'Alternating bands formed under pressure cycles too regular to be geological.' },
+    conductive_vein: { name: 'CONDUCTIVE CRYSTAL VEIN', depth: '300–2,800 m', hardness: '6.8 GPa', yield: 'Wiring · alien crystal', note: 'Arc Lamprey juveniles excavate these veins from within.' },
+    living_substrate: { name: 'AOSHEN SUBSTRATE', depth: '4,000 m+', hardness: 'VARIABLE', yield: 'Bio sample · artefact', note: 'Mineral response includes action potentials. Classification as rock is provisional.' },
+};
+function sectorForDepth(depth) {
+    let sector = SURVEY_SECTORS[0];
+    for (const candidate of SURVEY_SECTORS) if (depth >= candidate.gate) sector = candidate;
+    return sector;
+}
+function campaignAct() {
+    const depth = meta.deepestEver || 0;
+    let act = STORY_ACTS[0];
+    for (const candidate of STORY_ACTS) if (depth >= candidate.unlock) act = candidate;
+    meta.campaign.act = act.id;
+    return act;
+}
+function recordSectorDive(g) {
+    const reached = g.deepestDepth || 0;
+    for (const sector of SURVEY_SECTORS) {
+        if (reached < sector.gate) continue;
+        const eco = meta.sectorEcology[sector.id] || { survey: 0, extraction: 0, disturbance: 0 };
+        eco.survey = Math.min(100, (eco.survey || 0) + 8 + Math.floor(Math.min(20, (reached - sector.gate) / 100)));
+        eco.disturbance = Math.max(0, Math.min(100, (eco.disturbance || 0) * 0.88 + (g.kills || 0) * 0.06));
+        eco.lastDive = Date.now();
+        meta.sectorEcology[sector.id] = eco;
+    }
+    meta.campaign.evidence = (meta.campaign.evidence || 0) + Math.max(1, Math.floor(reached / 1000));
+    campaignAct();
+}
 let gameMode = 'descent'; // the deep is always alive — ecology/horror is the whole game now
 
 function createGame() {
@@ -3036,8 +3222,16 @@ function varyColor(hex, deg) {
 function spawnEnemy(g, forceType, forcePos) {
     const types = getSpawnableTypes(g.wave, g);
     if (!types.length && !forceType) return;   // forced spawns (bosses, carriers, events) must not starve
-    // Weight toward newer types
-    const type = forceType || types[Math.floor(Math.random() * types.length)];
+    const eco = meta.sectorEcology[sectorForDepth(g.depth).id] || { disturbance: 0 };
+    let ecologicalPool = types;
+    if (!forceType && eco.disturbance > 35) {
+        const opportunists = types.filter(t => ['pack', 'scavenger', 'mid'].includes(enemyRole(t.id, t.ai)));
+        if (opportunists.length && Math.random() < Math.min(0.75, eco.disturbance / 100)) ecologicalPool = opportunists;
+    } else if (!forceType && eco.disturbance < 12) {
+        const residents = types.filter(t => ['prey', 'sessile', 'support'].includes(enemyRole(t.id, t.ai)));
+        if (residents.length && Math.random() < 0.45) ecologicalPool = residents;
+    }
+    const type = forceType || ecologicalPool[Math.floor(Math.random() * ecologicalPool.length)];
     if (g._preySuppress > 0) {
         g._preySuppress = Math.max(0, g._preySuppress - 0.1);
         if (!forceType && enemyRole(type.id, type.ai) === 'prey' && Math.random() < 0.4) return;
@@ -3960,12 +4154,16 @@ function spawnWorldObjects(g, dt) {
         const x = (wb.cx || 0) + Math.cos(ang) * rad;
         const y = (wb.cy || 0) + Math.sin(ang) * rad;
         const obDepth = (g.depth || 0) + 5 + Math.random() * (OB_DEPTH_RANGE - 5);
+        let deposit = null;
+        if (t.kind === 'rock' && Math.random() < 0.2) deposit = 'basalt_nodule';
+        if (t.kind === 'crystal' && Math.random() < 0.45) deposit = zone === 'HADAL' ? 'living_substrate' : 'conductive_vein';
         g.obstacles.push({
             x, y, r: t.r * (0.85 + Math.random() * 0.4),
             kind: t.kind, color: t.color,
             seed: Math.random() * 100,
             zone,
             obDepth,
+            deposit, surveyed: false, mineProgress: 0, mined: false,
         });
     }
 
@@ -4016,6 +4214,22 @@ function spawnWorldObjects(g, dt) {
             spawnedAt: g.runTime,
             obDepth,
         });
+    }
+    if (!g._storySitesSpawned) g._storySitesSpawned = new Set();
+    const storySite = STORY_SITES.find(site =>
+        g.depth >= site.depth - 35 && g.depth <= site.depth + 80
+        && !meta.storySitesFound.includes(site.id) && !g._storySitesSpawned.has(site.id));
+    if (storySite) {
+        g._storySitesSpawned.add(storySite.id);
+        const a = Math.random() * PI2, range = Math.min(520, (wb.radius || 900) * 0.55);
+        g.wrecks.push({
+            x: g.player.x + Math.cos(a) * range, y: g.player.y + Math.sin(a) * range,
+            r: 48, loot: WRECK_LOOT_TABLE.find(l => l.id === 'weapon_lv') || pickWreckLoot(),
+            name: storySite.name, log: storySite.log, storySite: storySite.id, storyFragment: storySite.fragment,
+            revealed: false, salvaged: false, sealed: true, seed: Math.random() * 100,
+            spawnedAt: g.runTime, obDepth: g.depth + 8,
+        });
+        addNereidLog(g, `Priority site detected: ${storySite.name}. Archive carrier intact.`);
     }
     // Cull wrecks we've fully passed (depth-wise)
     const WRECK_DEPTH_RANGE = 50;
@@ -4201,6 +4415,13 @@ function updateWreckInteraction(g, dt) {
             }
             g._salvageCompleted = (g._salvageCompleted || 0) + 1;
             const wr = g.nearestWreck;
+            if (wr.storySite && !meta.storySitesFound.includes(wr.storySite)) {
+                meta.storySitesFound.push(wr.storySite);
+                if (wr.storyFragment && !meta.loreFragments.includes(wr.storyFragment)) meta.loreFragments.push(wr.storyFragment);
+                meta.campaign.evidence = (meta.campaign.evidence || 0) + 3;
+                saveMeta();
+                g.floatingTexts.push({ x: wr.x, y: wr.y - 44, text: 'STORY EVIDENCE RECOVERED', color: '#B0A0E8', life: 2.2, vy: -18 });
+            }
             addNereidLog(g, `${wr.name} — salvage complete.  ${wr.loot.label} recovered.`);
             // Read the wreck's last log over the next few seconds
             if (wr.log && wr.log.length) {
@@ -4216,6 +4437,54 @@ function updateWreckInteraction(g, dt) {
     } else {
         g.salvageHoldTime = Math.max(0, (g.salvageHoldTime || 0) - dt * 2);
     }
+}
+
+function updateMiningInteraction(g, dt) {
+    const p = g.player;
+    g.nearestDeposit = null;
+    g._miningBeam = null;
+    let best = 125;
+    for (const ob of (g.obstacles || [])) {
+        if (ob.trackDepth) ob.obDepth = g.depth;
+        if (!ob.deposit || ob.mined || Math.abs((ob.obDepth || 0) - g.depth) > 14) continue;
+        const d = dist(p, ob);
+        if (d < best) { best = d; g.nearestDeposit = ob; }
+    }
+    const ob = g.nearestDeposit;
+    if (!ob) return;
+    if (!ob.surveyed) {
+        maybeHint(g, 'geology', 'Unclassified mineral contact — ping it before attempting extraction.');
+        return;
+    }
+    if (!meta.modulesEquipped.includes('mining_laser')) {
+        maybeHint(g, 'mining_laser', 'Surveyed deposit. Fabricate and equip MINING LASER Mk I at the Mooring.');
+        return;
+    }
+    if (!keys['e'] || g.nearestWreck) {
+        ob.mineProgress = Math.max(0, (ob.mineProgress || 0) - dt * 0.12);
+        return;
+    }
+    if ((p.battery || 0) <= 2) return;
+    p.battery = Math.max(0, p.battery - dt * 4.5);
+    g.noise = Math.max(g.noise || 0, 0.9);
+    ob.mineProgress = (ob.mineProgress || 0) + dt / (ob.deposit === 'living_substrate' ? 6 : 4);
+    g._miningBeam = { x: ob.x, y: ob.y, progress: Math.min(1, ob.mineProgress) };
+    if (ob.mineProgress < 1) return;
+    const yields = ob.deposit === 'basalt_nodule' ? { scrap: 3, corepl: 1 }
+        : ob.deposit === 'conductive_vein' ? { wiring: 2, crystal: 2 }
+        : { biosamp: 2, artifact: 1 };
+    addMaterials(yields);
+    ob.mined = true;
+    g._minedDeposits = (g._minedDeposits || 0) + 1;
+    const sector = sectorForDepth(g.depth);
+    const eco = meta.sectorEcology[sector.id] || { survey: 0, extraction: 0, disturbance: 0 };
+    eco.extraction += 1;
+    eco.disturbance = Math.min(100, eco.disturbance + (ob.deposit === 'living_substrate' ? 12 : 4));
+    meta.sectorEcology[sector.id] = eco;
+    saveMeta();
+    g.floatingTexts.push({ x: ob.x, y: ob.y - 24, text: Object.entries(yields).map(([id, n]) => `+${n} ${id.toUpperCase()}`).join(' · '), color: '#FFB84A', life: 2, vy: -22 });
+    playTone(220, 0.18, 'sawtooth', 0.08); playTone(660, 0.28, 'sine', 0.06);
+    g.shake = 4;
 }
 
 // =====================================================================
@@ -5208,6 +5477,7 @@ function update(dt) {
 
     // --- Wreck interaction (find nearest, track salvage hold) ---
     updateWreckInteraction(g, dt);
+    updateMiningInteraction(g, dt);
 
     // --- Objectives ticking ---
     updateObjectives(g, dt);
@@ -5872,6 +6142,7 @@ function update(dt) {
                 }
                 // An aberrant specimen is a dissection-grade sample — full analysis
                 if (e.aberrant) creditResearch(g, e.typeId, 3, 'aberrant specimen');
+                else if (researchTier(e.typeId) >= 3) creditResearch(g, e.typeId, 4, 'tissue analysis');
                 else creditResearch(g, e.typeId, 1, 'specimen retrieved');
             }
 
@@ -6311,6 +6582,20 @@ function update(dt) {
                     }
                 }
             }
+            for (const ob of (g.obstacles || [])) {
+                if (!ob.deposit || ob.surveyed || ob.mined) continue;
+                const d = dist(ef, ob);
+                if (d - (ob.r || 20) > scanOuter || d + (ob.r || 20) < scanInner) continue;
+                ob.surveyed = true;
+                if (!meta.geologyScans.includes(ob.deposit)) {
+                    meta.geologyScans.push(ob.deposit);
+                    meta.campaign.evidence = (meta.campaign.evidence || 0) + 1;
+                    saveMeta();
+                    const record = GEOLOGY_RECORDS[ob.deposit];
+                    addNereidLog(g, `Geological contact: ${record ? record.name : ob.deposit}. Composition model added to PDA.`);
+                }
+                g.floatingTexts.push({ x: ob.x, y: ob.y - (ob.r || 20) - 8, text: 'GEOLOGY SCANNED', color: '#FFB84A', life: 1.5, vy: -24 });
+            }
         } else if (ef.type === 'cascade_ring') {
             // Feature 5: Cascade ring visual
             ef.radius += ef.speed * dt;
@@ -6687,6 +6972,7 @@ function update(dt) {
             const hpLoss = 1 - (g.player.hp / g.player.maxHp);
             const surfaceCost = Math.round(8 + hpLoss * 22);
             meta.hullCondition = Math.max(10, (meta.hullCondition || 100) - surfaceCost);
+            recordSectorDive(g);
             saveMeta();
             sfxRevive();
             addNereidLog(g, 'SURFACE. We made it back. Take it all home, Pilot.');
@@ -7017,7 +7303,7 @@ function draw() {
         modules: drawModules, systems: drawSystems, maintenance: drawMaintenance, interaction: drawEventInteraction,
         runtime_error: drawRuntimeFault,
         contracts: drawContracts, puzzle: drawPuzzle, patch: drawPatch,
-        cards: drawCardDraft, codex: drawCodex, tutorial: drawTutorial,
+        cards: drawCardDraft, codex: drawPDA, tutorial: drawTutorial,
     };
     // Round 4/5: title + card draft + contracts get REAL mobile layouts — the
     // scale-to-fit shrink (h/760 ≈ 0.5 on a landscape phone) made them
@@ -7367,6 +7653,20 @@ function draw() {
         ctx.translate(sx, sy);
         ctx.scale(scaleK, scaleK);
         drawObstacle(0, 0, ob);
+        if (ob.deposit && !ob.mined) {
+            const oreCol = ob.surveyed ? '#FFB84A' : 'rgba(140,170,180,0.32)';
+            ctx.strokeStyle = oreCol; ctx.lineWidth = ob.surveyed ? 2 : 1;
+            ctx.beginPath();
+            ctx.moveTo(-ob.r * 0.55, ob.r * 0.1);
+            ctx.lineTo(-ob.r * 0.18, -ob.r * 0.22);
+            ctx.lineTo(ob.r * 0.2, ob.r * 0.16);
+            ctx.lineTo(ob.r * 0.58, -ob.r * 0.12);
+            ctx.stroke();
+            if (ob.mineProgress > 0) {
+                ctx.strokeStyle = '#FFE090'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.arc(0, 0, ob.r + 7, -Math.PI / 2, -Math.PI / 2 + PI2 * Math.min(1, ob.mineProgress)); ctx.stroke();
+            }
+        }
         ctx.restore();
         ctx.globalAlpha = 1;
     }
@@ -8457,6 +8757,31 @@ function draw() {
             ctx.beginPath(); ctx.arc(Math.cos(ra) * 14, Math.sin(ra) * 14, 1, 0, PI2); ctx.fill();
         }
 
+        // Installed assemblies share the same manifest as the PDA blueprint.
+        for (const assemblyId of (meta.modulesEquipped || [])) {
+            const assembly = SUB_ASSEMBLY_DEFS[assemblyId];
+            if (!assembly) continue;
+            ctx.strokeStyle = assembly.color; ctx.fillStyle = hexA(assembly.color, 0.48); ctx.lineWidth = 1.2;
+            if (assemblyId === 'lattice') {
+                for (const rr of [11, 15, 19]) { ctx.beginPath(); ctx.arc(0, 0, rr, -0.65, 0.65); ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, rr, Math.PI - 0.65, Math.PI + 0.65); ctx.stroke(); }
+            } else if (assemblyId === 'chitin' || assemblyId === 'anechoic') {
+                ctx.beginPath(); ctx.arc(0, 0, 17.5, -2.65, -1.35); ctx.arc(0, 0, 17.5, 0.5, 1.8); ctx.stroke();
+            } else if (assemblyId === 'passonar') {
+                ctx.beginPath(); ctx.moveTo(-2, -15); ctx.lineTo(-2, -23); ctx.lineTo(5, -26); ctx.stroke();
+                ctx.beginPath(); ctx.arc(5, -26, 4, -1.2, 1.2); ctx.stroke();
+            } else if (assemblyId === 'capbank') {
+                ctx.fillRect(-16, -6, 6, 12); ctx.strokeRect(-16, -6, 6, 12);
+            } else if (assemblyId === 'silprops') {
+                ctx.beginPath(); ctx.ellipse(-19, -7, 5, 2, -0.4, 0, PI2); ctx.ellipse(-19, 7, 5, 2, 0.4, 0, PI2); ctx.stroke();
+            } else if (assemblyId.startsWith('mount_')) {
+                ctx.fillRect(-4, 14, 11, 4); ctx.strokeRect(-4, 14, 11, 4);
+            } else if (assemblyId === 'mining_laser') {
+                const deploy = g._miningBeam ? 1 : 0.35;
+                ctx.beginPath(); ctx.moveTo(12, 7); ctx.lineTo(18 + deploy * 6, 9); ctx.lineTo(23 + deploy * 8, 5); ctx.stroke();
+                ctx.fillStyle = '#FFF2B0'; ctx.beginPath(); ctx.arc(23 + deploy * 8, 5, 2.2, 0, PI2); ctx.fill();
+            }
+        }
+
         // Rust/wear patches (grunge)
         ctx.fillStyle = 'rgba(80,50,30,0.12)';
         ctx.beginPath(); ctx.arc(5, -4, 4, 0, PI2); ctx.fill();
@@ -8500,6 +8825,16 @@ function draw() {
 
         ctx.restore();
         ctx.globalAlpha = 1;
+
+        if (g._miningBeam) {
+            const tx = g._miningBeam.x - cx, ty = g._miningBeam.y - cy;
+            const pulse = 0.55 + Math.sin(g.runTime * 38) * 0.25;
+            ctx.strokeStyle = `rgba(255,184,74,${pulse})`; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(px2, py2); ctx.lineTo(tx, ty); ctx.stroke();
+            ctx.strokeStyle = 'rgba(255,245,200,0.8)'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(px2, py2); ctx.lineTo(tx, ty); ctx.stroke();
+            drawGlow(ctx, '#FFB84A', tx, ty, 18, 0.55);
+        }
 
         // --- WAKE TURBULENCE (behind sub when moving) ---
         if (spd > 20) {
@@ -11392,7 +11727,7 @@ function drawTitle(w, h) {
     ctx.fillStyle = '#DAA520';
     ctx.fillText('[U] UPGRADES', w / 2 - 150, ACTIONS_Y + 18);
     ctx.fillStyle = '#5AAFDA';
-    ctx.fillText(`[C] CODEX ${meta.loreFragments.length}/${LORE_FRAGMENTS.length}`, w / 2, ACTIONS_Y + 18);
+    ctx.fillText(`[C] FIELD PDA · ACT ${campaignAct().id}`, w / 2, ACTIONS_Y + 18);
     ctx.fillStyle = '#A0E0A0';
     ctx.fillText('[T] TUTORIAL', w / 2 + 150, ACTIONS_Y + 18);
     addTapZone(w / 2 - 110, ACTIONS_Y - 18, 220, 24, 'Enter');
@@ -11676,7 +12011,7 @@ function drawMooring(w, h, g) {
     const signalY = hasQuestion ? 332 : hasLine ? 278 : 238;
     if (g && g._signalEarned && !hasQuestion) {
         ctx.fillStyle = '#B0A0E8'; ctx.font = '11px monospace';
-        ctx.fillText('⌁ +' + g._signalEarned + ' SIGNAL distilled  ·  ⌁ ' + (meta.signal || 0) + ' banked — [C] CODEX', w / 2, signalY);
+        ctx.fillText('⌁ +' + g._signalEarned + ' SIGNAL distilled  ·  ⌁ ' + (meta.signal || 0) + ' banked — [C] FIELD PDA', w / 2, signalY);
     }
     const actY = hasQuestion ? 360 : hasLine && g._signalEarned ? 304 : hasLine ? 280 : g && g._signalEarned ? 264 : 248;
     ctx.fillStyle = '#0a1520'; ctx.fillRect(w / 2 - 180, actY, 360, 38);
@@ -11695,6 +12030,11 @@ function drawMooring(w, h, g) {
     ctx.fillStyle = '#80FFE0'; ctx.font = '14px monospace';
     ctx.fillText('[G]   MODULE BAY', w / 2, actY + 120);
     addTapZone(w / 2 - 180, actY + 96, 360, 38, 'g');
+    ctx.fillStyle = '#0a1520'; ctx.fillRect(w / 2 - 180, actY + 144, 360, 38);
+    ctx.strokeStyle = '#B0A0E8'; ctx.strokeRect(w / 2 - 180, actY + 144, 360, 38);
+    ctx.fillStyle = '#B0A0E8'; ctx.font = '14px monospace';
+    ctx.fillText('[C]   NEREID FIELD PDA', w / 2, actY + 168);
+    addTapZone(w / 2 - 180, actY + 144, 360, 38, 'c');
 }
 
 // --- MODULE BAY — craft and equip biomimetic modules (research-gated) ---
@@ -11713,12 +12053,13 @@ function drawModules(w, h) {
     const rowH = Math.max(40, Math.min(52, (h - 190) / MODULE_DEFS.length));
     for (let i = 0; i < MODULE_DEFS.length; i++) {
         const m = MODULE_DEFS[i];
+        const moduleKey = ['1','2','3','4','5','6','7','8','9','0','-','='][i];
         const unlocked = moduleUnlocked(m);
         const owned = meta.modulesOwned.includes(m.id);
         const equipped = meta.modulesEquipped.includes(m.id);
-        const affordable = canAfford(m.cost);
+        const affordable = canAfford(m.cost) && moduleComponentsReady(m);
         const bx = w / 2 - 330, by = 136 + i * rowH, bw = 660, bh = rowH - 5;
-        addTapZone(bx, by, bw, bh, String(i + 1));
+        addTapZone(bx, by, bw, bh, moduleKey);
         ctx.fillStyle = equipped ? '#0E2430' : '#0a1420';
         ctx.fillRect(bx, by, bw, bh);
         ctx.strokeStyle = equipped ? '#5ADFCF' : owned ? '#3A6A5A' : unlocked ? '#3A4A5A' : '#1A2430';
@@ -11728,12 +12069,13 @@ function drawModules(w, h) {
         ctx.fillStyle = unlocked ? (equipped ? '#80FFE0' : owned ? '#A0D0C0' : '#C0D0DC') : '#3A4A5A';
         ctx.font = 'bold 12px monospace';
         const state = equipped ? 'EQUIPPED' : owned ? 'IN STORES' : unlocked ? (affordable ? 'CRAFTABLE' : 'NEED MATERIALS') : 'LOCKED';
-        ctx.fillText(`[${i + 1}] ${m.name}  ·  ${m.slot.toUpperCase()}  ·  ${state}`, bx + 12, by + 20);
+        ctx.fillText(`[${moduleKey}] ${m.name}  ·  ${m.slot.toUpperCase()}  ·  ${state}`, bx + 12, by + 20);
         ctx.font = '10px monospace';
         if (unlocked) {
             ctx.fillStyle = '#7A8A9A';
             const dbl = drawbackLabel(m.id);
-            ctx.fillText(m.desc + (owned ? '' : '   —   ' + matsLabel(m.cost)), bx + 12, by + 33);
+            const partCost = Object.entries(m.components || {}).map(([id, qty]) => `${qty} ${id.replaceAll('_', ' ')}`).join(', ');
+            ctx.fillText(m.desc + (owned ? '' : '   —   ' + [matsLabel(m.cost), partCost].filter(Boolean).join(' · ')), bx + 12, by + 33);
             if (dbl && rowH >= 48) { ctx.fillStyle = '#9A6A5A'; ctx.fillText(dbl, bx + 12, by + 44); }
         } else {
             const def = ENEMY_TYPES[m.req.type];
@@ -11744,7 +12086,7 @@ function drawModules(w, h) {
     }
     ctx.textAlign = 'center';
     ctx.fillStyle = Date.now() < moduleFeedback.until ? moduleFeedback.color : '#888'; ctx.font = '12px monospace';
-    ctx.fillText(Date.now() < moduleFeedback.until ? moduleFeedback.text : '[1-9,0,-] craft / equip / unequip   ·   [ESC] back', w / 2, Math.min(h - 18, 146 + MODULE_DEFS.length * rowH));
+    ctx.fillText(Date.now() < moduleFeedback.until ? moduleFeedback.text : '[1-9,0,-,=] craft / equip / unequip   ·   [ESC] back', w / 2, Math.min(h - 18, 146 + MODULE_DEFS.length * rowH));
     addTapZone(0, h - 50, w, 50, 'Escape');
 }
 
@@ -12350,7 +12692,7 @@ function drawTitleMobile(w, h) {
     addTapZone(dive.x, btnY, dive.w, btnH, 'Enter');
     const secondary = [
         { label: 'UPGRADES', key: 'u', color: '#DAA520' },
-        { label: `CODEX ${meta.loreFragments.length}`, key: 'c', color: '#5AAFDA' },
+        { label: `FIELD PDA · ACT ${campaignAct().id}`, key: 'c', color: '#5AAFDA' },
         { label: dailyArmed ? '◈ DAILY ON' : 'DAILY', key: 'd', color: '#E8D080' },
     ];
     if (meta.p3Unlocked) secondary.push({ label: meta.destination === 'p3' ? '→ P3 SCAR' : '→ P9', key: 'p', color: meta.destination === 'p3' ? '#C87840' : '#4A8ADA' });
@@ -12682,7 +13024,234 @@ function drawEventOverlay(w, h, g) {
     ctx.fillRect(bx + 10, by + bh - 15, (bw - 20) * timerPct, 6);
 }
 
-// --- Codex Screen ---
+const PDA_TABS = ['EXPEDITION', 'XENOBIOLOGY', 'GEOLOGY', 'BLUEPRINTS', 'ARCHIVE', 'VESSEL'];
+let pdaTab = 0;
+let pdaSelection = 0;
+let pdaReturnPhase = 'title';
+function openPDA(returnPhase = 'title') {
+    pdaReturnPhase = returnPhase;
+    pdaSelection = 0;
+    phase = 'codex';
+}
+function pdaEntries() {
+    if (pdaTab === 1) return Object.keys(XENO_RECORDS);
+    if (pdaTab === 2) return Object.keys(GEOLOGY_RECORDS);
+    if (pdaTab === 3) return [...COMPONENT_RECIPES, ...MODULE_DEFS];
+    if (pdaTab === 4) return LORE_FRAGMENTS.filter(f => meta.loreFragments.includes(f.id));
+    return [];
+}
+function drawPdaParagraph(text, x, y, maxW, lineH = 14, maxLines = 5, color = '#A9C1C8') {
+    ctx.fillStyle = color; ctx.font = '10px monospace'; ctx.textAlign = 'left';
+    const words = String(text || '').split(/\s+/);
+    let line = '', lines = [];
+    for (const word of words) {
+        const next = line ? `${line} ${word}` : word;
+        if (ctx.measureText(next).width > maxW && line) { lines.push(line); line = word; }
+        else line = next;
+    }
+    if (line) lines.push(line);
+    lines = lines.slice(0, maxLines);
+    for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], x, y + i * lineH);
+    return y + lines.length * lineH;
+}
+function playArchiveEntry(fragment) {
+    if (!fragment) return;
+    if (!meta.archivePlayed.includes(fragment.id)) { meta.archivePlayed.push(fragment.id); saveMeta(); }
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(fragment.text.replace(/\[[^\]]+\]/g, '').replace(/\n/g, '. '));
+        utterance.rate = 0.84; utterance.pitch = 0.72; utterance.volume = meta.volume || 0.8;
+        window.speechSynthesis.speak(utterance);
+    } else if (audioCtx) {
+        playTone(220, 0.12, 'sine', 0.04);
+        setTimeout(() => playTone(330, 0.2, 'sine', 0.04), 140);
+    }
+}
+function fabricatePdaSelection() {
+    const entries = pdaEntries();
+    const selected = entries[pdaSelection];
+    if (!selected || pdaTab !== 3) return;
+    if (selected.ingredients || selected.id && COMPONENT_RECIPES.includes(selected)) {
+        if (!componentUnlocked(selected)) { setModuleFeedback(`${selected.name}: research prerequisite incomplete.`); return; }
+        if (!canAfford(selected.cost)) { setModuleFeedback(`${selected.name}: insufficient raw materials.`); return; }
+        spendMaterials(selected.cost);
+        meta.components[selected.id] = (meta.components[selected.id] || 0) + 1;
+        saveMeta();
+        setModuleFeedback(`${selected.name} fabricated.`, true);
+        if (audioCtx) sfxLevelUp();
+        return;
+    }
+    craftOrToggleModule(selected);
+}
+function drawPdaVessel(cx, cy, scale = 1) {
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.transform(1, 0, -0.16, 1, 0, 0);
+    ctx.strokeStyle = 'rgba(90,223,207,0.7)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(-175, 0);
+    ctx.bezierCurveTo(-135, -54, 105, -54, 185, 0);
+    ctx.bezierCurveTo(110, 54, -135, 54, -175, 0); ctx.stroke();
+    ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.moveTo(-175, 0); ctx.lineTo(185, 0); ctx.stroke(); ctx.setLineDash([]);
+    for (const x of [-110, -45, 25, 95]) { ctx.beginPath(); ctx.ellipse(x, 0, 8, 43, 0, 0, PI2); ctx.stroke(); }
+    ctx.beginPath(); ctx.ellipse(80, 0, 39, 39, 0, 0, PI2); ctx.stroke();
+    ctx.strokeRect(-22, -76, 58, 28);
+    for (const id of (meta.modulesEquipped || [])) {
+        const a = SUB_ASSEMBLY_DEFS[id]; if (!a) continue;
+        ctx.strokeStyle = a.color; ctx.fillStyle = hexA(a.color, 0.18); ctx.lineWidth = 2;
+        if (a.socket === 'hull_ring') { ctx.beginPath(); ctx.ellipse(5, 0, 16, 49, 0, 0, PI2); ctx.stroke(); }
+        else if (a.socket === 'hull_skin') { ctx.beginPath(); ctx.ellipse(-25, 0, 105, 48, 0, 0, PI2); ctx.stroke(); }
+        else if (a.socket === 'aft_drive') { ctx.beginPath(); ctx.ellipse(-185, -26, 9, 22, 0, 0, PI2); ctx.ellipse(-185, 26, 9, 22, 0, 0, PI2); ctx.stroke(); }
+        else if (a.socket === 'sensor_mast') { ctx.beginPath(); ctx.moveTo(0, -76); ctx.lineTo(0, -105); ctx.arc(0, -108, 9, 0, PI2); ctx.stroke(); }
+        else if (a.socket === 'power_bay') { ctx.fillRect(-92, -27, 45, 54); ctx.strokeRect(-92, -27, 45, 54); }
+        else if (a.socket === 'weapon_mount') { ctx.fillRect(-10, 45, 56, 11); ctx.strokeRect(-10, 45, 56, 11); }
+        else if (a.socket === 'prow_tool') { ctx.beginPath(); ctx.moveTo(150, 20); ctx.lineTo(205, 48); ctx.lineTo(228, 36); ctx.stroke(); }
+    }
+    ctx.restore();
+}
+function drawPDA(w, h) {
+    ctx.fillStyle = '#01070d'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(90,223,207,0.045)'; ctx.lineWidth = 1;
+    for (let x = 0; x < w; x += 24) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+    for (let y = 0; y < h; y += 24) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+    const act = campaignAct();
+    ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 21px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('NEREID FIELD PDA', 24, 34);
+    ctx.fillStyle = '#718B96'; ctx.font = '9px monospace'; ctx.textAlign = 'right';
+    ctx.fillText(`PELAGOS-9 · ACT ${act.id} · EVIDENCE ${meta.campaign.evidence || 0}`, w - 24, 32);
+    const tabW = (w - 32) / PDA_TABS.length;
+    for (let i = 0; i < PDA_TABS.length; i++) {
+        const x = 16 + i * tabW;
+        ctx.fillStyle = i === pdaTab ? '#0F2A31' : '#07131A'; ctx.fillRect(x, 50, tabW - 4, 34);
+        ctx.strokeStyle = i === pdaTab ? '#5ADFCF' : '#203844'; ctx.strokeRect(x, 50, tabW - 4, 34);
+        ctx.fillStyle = i === pdaTab ? '#A5FFF0' : '#607984'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
+        ctx.fillText(`[${i + 1}] ${PDA_TABS[i]}`, x + (tabW - 4) / 2, 71);
+        addTapZone(x, 50, tabW - 4, 34, String(i + 1));
+    }
+    const top = 104, bottom = h - 38;
+    ctx.strokeStyle = '#1A3A44'; ctx.strokeRect(16, top, w - 32, bottom - top);
+
+    if (pdaTab === 0) {
+        ctx.textAlign = 'left'; ctx.fillStyle = '#FFB84A'; ctx.font = 'bold 15px monospace';
+        ctx.fillText(`ACT ${act.id} · ${act.title}`, 34, 132);
+        drawPdaParagraph(act.truth, 34, 153, w - 68, 15, 3, '#C9D8DC');
+        ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 11px monospace'; ctx.fillText('SURVEY PROVINCES', 34, 202);
+        for (let i = 0; i < SURVEY_SECTORS.length; i++) {
+            const s = SURVEY_SECTORS[i], eco = meta.sectorEcology[s.id] || { survey: 0, extraction: 0, disturbance: 0 };
+            const unlocked = (meta.deepestEver || 0) >= s.gate;
+            const y = 224 + i * 82;
+            ctx.fillStyle = unlocked ? '#071820' : '#050A0D'; ctx.fillRect(34, y, w - 68, 70);
+            ctx.strokeStyle = unlocked ? '#285564' : '#142028'; ctx.strokeRect(34, y, w - 68, 70);
+            ctx.fillStyle = unlocked ? '#A5D9DF' : '#354951'; ctx.font = 'bold 11px monospace';
+            ctx.fillText(`${s.name} · ${s.range}`, 46, y + 18);
+            ctx.fillStyle = unlocked ? '#78949E' : '#29383E'; ctx.font = '9px monospace';
+            ctx.fillText(s.question, 46, y + 36); ctx.fillText(s.signature, 46, y + 52);
+            ctx.textAlign = 'right'; ctx.fillText(`SURVEY ${eco.survey || 0}% · EXTRACTION ${eco.extraction || 0} · DISTURBANCE ${Math.round(eco.disturbance || 0)}%`, w - 46, y + 18); ctx.textAlign = 'left';
+        }
+    } else if (pdaTab === 1) {
+        const ids = Object.keys(XENO_RECORDS); pdaSelection = Math.max(0, Math.min(pdaSelection, ids.length - 1));
+        for (let i = 0; i < ids.length; i++) {
+            const id = ids[i], def = ENEMY_TYPES[id], tier = researchTier(id), y = 122 + i * 54;
+            ctx.fillStyle = i === pdaSelection ? '#11303A' : '#07141B'; ctx.fillRect(28, y, 205, 46);
+            ctx.strokeStyle = i === pdaSelection ? '#5ADFCF' : '#17303A'; ctx.strokeRect(28, y, 205, 46);
+            ctx.fillStyle = tier ? '#B8DDE0' : '#354750'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'left';
+            ctx.fillText(tier ? def.name : 'UNIDENTIFIED CONTACT', 38, y + 18);
+            ctx.fillStyle = tier ? '#628A92' : '#27373D'; ctx.font = '9px monospace';
+            ctx.fillText(`${'●'.repeat(tier)}${'○'.repeat(4 - tier)} · ${tier ? XENO_RECORDS[id].className : 'NO DATA'}`, 38, y + 35);
+            addTapZone(28, y, 205, 46, `PDASEL:${i}`);
+        }
+        const id = ids[pdaSelection], rec = XENO_RECORDS[id], tier = researchTier(id), def = ENEMY_TYPES[id];
+        const dx = 258;
+        ctx.fillStyle = '#06151C'; ctx.fillRect(dx, 120, w - dx - 28, 158);
+        ctx.strokeStyle = tier ? '#326A72' : '#1D3036'; ctx.strokeRect(dx, 120, w - dx - 28, 158);
+        if (tier) {
+            ctx.save(); ctx.translate(dx + 120, 198); ctx.rotate(Math.sin(performance.now() * 0.0006) * 0.08);
+            drawBodyPlan({ typeId: id, vseed: 7, phase: 1 }, 48, def.color || '#5ADFCF', performance.now() * 0.001); ctx.restore();
+        }
+        ctx.textAlign = 'left'; ctx.fillStyle = tier ? '#A5FFF0' : '#40535B'; ctx.font = 'bold 14px monospace';
+        ctx.fillText(tier ? def.name.toUpperCase() : 'CONTACT UNRESOLVED', dx + 225, 150);
+        ctx.font = 'italic 11px monospace'; ctx.fillStyle = '#70919A'; ctx.fillText(tier ? rec.designation : 'Ping a living specimen to establish morphology.', dx + 225, 170);
+        if (tier) {
+            ctx.font = '9px monospace'; ctx.fillStyle = '#78949E';
+            ctx.fillText(`${rec.size} · ${rec.depth} · CONFIDENCE ${rec.confidence}`, dx + 225, 192);
+            let y = 310;
+            const fields = [
+                ['HABITAT', rec.habitat, 1], ['MORPHOLOGY', rec.morphology, 1],
+                ['BEHAVIOUR', rec.behaviour, 2], ['ECOLOGICAL ROLE', rec.ecology, 3],
+                ['LIFECYCLE', rec.lifecycle, 3], ['BIOMIMETIC APPLICATION', rec.application, 4],
+            ];
+            for (const [label, text, req] of fields) {
+                ctx.fillStyle = tier >= req ? '#5ADFCF' : '#31444C'; ctx.font = 'bold 9px monospace'; ctx.fillText(label, dx, y);
+                y = drawPdaParagraph(tier >= req ? text : `REQUIRES RESEARCH TIER ${req}`, dx, y + 15, w - dx - 38, 13, 3, tier >= req ? '#A9C1C8' : '#35464D') + 10;
+            }
+        }
+    } else if (pdaTab === 2) {
+        const ids = Object.keys(GEOLOGY_RECORDS); pdaSelection = Math.max(0, Math.min(pdaSelection, ids.length - 1));
+        for (let i = 0; i < ids.length; i++) {
+            const id = ids[i], rec = GEOLOGY_RECORDS[id], known = meta.geologyScans.includes(id), y = 126 + i * 116;
+            ctx.fillStyle = i === pdaSelection ? '#182B28' : '#07141B'; ctx.fillRect(34, y, w - 68, 98);
+            ctx.strokeStyle = i === pdaSelection ? '#FFB84A' : '#223842'; ctx.strokeRect(34, y, w - 68, 98);
+            ctx.fillStyle = known ? '#FFD08A' : '#3B4A4D'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'left';
+            ctx.fillText(known ? rec.name : 'UNCLASSIFIED GEOLOGICAL CONTACT', 48, y + 22);
+            ctx.font = '9px monospace'; ctx.fillStyle = known ? '#A1B7BC' : '#334047';
+            ctx.fillText(known ? `${rec.depth} · HARDNESS ${rec.hardness} · YIELD ${rec.yield}` : 'Sonar survey required.', 48, y + 42);
+            if (known) drawPdaParagraph(rec.note, 48, y + 62, w - 96, 13, 3);
+            addTapZone(34, y, w - 68, 98, `PDASEL:${i}`);
+        }
+    } else if (pdaTab === 3) {
+        const entries = pdaEntries(); pdaSelection = Math.max(0, Math.min(pdaSelection, entries.length - 1));
+        for (let i = 0; i < entries.length; i++) {
+            const item = entries[i], component = i < COMPONENT_RECIPES.length;
+            const unlocked = component ? componentUnlocked(item) : moduleUnlocked(item);
+            const owned = component ? (meta.components[item.id] || 0) : meta.modulesOwned.includes(item.id);
+            const y = 120 + i * 34;
+            ctx.fillStyle = i === pdaSelection ? '#11303A' : '#07141B'; ctx.fillRect(30, y, w - 60, 29);
+            ctx.strokeStyle = i === pdaSelection ? '#5ADFCF' : '#17303A'; ctx.strokeRect(30, y, w - 60, 29);
+            ctx.fillStyle = unlocked ? '#B9DDE2' : '#3A4B52'; ctx.font = '10px monospace'; ctx.textAlign = 'left';
+            ctx.fillText(`${component ? 'COMPONENT' : item.slot.toUpperCase()} · ${item.name}`, 42, y + 19);
+            ctx.textAlign = 'right'; ctx.fillText(component ? `OWNED ${owned}` : owned ? (meta.modulesEquipped.includes(item.id) ? 'EQUIPPED' : 'IN STORES') : unlocked ? 'FABRICATE' : 'LOCKED', w - 42, y + 19);
+            addTapZone(30, y, w - 60, 29, `PDASEL:${i}`);
+        }
+        ctx.textAlign = 'center'; ctx.fillStyle = Date.now() < moduleFeedback.until ? moduleFeedback.color : '#FFB84A'; ctx.font = 'bold 10px monospace';
+        ctx.fillText(Date.now() < moduleFeedback.until ? moduleFeedback.text : '[↑/↓] SELECT · [F] FABRICATE / EQUIP', w / 2, h - 56);
+    } else if (pdaTab === 4) {
+        const entries = pdaEntries(); pdaSelection = Math.max(0, Math.min(pdaSelection, Math.max(0, entries.length - 1)));
+        ctx.textAlign = 'left';
+        for (let i = 0; i < entries.length; i++) {
+            const frag = entries[i], y = 120 + i * 34;
+            if (y > h - 90) break;
+            ctx.fillStyle = i === pdaSelection ? '#241C32' : '#07141B'; ctx.fillRect(28, y, 220, 29);
+            ctx.strokeStyle = i === pdaSelection ? '#B0A0E8' : '#20313A'; ctx.strokeRect(28, y, 220, 29);
+            ctx.fillStyle = '#A99AC8'; ctx.font = '9px monospace';
+            ctx.fillText(`${meta.archivePlayed.includes(frag.id) ? '▶' : '○'} ${frag.id.toUpperCase()} · LAYER ${frag.layer}`, 38, y + 19);
+            addTapZone(28, y, 220, 29, `PDASEL:${i}`);
+        }
+        const frag = entries[pdaSelection];
+        if (frag) {
+            ctx.fillStyle = '#B0A0E8'; ctx.font = 'bold 12px monospace'; ctx.fillText('ARCHIVE TRANSCRIPT', 278, 132);
+            drawPdaParagraph(frag.text, 278, 160, w - 310, 16, 22, '#C5BCD9');
+            ctx.fillStyle = '#7D7392'; ctx.font = '10px monospace'; ctx.fillText('[ENTER / P] PLAY AUDIO LOG', 278, h - 58);
+        } else {
+            ctx.fillStyle = '#46545A'; ctx.font = '11px monospace'; ctx.fillText('No recovered recordings.', 278, 150);
+        }
+    } else if (pdaTab === 5) {
+        ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center';
+        ctx.fillText('NEREID-II · AS-BUILT / CURRENT CONFIGURATION', w / 2, 132);
+        drawPdaVessel(w / 2, 330, Math.min(1.25, (w - 160) / 470));
+        let y = 500; ctx.textAlign = 'left';
+        const installed = meta.modulesEquipped || [];
+        if (!installed.length) { ctx.fillStyle = '#526A72'; ctx.fillText('NO OPTIONAL ASSEMBLIES INSTALLED', 50, y); }
+        for (const id of installed) {
+            const a = SUB_ASSEMBLY_DEFS[id]; if (!a) continue;
+            ctx.fillStyle = a.color; ctx.fillRect(48, y - 9, 8, 8);
+            ctx.fillStyle = '#A8C2C8'; ctx.font = '10px monospace'; ctx.fillText(`${a.label} · SOCKET ${a.socket.toUpperCase()}${a.animation ? ' · ANIM ' + a.animation : ''}`, 66, y);
+            y += 22;
+        }
+        ctx.fillStyle = '#647D86'; ctx.font = '9px monospace'; ctx.fillText('GLB SOCKET CONTRACT: hull_skin · hull_ring · aft_drive · sensor_mast · power_bay · weapon_mount · prow_tool', 48, h - 58);
+    }
+    ctx.fillStyle = '#607984'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('[1–6] SECTION · [↑/↓] SELECT · [ESC] CLOSE PDA', w / 2, h - 14);
+    addTapZone(0, h - 42, w, 42, 'Escape');
+}
+
+// --- Legacy Codex renderer retained for save/debug compatibility. ---
 function drawCodex(w, h) {
     ctx.fillStyle = '#010208'; ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 24px monospace'; ctx.textAlign = 'center';
@@ -13119,7 +13688,7 @@ window.addEventListener('keydown', e => {
         }
         if (e.key === 'u' || e.key === 'U') { phase = 'shop'; return; }
         if (e.key === 'g' || e.key === 'G') { phase = 'modules'; return; }
-        if (e.key === 'c' || e.key === 'C') { phase = 'codex'; return; }
+        if (e.key === 'c' || e.key === 'C') { openPDA('mooring'); return; }
         if (e.key === 'Enter') { cardHand = dealCards(meta.totalRuns); cardSelected = new Set(); rollContractBoard(); phase = 'contracts'; return; }
         return;
     }
@@ -13128,40 +13697,9 @@ window.addEventListener('keydown', e => {
         let mn = parseInt(e.key);
         if (e.key === '0') mn = 10;
         if (e.key === '-') mn = 11;
+        if (e.key === '=') mn = 12;
         if (mn >= 1 && mn <= MODULE_DEFS.length) {
-            const m = MODULE_DEFS[mn - 1];
-            if (!moduleUnlocked(m)) {
-                setModuleFeedback(`${m.name}: research ${m.req.type} to tier ${m.req.tier} (now ${meta.research[m.req.type] || 0}).`);
-                if (audioCtx) playTone(120, 0.1, 'square', 0.04);
-                return;
-            }
-            if (meta.modulesEquipped.includes(m.id)) {
-                meta.modulesEquipped = meta.modulesEquipped.filter(id => id !== m.id);
-                setModuleFeedback(`${m.name} moved to stores.`, true);
-            } else if (meta.modulesOwned.includes(m.id)) {
-                if (equippedInSlot(m.slot) < MODULE_SLOTS[m.slot]) {
-                    meta.modulesEquipped.push(m.id);
-                    setModuleFeedback(`${m.name} equipped in ${m.slot.toUpperCase()}.`, true);
-                } else {
-                    setModuleFeedback(`${m.slot.toUpperCase()} slots full — unequip another module first.`);
-                    if (audioCtx) playTone(120, 0.1, 'square', 0.04);
-                }
-            } else if (spendMaterials(m.cost)) {
-                meta.modulesOwned.push(m.id);
-                if (equippedInSlot(m.slot) < MODULE_SLOTS[m.slot]) {
-                    meta.modulesEquipped.push(m.id);
-                    setModuleFeedback(`${m.name} fabricated and equipped.`, true);
-                } else {
-                    setModuleFeedback(`${m.name} fabricated; ${m.slot.toUpperCase()} slots are full.`, true);
-                }
-                if (audioCtx) sfxLevelUp();
-            } else {
-                const missing = Object.keys(m.cost).filter(k => (meta.materials[k] || 0) < m.cost[k])
-                    .map(k => `${m.cost[k] - (meta.materials[k] || 0)} ${BASE_MATERIALS[k].name}`).join(', ');
-                setModuleFeedback(`${m.name}: missing ${missing}.`);
-                if (audioCtx) playTone(120, 0.1, 'square', 0.04);
-            }
-            saveMeta();
+            if (!craftOrToggleModule(MODULE_DEFS[mn - 1]) && audioCtx) playTone(120, 0.1, 'square', 0.04);
         }
         return;
     }
@@ -13257,9 +13795,22 @@ window.addEventListener('keydown', e => {
         }
         return;
     }
-    if (phase === 'codex' && e.key === 'Escape') { phase = 'title'; }
+    if (phase === 'codex') {
+        if (e.key === 'Escape') { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); phase = pdaReturnPhase; return; }
+        if (e.key.startsWith('PDASEL:')) {
+            pdaSelection = Math.max(0, Math.min(pdaEntries().length - 1, Number(e.key.slice(7)) || 0));
+            return;
+        }
+        const tabNum = parseInt(e.key);
+        if (tabNum >= 1 && tabNum <= PDA_TABS.length) { pdaTab = tabNum - 1; pdaSelection = 0; return; }
+        const entries = pdaEntries();
+        if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') { pdaSelection = Math.max(0, pdaSelection - 1); return; }
+        if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') { pdaSelection = Math.min(Math.max(0, entries.length - 1), pdaSelection + 1); return; }
+        if ((e.key === 'Enter' || e.key === 'p' || e.key === 'P') && pdaTab === 4) { playArchiveEntry(entries[pdaSelection]); return; }
+        if ((e.key === 'f' || e.key === 'F') && pdaTab === 3) { fabricatePdaSelection(); return; }
+    }
     // [S] in codex — spend Signal to unseal the next archive fragment (cheapest layer first)
-    if (phase === 'codex' && (e.key === 's' || e.key === 'S')) {
+    if (phase === 'codex' && pdaTab === 4 && (e.key === 'u' || e.key === 'U')) {
         const next = LORE_FRAGMENTS.filter(f => !meta.loreFragments.includes(f.id)).sort((a, b) => a.layer - b.layer)[0];
         if (next && (meta.signal || 0) >= next.layer * 40) {
             meta.signal -= next.layer * 40;
@@ -13289,7 +13840,7 @@ window.addEventListener('keydown', e => {
             if (audioCtx) playTone(dailyArmed ? 520 : 260, 0.08, 'sine', 0.05);
         }
         if (e.key === 'u' || e.key === 'U') phase = 'shop';
-        if (e.key === 'c' || e.key === 'C') phase = 'codex';
+        if (e.key === 'c' || e.key === 'C') openPDA('title');
         if (e.key === 't' || e.key === 'T') phase = 'tutorial';
         if (e.key === 'w' || e.key === 'W') phase = 'workshop';
         // [P] destination — Pelagos-9 (living trench) / Pelagos-3 "THE SCAR" (drowned machinery)
@@ -13502,7 +14053,13 @@ window.__deepSwarm = {
         game: game ? {
             depth: game.depth, wave: game.wave, hp: game.player.hp, battery: game.player.battery,
             systems: game.systems, inventory: game.inventory.length, zone: zoneFromDepth(game.depth),
+            minedDeposits: game._minedDeposits || 0,
         } : null,
+        campaign: {
+            act: campaignAct().id, evidence: meta.campaign.evidence || 0,
+            geology: [...meta.geologyScans], components: { ...meta.components },
+            equipped: [...(meta.modulesEquipped || [])], pdaTab,
+        },
     }),
     startSeeded(seed = 'test') {
         dailyRng = mulberry32(seedFromString(String(seed)));
@@ -13526,6 +14083,34 @@ window.__deepSwarm = {
     triggerSystemIncident(id = 'reactor', amount = 50) {
         if (!game) this.startSeeded('system-incident');
         openSystemIncident(id, 'debug incident', amount);
+        return this.getState();
+    },
+    prepareCampaignTest() {
+        meta.research.lamprey = 3;
+        if (!meta.scannedCreatures.includes('lamprey')) meta.scannedCreatures.push('lamprey');
+        for (const id of ['conductive_vein', 'basalt_nodule']) if (!meta.geologyScans.includes(id)) meta.geologyScans.push(id);
+        meta.components.conductive_lens = 1;
+        meta.components.pressure_frame = 1;
+        meta.components.bio_capacitor = 1;
+        for (const id of Object.keys(BASE_MATERIALS)) meta.materials[id] = Math.max(20, meta.materials[id] || 0);
+        if (!meta.modulesOwned.includes('mining_laser')) meta.modulesOwned.push('mining_laser');
+        meta.modulesEquipped = meta.modulesEquipped.filter(id => (MODULE_DEFS.find(m => m.id === id) || {}).slot !== 'prow');
+        meta.modulesEquipped.push('mining_laser');
+        saveMeta();
+        return this.getState();
+    },
+    spawnTestDeposit(id = 'conductive_vein') {
+        if (!game) this.startSeeded('mining-test');
+        game.obstacles.push({
+            x: game.player.x + 70, y: game.player.y, r: 24, kind: id === 'conductive_vein' ? 'crystal' : 'rock',
+            color: id === 'conductive_vein' ? '#A06ACC' : '#59616A', seed: 7, zone: zoneFromDepth(game.depth),
+            obDepth: game.depth, deposit: id, surveyed: true, mineProgress: 0, mined: false, trackDepth: true,
+        });
+        return this.getState();
+    },
+    showPDA(tab = 0) {
+        pdaTab = Math.max(0, Math.min(PDA_TABS.length - 1, Number(tab) || 0));
+        openPDA(game && game._surfaced ? 'mooring' : 'title');
         return this.getState();
     },
     giveTestCargo() {
