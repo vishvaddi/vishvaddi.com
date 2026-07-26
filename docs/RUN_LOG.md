@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-07-26 — Deep Swarm render-fault recovery
+
+- Reset the Canvas 2D drawing state after an animation-loop fault so a leaked porthole clip or transform cannot hide the diagnostic screen behind a black frozen viewport.
+- Made the fault screen fit Android landscape and changed its primary action from discarding the run to clearing transient event state and resuming the dive.
+- Added a browser regression that deliberately throws while a viewport clip is active, verifies the full canvas recovers, then resumes the same dive.
+- Bumped the scoped offline cache so installed copies receive the recovery immediately.
+
 ## 2026-07-26 — Deep Swarm Systems control hotfix
 
 - Removed the conflicting `S` Systems binding; holding `S` now remains normal downward movement and cannot interrupt a dive.

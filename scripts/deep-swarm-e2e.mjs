@@ -49,6 +49,43 @@ try {
   const systemsState = await page.evaluate(() => window.__deepSwarm.getState())
   check('systems: random incident opens blueprint', systemsState.phase === 'systems' && systemsState.game.systems.reactor.condition === 30)
 
+  const expectedErrors = errors.length
+  await page.setViewportSize({ width: 844, height: 390 })
+  await page.evaluate(() => {
+    window.__deepSwarm.startSeeded('render-recovery')
+    const render = document.querySelector('#c').getContext('2d')
+    const fillText = render.fillText.bind(render)
+    let injected = false
+    render.fillText = function (...args) {
+      if (!injected) {
+        injected = true
+        this.save()
+        this.beginPath()
+        this.rect(this.canvas.width - 36, 0, 36, 36)
+        this.clip()
+        this.translate(this.canvas.width, 0)
+        throw new Error('synthetic render fault')
+      }
+      return fillText(...args)
+    }
+  })
+  await page.waitForTimeout(120)
+  const faultState = await page.evaluate(() => {
+    const render = document.querySelector('#c').getContext('2d')
+    return {
+      state: window.__deepSwarm.getState(),
+      corner: [...render.getImageData(0, 0, 1, 1).data],
+    }
+  })
+  check('runtime: fault screen escapes leaked viewport clip',
+    faultState.state.phase === 'runtime_error' && faultState.corner[0] === 6 && faultState.corner[1] === 1 && faultState.corner[2] === 4,
+    `${faultState.state.phase} · rgb(${faultState.corner.slice(0, 3).join(',')})`)
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(80)
+  const recoveredState = await page.evaluate(() => window.__deepSwarm.getState())
+  check('runtime: resume returns to the interrupted dive', recoveredState.phase === 'playing' && !recoveredState.error, recoveredState.phase)
+  errors.splice(expectedErrors)
+
   await page.evaluate(() => window.__deepSwarm.giveTestCargo())
   await page.waitForTimeout(100)
   const cargoState = await page.evaluate(() => window.__deepSwarm.getState())
@@ -57,7 +94,6 @@ try {
   await page.keyboard.press('ArrowRight')
   check('cargo: organisation controls keep console clean', errors.length === 0, errors.length ? [...errors, ...requestFailures].slice(0, 2).join(' | ') : '')
 
-  await page.setViewportSize({ width: 844, height: 390 })
   await page.evaluate(() => window.__deepSwarm.setPhase('modules'))
   await page.keyboard.press('1')
   await page.waitForTimeout(100)

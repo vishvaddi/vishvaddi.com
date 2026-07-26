@@ -1377,6 +1377,15 @@ function captureRuntimeError(error, source) {
         game._deathCause = 'SYSTEM ERROR';
     }
 }
+function resetRenderContextAfterFault() {
+    if (typeof ctx.reset === 'function') {
+        ctx.reset();
+        return;
+    }
+    const width = canvas.width, height = canvas.height;
+    canvas.width = width;
+    canvas.height = height;
+}
 window.addEventListener('error', e => captureRuntimeError(e.error || e.message, 'window.error'));
 window.addEventListener('unhandledrejection', e => captureRuntimeError(e.reason, 'unhandledrejection'));
 // Fusion discovery log — persists across DSV lives (knowledge survives the hull)
@@ -11047,15 +11056,17 @@ function drawDeathScreen(w, h, g) {
 function drawRuntimeFault(w, h) {
     const fault = lastRuntimeError || { message: 'Unknown runtime fault', trace: [] };
     ctx.fillStyle = '#060104'; ctx.fillRect(0, 0, w, h);
+    const compact = h < 520;
+    const top = compact ? 54 : 90;
     ctx.textAlign = 'center'; ctx.fillStyle = '#FF4050'; ctx.font = 'bold 24px monospace';
-    ctx.fillText('FLIGHT COMPUTER FAULT', w / 2, 90);
+    ctx.fillText('FLIGHT COMPUTER FAULT', w / 2, top);
     ctx.fillStyle = '#C8A0A8'; ctx.font = '12px monospace';
-    ctx.fillText(fault.message.slice(0, 90), w / 2, 126);
+    ctx.fillText(fault.message.slice(0, compact ? 58 : 90), w / 2, top + 36);
     const last = fault.trace[fault.trace.length - 1];
-    if (last) ctx.fillText(`${last.depth}m · ${last.zone} · wave ${last.wave} · ${last.hp} hull · ${last.battery}% power`, w / 2, 152);
+    if (last) ctx.fillText(`${last.depth}m · ${last.zone} · wave ${last.wave} · ${last.hp} hull · ${last.battery}% power`, w / 2, top + 62);
     ctx.fillStyle = '#7A8A9A'; ctx.font = '11px monospace';
-    ctx.fillText('Diagnostic saved in this browser session. [ENTER] return to title.', w / 2, 192);
-    addTapZone(w / 2 - 180, 170, 360, 44, 'Enter');
+    ctx.fillText('Diagnostic saved. [ENTER] resume dive · [ESC] return to title', w / 2, top + 102);
+    addTapZone(w / 2 - 190, top + 76, 380, 48, 'Enter');
 }
 
 // =====================================================================
@@ -13364,7 +13375,22 @@ window.addEventListener('keydown', e => {
         if (e.key === 'w' || e.key === 'W') phase = 'workshop';
     }
     if (phase === 'runtime_error' && e.key === 'Enter') {
+        if (game) {
+            game._runtimeError = null;
+            game.activeEvent = null;
+            systemIncident = null;
+            eventInteraction = null;
+            maintenanceState = null;
+            lastRuntimeError = null;
+            phase = 'playing';
+        } else {
+            phase = 'title';
+        }
+        return;
+    }
+    if (phase === 'runtime_error' && e.key === 'Escape') {
         game = null;
+        lastRuntimeError = null;
         phase = 'title';
         return;
     }
@@ -13461,6 +13487,7 @@ function loop(ts) {
         postFX(ts);
     } catch(err) {
         captureRuntimeError(err, 'animation-loop');
+        resetRenderContextAfterFault();
         phase = 'runtime_error';
         console.error(err);
     }
