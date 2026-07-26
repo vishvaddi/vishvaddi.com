@@ -14252,6 +14252,8 @@ window.__deepSwarm = {
     queueNereidTest() {
         if (!game) this.startSeeded('nereid-cadence');
         game.runTime = 1;
+        game.nereidQueue = [];
+        game._nereidLastAt = 1;
         addNereidLog(game, 'Routine survey observation one.');
         addNereidLog(game, 'Routine survey observation two.');
         addNereidLog(game, 'Routine survey observation three.');
