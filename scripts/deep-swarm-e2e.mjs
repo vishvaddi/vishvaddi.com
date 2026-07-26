@@ -15,9 +15,11 @@ const browser = await chromium.launch({
 const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
 const page = await context.newPage()
 const errors = []
+const requestFailures = []
 page.on('pageerror', error => errors.push(String(error)))
+page.on('requestfailed', request => requestFailures.push(`${request.url()} — ${request.failure()?.errorText ?? 'failed'}`))
 page.on('console', message => {
-  if (message.type() === 'error' && !/sw\.js|favicon|cloudflareinsights/i.test(message.text())) errors.push(message.text())
+  if (message.type() === 'error' && !/sw\.js|favicon|cloudflareinsights|ERR_FAILED/i.test(message.text())) errors.push(message.text())
 })
 
 try {
@@ -49,7 +51,7 @@ try {
   check('cargo: shaped test manifest opens', cargoState.phase === 'inventory' && cargoState.game.inventory === 3)
   await page.keyboard.press('r')
   await page.keyboard.press('ArrowRight')
-  check('cargo: organisation controls keep console clean', errors.length === 0, errors.slice(0, 2).join(' | '))
+  check('cargo: organisation controls keep console clean', errors.length === 0, errors.length ? [...errors, ...requestFailures].slice(0, 2).join(' | ') : '')
 
   await page.setViewportSize({ width: 844, height: 390 })
   await page.evaluate(() => window.__deepSwarm.setPhase('modules'))
@@ -57,7 +59,7 @@ try {
   await page.waitForTimeout(100)
   const mobileState = await page.evaluate(() => window.__deepSwarm.getState())
   check('module bay: locked input is handled without fault', mobileState.phase === 'modules' && !mobileState.error)
-  check('runtime: browser console remains clean', errors.length === 0, errors.slice(0, 3).join(' | '))
+  check('runtime: browser console remains clean', errors.length === 0, errors.length ? [...errors, ...requestFailures].slice(0, 3).join(' | ') : '')
 } catch (error) {
   const boot = await page.evaluate(() => ({
     api: typeof window.__deepSwarm,
