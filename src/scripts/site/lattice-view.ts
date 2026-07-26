@@ -52,6 +52,62 @@ export function armTwice(btn: HTMLButtonElement, label: string, fn: () => void):
 // 8 fill colours that read on both hosts' light + dark surfaces
 const FILLS = ['#5b8dd633', '#c5683f33', '#6aa84f33', '#8e63ce33', '#d0a03f33', '#4fa8a033', '#c65b7a33', '#7a7a7a33']
 
+// Obsidian-style inline markdown, rendered XSS-safe (textContent only, no innerHTML).
+// Order matters: wikilink · [text](url) · `code` · **bold** · ~~strike~~ · *italic* · _italic_.
+// Bold/strike bodies are lazy (not [^*]+/[^~]+) so they can contain nested emphasis —
+// a greedy-free class made "**a *b* c**" fall through to the single-* branch mid-string.
+const INLINE_RE = /\[\[([^\]]+)\]\]|\[([^\]]+)\]\(([^)\s]+)\)|`([^`]+)`|\*\*(.+?)\*\*|~~(.+?)~~|\*([^*\n]+)\*|_([^_\n]+)_/g
+
+/** Append `text` to `parent` as inline-markdown DOM nodes. Recurses into emphasis, never into code. */
+function renderInline(parent: HTMLElement, text: string): void {
+  let last = 0
+  // matchAll, not an exec loop: this function recurses into emphasis, and a shared /g
+  // regex's lastIndex is reset by the inner call — the outer loop then re-matches from
+  // the start forever. matchAll iterates over its own clone, so recursion can't clobber it.
+  for (const m of text.matchAll(INLINE_RE)) {
+    const at = m.index ?? 0
+    if (at > last) parent.appendChild(document.createTextNode(text.slice(last, at)))
+    if (m[1] !== undefined) {
+      const a = document.createElement('button')
+      a.className = 'lat-link'; a.dataset.link = m[1]; a.textContent = m[1]
+      parent.appendChild(a)
+    } else if (m[2] !== undefined) {
+      const a = document.createElement('a')
+      a.className = 'lat-extlink'; a.textContent = m[2]
+      if (/^https?:\/\//i.test(m[3])) { a.href = m[3]; a.target = '_blank'; a.rel = 'noopener noreferrer' }  // http(s) only — blocks javascript:/data:
+      parent.appendChild(a)
+    } else if (m[4] !== undefined) {
+      const c = document.createElement('code'); c.className = 'lat-code'; c.textContent = m[4]
+      parent.appendChild(c)
+    } else if (m[5] !== undefined) {
+      const b = document.createElement('strong'); renderInline(b, m[5]); parent.appendChild(b)
+    } else if (m[6] !== undefined) {
+      const s = document.createElement('s'); renderInline(s, m[6]); parent.appendChild(s)
+    } else {
+      const em = document.createElement('em'); renderInline(em, (m[7] ?? m[8])!); parent.appendChild(em)
+    }
+    last = at + m[0].length
+  }
+  if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)))
+}
+
+// Leading task marker: "[ ] ", "[x] ", or "- [ ] " (Obsidian checkbox syntax).
+// The "- " is captured, not skipped, so toggling can put it back — dropping it would
+// rewrite a list item into a bare marker and break round-tripping to Obsidian.
+const TASK_RE = /^(- )?\[([ xX])\]\s+/
+
+/** True if any cell in the subtree wiki-links to `title` (case-insensitive). */
+function gridLinksTo(grid: LatticeGrid, title: string): boolean {
+  const want = title.trim().toLowerCase()
+  for (const row of grid.rows) for (const cell of row) {
+    const re = /\[\[([^\]]+)\]\]/g
+    let m: RegExpExecArray | null
+    while ((m = re.exec(cell.text))) if (m[1].trim().toLowerCase() === want) return true
+    if (cell.grid && gridLinksTo(cell.grid, title)) return true
+  }
+  return false
+}
+
 export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): void {
   let sheet: LatticeSheet | null = null
   let zoomPath: string[] = []
@@ -236,6 +292,30 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
     }
   }
 
+  /** Sheets that wiki-link to `title` — the Obsidian backlinks panel. */
+  async function renderBacklinks(container: HTMLElement, title: string) {
+    const cur = sheet
+    if (!cur) return
+    const all = await adapter.loadAll()
+    if (!container.isConnected) return          // a later redraw replaced us
+    const hits = all.filter(s => s.id !== cur.id && gridLinksTo(s.root, title))
+    if (!hits.length) return
+    const card = document.createElement('div')
+    card.className = 'lat-backlinks'
+    const h = document.createElement('div')
+    h.className = 'lat-backlinks-title'
+    h.textContent = `↩ Linked from (${hits.length})`
+    card.appendChild(h)
+    for (const s of hits) {
+      const b = document.createElement('button')
+      b.className = 'lat-backlink'
+      b.textContent = s.title
+      b.addEventListener('click', () => openSheet(s))
+      card.appendChild(b)
+    }
+    container.appendChild(card)
+  }
+
   // ---- rendering ----------------------------------------------------------------
 
   function inRect(owner: string | null, r: number, c: number): boolean {
@@ -285,18 +365,19 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
         f.title = cell.text
         t.appendChild(f)
       } else {
-        const parts = cell.text.split(/(\[\[[^\]]+\]\])/)
-        for (const p of parts) {
-          const m = /^\[\[([^\]]+)\]\]$/.exec(p)
-          if (m) {
-            const a = document.createElement('button')
-            a.className = 'lat-link'
-            a.dataset.link = m[1]
-            a.textContent = m[1]
-            t.appendChild(a)
-          } else if (p) {
-            t.appendChild(document.createTextNode(p))
-          }
+        const task = TASK_RE.exec(cell.text)
+        if (task) {
+          const box = document.createElement('button')
+          box.className = 'lat-check'
+          box.dataset.check = cell.id
+          const checked = task[2] !== ' '
+          box.textContent = checked ? '☑' : '☐'
+          box.setAttribute('role', 'checkbox')
+          box.setAttribute('aria-checked', String(checked))
+          t.appendChild(box)
+          renderInline(t, cell.text.slice(task[0].length))
+        } else {
+          renderInline(t, cell.text)
         }
       }
       d.appendChild(t)
@@ -921,6 +1002,24 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
 
     wrap.addEventListener('click', (e) => {
       if (dragMoved) { dragMoved = false; return }
+      if ((e.target as HTMLElement).closest('.lat-extlink')) return   // real <a>, let the browser open it
+      const check = (e.target as HTMLElement).closest<HTMLElement>('.lat-check')
+      if (check?.dataset.check && sheet) {
+        e.stopPropagation()
+        const loc = locate(sheet.root, check.dataset.check)
+        if (loc) {
+          snapshot()
+          const t = TASK_RE.exec(loc.cell.text)
+          if (t) {
+            const nowDone = t[2] === ' '
+            setText(sheet.root, loc.cell.id, loc.cell.text.replace(TASK_RE, `${t[1] ?? ''}[${nowDone ? 'x' : ' '}] `))
+            loc.cell.done = nowDone            // keep %-done roll-ups honest
+            if (nowDone) adapter.onTick?.()
+          }
+          afterMutate()
+        }
+        return
+      }
       const link = (e.target as HTMLElement).closest<HTMLElement>('.lat-link')
       if (link?.dataset.link) {
         e.stopPropagation()
@@ -1254,6 +1353,10 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
         drawEditor()
       }
     }, { passive: false })
+
+    const backlinks = document.createElement('div')
+    el.appendChild(backlinks)
+    void renderBacklinks(backlinks, sheet.title)
 
     paintLineSel(wrap, root)
     el.focus()
