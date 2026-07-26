@@ -1,7 +1,7 @@
 // Deep Swarm app shell — scoped to /games/deep-swarm/ only; the main site's
 // worker never sees this. Network-first so a deploy is picked up on next
 // launch, cache fallback so the installed app opens offline.
-const CACHE = 'deepswarm-v18';
+const CACHE = 'deepswarm-v19';
 const SHELL = ['./index.html', './game.js', './manifest.json', './icon-192.png', './icon-512.png', './concept_art/02_cockpit_porthole_dread.png'];
 
 self.addEventListener('install', (e) => {

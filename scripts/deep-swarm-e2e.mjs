@@ -1,0 +1,72 @@
+import { chromium } from 'playwright-core'
+
+const BASE = process.argv[2] ?? 'http://127.0.0.1:4321'
+let failures = 0
+const check = (name, ok, detail = '') => {
+  console.log(`  ${ok ? '✓' : '✗'} ${name}${detail ? ` — ${detail}` : ''}`)
+  if (!ok) failures++
+}
+
+const browser = await chromium.launch({
+  channel: 'chrome',
+  headless: true,
+  args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'],
+})
+const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+const page = await context.newPage()
+const errors = []
+page.on('pageerror', error => errors.push(String(error)))
+page.on('console', message => {
+  if (message.type() === 'error' && !/sw\.js|favicon|cloudflareinsights/i.test(message.text())) errors.push(message.text())
+})
+
+try {
+  await page.goto(`${BASE}/games/deep-swarm/`, { waitUntil: 'domcontentloaded' })
+  await page.waitForFunction(() => window.__deepSwarm?.build, null, { timeout: 15000 })
+  const build = await page.evaluate(() => window.__deepSwarm.build)
+  check('boot: overhaul build exposed', /overhaul/.test(build), build)
+
+  await page.evaluate(() => window.__deepSwarm.startSeeded('boundary-soak'))
+  for (const depth of [0, 199, 200, 999, 1000, 1999, 2000, 3499, 3500, 4499, 4500, 6000]) {
+    await page.evaluate(value => window.__deepSwarm.jumpDepth(value), depth)
+    await page.waitForTimeout(120)
+    const state = await page.evaluate(() => window.__deepSwarm.getState())
+    check(`boundary: ${depth}m remains live`, !state.error && state.phase === 'playing', state.error?.message ?? state.phase)
+  }
+
+  await page.evaluate(() => {
+    window.__deepSwarm.startSeeded('systems')
+    window.__deepSwarm.damageSystem('reactor', 70)
+    window.__deepSwarm.openSystems()
+  })
+  await page.waitForTimeout(100)
+  const systemsState = await page.evaluate(() => window.__deepSwarm.getState())
+  check('systems: damage persists and screen opens', systemsState.phase === 'systems' && systemsState.game.systems.reactor.condition === 30)
+
+  await page.evaluate(() => window.__deepSwarm.giveTestCargo())
+  await page.waitForTimeout(100)
+  const cargoState = await page.evaluate(() => window.__deepSwarm.getState())
+  check('cargo: shaped test manifest opens', cargoState.phase === 'inventory' && cargoState.game.inventory === 3)
+  await page.keyboard.press('r')
+  await page.keyboard.press('ArrowRight')
+  check('cargo: organisation controls keep console clean', errors.length === 0, errors.slice(0, 2).join(' | '))
+
+  await page.setViewportSize({ width: 844, height: 390 })
+  await page.evaluate(() => window.__deepSwarm.setPhase('modules'))
+  await page.keyboard.press('1')
+  await page.waitForTimeout(100)
+  const mobileState = await page.evaluate(() => window.__deepSwarm.getState())
+  check('module bay: locked input is handled without fault', mobileState.phase === 'modules' && !mobileState.error)
+  check('runtime: browser console remains clean', errors.length === 0, errors.slice(0, 3).join(' | '))
+} catch (error) {
+  const boot = await page.evaluate(() => ({
+    api: typeof window.__deepSwarm,
+    scripts: [...document.scripts].map(script => script.src),
+    canvas: !!document.querySelector('#c'),
+  })).catch(() => null)
+  check('suite completed', false, `${String(error).slice(0, 180)}${errors.length ? ` | ${errors.slice(0, 3).join(' | ')}` : ''} | ${JSON.stringify(boot)}`)
+} finally {
+  await browser.close()
+}
+
+if (failures) process.exit(1)

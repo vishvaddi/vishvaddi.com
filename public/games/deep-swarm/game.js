@@ -358,6 +358,12 @@ const BIOME_DEFS = {
     graveyard:      { zones: ['twilight', 'midnight', 'abyssal'], line: 'Multiple wrecks on sonar. A bad place for ships. Good salvage.' },
     brine_pool:     { zones: ['abyssal', 'hadal'],     line: 'Brine pool — hypersaline. Do not linger in it. Things crystallise at its edge.' },
     crystal_cavern: { zones: ['midnight', 'abyssal', 'hadal'], line: 'Crystal formation. Kill the lights and watch what opens.' },
+    cable_graveyard:{ zones: ['twilight', 'midnight'], line: 'Cable graveyard. None of those trunks are connected. Three are drawing current.' },
+    turbine_forest: { zones: ['twilight', 'midnight', 'abyssal'], line: 'Turbine forest. The rotors stopped decades ago. One is turning against the current.' },
+    whale_cathedral:{ zones: ['midnight', 'abyssal'], line: 'Whale-fall cathedral. Ribs on sonar like roof trusses. Something built a nave.' },
+    pressure_habitat:{ zones: ['abyssal', 'hadal'], line: 'Pressure habitat ahead. Windows intact. No beacon. Interior lights are following us.' },
+    reactor_trench: { zones: ['abyssal', 'hadal'], line: 'Reactor trench. Heat without life. Machinery without an operator.' },
+    survey_array:   { zones: ['midnight', 'abyssal', 'hadal'], line: 'Survey array. Every dish is aimed at this sub, not the seabed.' },
 };
 function spawnBiomePocket(g, p) {
     const zone = musicSlot();
@@ -386,6 +392,15 @@ function spawnBiomePocket(g, p) {
         push('crystal', 7, 520);
         g.volumes.push({ kind: 'bloom', x: cx, y: cy, w: 60, h: 60, life: 90, closedT: 0 });
     }
+    else if (kind === 'cable_graveyard') { push('cable', 9, 560); push('debris', 4, 500); }
+    else if (kind === 'turbine_forest') { push('monolith', 7, 560); push('cable', 5, 520); }
+    else if (kind === 'whale_cathedral') { push('bones', 9, 600); push('spire', 3, 520); }
+    else if (kind === 'pressure_habitat') {
+        push('debris', 7, 520); push('monolith', 4, 420);
+        g.wrecks.push({ x: cx, y: cy, r: 46, loot: pickWreckLoot(), revealed: false, salvaged: false, seed: Math.random() * 100, spawnedAt: g.runTime, sealed: true });
+    }
+    else if (kind === 'reactor_trench') { push('vent', 6, 560); push('debris', 6, 540); }
+    else if (kind === 'survey_array') { push('monolith', 8, 620); push('cable', 6, 560); }
     addNereidLog(g, BIOME_DEFS[kind].line);
     g._lastBiomeAt = g.runTime;
 }
@@ -1333,6 +1348,37 @@ function mulberry32(a) {
 }
 function seedFromString(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return h >>> 0; }
 function RND() { return dailyRng ? dailyRng() : Math.random(); }
+const DEEP_SWARM_BUILD = '2026.07.26-overhaul';
+const RUN_TRACE_LIMIT = 30;
+let runTrace = [];
+let lastRuntimeError = null;
+function traceRun(g, reason = 'tick') {
+    if (!g) return;
+    const entry = {
+        at: Date.now(), reason, phase, depth: Math.floor(g.depth || 0), wave: g.wave || 0,
+        hp: Math.round((g.player && g.player.hp) || 0), battery: Math.round((g.player && g.player.battery) || 0),
+        zone: zoneFromDepth(g.depth || 0), event: g.activeEvent ? g.activeEvent.id : null,
+        enemies: (g.enemies || []).length, obstacles: (g.obstacles || []).length,
+    };
+    runTrace.push(entry);
+    if (runTrace.length > RUN_TRACE_LIMIT) runTrace.shift();
+    try { sessionStorage.setItem('deepswarm_run_trace', JSON.stringify(runTrace)); } catch {}
+}
+function captureRuntimeError(error, source) {
+    const err = error instanceof Error ? error : new Error(String(error || 'Unknown runtime error'));
+    lastRuntimeError = {
+        build: DEEP_SWARM_BUILD, source, message: err.message, stack: err.stack || '',
+        phase: typeof phase === 'string' ? phase : 'boot',
+        trace: [...runTrace],
+    };
+    try { sessionStorage.setItem('deepswarm_last_error', JSON.stringify(lastRuntimeError)); } catch {}
+    if (typeof game !== 'undefined' && game) {
+        game._runtimeError = lastRuntimeError;
+        game._deathCause = 'SYSTEM ERROR';
+    }
+}
+window.addEventListener('error', e => captureRuntimeError(e.error || e.message, 'window.error'));
+window.addEventListener('unhandledrejection', e => captureRuntimeError(e.reason, 'unhandledrejection'));
 // Fusion discovery log — persists across DSV lives (knowledge survives the hull)
 if (!meta.fusionsDiscovered) meta.fusionsDiscovered = [];
 // RESEARCH TIERS per species (BioShock camera × Subnautica scans):
@@ -1483,6 +1529,32 @@ const MODULE_DRAWBACKS = {
     grapnel:  { weight: 5 },  ram: { loud: 10 },
     mount_torp: { draw: 10, loud: 5 }, mount_harp: { weight: 6 }, mount_arc: { draw: 15 },
 };
+const SYSTEM_DEFS = [
+    { id: 'reactor', name: 'REACTOR', short: 'PWR', repair: 'circuit', effect: 'Battery capacity and weapon power' },
+    { id: 'propulsion', name: 'PROPULSION', short: 'THR', repair: 'valve', effect: 'Thrust, dash and silent running' },
+    { id: 'sonar', name: 'SONAR / COMMS', short: 'SNR', repair: 'signal', effect: 'Contacts, minimap and NEREID telemetry' },
+    { id: 'weapons', name: 'WEAPON BUS', short: 'WPN', repair: 'circuit', effect: 'Fire rate and targeting' },
+    { id: 'ballast', name: 'BALLAST / LIFE SUPPORT', short: 'BAL', repair: 'valve', effect: 'Ascent rate and reserve drain' },
+    { id: 'hull', name: 'PRESSURE HULL', short: 'HUL', repair: 'breach', effect: 'Impact and crush resistance' },
+];
+function createSubSystems() {
+    return Object.fromEntries(SYSTEM_DEFS.map(s => [s.id, { condition: 100, fault: '' }]));
+}
+function systemEfficiency(g, id) {
+    const condition = g && g.systems && g.systems[id] ? g.systems[id].condition : 100;
+    return Math.max(0.35, Math.min(1, condition / 100));
+}
+function damageSystem(g, id, amount, fault = '') {
+    const sys = g && g.systems && g.systems[id];
+    if (!sys) return;
+    sys.condition = Math.max(0, sys.condition - amount * ((g.player && g.player._systemResist) || 1));
+    if (fault) sys.fault = fault;
+    g._lastDamagedSystem = id;
+}
+function lowestSystem(g) {
+    return SYSTEM_DEFS.map(s => ({ ...s, condition: g.systems[s.id].condition }))
+        .sort((a, b) => a.condition - b.condition)[0];
+}
 function drawbackLabel(id) {
     const d = MODULE_DRAWBACKS[id]; if (!d) return '';
     const parts = [];
@@ -1493,6 +1565,10 @@ function drawbackLabel(id) {
 }
 function moduleUnlocked(m) { return (meta.research[m.req.type] || 0) >= m.req.tier; }
 function equippedInSlot(slot) { return meta.modulesEquipped.filter(id => (MODULE_DEFS.find(m => m.id === id) || {}).slot === slot).length; }
+let moduleFeedback = { text: 'Select a module to inspect, craft or equip.', color: '#7A8A9A', until: 0 };
+function setModuleFeedback(text, ok = false) {
+    moduleFeedback = { text, color: ok ? '#80E0A0' : '#FF9070', until: Date.now() + 3500 };
+}
 function matsLabel(cost) {
     return Object.keys(cost).map(k => `${cost[k]} ${BASE_MATERIALS[k].name}`).join(', ');
 }
@@ -1649,6 +1725,10 @@ const CARD_DEFS = [
     { id: 'pressure_adapt', name: 'Pressure Adapted', rarity: 'uncommon', tags: ['DEPTH'], desc: '+3% damage per 1000m depth', fn: g => { g.player._depthDmg = true; } },
     { id: 'deep_lungs', name: 'Deep Lungs', rarity: 'common', tags: ['DEPTH'], desc: 'Corruption rises 25% slower', fn: g => { g.player._corruptResist = 0.75; } },
     { id: 'thick_skin', name: 'Thick Skin', rarity: 'common', tags: ['HULL'], desc: '+2 armor', fn: g => { g.player.armor += 2; } },
+    { id: 'redundant_bus', name: 'Redundant Bus', rarity: 'uncommon', tags: ['HULL','SONAR'], desc: 'Subsystem damage reduced 40%', fn: g => { g.player._systemResist = 0.6; } },
+    { id: 'damage_control', name: 'Damage Control Party', rarity: 'rare', tags: ['HULL'], desc: 'Every level restores the weakest system', fn: g => { g.player._damageControl = true; restoreSystem(g, lowestSystem(g).id, 18); } },
+    { id: 'emergency_cells', name: 'Emergency Cells', rarity: 'uncommon', tags: ['DEPTH'], desc: 'Below 20% power, propulsion stays at 70%', fn: g => { g.player._emergencyCells = true; } },
+    { id: 'ghost_array', name: 'Ghost Array', rarity: 'rare', tags: ['SONAR','STEALTH'], desc: 'False contacts reveal themselves; pings are quieter', fn: g => { g.player._ghostArray = true; } },
     { id: 'wide_area', name: 'Wide Area', rarity: 'common', tags: ['DAMAGE'], desc: '+20% weapon area', fn: g => { g.player.areaMult *= 1.2; } },
     { id: 'rapid_fire', name: 'Rapid Fire', rarity: 'uncommon', tags: ['DAMAGE'], desc: '-15% cooldowns', fn: g => { g.player.cdMult *= 0.85; } },
     // Legendaries (existing)
@@ -1720,7 +1800,7 @@ const EVENT_DEFS = [
         choices: [
             { text: '[1] INVESTIGATE — someone might be alive', fn: g => {
                 if (Math.random() < 0.5) {
-                    for (let i = 0; i < 2; i++) { const ids = Object.keys(BELT_DEFS); const bid = ids[Math.floor(Math.random() * ids.length)]; if (g.inventory.length < 50) g.inventory.push({ id: bid, name: BELT_DEFS[bid].name, belt: true, value: BELT_DEFS[bid].value, depth: g.depth }); }
+                    for (let i = 0; i < 2; i++) { const ids = Object.keys(BELT_DEFS); const bid = ids[Math.floor(Math.random() * ids.length)]; tryStowCargo(g, { id: bid, name: BELT_DEFS[bid].name, belt: true, value: BELT_DEFS[bid].value, depth: g.depth }); }
                     g.goldEarned += 40;
                     addNereidLog(g, 'Survivor cache. No survivor. Take it — they would rather you than the water.');
                 } else {
@@ -2355,6 +2435,11 @@ const WEAPON_DEFS = {
     depthcharge: { name: 'Depth Charges', baseDmg: 35, baseCooldown: 3, baseArea: 50, desc: 'Trail bombs' },
     harpoon: { name: 'Harpoon', baseDmg: 15, baseCooldown: 1.2, baseArea: 0, desc: 'Piercing line' },
     lure: { name: 'Bio Lure', baseDmg: 50, baseCooldown: 6, baseArea: 70, desc: 'Attract + explode' },
+    cutter: { name: 'Cutting Torch', baseDmg: 32, baseCooldown: 1.4, baseArea: 105, desc: 'Brutal short-range salvage beam' },
+    decoy_launcher: { name: 'Acoustic Decoy', baseDmg: 8, baseCooldown: 7, baseArea: 150, desc: 'Throws attention away from the hull' },
+    arc_welder: { name: 'Arc Welder', baseDmg: 10, baseCooldown: 9, baseArea: 75, desc: 'Repairs the weakest system while arcing nearby' },
+    pressure_lance: { name: 'Pressure Lance', baseDmg: 45, baseCooldown: 2.6, baseArea: 24, desc: 'Slow, heavy, armour-piercing bolt' },
+    net_launcher: { name: 'Tangle Net', baseDmg: 4, baseCooldown: 6, baseArea: 130, desc: 'Roots a hunting group in place' },
     // --- EVOLVED WEAPONS (Ball X Pit combinations — full 15-pair matrix) ---
     tsunami:         { name: 'TSUNAMI',          baseDmg: 30,  baseCooldown: 2.0, baseArea: 200, desc: 'Sonar + Field = screen-wide pulse', evolved: true },
     leviathan_lance: { name: 'LEVIATHAN LANCE',  baseDmg: 80,  baseCooldown: 1.5, baseArea: 60,  desc: 'Torpedo + Harpoon = piercing explosive', evolved: true },
@@ -2380,6 +2465,7 @@ const WEAPON_DEFS = {
 // Loadout icons — every weapon reads at a glance (BioShock plasmid row)
 const WEAPON_GLYPHS = {
     sonar: '◉', torpedo: '➤', field: '✳', depthcharge: '●', harpoon: '†', lure: '❖',
+    cutter: '⌁', decoy_launcher: '♫', arc_welder: '⚒', pressure_lance: '⇥', net_launcher: '⌗',
     tsunami: '◎', leviathan_lance: '⇶', abyssal_mine: '☄', echo_salvo: '⊚', pressure_burst: '◍',
     echo_lance: '⋔', false_chorus: '♫', volt_torpedo: '⚡', cluster_warhead: '⁂', baited_warhead: '⊙',
     capacitor_nova: '✺', live_wire: '⌁', galvanic_bait: '◈', dead_spike: '‡', winch: '↩',
@@ -2648,6 +2734,7 @@ const MODE_CONFIG = {
 // How loud each weapon is — the deep hears the loud ones from far off.
 const WEAPON_NOISE = {
     sonar: 1.2, torpedo: 0.7, depthcharge: 0.9, field: 0.15, harpoon: 0.05, lure: 0.3,
+    cutter: 0.25, decoy_launcher: 0.9, arc_welder: 0.35, pressure_lance: 0.55, net_launcher: 0.12,
     tsunami: 1.0, leviathan_lance: 0.8, abyssal_mine: 0.9, maelstrom: 1.1, sirens_call: 1.0, wrath: 0.9,
     echo_salvo: 1.1, pressure_burst: 1.2, echo_lance: 0.9, false_chorus: 0.8,
     volt_torpedo: 0.6, cluster_warhead: 1.0, baited_warhead: 0.7,
@@ -2694,6 +2781,9 @@ function createGame() {
             chainTimer: 0, chainCount: 0,
             corruption: 0,
         },
+        systems: createSubSystems(),
+        _lastDamageCause: 'UNKNOWN',
+        _lastTraceSecond: -1,
         enemies: [], gems: [], projectiles: [], effects: [], floatingTexts: [],
         depthCharges: [], lures: [],
         wave: 1, waveTimer: 0, spawnTimer: 0, spawnRate: 2.4,
@@ -2736,6 +2826,7 @@ function createGame() {
         // LOOT — in-world drops + collected inventory
         lootItems: [],          // floating in the world, magneted to player like gems
         inventory: [],          // collected items, sellable for gold via TAB screen
+        cargoGrid: { cols: 8, rows: 6, selected: 0 },
         // ASCENT — once committed, you cannot dive again. Reach 0m to bank everything.
         ascending: false,
         ascendStartTime: 0,
@@ -2810,7 +2901,7 @@ function createGame() {
         }
         // Quartermaster stock stowed aboard
         for (const bid of Object.keys(meta.beltStock || {})) {
-            for (let i = 0; i < meta.beltStock[bid]; i++) g.inventory.push({ id: bid, name: BELT_DEFS[bid].name, belt: true, value: BELT_DEFS[bid].value, depth: 0 });
+            for (let i = 0; i < meta.beltStock[bid]; i++) tryStowCargo(g, { id: bid, name: BELT_DEFS[bid].name, belt: true, value: BELT_DEFS[bid].value, depth: 0 });
         }
         meta.beltStock = {};
         saveMeta();
@@ -3096,7 +3187,8 @@ function fireWeapons(g, dt) {
         w.cooldown = cd;
         // ECOLOGY: firing makes noise the deep can hear. Sonar loud, harpoon near-silent.
         if (g._modeCfg && g._modeCfg.ecology) {
-            g.noise = Math.min(2.5, (g.noise || 0) + (WEAPON_NOISE[w.id] ?? 0.4));
+            const weaponNoise = (WEAPON_NOISE[w.id] ?? 0.4) * (w.id === 'sonar' && g.player._ghostArray ? 0.55 : 1);
+            g.noise = Math.min(2.5, (g.noise || 0) + weaponNoise);
             g.lastNoise = { x: g.player.x, y: g.player.y, t: g.runTime };   // they heard THIS spot
         }
         if (w.id === 'harpoon') sampleOr('harpoon', 0.22, 0.9 + Math.random() * 0.2);
@@ -3156,6 +3248,37 @@ function fireWeapons(g, dt) {
             const lx = g.player.x + Math.cos(a) * 150;
             const ly = g.player.y + Math.sin(a) * 150;
             g.lures.push({ x: lx, y: ly, timer: 3, dmg, aoe: area, pulse: 0 });
+        }
+        if (w.id === 'cutter') {
+            const targets = g.enemies.filter(e => e.hp > 0 && dist(g.player, e) < area)
+                .sort((a, b) => dist(g.player, a) - dist(g.player, b));
+            if (targets[0]) {
+                damageEnemy(g, targets[0], dmg);
+                g.effects.push({ type: 'beam', x1: g.player.x, y1: g.player.y, x2: targets[0].x, y2: targets[0].y, color: '#FFB060', life: 0.12 });
+            }
+        }
+        if (w.id === 'decoy_launcher') {
+            const a = Math.random() * PI2;
+            const lx = g.player.x + Math.cos(a) * 260, ly = g.player.y + Math.sin(a) * 260;
+            g.deployables.push({ kind: 'decoy', x: lx, y: ly, life: 8 });
+            g.lastNoise = { x: lx, y: ly, t: g.runTime };
+        }
+        if (w.id === 'arc_welder') {
+            const weak = lowestSystem(g);
+            restoreSystem(g, weak.id, 3 + w.level);
+            for (const e of g.enemies) if (dist(g.player, e) < area) damageEnemy(g, e, dmg);
+        }
+        if (w.id === 'pressure_lance') {
+            const nearest = findNearest(g.player, g.enemies);
+            if (nearest) {
+                const a = Math.atan2(nearest.y - g.player.y, nearest.x - g.player.x);
+                g.projectiles.push({ x: g.player.x, y: g.player.y, vx: Math.cos(a) * 390, vy: Math.sin(a) * 390, dmg, aoe: area, life: 1.8, pierce: 8, color: '#D8F0FF' });
+            }
+        }
+        if (w.id === 'net_launcher') {
+            const nearest = findNearest(g.player, g.enemies);
+            const nx = nearest ? nearest.x : g.player.x, ny = nearest ? nearest.y : g.player.y - 100;
+            g.deployables.push({ kind: 'net', x: nx, y: ny, life: 8 });
         }
         // --- EVOLVED WEAPONS ---
         if (w.id === 'tsunami') {
@@ -3729,22 +3852,19 @@ const WRECK_LOOT_TABLE = [
     } },
     { id: 'cargo', label: 'CARGO CRATE', color: '#C0A060', weight: 3, give: g => {
         const v = 60 + Math.floor(Math.random() * 80);
-        if (g.inventory.length < 50) {
-            g.inventory.push({ id: 'cargo', name: 'CARGO (' + v + 'g)', cargo: true, value: v, depth: g.depth });
+        if (tryStowCargo(g, { id: 'cargo', name: 'CARGO (' + v + 'g)', cargo: true, value: v, depth: g.depth })) {
             g.floatingTexts.push({ x: g.player.x, y: g.player.y - 24, text: '+CARGO CRATE (' + v + 'g at surface)', color: '#C0A060', life: 1.8, vy: -26 });
         } else g.goldEarned += v;
     } },
     { id: 'belt_loot', label: 'UTILITY CACHE', color: '#5AD0FF', weight: 3, give: g => {
         const ids = Object.keys(BELT_DEFS);
         const bid = ids[Math.floor(Math.random() * ids.length)];
-        if (g.inventory.length < 50) {
-            g.inventory.push({ id: bid, name: BELT_DEFS[bid].name, belt: true, value: BELT_DEFS[bid].value, depth: g.depth });
+        if (tryStowCargo(g, { id: bid, name: BELT_DEFS[bid].name, belt: true, value: BELT_DEFS[bid].value, depth: g.depth })) {
             g.floatingTexts.push({ x: g.player.x, y: g.player.y - 24, text: '+' + BELT_DEFS[bid].name, color: '#5AD0FF', life: 1.6, vy: -28 });
         } else g.goldEarned += BELT_DEFS[bid].value;
     } },
     { id: 'repair_kit_loot', label: 'REPAIR KIT',  color: '#80FFA0', weight: 4, give: g => {
-        if (g.inventory.length < 50) {
-            g.inventory.push({ ...REPAIR_KIT, depth: g.depth });
+        if (tryStowCargo(g, { ...REPAIR_KIT, depth: g.depth })) {
             g.floatingTexts.push({ x: g.player.x, y: g.player.y - 24, text: '+REPAIR KIT', color: '#80FFA0', life: 1.6, vy: -28 });
         } else {
             g.goldEarned += REPAIR_KIT.value;
@@ -3843,6 +3963,9 @@ function spawnWorldObjects(g, dt) {
     // Cull obstacles the sub has fully passed (depth > obDepth + range), or that fell outside the (shrinking) circular bound.
     for (let i = g.obstacles.length - 1; i >= 0; i--) {
         const ob = g.obstacles[i];
+        if (ob.kind === 'rock' && dist(g.player, ob) < 220 && Math.abs(g.depth - ob.obDepth) < 45) {
+            ob.obDepth = g.depth;
+        }
         if ((g.depth - ob.obDepth) > OB_DEPTH_RANGE) { g.obstacles.splice(i, 1); continue; }
         const dx = ob.x - (wb.cx || 0), dy = ob.y - (wb.cy || 0);
         if (dx * dx + dy * dy > (wb.radius + 50) * (wb.radius + 50)) g.obstacles.splice(i, 1);
@@ -4241,6 +4364,7 @@ function performFusion(g, evo) {
 
 function triggerLevelUp(g) {
     sfxLevelUp();
+    if (g.player._damageControl) restoreSystem(g, lowestSystem(g).id, 12);
     g.flashTimer = 0.3;
     addNereidLog(g, getNereidLine('levelUp', g));
     // Check if can add new weapon — base weapons only; evolved weapons are earned by fusing
@@ -4640,7 +4764,7 @@ function update(dt) {
     // Frozen phases — game does not advance
     if (isPortraitPhone()) return;   // rotate-to-landscape gate; soft pause
     if (phase === 'paused') return;
-    if (phase === 'inventory') return;
+    if (phase === 'inventory' || phase === 'systems' || phase === 'maintenance') return;
     if (phase === 'runshop') return;
     // Event timer ticks even when paused for event
     if (phase === 'event' && game && game.activeEvent) {
@@ -4660,6 +4784,11 @@ function update(dt) {
         addNereidLog(g, 'Pelagos-3. No survey data. No biology on record. Everything below us was BUILT, Pilot — and something is still drawing power.');
     }
     const p = g.player;
+    const traceSecond = Math.floor(g.runTime || 0);
+    if (traceSecond !== g._lastTraceSecond) {
+        g._lastTraceSecond = traceSecond;
+        traceRun(g);
+    }
 
     // --- ECOLOGY (Phase 1): mode + stimulus bookkeeping ---
     g._modeCfg = MODE_CONFIG[g.mode] || MODE_CONFIG.swarm;
@@ -4790,7 +4919,8 @@ function update(dt) {
     if (cargoN > 4 && !g.silent) g.noise = Math.max(g.noise || 0, 0.15);
     const thrustForce = p.speed * 4 * silentMult * cargoMult; // acceleration
     const dragCoeff = 0.06; // 0 = no drag, 1 = instant stop. 0.06 = soupy underwater
-    const maxSpeed = p.speed * silentMult * cargoMult;
+    const propEfficiency = p._emergencyCells && p.battery < 20 ? Math.max(0.7, systemEfficiency(g, 'propulsion')) : systemEfficiency(g, 'propulsion');
+    const maxSpeed = p.speed * silentMult * cargoMult * propEfficiency;
 
     // --- DASH (Hades) — Space = burst of speed + i-frames ---
     if (p.dashTimer > 0) {
@@ -4844,6 +4974,15 @@ function update(dt) {
         const minD = (ob.r || 30) + 14;
         const d2 = dx * dx + dy * dy;
         if (d2 < minD * minD && d2 > 0.01) {
+            if (ob.kind === 'rock' && p.dashTimer > 0) {
+                ob._shattered = true;
+                ob.obDepth = g.depth - 100;
+                g.score = (g.score || 0) + 10;
+                g.shake = Math.max(g.shake || 0, 5);
+                g.floatingTexts.push({ x: ob.x, y: ob.y - 20, text: 'RUBBLE CLEARED', color: '#B0A090', life: 1, vy: -20 });
+                noiseBurst(0.3, 0.08, 300);
+                continue;
+            }
             const d = Math.sqrt(d2);
             const push = (minD - d);
             const nx = dx / d, ny = dy / d;
@@ -4855,6 +4994,9 @@ function update(dt) {
                 if (-dot > 120 && hardKinds[ob.kind] && p.iFrames <= 0) {
                     const dmg = Math.min(12, Math.round((-dot - 120) / 70) + 1);
                     p.hp -= dmg;
+                    g._lastDamageCause = 'IMPACT';
+                    const hitSystem = SYSTEM_DEFS[Math.floor(Math.random() * SYSTEM_DEFS.length)].id;
+                    damageSystem(g, hitSystem, 5 + dmg * 1.5, 'impact shock');
                     p.iFrames = Math.max(p.iFrames, 0.4);
                     g.shake = Math.max(g.shake || 0, 4);
                     g.floatingTexts.push({ x: p.x, y: p.y - 20, text: `-${dmg} IMPACT`, color: '#FF9060', life: 1.2, vy: -24 });
@@ -6331,12 +6473,12 @@ function update(dt) {
         }
         if (d < 18) {
             // Add to inventory if room (cap 12)
-            if (g.inventory.length < 50) {
-                g.inventory.push({ ...li.type, depth: g.depth });
+            if (tryStowCargo(g, { ...li.type, depth: g.depth })) {
                 g.floatingTexts.push({ x: li.x, y: li.y - 12, text: '+' + li.type.name, color: li.type.color, life: 1.2, vy: -28 });
                 sfxCollect();
             } else {
                 g.floatingTexts.push({ x: li.x, y: li.y - 12, text: 'INVENTORY FULL', color: '#DA4060', life: 1.0, vy: -28 });
+                continue;
             }
             g.lootItems.splice(i, 1);
         }
@@ -6409,10 +6551,13 @@ function update(dt) {
 
     // --- BATTERY drain — scales with depth (pressure-driven systems use more power) ---
     const depthFactor = 1 + Math.min(2, (g.depth || 0) / 3000);
-    g.player.battery = Math.max(0, (g.player.battery || 100) - 0.35 * depthFactor * dt);
+    const reactorPenalty = 1 / systemEfficiency(g, 'reactor');
+    const lifeSupportPenalty = 1 / systemEfficiency(g, 'ballast');
+    g.player.battery = Math.max(0, (g.player.battery || 100) - 0.35 * depthFactor * reactorPenalty * lifeSupportPenalty * dt);
     // O2/POWER as the dive clock (Dave-style): low = warning, empty = the deep takes the hull.
     if (g.player.battery <= 0.5) {
         g.player.hp -= 4 * dt; // power out — life support failing; surface or die
+        g._lastDamageCause = 'POWER FAILURE';
         if (!g._o2Crit) { g._o2Crit = true; addNereidLog(g, 'Power gone. Life support failing — SURFACE, Pilot. Now.'); g.shake = Math.min(8, (g.shake || 0) + 3); }
     } else {
         g._o2Crit = false;
@@ -6420,7 +6565,7 @@ function update(dt) {
         if (g.player.battery > 30) g._o2Warn = false;
     }
     // Hold-full pressure: salvage is left behind once the hold caps. Bank it by ascending.
-    if (g.inventory.length >= 50) { if (!g._holdFullWarned) { g._holdFullWarned = true; addNereidLog(g, 'Hold full. Salvage now spills into the dark. Ascend (Z) to bank what we have.'); } }
+    if (!cargoHasSpace(g)) { if (!g._holdFullWarned) { g._holdFullWarned = true; addNereidLog(g, 'Hold packed. Reorganise [TAB], jettison cargo, or ascend [Z].'); } }
     else g._holdFullWarned = false;
 
     // --- CRUSH DEPTH — past hull's rated depth, the trench eats the hull continuously ---
@@ -6429,6 +6574,8 @@ function update(dt) {
         const over = Math.min(1, (g.depth - crushD) / 1500);
         const crushDmg = (0.5 + over * 3.5) * dt;
         g.player.hp -= crushDmg;
+        g._lastDamageCause = 'CRUSH DEPTH';
+        damageSystem(g, 'hull', crushDmg * 0.35, 'pressure deformation');
         if (!g._lastCrushCreak || g.runTime - g._lastCrushCreak > 4 - over * 2) {
             g._lastCrushCreak = g.runTime;
             if (audioCtx) playTone(35 + Math.random() * 15, 0.6, 'sawtooth', 0.04 + over * 0.03);
@@ -6657,6 +6804,31 @@ function update(dt) {
 
     // --- ZONE AMBIENCE EVENTS (one-time and recurring atmosphere beats) ---
     if (!g.ambient) g.ambient = { events: [], titanicSeen: false, lastWreckBeat: 0, lastFlashBeat: 0, lastCreak: 0 };
+    if (g._blackoutT > 0) {
+        g._blackoutT -= dt;
+        g.lightOn = false;
+        if (g._blackoutT <= 0) {
+            g.lightOn = g._lightBeforeBlackout !== false;
+            addNereidLog(g, 'Floodlight bus restored. External contact is no longer present.');
+        }
+    }
+    if (g.depth > 1200 && g.runTime - (g.ambient.lastImpossible || 0) > 45 && Math.random() < 0.0012) {
+        g.ambient.lastImpossible = g.runTime;
+        const beats = [
+            () => {
+                addNereidLog(g, `Sonar contact: ${Math.round(g.worldBounds.radius * 3.4)} metres long. Range decreasing. No bearing.`);
+                if (!g.player._ghostArray) damageSystem(g, 'sonar', 4, 'return larger than aperture');
+            },
+            () => {
+                g._lightBeforeBlackout = g.lightOn; g._blackoutT = 4.5;
+                addNereidLog(g, 'External lamps have isolated themselves. That command did not come from this console.');
+                damageSystem(g, 'reactor', 3, 'unauthorised load');
+            },
+            () => addNereidLog(g, 'A second sub is matching our telemetry exactly. Depth. Heading. Heartbeat. It is directly below us.'),
+            () => addNereidLog(g, 'The wreck behind us has changed its running lights. It is signalling our hull number.'),
+        ];
+        beats[Math.floor(Math.random() * beats.length)]();
+    }
 
     // Titanic milestone — once when crossing ~3800m, drop a ghostly wreck silhouette and a NEREID line
     if (!g.ambient.titanicSeen && g.depth >= 3800) {
@@ -6766,6 +6938,14 @@ function update(dt) {
 }
 
 function onDeath(g) {
+    if (!g._deathCause) {
+        if (g._runtimeError) g._deathCause = 'SYSTEM ERROR';
+        else if ((g.player.battery || 0) <= 0.5) g._deathCause = 'POWER FAILURE';
+        else if (g.depth > (g.player._crushDepth || 3000)) g._deathCause = 'CRUSH DEPTH';
+        else if (g._lastAttackerTypeId) g._deathCause = 'CREATURE ATTACK';
+        else g._deathCause = g._lastDamageCause || 'HULL FAILURE';
+    }
+    traceRun(g, 'death:' + g._deathCause);
     sfxDeath();
     phase = 'death';
     // Stats that survive across DSVs (achievement-style)
@@ -6829,7 +7009,9 @@ function draw() {
     // registered in virtual coordinates; hitTapZone divides by MENU_S.
     const MENU_DRAWS = {
         title: drawTitle, intro: drawIntro, shop: drawShop, workshop: drawWorkshop,
-        modules: drawModules, contracts: drawContracts, puzzle: drawPuzzle, patch: drawPatch,
+        modules: drawModules, systems: drawSystems, maintenance: drawMaintenance, interaction: drawEventInteraction,
+        runtime_error: drawRuntimeFault,
+        contracts: drawContracts, puzzle: drawPuzzle, patch: drawPatch,
         cards: drawCardDraft, codex: drawCodex, tutorial: drawTutorial,
     };
     // Round 4/5: title + card draft + contracts get REAL mobile layouts — the
@@ -9397,6 +9579,15 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         ctx.fillStyle = batColor;
         ctx.fillText(`PWR ${Math.floor(bat)}%`, 16, h - 50);
     }
+    if (g.systems) {
+        const faults = SYSTEM_DEFS.filter(s => g.systems[s.id].condition < 70);
+        ctx.font = 'bold 9px monospace'; ctx.textAlign = 'left';
+        ctx.fillStyle = faults.length ? '#FF8060' : hexA(pal.textDim, 0.75);
+        const systemText = faults.length
+            ? faults.map(s => `${s.short} ${Math.round(g.systems[s.id].condition)}%`).join('  ')
+            : 'ALL SYSTEMS NOMINAL';
+        ctx.fillText(`[S] ${systemText}`, 16, h - 36);
+    }
     // REPAIR KITS — show count if any held
     const kits = (g.inventory || []).filter(it => it.id === 'repair_kit').length;
     if (kits > 0) {
@@ -10635,73 +10826,119 @@ function drawRunShop(w, h, g) {
 }
 
 // =====================================================================
-// INVENTORY SCREEN — TAB to open. Sell salvage for gold.
+// SPATIAL CARGO HOLD — shaped salvage competes for physical cells.
 // =====================================================================
-function drawInventory(w, h, g) {
-    ctx.fillStyle = 'rgba(0,8,16,0.88)';
-    ctx.fillRect(0, 0, w, h);
-    // Title
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#FFD040'; ctx.font = 'bold 28px monospace';
-    ctx.fillText('SALVAGE INVENTORY', w / 2, 80);
-    // Gold
-    ctx.fillStyle = '#DAA520'; ctx.font = 'bold 16px monospace';
-    ctx.fillText(`${g.goldEarned}g`, w / 2, 108);
-    // Subtitle
-    ctx.fillStyle = '#9AB0C0'; ctx.font = '11px monospace';
-    ctx.fillText(`Salvage banks when you SURFACE   ·   [TAB / ESC] close`, w / 2, 130);
-    // Materials + breakdown hint
-    const _mtxt = Object.keys(BASE_MATERIALS).map(k => `${BASE_MATERIALS[k].glyph}${meta.materials[k] || 0}`).join('  ');
-    ctx.fillStyle = '#7A8A9A'; ctx.font = '10px monospace';
-    ctx.fillText('MATERIALS  ' + _mtxt + '       [B] break down all salvage → materials', w / 2, 148);
-
-    if (g.inventory.length === 0) {
-        ctx.fillStyle = '#5A6A7A'; ctx.font = '14px monospace';
-        ctx.fillText('— hold is empty —', w / 2, h / 2);
-        return;
+function tryStowCargo(g, item) {
+    g.inventory.push(item);
+    ensureCargoLayout(g);
+    if (item._cargoX != null) return true;
+    g.inventory.splice(g.inventory.indexOf(item), 1);
+    return false;
+}
+function cargoHasSpace(g, item = { belt: true }) {
+    ensureCargoLayout(g);
+    for (let y = 0; y < g.cargoGrid.rows; y++) for (let x = 0; x < g.cargoGrid.cols; x++) {
+        if (cargoCanPlace(g, item, x, y, -1)) return true;
     }
-
-    // Grid of items
-    const cols = 4;
-    const cellW = 180, cellH = 80, gap = 12;
-    const totalW = cols * cellW + (cols - 1) * gap;
-    const startX = w / 2 - totalW / 2;
-    const startY = 170;
-    let totalValue = 0;
+    return false;
+}
+function cargoBaseSize(item) {
+    if (item.id === 'repair_kit') return [2, 1];
+    if (item.belt) return [1, 1];
+    if (item.cargo) return [2, 2];
+    if (item.rarity === 'legendary') return [3, 2];
+    if (item.rarity === 'rare') return [2, 1];
+    return [1, 1];
+}
+function cargoDims(item) {
+    const size = cargoBaseSize(item);
+    return item._cargoRot ? [size[1], size[0]] : size;
+}
+function cargoCanPlace(g, item, x, y, ignoreIndex) {
+    const [iw, ih] = cargoDims(item), grid = g.cargoGrid;
+    if (x < 0 || y < 0 || x + iw > grid.cols || y + ih > grid.rows) return false;
+    for (let i = 0; i < g.inventory.length; i++) {
+        if (i === ignoreIndex) continue;
+        const other = g.inventory[i];
+        if (other._cargoX == null) continue;
+        const [ow, oh] = cargoDims(other);
+        if (x < other._cargoX + ow && x + iw > other._cargoX && y < other._cargoY + oh && y + ih > other._cargoY) return false;
+    }
+    return true;
+}
+function ensureCargoLayout(g) {
+    if (!g.cargoGrid) g.cargoGrid = { cols: 8, rows: 6, selected: 0 };
     for (let i = 0; i < g.inventory.length; i++) {
         const item = g.inventory[i];
-        totalValue += item.value;
-        const r = Math.floor(i / cols), c = i % cols;
-        const cx2 = startX + c * (cellW + gap);
-        const cy2 = startY + r * (cellH + gap);
-        const rcol = LOOT_RARITY_COLORS[item.rarity] || '#FFF';
-        // Card body
-        ctx.fillStyle = '#0E1A28';
-        ctx.beginPath(); ctx.roundRect(cx2, cy2, cellW, cellH, 6); ctx.fill();
-        ctx.strokeStyle = rcol; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.roundRect(cx2, cy2, cellW, cellH, 6); ctx.stroke();
-        // Glyph (left)
-        const gCx = cx2 + 28, gCy = cy2 + cellH / 2;
-        drawGlow(ctx, item.color, gCx, gCy, 18, 0.5);
-        ctx.fillStyle = item.color;
-        ctx.font = 'bold 24px monospace'; ctx.textAlign = 'center';
-        ctx.fillText(item.glyph, gCx, gCy + 8);
-        // Name + rarity
-        ctx.fillStyle = '#FFF'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left';
-        ctx.fillText(item.name, cx2 + 56, cy2 + 22);
-        ctx.fillStyle = rcol; ctx.font = '11px monospace';
-        ctx.fillText(item.rarity.toUpperCase(), cx2 + 56, cy2 + 36);
-        // Value
-        ctx.fillStyle = '#DAA520'; ctx.font = 'bold 13px monospace';
-        ctx.fillText(`${item.value}g`, cx2 + 56, cy2 + 56);
+        if (item._cargoX != null && cargoCanPlace(g, item, item._cargoX, item._cargoY, i)) continue;
+        item._cargoX = null; item._cargoY = null;
+        outer: for (let y = 0; y < g.cargoGrid.rows; y++) {
+            for (let x = 0; x < g.cargoGrid.cols; x++) {
+                if (cargoCanPlace(g, item, x, y, i)) { item._cargoX = x; item._cargoY = y; break outer; }
+            }
+        }
     }
-    // Total at bottom
-    const cellsHigh = Math.ceil(g.inventory.length / cols);
-    const totalsY = startY + cellsHigh * (cellH + gap) + 24;
-    ctx.fillStyle = '#9AB0C0'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center';
-    ctx.fillText(`Surface value: ${totalValue}g`, w / 2, totalsY);
-    ctx.fillStyle = '#5A6A7A'; ctx.font = '10px monospace';
-    ctx.fillText(`${g.inventory.length}/50 slots used`, w / 2, totalsY + 16);
+    g.cargoGrid.selected = Math.max(0, Math.min(g.inventory.length - 1, g.cargoGrid.selected || 0));
+}
+function moveSelectedCargo(g, dx, dy) {
+    ensureCargoLayout(g);
+    const i = g.cargoGrid.selected, item = g.inventory[i];
+    if (!item || item._cargoX == null) return;
+    const nx = item._cargoX + dx, ny = item._cargoY + dy;
+    if (cargoCanPlace(g, item, nx, ny, i)) { item._cargoX = nx; item._cargoY = ny; }
+}
+function rotateSelectedCargo(g) {
+    ensureCargoLayout(g);
+    const i = g.cargoGrid.selected, item = g.inventory[i];
+    if (!item) return;
+    item._cargoRot = !item._cargoRot;
+    if (!cargoCanPlace(g, item, item._cargoX, item._cargoY, i)) item._cargoRot = !item._cargoRot;
+}
+function drawInventory(w, h, g) {
+    ensureCargoLayout(g);
+    ctx.fillStyle = 'rgba(0,8,16,0.94)'; ctx.fillRect(0, 0, w, h);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#FFD040'; ctx.font = 'bold 24px monospace';
+    ctx.fillText('CARGO HOLD', w / 2, 46);
+    ctx.fillStyle = '#9AB0C0'; ctx.font = '11px monospace';
+    ctx.fillText('[←↑↓→] move   [R] rotate   [Q/E] select   [J] jettison   [TAB/ESC] close', w / 2, 68);
+    const cell = Math.max(34, Math.min(58, (h - 150) / g.cargoGrid.rows));
+    const gx = Math.max(24, w / 2 - cell * g.cargoGrid.cols / 2 - 120), gy = 96;
+    for (let y = 0; y < g.cargoGrid.rows; y++) for (let x = 0; x < g.cargoGrid.cols; x++) {
+        ctx.fillStyle = '#07131c'; ctx.fillRect(gx + x * cell, gy + y * cell, cell - 2, cell - 2);
+        ctx.strokeStyle = '#1c3340'; ctx.strokeRect(gx + x * cell, gy + y * cell, cell - 2, cell - 2);
+    }
+    for (let i = 0; i < g.inventory.length; i++) {
+        const item = g.inventory[i];
+        if (item._cargoX == null) continue;
+        const [iw, ih] = cargoDims(item), selected = i === g.cargoGrid.selected;
+        const x = gx + item._cargoX * cell, y = gy + item._cargoY * cell;
+        const col = item.color || LOOT_RARITY_COLORS[item.rarity] || '#B0C0C8';
+        ctx.fillStyle = selected ? '#173342' : '#0e2430';
+        ctx.fillRect(x + 2, y + 2, iw * cell - 4, ih * cell - 4);
+        ctx.strokeStyle = selected ? '#FFD040' : col; ctx.lineWidth = selected ? 3 : 1.5;
+        ctx.strokeRect(x + 2, y + 2, iw * cell - 4, ih * cell - 4);
+        ctx.fillStyle = col; ctx.font = `bold ${Math.min(18, cell * 0.32)}px monospace`; ctx.textAlign = 'center';
+        ctx.fillText(item.glyph || '◆', x + iw * cell / 2, y + ih * cell / 2 + 5);
+    }
+    const selected = g.inventory[g.cargoGrid.selected];
+    const px = gx + g.cargoGrid.cols * cell + 26;
+    ctx.textAlign = 'left'; ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 13px monospace';
+    ctx.fillText('MANIFEST', px, gy);
+    if (selected) {
+        ctx.fillStyle = '#FFF'; ctx.font = 'bold 12px monospace';
+        ctx.fillText(selected.name, px, gy + 34);
+        ctx.fillStyle = '#DAA520'; ctx.fillText(`${selected.value || 0}g`, px, gy + 54);
+        const [sw, sh] = cargoDims(selected);
+        ctx.fillStyle = '#7A8A9A'; ctx.font = '10px monospace';
+        ctx.fillText(`${sw}×${sh} cells  ·  ${String(selected.rarity || 'utility').toUpperCase()}`, px, gy + 74);
+    }
+    const totalValue = g.inventory.reduce((sum, item) => sum + (item.value || 0), 0);
+    const used = g.inventory.reduce((sum, item) => { const [iw, ih] = cargoDims(item); return sum + (item._cargoX == null ? 0 : iw * ih); }, 0);
+    const overflow = g.inventory.filter(item => item._cargoX == null).length;
+    ctx.fillStyle = overflow ? '#FF6040' : '#9AB0C0'; ctx.font = 'bold 11px monospace';
+    ctx.fillText(`${used}/${g.cargoGrid.cols * g.cargoGrid.rows} cells  ·  surface ${totalValue}g${overflow ? `  ·  ${overflow} UNSTOWED` : ''}`, px, gy + 112);
+    ctx.fillStyle = '#7A8A9A'; ctx.font = '10px monospace';
+    ctx.fillText('[B] break down entire hold', px, gy + 140);
 }
 
 function drawDeathScreen(w, h, g) {
@@ -10732,7 +10969,7 @@ function drawDeathScreen(w, h, g) {
     } else {
         ctx.fillStyle = '#AA3040';
         ctx.font = '11px monospace';
-        ctx.fillText('HULL BREACH — DSV NEREID-II LOST', w / 2, h / 2 - 72);
+        ctx.fillText(`${g._deathCause || 'HULL FAILURE'} — DSV NEREID-II LOST`, w / 2, h / 2 - 72);
     }
 
     // Stats (compact, two columns; larger on phones)
@@ -10746,8 +10983,8 @@ function drawDeathScreen(w, h, g) {
     ];
     const rightStats = [
         { label: 'COMBO', value: g.bestCombo },
-        { label: 'GOLD', value: `+${g.goldEarned}` },
-        { label: 'CODEX', value: `${meta.loreFragments.length}/${LORE_FRAGMENTS.length}` },
+        { label: 'POWER', value: `${Math.floor(g.player.battery || 0)}%` },
+        { label: 'RATED', value: `${g.player._crushDepth || 3000}m` },
     ];
     for (let i = 0; i < leftStats.length; i++) {
         ctx.fillStyle = dPal.textDim; ctx.textAlign = 'right';
@@ -10809,6 +11046,20 @@ function drawDeathScreen(w, h, g) {
         addTapZone(w / 2 - 100, h / 2 + 100, 200, 40, 'Enter');
         addTapZone(w / 2 - 100, h / 2 + 150, 200, 40, 'u');
     }
+}
+
+function drawRuntimeFault(w, h) {
+    const fault = lastRuntimeError || { message: 'Unknown runtime fault', trace: [] };
+    ctx.fillStyle = '#060104'; ctx.fillRect(0, 0, w, h);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#FF4050'; ctx.font = 'bold 24px monospace';
+    ctx.fillText('FLIGHT COMPUTER FAULT', w / 2, 90);
+    ctx.fillStyle = '#C8A0A8'; ctx.font = '12px monospace';
+    ctx.fillText(fault.message.slice(0, 90), w / 2, 126);
+    const last = fault.trace[fault.trace.length - 1];
+    if (last) ctx.fillText(`${last.depth}m · ${last.zone} · wave ${last.wave} · ${last.hp} hull · ${last.battery}% power`, w / 2, 152);
+    ctx.fillStyle = '#7A8A9A'; ctx.font = '11px monospace';
+    ctx.fillText('Diagnostic saved in this browser session. [ENTER] return to title.', w / 2, 192);
+    addTapZone(w / 2 - 180, 170, 360, 44, 'Enter');
 }
 
 // =====================================================================
@@ -11413,11 +11664,14 @@ function drawMooring(w, h, g) {
         ctx.fillStyle = '#9AC8C0'; ctx.font = 'italic 12px monospace';
         ctx.fillText(g._mooringLine, w / 2, 254);
     }
-    if (g && g._signalEarned && !(g._theQuestion && !meta.ending)) {
+    const hasQuestion = !!(g && g._theQuestion && !meta.ending);
+    const hasLine = !!(g && g._mooringLine && !hasQuestion);
+    const signalY = hasQuestion ? 332 : hasLine ? 278 : 238;
+    if (g && g._signalEarned && !hasQuestion) {
         ctx.fillStyle = '#B0A0E8'; ctx.font = '11px monospace';
-        ctx.fillText('⌁ +' + g._signalEarned + ' SIGNAL distilled from score  ·  ⌁ ' + (meta.signal || 0) + ' banked — [C] spend in the CODEX', w / 2, 226 - 4);
+        ctx.fillText('⌁ +' + g._signalEarned + ' SIGNAL distilled  ·  ⌁ ' + (meta.signal || 0) + ' banked — [C] CODEX', w / 2, signalY);
     }
-    const actY = (g && g._theQuestion && !meta.ending) ? 344 : 268;   // the Question needs its room
+    const actY = hasQuestion ? 360 : hasLine && g._signalEarned ? 304 : hasLine ? 280 : g && g._signalEarned ? 264 : 248;
     ctx.fillStyle = '#0a1520'; ctx.fillRect(w / 2 - 180, actY, 360, 38);
     ctx.strokeStyle = '#5ADFCF'; ctx.lineWidth = 1; ctx.strokeRect(w / 2 - 180, actY, 360, 38);
     ctx.fillStyle = '#FFF'; ctx.font = '14px monospace';
@@ -11449,13 +11703,14 @@ function drawModules(w, h) {
     ctx.fillText('Materials  ' + mtxt, w / 2, 96);
     ctx.fillStyle = '#DAA520';
     ctx.fillText(`Slots — HULL ${equippedInSlot('hull')}/${MODULE_SLOTS.hull} · SYSTEMS ${equippedInSlot('systems')}/${MODULE_SLOTS.systems} · PROW ${equippedInSlot('prow')}/${MODULE_SLOTS.prow} · MOUNT ${equippedInSlot('mount')}/${MODULE_SLOTS.mount}`, w / 2, 116);
+    const rowH = Math.max(40, Math.min(52, (h - 190) / MODULE_DEFS.length));
     for (let i = 0; i < MODULE_DEFS.length; i++) {
         const m = MODULE_DEFS[i];
         const unlocked = moduleUnlocked(m);
         const owned = meta.modulesOwned.includes(m.id);
         const equipped = meta.modulesEquipped.includes(m.id);
         const affordable = canAfford(m.cost);
-        const bx = w / 2 - 330, by = 136 + i * 52, bw = 660, bh = 47;
+        const bx = w / 2 - 330, by = 136 + i * rowH, bw = 660, bh = rowH - 5;
         addTapZone(bx, by, bw, bh, String(i + 1));
         ctx.fillStyle = equipped ? '#0E2430' : '#0a1420';
         ctx.fillRect(bx, by, bw, bh);
@@ -11472,7 +11727,7 @@ function drawModules(w, h) {
             ctx.fillStyle = '#7A8A9A';
             const dbl = drawbackLabel(m.id);
             ctx.fillText(m.desc + (owned ? '' : '   —   ' + matsLabel(m.cost)), bx + 12, by + 33);
-            if (dbl) { ctx.fillStyle = '#9A6A5A'; ctx.fillText(dbl, bx + 12, by + 44); }
+            if (dbl && rowH >= 48) { ctx.fillStyle = '#9A6A5A'; ctx.fillText(dbl, bx + 12, by + 44); }
         } else {
             const def = ENEMY_TYPES[m.req.type];
             const known = (meta.research[m.req.type] || 0) >= 1;
@@ -11481,9 +11736,104 @@ function drawModules(w, h) {
         }
     }
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#888'; ctx.font = '13px monospace';
-    ctx.fillText('[1-9,0,-] craft / equip / unequip   ·   [ESC] back', w / 2, 136 + MODULE_DEFS.length * 52 + 20);
+    ctx.fillStyle = Date.now() < moduleFeedback.until ? moduleFeedback.color : '#888'; ctx.font = '12px monospace';
+    ctx.fillText(Date.now() < moduleFeedback.until ? moduleFeedback.text : '[1-9,0,-] craft / equip / unequip   ·   [ESC] back', w / 2, Math.min(h - 18, 146 + MODULE_DEFS.length * rowH));
     addTapZone(0, h - 50, w, 50, 'Escape');
+}
+
+let systemsReturnPhase = 'playing';
+let pendingRepairSystem = null;
+let maintenanceState = null;
+function restoreSystem(g, id, amount = 35) {
+    const sys = g && g.systems && g.systems[id];
+    if (!sys) return;
+    sys.condition = Math.min(100, sys.condition + amount);
+    if (sys.condition >= 70) sys.fault = '';
+    setModeMsg(g, `${SYSTEM_DEFS.find(s => s.id === id).name} RESTORED — ${Math.round(sys.condition)}%`);
+}
+function openSystemRepair(id) {
+    const def = SYSTEM_DEFS.find(s => s.id === id);
+    if (!game || !def || game.systems[id].condition >= 98) {
+        if (game) setModeMsg(game, def ? `${def.name} already nominal` : 'SYSTEM NOT FOUND');
+        return;
+    }
+    pendingRepairSystem = id;
+    if (def.repair === 'circuit') {
+        game._puzzleReward = 'system';
+        game._puzzleSystem = id;
+        openPuzzle();
+    } else if (def.repair === 'breach') {
+        openPatch('systems');
+    } else {
+        const pool = def.repair === 'signal' ? ['1', '3', '2', '4'] : ['a', 'd', 'd', 'a'];
+        maintenanceState = {
+            type: def.repair, systemId: id,
+            seq: [...pool].sort(() => Math.random() - 0.5),
+            index: 0, deadline: Date.now() + 6000, failed: false,
+        };
+        phase = 'maintenance';
+    }
+}
+function pressMaintenance(key) {
+    if (!maintenanceState || maintenanceState.failed) return;
+    if (key.toLowerCase() !== maintenanceState.seq[maintenanceState.index]) {
+        maintenanceState.failed = true;
+        setTimeout(() => { if (phase === 'maintenance') phase = 'systems'; }, 900);
+        return;
+    }
+    maintenanceState.index++;
+    if (maintenanceState.index >= maintenanceState.seq.length) {
+        restoreSystem(game, maintenanceState.systemId);
+        setTimeout(() => { if (phase === 'maintenance') phase = 'systems'; }, 700);
+    }
+}
+function drawSystems(w, h) {
+    ctx.fillStyle = '#020610'; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 24px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('SUBMERSIBLE SYSTEMS', w / 2, 52);
+    ctx.fillStyle = '#7A8A9A'; ctx.font = '11px monospace';
+    ctx.fillText('Select a damaged system to isolate and repair   ·   [ESC] return', w / 2, 74);
+    for (let i = 0; i < SYSTEM_DEFS.length; i++) {
+        const def = SYSTEM_DEFS[i], sys = game.systems[def.id];
+        const bx = w / 2 - 290, by = 100 + i * 76, bw = 580, bh = 64;
+        const col = sys.condition >= 70 ? '#5ADFCF' : sys.condition >= 35 ? '#FFD040' : '#FF6040';
+        addTapZone(bx, by, bw, bh, String(i + 1));
+        ctx.fillStyle = '#09131d'; ctx.fillRect(bx, by, bw, bh);
+        ctx.strokeStyle = col; ctx.strokeRect(bx, by, bw, bh);
+        ctx.textAlign = 'left'; ctx.fillStyle = col; ctx.font = 'bold 13px monospace';
+        ctx.fillText(`[${i + 1}] ${def.name}`, bx + 12, by + 21);
+        ctx.fillStyle = '#24303a'; ctx.fillRect(bx + 12, by + 31, 240, 8);
+        ctx.fillStyle = col; ctx.fillRect(bx + 12, by + 31, 240 * sys.condition / 100, 8);
+        ctx.fillStyle = '#9AB0C0'; ctx.font = '10px monospace';
+        ctx.fillText(`${Math.round(sys.condition)}%  ·  ${sys.fault || def.effect}`, bx + 268, by + 39);
+        ctx.fillStyle = '#607080';
+        ctx.fillText(sys.condition < 98 ? `repair: ${def.repair.toUpperCase()}` : 'NOMINAL', bx + 12, by + 55);
+    }
+}
+function drawMaintenance(w, h) {
+    const st = maintenanceState;
+    if (!st) { phase = 'systems'; return; }
+    if (!st.failed && Date.now() > st.deadline) st.failed = true;
+    ctx.fillStyle = 'rgba(0,4,10,0.94)'; ctx.fillRect(0, 0, w, h);
+    ctx.textAlign = 'center'; ctx.fillStyle = st.failed ? '#FF6040' : '#5ADFCF'; ctx.font = 'bold 22px monospace';
+    ctx.fillText(st.type === 'signal' ? 'MATCH SONAR RETURN' : 'BALANCE PRESSURE VALVES', w / 2, h / 2 - 95);
+    ctx.fillStyle = '#9AB0C0'; ctx.font = '12px monospace';
+    ctx.fillText(st.type === 'signal' ? 'Repeat the return sequence before it decays.' : 'Open the valves in the shown order.', w / 2, h / 2 - 68);
+    const labels = { a: '◀ A', d: 'D ▶', '1': '1', '2': '2', '3': '3', '4': '4' };
+    const startX = w / 2 - (st.seq.length * 82 - 12) / 2;
+    for (let i = 0; i < st.seq.length; i++) {
+        const x = startX + i * 82, done = i < st.index, current = i === st.index;
+        ctx.fillStyle = done ? '#103020' : '#101824'; ctx.fillRect(x, h / 2 - 30, 70, 64);
+        ctx.strokeStyle = done ? '#80E0A0' : current ? '#FFD040' : '#34404a'; ctx.lineWidth = current ? 3 : 1;
+        ctx.strokeRect(x, h / 2 - 30, 70, 64);
+        ctx.fillStyle = done ? '#80E0A0' : '#FFF'; ctx.font = 'bold 17px monospace';
+        ctx.fillText(labels[st.seq[i]], x + 35, h / 2 + 8);
+        if (current) addTapZone(x, h / 2 - 30, 70, 64, st.seq[i]);
+    }
+    if (st.failed) {
+        ctx.fillStyle = '#FF6040'; ctx.font = 'bold 14px monospace';
+        ctx.fillText('REPAIR FAILED — SYSTEM ISOLATED', w / 2, h / 2 + 72);
+    }
 }
 
 // ===== MOBILE CONTRACT BOARD — full-width rows, readable, thumb targets =====
@@ -11593,7 +11943,7 @@ function drawContracts(w, h) {
 // toggling a node flips it + its neighbours; bring all 9 online. Always
 // solvable (scrambled from the solved state). Solve → crafting materials.
 // =====================================================================
-let puzzleGrid = [], puzzleMoves = 0, puzzleSolved = false;
+let puzzleGrid = [], puzzleInitial = [], puzzleMoves = 0, puzzleSolved = false, puzzleHint = -1, puzzleLast = -1;
 function _puzzleToggle(grid, i) {
     const r = Math.floor(i / 3), c = i % 3;
     const idxs = [i];
@@ -11606,7 +11956,9 @@ function _puzzleToggle(grid, i) {
 // HULL BREACH — the second minigame: a timed patch sequence. Realistic sub
 // failure, hands-on fix: hit the shown thruster keys before the water wins.
 let patchState = null;
-function openPatch() {
+let patchReturnPhase = 'playing';
+function openPatch(returnPhase = 'playing') {
+    patchReturnPhase = returnPhase;
     const keys4 = ['w', 'a', 's', 'd'];
     patchState = {
         seq: Array.from({ length: 5 }, () => keys4[Math.floor(Math.random() * 4)]),
@@ -11621,9 +11973,13 @@ function pressPatch(k) {
         playTone(500 + patchState.idx * 90, 0.08, 'sine', 0.09);
         if (patchState.idx >= patchState.seq.length) {
             patchState.done = true;
+            if (pendingRepairSystem && game) {
+                restoreSystem(game, pendingRepairSystem);
+                pendingRepairSystem = null;
+            }
             if (game) { addNereidLog(game, 'Patch holding. Textbook hands, Pilot.'); game.streak = 'BREACH SEALED'; game.streakTimer = 2; }
             playSample('salvage', 0.5);
-            setTimeout(() => { if (phase === 'patch') phase = 'playing'; }, 900);
+            setTimeout(() => { if (phase === 'patch') phase = patchReturnPhase; }, 900);
         } else {
             patchState.deadline = Date.now() + patchState.window;
         }
@@ -11634,13 +11990,14 @@ function pressPatch(k) {
 function failPatch() {
     if (!patchState || patchState.done || patchState.failed) return;
     patchState.failed = true;
+    pendingRepairSystem = null;
     if (game) {
         game._leakT = 8;   // water keeps coming until it equalises
         addNereidLog(game, 'Patch slipped. We are taking water — ride it out or surface.');
         game.streak = 'BREACH — TAKING WATER'; game.streakTimer = 2.5;
     }
     noiseBurst(0.8, 0.1, 250);
-    setTimeout(() => { if (phase === 'patch') phase = 'playing'; }, 900);
+    setTimeout(() => { if (phase === 'patch') phase = patchReturnPhase; }, 900);
 }
 function drawPatch(w, h) {
     if (!patchState) { phase = 'playing'; return; }
@@ -11683,11 +12040,22 @@ function openPuzzle() {
     let n = 4 + Math.floor(Math.random() * 4);
     while (n-- > 0) _puzzleToggle(puzzleGrid, Math.floor(Math.random() * 9));
     if (puzzleGrid.every(v => v)) _puzzleToggle(puzzleGrid, 4); // never start solved
-    puzzleMoves = 0; puzzleSolved = false;
+    puzzleInitial = [...puzzleGrid];
+    puzzleMoves = 0; puzzleSolved = false; puzzleHint = -1; puzzleLast = -1;
     phase = 'puzzle';
+}
+function findPuzzleHint() {
+    let best = null;
+    for (let mask = 1; mask < 512; mask++) {
+        const test = [...puzzleGrid], moves = [];
+        for (let i = 0; i < 9; i++) if (mask & (1 << i)) { _puzzleToggle(test, i); moves.push(i); }
+        if (test.every(Boolean) && (!best || moves.length < best.length)) best = moves;
+    }
+    return best ? best[0] : -1;
 }
 function pressPuzzle(i) {
     if (puzzleSolved) return;
+    puzzleLast = i; puzzleHint = -1;
     _puzzleToggle(puzzleGrid, i);
     puzzleMoves++;
     if (puzzleGrid.every(v => v)) {
@@ -11704,6 +12072,11 @@ function pressPuzzle(i) {
             game.player.battery = Math.min(125, (game.player.battery || 100) + 25);
             addNereidLog(game, 'Junction rebuilt properly. Power restored. Good hands, Pilot.');
             game.streak = 'JUNCTION ONLINE — +25 battery'; game.streakTimer = 2.5;
+        } else if (game && game._puzzleReward === 'system' && game._puzzleSystem) {
+            const repaired = game._puzzleSystem;
+            game._puzzleReward = null;
+            game._puzzleSystem = null;
+            restoreSystem(game, repaired);
         } else {
             addMaterials({ wiring: 2, corecell: 1, crystal: 1 });
             saveMeta();
@@ -11719,9 +12092,9 @@ function drawPuzzle(w, h) {
     ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 22px monospace';
     ctx.fillText('POWER JUNCTION', w / 2, h / 2 - 150);
     ctx.fillStyle = '#9AB0C0'; ctx.font = '12px monospace';
-    ctx.fillText('Reroute the drowned circuit — bring ALL nodes online.', w / 2, h / 2 - 124);
+    ctx.fillText('Bring every node ONLINE. A press flips that node and its + neighbours.', w / 2, h / 2 - 124);
     ctx.fillStyle = '#7A8A9A'; ctx.font = '11px monospace';
-    ctx.fillText('[1-9] toggle a node + its neighbours   ·   [ESC] disengage', w / 2, h / 2 - 106);
+    ctx.fillText('[1-9] press   ·   [H] hint   ·   [R] reset   ·   [ESC] disengage', w / 2, h / 2 - 106);
     const cell = 70, gap = 10;
     const gw = 3 * cell + 2 * gap;
     const ox = w / 2 - gw / 2, oy = h / 2 - gw / 2 + 10;
@@ -11734,9 +12107,14 @@ function drawPuzzle(w, h) {
         ctx.fillStyle = on ? '#0e2630' : '#0a0f16';
         ctx.fillRect(x, y, cell, cell);
         if (on && typeof drawGlow === 'function') drawGlow(ctx, '#5ADFCF', x + cell / 2, y + cell / 2, 22, 0.6);
-        ctx.strokeStyle = on ? '#5ADFCF' : '#2a3a4a'; ctx.lineWidth = 2; ctx.strokeRect(x, y, cell, cell);
+        const affectedByLast = puzzleLast >= 0 && (() => {
+            const lr = Math.floor(puzzleLast / 3), lc = puzzleLast % 3;
+            return Math.abs(lr - r) + Math.abs(lc - c) <= 1;
+        })();
+        ctx.strokeStyle = i === puzzleHint ? '#FFD040' : affectedByLast ? '#B0A0E8' : on ? '#5ADFCF' : '#2a3a4a';
+        ctx.lineWidth = i === puzzleHint ? 4 : affectedByLast ? 3 : 2; ctx.strokeRect(x, y, cell, cell);
         ctx.fillStyle = on ? '#80F0E0' : '#3a4a5a'; ctx.font = 'bold 13px monospace';
-        ctx.fillText(String(i + 1), x + cell / 2, y + cell / 2 + 5);
+        ctx.fillText(`${i + 1} ${on ? 'ON' : 'OFF'}`, x + cell / 2, y + cell / 2 + 5);
     }
     ctx.fillStyle = puzzleSolved ? '#80E0A0' : '#9AB0C0'; ctx.font = '12px monospace';
     ctx.fillText(puzzleSolved ? 'ONLINE — salvage released' : `moves: ${puzzleMoves}`, w / 2, oy + gw + 30);
@@ -12032,6 +12410,80 @@ function drawCardDraft(w, h) {
     }
 }
 
+// --- Event interactions — one reusable mechanical grammar per incident family. ---
+let eventInteraction = null;
+const EVENT_INTERACTION_TYPES = [
+    { id: 'circuit', title: 'REROUTE CIRCUIT', keys: ['1', '4', '2', '3'], prompt: 'Close the live path in sequence.' },
+    { id: 'valve', title: 'BALANCE VALVES', keys: ['a', 'd', 'a', 'd'], prompt: 'Counter the pressure swing.' },
+    { id: 'signal', title: 'MATCH RETURN', keys: ['1', '3', '2', '4'], prompt: 'Repeat the clean sonar return.' },
+    { id: 'tether', title: 'TENSION TETHER', keys: ['w', 's', 'w', 's'], prompt: 'Hold tension without snapping the line.' },
+    { id: 'seal', title: 'SEAL CONTACT', keys: ['a', 'w', 'd', 's'], prompt: 'Lock the breach clockwise.' },
+];
+function eventInteractionType(eventId) {
+    const hash = [...String(eventId || 'event')].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) >>> 0, 0);
+    return EVENT_INTERACTION_TYPES[hash % EVENT_INTERACTION_TYPES.length];
+}
+function beginEventInteraction(g, event, choiceIndex) {
+    const choice = event.choices[choiceIndex];
+    if (/minigame|hands.on|rewire|patch it/i.test(choice.text)) {
+        g.activeEvent = null;
+        choice.fn(g);
+        if (phase === 'event') phase = 'playing';
+        return;
+    }
+    const type = eventInteractionType(event.id);
+    const sequence = [...type.keys];
+    if (choiceIndex % 2) sequence.reverse();
+    eventInteraction = {
+        type, sequence, index: 0, event, choiceIndex,
+        deadline: Date.now() + 6500, failed: false, complete: false,
+    };
+    g.activeEvent = null;
+    phase = 'interaction';
+}
+function finishEventInteraction(success) {
+    const st = eventInteraction;
+    if (!st || st.complete) return;
+    st.complete = true; st.failed = !success;
+    if (success) st.event.choices[st.choiceIndex].fn(game);
+    else if (st.event.noChoice) st.event.noChoice(game);
+    setTimeout(() => { if (phase === 'interaction') phase = 'playing'; }, 850);
+}
+function pressEventInteraction(key) {
+    const st = eventInteraction;
+    if (!st || st.complete) return;
+    if (key.toLowerCase() !== st.sequence[st.index]) { finishEventInteraction(false); return; }
+    st.index++;
+    if (st.index >= st.sequence.length) finishEventInteraction(true);
+}
+function drawEventInteraction(w, h) {
+    const st = eventInteraction;
+    if (!st) { phase = 'playing'; return; }
+    if (!st.complete && Date.now() > st.deadline) finishEventInteraction(false);
+    ctx.fillStyle = '#01050a'; ctx.fillRect(0, 0, w, h);
+    ctx.textAlign = 'center'; ctx.fillStyle = st.failed ? '#FF6040' : st.complete ? '#80E0A0' : '#C47840';
+    ctx.font = 'bold 22px monospace'; ctx.fillText(st.type.title, w / 2, h / 2 - 105);
+    ctx.fillStyle = '#9AB0C0'; ctx.font = '12px monospace'; ctx.fillText(st.type.prompt, w / 2, h / 2 - 78);
+    const labels = { a: '◀ A', d: 'D ▶', w: '▲ W', s: '▼ S', '1': '1', '2': '2', '3': '3', '4': '4' };
+    const startX = w / 2 - (st.sequence.length * 82 - 12) / 2;
+    for (let i = 0; i < st.sequence.length; i++) {
+        const x = startX + i * 82, done = i < st.index, current = i === st.index && !st.complete;
+        ctx.fillStyle = done ? '#103020' : '#101824'; ctx.fillRect(x, h / 2 - 35, 70, 64);
+        ctx.strokeStyle = done ? '#80E0A0' : current ? '#FFD040' : '#34404a'; ctx.lineWidth = current ? 3 : 1;
+        ctx.strokeRect(x, h / 2 - 35, 70, 64);
+        ctx.fillStyle = done ? '#80E0A0' : '#FFF'; ctx.font = 'bold 17px monospace';
+        ctx.fillText(labels[st.sequence[i]], x + 35, h / 2 + 3);
+        if (current) addTapZone(x, h / 2 - 35, 70, 64, st.sequence[i]);
+    }
+    const remain = Math.max(0, (st.deadline - Date.now()) / 6500);
+    ctx.fillStyle = '#231014'; ctx.fillRect(w / 2 - 150, h / 2 + 58, 300, 8);
+    ctx.fillStyle = remain > 0.3 ? '#C47840' : '#FF4030'; ctx.fillRect(w / 2 - 150, h / 2 + 58, 300 * remain, 8);
+    if (st.complete) {
+        ctx.fillStyle = st.failed ? '#FF6040' : '#80E0A0'; ctx.font = 'bold 14px monospace';
+        ctx.fillText(st.failed ? 'FAILED — CONSEQUENCE APPLIED' : 'STABLE — DECISION EXECUTED', w / 2, h / 2 + 98);
+    }
+}
+
 // --- Event Overlay ---
 function drawEventOverlay(w, h, g) {
     if (!g.activeEvent) return;
@@ -12246,9 +12698,49 @@ window.addEventListener('keydown', e => {
         phase = (phase === 'inventory') ? 'playing' : 'inventory';
         return;
     }
+    if ((phase === 'playing' || phase === 'inventory') && (e.key === 's' || e.key === 'S') && game) {
+        systemsReturnPhase = phase === 'inventory' ? 'inventory' : 'playing';
+        phase = 'systems';
+        return;
+    }
+    if (phase === 'systems' && game) {
+        if (e.key === 'Escape' || e.key === 's' || e.key === 'S') { phase = systemsReturnPhase; return; }
+        const sn = parseInt(e.key);
+        if (sn >= 1 && sn <= SYSTEM_DEFS.length) openSystemRepair(SYSTEM_DEFS[sn - 1].id);
+        return;
+    }
+    if (phase === 'maintenance') {
+        if (e.key === 'Escape') { phase = 'systems'; return; }
+        pressMaintenance(e.key);
+        return;
+    }
+    if (phase === 'interaction') {
+        pressEventInteraction(e.key);
+        return;
+    }
     // SHOP and SELLING are SURFACE-ONLY. Inventory is view-only mid-dive — salvage banks on surface.
     if (phase === 'inventory' && game) {
         if (e.key === 'Escape') { phase = 'playing'; return; }
+        ensureCargoLayout(game);
+        if (e.key === 'q' || e.key === 'Q') {
+            game.cargoGrid.selected = (game.cargoGrid.selected - 1 + game.inventory.length) % Math.max(1, game.inventory.length);
+            return;
+        }
+        if (e.key === 'e' || e.key === 'E') {
+            game.cargoGrid.selected = (game.cargoGrid.selected + 1) % Math.max(1, game.inventory.length);
+            return;
+        }
+        if (e.key === 'ArrowLeft') { moveSelectedCargo(game, -1, 0); return; }
+        if (e.key === 'ArrowRight') { moveSelectedCargo(game, 1, 0); return; }
+        if (e.key === 'ArrowUp') { moveSelectedCargo(game, 0, -1); return; }
+        if (e.key === 'ArrowDown') { moveSelectedCargo(game, 0, 1); return; }
+        if (e.key === 'r' || e.key === 'R') { rotateSelectedCargo(game); return; }
+        if ((e.key === 'j' || e.key === 'J') && game.inventory.length) {
+            const [drop] = game.inventory.splice(game.cargoGrid.selected, 1);
+            game.lootItems.push({ x: game.player.x, y: game.player.y + 35, type: drop, life: 30, dropDepth: game.depth });
+            game.cargoGrid.selected = Math.max(0, Math.min(game.inventory.length - 1, game.cargoGrid.selected));
+            return;
+        }
         // BREAK DOWN — trade held salvage's gold value for crafting materials
         if (e.key === 'b' || e.key === 'B') {
             if (game.inventory.length) {
@@ -12463,11 +12955,7 @@ window.addEventListener('keydown', e => {
     if (phase === 'event' && game && game.activeEvent) {
         const num = parseInt(e.key);
         if (num >= 1 && num <= game.activeEvent.choices.length) {
-            game.activeEvent.choices[num - 1].fn(game);
-            game.activeEvent = null;
-            // A choice may have opened a minigame (junction/patch) — only
-            // resume play if the choice didn't take us somewhere else
-            if (phase === 'event') phase = 'playing';
+            beginEventInteraction(game, game.activeEvent, num - 1);
         }
     }
     // Card draft
@@ -12496,17 +12984,37 @@ window.addEventListener('keydown', e => {
         if (e.key === '-') mn = 11;
         if (mn >= 1 && mn <= MODULE_DEFS.length) {
             const m = MODULE_DEFS[mn - 1];
-            if (!moduleUnlocked(m)) { if (audioCtx) playTone(120, 0.1, 'square', 0.04); return; }
+            if (!moduleUnlocked(m)) {
+                setModuleFeedback(`${m.name}: research ${m.req.type} to tier ${m.req.tier} (now ${meta.research[m.req.type] || 0}).`);
+                if (audioCtx) playTone(120, 0.1, 'square', 0.04);
+                return;
+            }
             if (meta.modulesEquipped.includes(m.id)) {
                 meta.modulesEquipped = meta.modulesEquipped.filter(id => id !== m.id);
+                setModuleFeedback(`${m.name} moved to stores.`, true);
             } else if (meta.modulesOwned.includes(m.id)) {
-                if (equippedInSlot(m.slot) < MODULE_SLOTS[m.slot]) meta.modulesEquipped.push(m.id);
-                else if (audioCtx) playTone(120, 0.1, 'square', 0.04);   // slot full
+                if (equippedInSlot(m.slot) < MODULE_SLOTS[m.slot]) {
+                    meta.modulesEquipped.push(m.id);
+                    setModuleFeedback(`${m.name} equipped in ${m.slot.toUpperCase()}.`, true);
+                } else {
+                    setModuleFeedback(`${m.slot.toUpperCase()} slots full — unequip another module first.`);
+                    if (audioCtx) playTone(120, 0.1, 'square', 0.04);
+                }
             } else if (spendMaterials(m.cost)) {
                 meta.modulesOwned.push(m.id);
-                if (equippedInSlot(m.slot) < MODULE_SLOTS[m.slot]) meta.modulesEquipped.push(m.id);
+                if (equippedInSlot(m.slot) < MODULE_SLOTS[m.slot]) {
+                    meta.modulesEquipped.push(m.id);
+                    setModuleFeedback(`${m.name} fabricated and equipped.`, true);
+                } else {
+                    setModuleFeedback(`${m.name} fabricated; ${m.slot.toUpperCase()} slots are full.`, true);
+                }
                 if (audioCtx) sfxLevelUp();
-            } else if (audioCtx) playTone(120, 0.1, 'square', 0.04);
+            } else {
+                const missing = Object.keys(m.cost).filter(k => (meta.materials[k] || 0) < m.cost[k])
+                    .map(k => `${m.cost[k] - (meta.materials[k] || 0)} ${BASE_MATERIALS[k].name}`).join(', ');
+                setModuleFeedback(`${m.name}: missing ${missing}.`);
+                if (audioCtx) playTone(120, 0.1, 'square', 0.04);
+            }
             saveMeta();
         }
         return;
@@ -12518,6 +13026,11 @@ window.addEventListener('keydown', e => {
     }
     if (phase === 'puzzle') {
         if (e.key === 'Escape') { phase = 'playing'; return; }
+        if (e.key === 'r' || e.key === 'R') {
+            puzzleGrid = [...puzzleInitial]; puzzleMoves = 0; puzzleSolved = false; puzzleHint = -1; puzzleLast = -1;
+            return;
+        }
+        if (e.key === 'h' || e.key === 'H') { puzzleHint = findPuzzleHint(); return; }
         const pn = parseInt(e.key);
         if (pn >= 1 && pn <= 9) pressPuzzle(pn - 1);
         return;
@@ -12715,6 +13228,11 @@ window.addEventListener('keydown', e => {
         if (e.key === 'u' || e.key === 'U') phase = 'shop';
         if (e.key === 'w' || e.key === 'W') phase = 'workshop';
     }
+    if (phase === 'runtime_error' && e.key === 'Enter') {
+        game = null;
+        phase = 'title';
+        return;
+    }
     if (phase === 'shop') {
         if (e.key === 'Escape') phase = (game && game._surfaced && game.player.hp > 0) ? 'mooring' : (meta.totalRuns > 0 && game && game.player.hp <= 0 ? 'death' : 'title');
         const upgKeys = ['damage', 'hp', 'speed', 'xpGain'];
@@ -12807,17 +13325,57 @@ function loop(ts) {
         drawFps();
         postFX(ts);
     } catch(err) {
-        // Show error on screen so we can debug
-        ctx.fillStyle = '#FF0000';
-        ctx.font = '16px monospace';
-        ctx.textAlign = 'left';
-        ctx.fillText('ERROR: ' + err.message, 20, 40);
-        ctx.fillText('Line: ' + (err.stack || '').split('\n')[1], 20, 60);
+        captureRuntimeError(err, 'animation-loop');
+        phase = 'runtime_error';
         console.error(err);
     }
     requestAnimationFrame(loop);
 }
 initPostFX();
 window.addEventListener('keydown', e => { if ((e.key === 'o' || e.key === 'O') && POSTFX.gl) { POSTFX.on = !POSTFX.on; if (POSTFX.canvas) POSTFX.canvas.style.display = POSTFX.on ? 'block' : 'none'; } });
+window.__deepSwarm = {
+    build: DEEP_SWARM_BUILD,
+    getState: () => ({
+        phase, error: lastRuntimeError, trace: [...runTrace],
+        game: game ? {
+            depth: game.depth, wave: game.wave, hp: game.player.hp, battery: game.player.battery,
+            systems: game.systems, inventory: game.inventory.length, zone: zoneFromDepth(game.depth),
+        } : null,
+    }),
+    startSeeded(seed = 'test') {
+        dailyRng = mulberry32(seedFromString(String(seed)));
+        game = createGame();
+        phase = 'playing';
+        runTrace = [];
+        traceRun(game, 'debug-start');
+        return this.getState();
+    },
+    jumpDepth(depth) {
+        if (!game) this.startSeeded('depth-jump');
+        const base = game.runTime * 5 + Math.pow(game.runTime, 1.4) * 0.05;
+        game._depthOffset = Math.max(0, Number(depth) || 0) - base;
+        game.depth = Math.max(0, Number(depth) || 0);
+        updateWorldBounds(game);
+        traceRun(game, 'debug-depth-jump');
+        return this.getState();
+    },
+    damageSystem(id, amount = 50) { damageSystem(game, id, amount, 'debug fault'); return this.getState(); },
+    openSystems() { if (game) { systemsReturnPhase = 'playing'; phase = 'systems'; } return this.getState(); },
+    giveTestCargo() {
+        if (!game) this.startSeeded('cargo-test');
+        game.inventory.push(
+            { id: 'cargo', name: 'MACHINERY CRATE', cargo: true, value: 80, rarity: 'rare', glyph: '▣', color: '#C0A060' },
+            { id: 'repair_kit', name: 'REPAIR KIT', value: 45, rarity: 'uncommon', glyph: '+', color: '#80FFA0' },
+            { id: 'belt_flare', name: 'PHOSPHOR FLARE', belt: true, value: 35, glyph: '✦', color: '#FFD080' },
+        );
+        ensureCargoLayout(game);
+        phase = 'inventory';
+        return this.getState();
+    },
+    setPhase(next) {
+        const allowed = ['playing', 'inventory', 'systems', 'modules', 'mooring', 'puzzle'];
+        if (allowed.includes(next)) phase = next;
+        return this.getState();
+    },
+};
 requestAnimationFrame(loop);
-

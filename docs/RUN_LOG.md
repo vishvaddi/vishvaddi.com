@@ -1,5 +1,16 @@
 # Run Log
 
+## 2026-07-26 — Deep Swarm systems-and-horror overhaul
+
+- Added deterministic run diagnostics, a recoverable flight-computer fault screen, rolling local traces and explicit impact, power, crush-depth and creature loss causes.
+- Verified every depth boundary from 0–6,000 m, including the reported 1,999→2,000 m transition, in headless Chrome with a clean console.
+- Rebuilt the Module Bay feedback, responsive Mooring spacing and Power Junction teaching; made ordinary rubble depth-lock while pursued and shatter under dash.
+- Added six degradable submersible systems, HUD status, inspection and circuit, breach, valve and signal repair interactions.
+- Replaced the flat 50-item inventory with an 8×6 shaped cargo hold supporting selection, movement, rotation and exact jettisoning; all loot paths now enforce physical capacity.
+- Routed ordinary incidents through five event-specific interaction grammars while preserving existing bespoke breach and junction minigames.
+- Added six authored biome pockets, instrument-driven false-contact and blackout horror beats, five functional utility weapons and four system-focused upgrades.
+- Added `npm run test:deep-swarm`, bumped the scoped offline cache and verified the production build.
+
 ## 2026-07-23 — Credential containment, Astro 7 security and Programme rail clearance
 
 - Revoked the historical GitHub personal access token and confirmed the historical ElevenLabs key was already inactive; both now return HTTP 401.
