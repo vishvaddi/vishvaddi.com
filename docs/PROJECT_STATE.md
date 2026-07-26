@@ -11,7 +11,7 @@ _Last updated: 2026-07-26 — Deep Swarm has a testable systems-and-horror overh
 - Studio PADS expands its performance grid to the available desktop height. MIX keeps all ten channels on one row and stacks compact export/device panels beside them; the responsive suite measures these layout contracts.
 - The site runs on Astro 7 with zero known npm vulnerabilities and a global type check with zero errors. Independently built game snapshots under `public/games/` are excluded from the Astro source scan.
 - `/games/deep-swarm/` now exposes deterministic diagnostics and explicit loss causes, with automated boundary coverage through 6,000 m.
-- Deep Swarm has six degradable submersible systems with hands-on repairs, spatial shaped cargo, readable Module Bay feedback, destructible rubble, event-specific interaction grammars, additional biome pockets and five utility weapons.
+- Deep Swarm has six degradable submersible systems with an event-only interactive 3D damage blueprint and hands-on repairs, spatial shaped cargo, readable Module Bay feedback, destructible rubble, event-specific interaction grammars, additional biome pockets and five utility weapons.
 - `/games/carromancy/` hosts the production Carromancy build and is listed on `/games`.
 - Carromancy remains developed in its own `vishvaddi/carromancy` repository; the site carries a built snapshot under `public/games/carromancy/`.
 - The current snapshot uses a dual Power-and-clearance victory model: rivals require 5/7/9 own-colour coins, Guardians require a settled Queen, and misses act as the limited life economy. Successful own-colour pots retain the table; opponent coins and foul debts are respotted.

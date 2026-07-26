@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-07-26 — Deep Swarm Systems control hotfix
+
+- Removed the conflicting `S` Systems binding; holding `S` now remains normal downward movement and cannot interrupt a dive.
+- Restricted the Systems blueprint to explicit hull, reactor, ballast and life-support fault events; hard impacts can damage systems but no longer open repair UI.
+- Replaced the flat diagnostic list with an interactive pseudo-3D NEREID-II blueprint: layered wireframe hull, cutaway rings, system leaders, condition cards and a pulsing fault hotspot.
+- Extended browser coverage to hold `S` during live play and trigger a controlled random incident; the complete local suite and production build pass with a clean console.
+
 ## 2026-07-26 — Deep Swarm systems-and-horror overhaul
 
 - Added deterministic run diagnostics, a recoverable flight-computer fault screen, rolling local traces and explicit impact, power, crush-depth and creature loss causes.

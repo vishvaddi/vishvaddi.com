@@ -1823,12 +1823,12 @@ const EVENT_DEFS = [
         ], noChoice: g => {} },
     { id: 'hull_breach', weight: 2, minWave: 5, title: 'HULL BREACH', text: 'A seam has let go aft of frame nineteen — the same frame the yard flagged on DSV-01\'s last refit, the note Meridian marked "acceptable within audit tolerance." Water is coming in as a flat grey blade. NEREID has already cut power to the aft bus. Seconds matter more than blame does.',
         choices: [
-            { text: '[1] PATCH IT — hands on the plate (minigame)', fn: g => { openPatch(); } },
+            { text: '[1] OPEN DAMAGE BLUEPRINT — isolate and patch', fn: g => { openSystemIncident('hull', 'frame nineteen breach', 42); } },
             { text: '[2] SEAL THE COMPARTMENT — lose the space', fn: g => { g.player.maxHp = Math.max(40, g.player.maxHp - 12); g.player.hp = Math.min(g.player.hp, g.player.maxHp); addNereidLog(g, 'Compartment sealed. Smaller boat now. Still a boat.'); } },
         ], noChoice: g => { g._leakT = 8; } },
     { id: 'junction_fault', weight: 2, minWave: 3, title: 'ELECTRICAL FAULT', text: 'Junction box four is fouled — something organic got into the cable run and died there, and the relays are arcing through it. Weapons are browning out mid-cycle. LANTERN-3\'s maintenance log ended with this exact fault signature. Its next entry was never written.',
         choices: [
-            { text: '[1] REPAIR — hands-on rewiring (minigame)', fn: g => { g._puzzleReward = 'battery'; openPuzzle(); } },
+            { text: '[1] OPEN DAMAGE BLUEPRINT — reroute the live bus', fn: g => { openSystemIncident('reactor', 'junction box four arcing', 38); } },
             { text: '[2] BYPASS — quick splice, -15 battery', fn: g => { g.player.battery = Math.max(10, (g.player.battery || 100) - 15); addNereidLog(g, 'Bypassed. The splice will hold. Probably.'); } },
         ], noChoice: g => { g.player.battery = Math.max(10, (g.player.battery || 100) - 15); } },
     { id: 'pressure_spike', minWave: 4, title: 'PRESSURE SPIKE', text: 'The trench floor is moving — a slow-motion shrug the seismographs upstairs will file as a "minor event." Down here the pressure wave arrives as a fist. The hull is singing in a key NEREID says she has heard only once before, on a recording she is not supposed to have.',
@@ -1853,17 +1853,17 @@ const EVENT_DEFS = [
         ], noChoice: g => { g.player.corruption += 10; } },
     { id: 'ballast_fault', weight: 2, minWave: 4, title: 'BALLAST FAULT', text: 'The trim pumps are hunting — cycling wrong, chasing a level they cannot find, and the boat wallows like something tired. The fault tree ends at a valve Meridian\'s procurement sheet lists as "equivalent substitute." DSV-01\'s pilot filed a complaint about that exact substitution. It was closed as resolved. Posthumously.',
         choices: [
-            { text: '[1] REWIRE THE PUMP LOGIC — hands on (minigame)', fn: g => { g._puzzleReward = 'battery'; openPuzzle(); } },
+            { text: '[1] OPEN DAMAGE BLUEPRINT — isolate trim pumps', fn: g => { openSystemIncident('ballast', 'trim pumps hunting', 36); } },
             { text: '[2] RUN HEAVY — live with it (-12% speed this dive)', fn: g => { g.player.speed *= 0.88; addNereidLog(g, 'Logged. We fly like a brick until the Mooring.'); } },
         ], noChoice: g => { g.player.speed *= 0.88; } },
     { id: 'scrubber_clog', weight: 2, minWave: 6, title: 'CO₂ SCRUBBER CLOG', text: 'The air is going stale — CO2 creeping, the first copper taste at the back of the throat. The scrubber bed is fouled with something organic that came through the intake screens, and whatever it is, it is still faintly warm. The manual gives you nineteen minutes of margin. The manual has been wrong before.',
         choices: [
-            { text: '[1] HANDS IN THE BED — clear it now (minigame)', fn: g => { openPatch(); } },
+            { text: '[1] OPEN DAMAGE BLUEPRINT — clear life support', fn: g => { openSystemIncident('ballast', 'scrubber bed fouled', 34); } },
             { text: '[2] CRACK A SPARE CELL — breathe easy, -20 battery', fn: g => { g.player.battery = Math.max(10, (g.player.battery || 100) - 20); } },
         ], noChoice: g => { g.player.hp -= 12; addNereidLog(g, 'You waited. The air noticed.'); } },
     { id: 'microfracture', weight: 2, minWave: 10, title: 'HULL MICROFRACTURE', text: 'A hairline crack in the pressure hull, too fine to see, singing at the edge of hearing — a wet-glass note that rises as you descend. NEREID is tracking it by ear. At this depth a hairline does not stay a hairline; it matures, like everything else down here, into something with appetite.',
         choices: [
-            { text: '[1] PATCH IT — before the sea finds it (minigame)', fn: g => { openPatch(); } },
+            { text: '[1] OPEN DAMAGE BLUEPRINT — locate microfracture', fn: g => { openSystemIncident('hull', 'pressure-hull microfracture', 32); } },
             { text: '[2] RESPECT IT — crush depth -600m this dive', fn: g => { g.player._crushDepth = (g.player._crushDepth || 3000) - 600; addNereidLog(g, 'New floor set. The crack keeps its own counsel below that.'); } },
         ], noChoice: g => { g._leakT = 6; } },
     { id: 'meridian_override', minWave: 8, title: 'MERIDIAN OVERRIDE', text: 'Corporate uplink, priority header, audit code CS-0. A route deviation in non-negotiable phrasing — "proceed to reference, maintain silence regarding cargo observed." They do not say why. They never said why to DSV-01 either, and her final telemetry frame came from a grid square that officially does not exist.',
@@ -5002,11 +5002,7 @@ function update(dt) {
                     g.floatingTexts.push({ x: p.x, y: p.y - 20, text: `-${dmg} IMPACT`, color: '#FF9060', life: 1.2, vy: -24 });
                     playSample('clank', Math.min(0.5, 0.2 + dmg * 0.04), 0.85 + Math.random() * 0.3);
                     noiseBurst(0.35, 0.09, 420);
-                    // Deep water forgives nothing: a hard enough hit can start a seam
-                    if (dmg >= 8 && g.depth > 1500 && Math.random() < 0.2 && phase === 'playing') {
-                        addNereidLog(g, 'That one opened a seam. Hands NOW, Pilot.');
-                        openPatch();
-                    }
+                    if (dmg >= 8 && g.depth > 1500) addNereidLog(g, 'Impact fault logged. The next incident may finish what that rock started.');
                     g.noise = Math.min(2.5, (g.noise || 0) + 0.25);
                 }
                 p._vx -= dot * nx; p._vy -= dot * ny;
@@ -9586,7 +9582,7 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         const systemText = faults.length
             ? faults.map(s => `${s.short} ${Math.round(g.systems[s.id].condition)}%`).join('  ')
             : 'ALL SYSTEMS NOMINAL';
-        ctx.fillText(`[S] ${systemText}`, 16, h - 36);
+        ctx.fillText(systemText, 16, h - 36);
     }
     // REPAIR KITS — show count if any held
     const kits = (g.inventory || []).filter(it => it.id === 'repair_kit').length;
@@ -11744,15 +11740,25 @@ function drawModules(w, h) {
 let systemsReturnPhase = 'playing';
 let pendingRepairSystem = null;
 let maintenanceState = null;
+let systemIncident = null;
+function openSystemIncident(id, fault, amount) {
+    if (!game || !game.systems[id]) return;
+    damageSystem(game, id, amount, fault);
+    systemIncident = { id, fault, openedAt: Date.now() };
+    systemsReturnPhase = 'playing';
+    phase = 'systems';
+}
 function restoreSystem(g, id, amount = 35) {
     const sys = g && g.systems && g.systems[id];
     if (!sys) return;
     sys.condition = Math.min(100, sys.condition + amount);
     if (sys.condition >= 70) sys.fault = '';
+    if (systemIncident && systemIncident.id === id) systemIncident.resolved = true;
     setModeMsg(g, `${SYSTEM_DEFS.find(s => s.id === id).name} RESTORED — ${Math.round(sys.condition)}%`);
 }
 function openSystemRepair(id) {
     const def = SYSTEM_DEFS.find(s => s.id === id);
+    if (systemIncident && systemIncident.id !== id) return;
     if (!game || !def || game.systems[id].condition >= 98) {
         if (game) setModeMsg(game, def ? `${def.name} already nominal` : 'SYSTEM NOT FOUND');
         return;
@@ -11763,7 +11769,7 @@ function openSystemRepair(id) {
         game._puzzleSystem = id;
         openPuzzle();
     } else if (def.repair === 'breach') {
-        openPatch('systems');
+        openPatch(systemIncident ? 'playing' : 'systems');
     } else {
         const pool = def.repair === 'signal' ? ['1', '3', '2', '4'] : ['a', 'd', 'd', 'a'];
         maintenanceState = {
@@ -11778,37 +11784,171 @@ function pressMaintenance(key) {
     if (!maintenanceState || maintenanceState.failed) return;
     if (key.toLowerCase() !== maintenanceState.seq[maintenanceState.index]) {
         maintenanceState.failed = true;
-        setTimeout(() => { if (phase === 'maintenance') phase = 'systems'; }, 900);
+        setTimeout(() => { if (phase === 'maintenance') phase = systemsReturnPhase; }, 900);
         return;
     }
     maintenanceState.index++;
     if (maintenanceState.index >= maintenanceState.seq.length) {
         restoreSystem(game, maintenanceState.systemId);
-        setTimeout(() => { if (phase === 'maintenance') phase = 'systems'; }, 700);
+        setTimeout(() => { if (phase === 'maintenance') phase = systemsReturnPhase; }, 700);
     }
 }
 function drawSystems(w, h) {
-    ctx.fillStyle = '#020610'; ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 24px monospace'; ctx.textAlign = 'center';
-    ctx.fillText('SUBMERSIBLE SYSTEMS', w / 2, 52);
-    ctx.fillStyle = '#7A8A9A'; ctx.font = '11px monospace';
-    ctx.fillText('Select a damaged system to isolate and repair   ·   [ESC] return', w / 2, 74);
+    if (!game || !game.systems) { phase = 'playing'; return; }
+    ctx.fillStyle = '#01070d'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(90,223,207,0.055)'; ctx.lineWidth = 1;
+    for (let x = 0; x < w; x += 24) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+    for (let y = 0; y < h; y += 24) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+
+    const targetId = systemIncident && !systemIncident.resolved ? systemIncident.id : null;
+    const pulse = 0.55 + Math.sin(performance.now() * 0.008) * 0.35;
+    ctx.textAlign = 'center'; ctx.fillStyle = targetId ? '#FF7058' : '#5ADFCF'; ctx.font = 'bold 22px monospace';
+    ctx.fillText(targetId ? 'NEREID-II · ACTIVE DAMAGE BLUEPRINT' : 'NEREID-II · SYSTEM BLUEPRINT', w / 2, 40);
+    ctx.fillStyle = '#7A9AAA'; ctx.font = '10px monospace';
+    ctx.fillText(targetId ? `FAULT: ${systemIncident.fault.toUpperCase()}  ·  SELECT THE PULSING ASSEMBLY` : 'DIAGNOSTIC VIEW', w / 2, 60);
+
+    const cx = w / 2, cy = Math.min(h * 0.48, 350);
+    const bodyL = Math.min(255, w * 0.34), bodyR = Math.min(76, h * 0.11);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.transform(1, 0, -0.18, 1, 0, 0);
+
+    for (let layer = 3; layer >= 0; layer--) {
+        const ox = layer * 4, oy = -layer * 5;
+        ctx.strokeStyle = layer ? `rgba(45,110,125,${0.08 + layer * 0.035})` : 'rgba(90,223,207,0.72)';
+        ctx.lineWidth = layer ? 1 : 1.8;
+        ctx.beginPath();
+        ctx.moveTo(-bodyL + ox, oy);
+        ctx.bezierCurveTo(-bodyL * 0.72 + ox, -bodyR + oy, bodyL * 0.55 + ox, -bodyR * 0.92 + oy, bodyL + ox, oy);
+        ctx.bezierCurveTo(bodyL * 0.58 + ox, bodyR * 0.9 + oy, -bodyL * 0.72 + ox, bodyR + oy, -bodyL + ox, oy);
+        ctx.stroke();
+    }
+    ctx.setLineDash([5, 6]); ctx.strokeStyle = 'rgba(90,223,207,0.25)';
+    ctx.beginPath(); ctx.moveTo(-bodyL, 0); ctx.lineTo(bodyL, 0); ctx.stroke(); ctx.setLineDash([]);
+    for (const rx of [-150, -80, 0, 80, 150]) {
+        const rr = bodyR * (1 - Math.pow(Math.abs(rx) / (bodyL + 25), 1.7));
+        ctx.strokeStyle = 'rgba(90,223,207,0.28)'; ctx.beginPath(); ctx.ellipse(rx, 0, 10, Math.max(18, rr), 0, 0, PI2); ctx.stroke();
+    }
+    // Cutaway machinery gives the silhouette the visual grammar of a research-sub blueprint.
+    ctx.strokeStyle = 'rgba(90,223,207,0.52)';
+    ctx.beginPath(); ctx.ellipse(94, -2, 48, 48, 0, 0, PI2); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(94, -2, 38, 38, 0, 0, PI2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(122, -7, 9, 0, PI2); ctx.stroke();
+    for (const mx of [-120, -76, -32]) {
+        ctx.strokeRect(mx, -31, 34, 62);
+        ctx.beginPath(); ctx.moveTo(mx, -21); ctx.lineTo(mx + 34, -21); ctx.moveTo(mx, 21); ctx.lineTo(mx + 34, 21); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(90,223,207,0.65)';
+    ctx.strokeRect(-48, -bodyR - 34, 82, 34);
+    ctx.beginPath(); ctx.moveTo(-32, -bodyR - 34); ctx.lineTo(-18, -bodyR - 55); ctx.lineTo(10, -bodyR - 55); ctx.lineTo(22, -bodyR - 34); ctx.stroke();
+    ctx.beginPath(); ctx.arc(bodyL - 52, -5, 20, 0, PI2); ctx.stroke();
+    for (const py of [-30, 30]) {
+        ctx.beginPath(); ctx.moveTo(-bodyL, 0); ctx.lineTo(-bodyL - 42, py); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(-bodyL - 48, py, 10, 25, 0, 0, PI2); ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(bodyL - 18, 24); ctx.lineTo(bodyL + 28, 45); ctx.lineTo(bodyL + 55, 72);
+    ctx.lineTo(bodyL + 39, 87); ctx.lineTo(bodyL + 18, 63); ctx.lineTo(bodyL - 4, 55);
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(bodyL + 28, 45, 6, 0, PI2); ctx.arc(bodyL + 55, 72, 6, 0, PI2); ctx.stroke();
+    ctx.restore();
+
+    // Overall dimensions and frame stations mirror a naval lines plan.
+    const dimY = cy - bodyR - 82;
+    ctx.strokeStyle = 'rgba(90,223,207,0.34)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - bodyL, dimY); ctx.lineTo(cx + bodyL, dimY);
+    ctx.moveTo(cx - bodyL, dimY - 6); ctx.lineTo(cx - bodyL, dimY + 6);
+    ctx.moveTo(cx + bodyL, dimY - 6); ctx.lineTo(cx + bodyL, dimY + 6);
+    ctx.stroke();
+    ctx.fillStyle = '#628995'; ctx.font = '8px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('OVERALL LENGTH 7.2 m', cx, dimY - 5);
+    const stations = [-150, -80, 0, 80, 150];
+    for (let i = 0; i < stations.length; i++) {
+        const sx = cx + stations[i];
+        ctx.beginPath(); ctx.moveTo(sx, cy + bodyR + 5); ctx.lineTo(sx, cy + bodyR + 13); ctx.stroke();
+        ctx.fillText(`F${String(i * 6 + 1).padStart(2, '0')}`, sx, cy + bodyR + 24);
+    }
+    ctx.textAlign = 'left';
+    ctx.fillText('BATTERY / POWER BUS', cx - 132, cy - 39);
+    ctx.fillText('PRESSURE SPHERE', cx + 58, cy - 58);
+    ctx.fillText('VIEWPORT', cx + bodyL - 78, cy - 34);
+    ctx.fillText('MANIPULATOR', cx + bodyL - 18, cy + 101);
+
+    const nodes = {
+        reactor: [cx - 42, cy], propulsion: [cx - bodyL + 34, cy + 18],
+        sonar: [cx + bodyL - 46, cy - 7], weapons: [cx + 42, cy - bodyR + 5],
+        ballast: [cx - 24, cy + bodyR - 8], hull: [cx + 104, cy + bodyR * 0.48],
+    };
+    const cards = {
+        reactor: [24, 118], propulsion: [24, 222], ballast: [24, 326],
+        sonar: [w - 244, 118], weapons: [w - 244, 222], hull: [w - 244, 326],
+    };
     for (let i = 0; i < SYSTEM_DEFS.length; i++) {
         const def = SYSTEM_DEFS[i], sys = game.systems[def.id];
-        const bx = w / 2 - 290, by = 100 + i * 76, bw = 580, bh = 64;
+        const [nx, ny] = nodes[def.id], [bx, by] = cards[def.id];
+        const active = !targetId || targetId === def.id;
         const col = sys.condition >= 70 ? '#5ADFCF' : sys.condition >= 35 ? '#FFD040' : '#FF6040';
-        addTapZone(bx, by, bw, bh, String(i + 1));
-        ctx.fillStyle = '#09131d'; ctx.fillRect(bx, by, bw, bh);
-        ctx.strokeStyle = col; ctx.strokeRect(bx, by, bw, bh);
-        ctx.textAlign = 'left'; ctx.fillStyle = col; ctx.font = 'bold 13px monospace';
-        ctx.fillText(`[${i + 1}] ${def.name}`, bx + 12, by + 21);
-        ctx.fillStyle = '#24303a'; ctx.fillRect(bx + 12, by + 31, 240, 8);
-        ctx.fillStyle = col; ctx.fillRect(bx + 12, by + 31, 240 * sys.condition / 100, 8);
-        ctx.fillStyle = '#9AB0C0'; ctx.font = '10px monospace';
-        ctx.fillText(`${Math.round(sys.condition)}%  ·  ${sys.fault || def.effect}`, bx + 268, by + 39);
-        ctx.fillStyle = '#607080';
-        ctx.fillText(sys.condition < 98 ? `repair: ${def.repair.toUpperCase()}` : 'NOMINAL', bx + 12, by + 55);
+        ctx.globalAlpha = active ? 1 : 0.22;
+        ctx.strokeStyle = targetId === def.id ? `rgba(255,112,88,${pulse})` : hexA(col, 0.4);
+        ctx.lineWidth = targetId === def.id ? 2.5 : 1;
+        const anchorX = bx < cx ? bx + 220 : bx;
+        ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo((nx + anchorX) / 2, ny); ctx.lineTo(anchorX, by + 34); ctx.stroke();
+        ctx.fillStyle = '#05141d'; ctx.fillRect(bx, by, 220, 68);
+        ctx.strokeStyle = targetId === def.id ? '#FF7058' : col; ctx.strokeRect(bx, by, 220, 68);
+        ctx.fillStyle = col; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left';
+        ctx.fillText(`[${i + 1}] ${def.name}`, bx + 10, by + 18);
+        ctx.fillStyle = '#203440'; ctx.fillRect(bx + 10, by + 29, 128, 7);
+        ctx.fillStyle = col; ctx.fillRect(bx + 10, by + 29, 128 * sys.condition / 100, 7);
+        ctx.fillStyle = '#8DA7B3'; ctx.font = '9px monospace';
+        const fault = sys.fault || 'nominal';
+        ctx.fillText(`${Math.round(sys.condition)}% · ${fault.slice(0, 28)}`, bx + 10, by + 51);
+        ctx.fillStyle = active && sys.condition < 98 ? '#B9DDE2' : '#58707A';
+        ctx.fillText(active && sys.condition < 98 ? `REPAIR: ${def.repair.toUpperCase()}` : 'STANDBY', bx + 10, by + 63);
+        ctx.beginPath(); ctx.arc(nx, ny, targetId === def.id ? 10 + pulse * 4 : 7, 0, PI2);
+        ctx.fillStyle = targetId === def.id ? `rgba(255,112,88,${pulse})` : col; ctx.fill();
+        if (active) {
+            addTapZone(bx, by, 220, 68, String(i + 1));
+            addTapZone(nx - 18, ny - 18, 36, 36, String(i + 1));
+        }
+        ctx.globalAlpha = 1;
     }
+
+    // Orthographic insets make the drawing readable as a real three-view blueprint.
+    const insetY = Math.min(h - 76, cy + bodyR + 126);
+    const topCx = cx - 105, topL = Math.min(142, bodyL * 0.62), topR = 24;
+    ctx.strokeStyle = 'rgba(90,223,207,0.46)'; ctx.fillStyle = '#628995'; ctx.lineWidth = 1;
+    ctx.font = '8px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('PLAN VIEW', topCx, insetY - 34);
+    ctx.beginPath();
+    ctx.moveTo(topCx - topL, insetY);
+    ctx.bezierCurveTo(topCx - topL * 0.62, insetY - topR, topCx + topL * 0.7, insetY - topR, topCx + topL, insetY);
+    ctx.bezierCurveTo(topCx + topL * 0.7, insetY + topR, topCx - topL * 0.62, insetY + topR, topCx - topL, insetY);
+    ctx.stroke();
+    ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.moveTo(topCx - topL, insetY); ctx.lineTo(topCx + topL, insetY); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(topCx - topL * 0.72, insetY); ctx.lineTo(topCx - topL * 0.9, insetY - 35);
+    ctx.moveTo(topCx - topL * 0.72, insetY); ctx.lineTo(topCx - topL * 0.9, insetY + 35);
+    ctx.moveTo(topCx + topL * 0.15, insetY); ctx.lineTo(topCx + topL * 0.03, insetY - 34);
+    ctx.moveTo(topCx + topL * 0.15, insetY); ctx.lineTo(topCx + topL * 0.03, insetY + 34);
+    ctx.stroke();
+
+    const frontCx = cx + 190, frontR = 36;
+    ctx.fillText('FRAME 19 · FORWARD', frontCx, insetY - 48);
+    ctx.beginPath(); ctx.ellipse(frontCx, insetY, frontR, frontR * 1.12, 0, 0, PI2); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(frontCx, insetY, 24, 27, 0, 0, PI2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(frontCx, insetY - 3, 9, 0, PI2); ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(frontCx - 42, insetY + 5, 8, 22, 0, 0, PI2);
+    ctx.ellipse(frontCx + 42, insetY + 5, 8, 22, 0, 0, PI2);
+    ctx.moveTo(frontCx - 58, insetY); ctx.lineTo(frontCx + 58, insetY);
+    ctx.moveTo(frontCx, insetY - 50); ctx.lineTo(frontCx, insetY + 50);
+    ctx.stroke();
+    ctx.fillText('PRESSURE SPHERE / TRIM TANKS', frontCx, insetY + 58);
+
+    ctx.textAlign = 'center'; ctx.font = 'bold 11px monospace';
+    ctx.fillStyle = targetId ? '#FFB090' : '#708894';
+    ctx.fillText(targetId ? `[${SYSTEM_DEFS.findIndex(s => s.id === targetId) + 1}] ISOLATE ${SYSTEM_DEFS.find(s => s.id === targetId).name}  ·  [ESC] ABANDON REPAIR` : '[ESC] CLOSE DIAGNOSTIC', w / 2, h - 18);
 }
 function drawMaintenance(w, h) {
     const st = maintenanceState;
@@ -12425,7 +12565,7 @@ function eventInteractionType(eventId) {
 }
 function beginEventInteraction(g, event, choiceIndex) {
     const choice = event.choices[choiceIndex];
-    if (/minigame|hands.on|rewire|patch it/i.test(choice.text)) {
+    if (/minigame|hands.on|rewire|patch it|damage blueprint/i.test(choice.text)) {
         g.activeEvent = null;
         choice.fn(g);
         if (phase === 'event') phase = 'playing';
@@ -12698,19 +12838,14 @@ window.addEventListener('keydown', e => {
         phase = (phase === 'inventory') ? 'playing' : 'inventory';
         return;
     }
-    if ((phase === 'playing' || phase === 'inventory') && (e.key === 's' || e.key === 'S') && game) {
-        systemsReturnPhase = phase === 'inventory' ? 'inventory' : 'playing';
-        phase = 'systems';
-        return;
-    }
     if (phase === 'systems' && game) {
-        if (e.key === 'Escape' || e.key === 's' || e.key === 'S') { phase = systemsReturnPhase; return; }
+        if (e.key === 'Escape') { systemIncident = null; phase = systemsReturnPhase; return; }
         const sn = parseInt(e.key);
         if (sn >= 1 && sn <= SYSTEM_DEFS.length) openSystemRepair(SYSTEM_DEFS[sn - 1].id);
         return;
     }
     if (phase === 'maintenance') {
-        if (e.key === 'Escape') { phase = 'systems'; return; }
+        if (e.key === 'Escape') { systemIncident = null; phase = systemsReturnPhase; return; }
         pressMaintenance(e.key);
         return;
     }
@@ -13361,6 +13496,11 @@ window.__deepSwarm = {
     },
     damageSystem(id, amount = 50) { damageSystem(game, id, amount, 'debug fault'); return this.getState(); },
     openSystems() { if (game) { systemsReturnPhase = 'playing'; phase = 'systems'; } return this.getState(); },
+    triggerSystemIncident(id = 'reactor', amount = 50) {
+        if (!game) this.startSeeded('system-incident');
+        openSystemIncident(id, 'debug incident', amount);
+        return this.getState();
+    },
     giveTestCargo() {
         if (!game) this.startSeeded('cargo-test');
         game.inventory.push(

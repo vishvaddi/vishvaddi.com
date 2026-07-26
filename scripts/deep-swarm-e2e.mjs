@@ -29,6 +29,11 @@ try {
   check('boot: overhaul build exposed', /overhaul/.test(build), build)
 
   await page.evaluate(() => window.__deepSwarm.startSeeded('boundary-soak'))
+  await page.keyboard.down('s')
+  await page.waitForTimeout(120)
+  const movementState = await page.evaluate(() => window.__deepSwarm.getState())
+  await page.keyboard.up('s')
+  check('controls: holding S stays in the dive', movementState.phase === 'playing', movementState.phase)
   for (const depth of [0, 199, 200, 999, 1000, 1999, 2000, 3499, 3500, 4499, 4500, 6000]) {
     await page.evaluate(value => window.__deepSwarm.jumpDepth(value), depth)
     await page.waitForTimeout(120)
@@ -38,12 +43,11 @@ try {
 
   await page.evaluate(() => {
     window.__deepSwarm.startSeeded('systems')
-    window.__deepSwarm.damageSystem('reactor', 70)
-    window.__deepSwarm.openSystems()
+    window.__deepSwarm.triggerSystemIncident('reactor', 70)
   })
   await page.waitForTimeout(100)
   const systemsState = await page.evaluate(() => window.__deepSwarm.getState())
-  check('systems: damage persists and screen opens', systemsState.phase === 'systems' && systemsState.game.systems.reactor.condition === 30)
+  check('systems: random incident opens blueprint', systemsState.phase === 'systems' && systemsState.game.systems.reactor.condition === 30)
 
   await page.evaluate(() => window.__deepSwarm.giveTestCargo())
   await page.waitForTimeout(100)
