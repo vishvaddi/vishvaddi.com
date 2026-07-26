@@ -1,5 +1,16 @@
 # Run Log
 
+## 2026-07-26 — Deep Swarm bathysphere and dive pacing
+
+- Fixed the reported flight-computer fault by initialising deployable-weapon state in every run and defensively recovering old or malformed sessions before a weapon fires.
+- Rebuilt the repair artwork around a large spherical pressure vessel with a viewport, ballast, batteries, life support, propulsion, sonar and manipulator mechanisms; aligned interactive damage nodes with those assemblies.
+- Added a distinct animated scientific plate and anatomical callouts for each of the six keystone species in the xenobiology PDA.
+- Reduced ordinary sealed-wreck frequency, limited Power Junction scrambles to two or three moves and reserved guaranteed junctions for selected authored story sites.
+- Queued routine NEREID dialogue at eight-second intervals while preserving urgent warnings.
+- Added a depth-driven lo-fi, trip-hop, hip-hop, electronic, dubstep, techno, drum-and-bass and jungle arc using genre-specific generated rhythm layers over the existing licensed tonal tracks; documented the reviewed Pixabay shortlist without importing unverified audio.
+- Extended production-browser coverage for deployable-state recovery, junction difficulty, NEREID pacing and the hadal music stage; verified the system and PDA artwork at 1,280 × 800.
+- Bumped the scoped offline cache so installed copies receive the stabilised build.
+
 ## 2026-07-26 — Deep Swarm expedition campaign
 
 - Added a five-act, five-sector expedition spine built around authored physical discovery sites, persistent survey evidence and a biosphere that changes under repeated extraction and disturbance.

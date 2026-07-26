@@ -366,7 +366,7 @@ const BIOME_DEFS = {
     survey_array:   { zones: ['midnight', 'abyssal', 'hadal'], line: 'Survey array. Every dish is aimed at this sub, not the seabed.' },
 };
 function spawnBiomePocket(g, p) {
-    const zone = musicSlot();
+    const zone = zoneFromDepth(g.depth).toLowerCase().replace('red_layer', 'hadal');
     const valid = Object.keys(BIOME_DEFS).filter(k => BIOME_DEFS[k].zones.includes(zone));
     if (!valid.length) return;
     const kind = valid[Math.floor(Math.random() * valid.length)];
@@ -397,7 +397,7 @@ function spawnBiomePocket(g, p) {
     else if (kind === 'whale_cathedral') { push('bones', 9, 600); push('spire', 3, 520); }
     else if (kind === 'pressure_habitat') {
         push('debris', 7, 520); push('monolith', 4, 420);
-        g.wrecks.push({ x: cx, y: cy, r: 46, loot: pickWreckLoot(), revealed: false, salvaged: false, seed: Math.random() * 100, spawnedAt: g.runTime, sealed: true });
+        g.wrecks.push({ x: cx, y: cy, r: 46, loot: pickWreckLoot(), revealed: false, salvaged: false, seed: Math.random() * 100, spawnedAt: g.runTime, sealed: Math.random() < 0.25 });
     }
     else if (kind === 'reactor_trench') { push('vent', 6, 560); push('debris', 6, 540); }
     else if (kind === 'survey_array') { push('monolith', 8, 620); push('cable', 6, 560); }
@@ -704,13 +704,16 @@ let musicBus = null, sfxBus = null;
 // as the depth takes over. [N] in pause still auditions per-zone picks.
 const MUSIC_ENABLED = true;
 const MUSIC = {
-    title:    { bed: null,               beats: ['pc_drifting'] },
-    sunlight: { bed: null,               beats: ['pc_lowtide', 'pc_seashells'] },
-    twilight: { bed: null,               beats: ['pc_heartocean', 'pc_discovery'] },
-    midnight: { bed: 'bed_hold',         beats: ['pc_cavern', 'pc_darkforest'] },
-    abyssal:  { bed: 'bed_heartbeat',    beats: ['pc_hide', 'pc_ghosttown'] },
-    hadal:    { bed: 'bed_heartbeat',    beats: ['pc_stranded', 'pc_silentwood'] },
-    p3:       { bed: 'bed_powerstation', beats: ['pc_mystic', 'pc_ghosttown'] },
+    title:      { bed: null,               beats: ['pc_drifting'],                    genre: 'LO-FI',      bpm: 72,  rhythm: 'lofi' },
+    lofi:       { bed: null,               beats: ['pc_lowtide', 'pc_seashells'],     genre: 'LO-FI',      bpm: 76,  rhythm: 'lofi' },
+    triphop:    { bed: null,               beats: ['pc_heartocean', 'pc_discovery'],  genre: 'TRIP-HOP',   bpm: 84,  rhythm: 'triphop' },
+    hiphop:     { bed: 'bed_hold',         beats: ['pc_cavern', 'pc_discovery'],      genre: 'HIP-HOP',    bpm: 94,  rhythm: 'hiphop' },
+    electronic: { bed: 'bed_hold',         beats: ['pc_darkforest', 'pc_mystic'],     genre: 'ELECTRONIC', bpm: 112, rhythm: 'electronic' },
+    dubstep:    { bed: 'bed_heartbeat',    beats: ['pc_hide', 'pc_ghosttown'],        genre: 'DUBSTEP',    bpm: 140, rhythm: 'dubstep' },
+    techno:     { bed: 'bed_heartbeat',    beats: ['pc_stranded', 'pc_mystic'],       genre: 'TECHNO',     bpm: 128, rhythm: 'techno' },
+    dnb:        { bed: 'bed_heartbeat',    beats: ['pc_silentwood', 'pc_stranded'],   genre: 'DRUM+BASS',  bpm: 174, rhythm: 'dnb' },
+    jungle:     { bed: 'bed_powerstation', beats: ['pc_ghosttown', 'pc_silentwood'],  genre: 'JUNGLE',     bpm: 168, rhythm: 'jungle' },
+    p3:         { bed: 'bed_powerstation', beats: ['pc_mystic', 'pc_ghosttown'],      genre: 'MACHINE DUB',bpm: 132, rhythm: 'dubstep' },
 };
 const _musicBuf = {};
 let _music = { slot: null, layers: [], switching: false };
@@ -732,7 +735,8 @@ function musicSlot() {
     if (!game || (phase !== 'playing' && phase !== 'paused' && phase !== 'levelup' && phase !== 'event' && phase !== 'gameover')) return null;
     if (game.moon === 'p3') return 'p3';
     const d = game.depth || 0;
-    return d < 200 ? 'sunlight' : d < 1000 ? 'twilight' : d < 2000 ? 'midnight' : d < 4000 ? 'abyssal' : 'hadal';
+    return d < 250 ? 'lofi' : d < 850 ? 'triphop' : d < 1450 ? 'hiphop' : d < 2200 ? 'electronic'
+        : d < 3000 ? 'dubstep' : d < 3900 ? 'techno' : d < 4900 ? 'dnb' : 'jungle';
 }
 
 function beatFor(slot) {
@@ -740,6 +744,47 @@ function beatFor(slot) {
     if (!def || !def.beats.length) return null;
     const pick = (meta.beatPick && meta.beatPick[slot]) || 0;
     return def.beats[pick % def.beats.length];
+}
+
+function rhythmBuffer(def) {
+    const cacheKey = `_rhythm_${def.rhythm}_${def.bpm}`;
+    if (_musicBuf[cacheKey]) return _musicBuf[cacheKey];
+    const rate = audioCtx.sampleRate, step = 60 / def.bpm / 4, bars = 4;
+    const length = Math.ceil(step * 16 * bars * rate);
+    const buffer = audioCtx.createBuffer(1, length, rate), data = buffer.getChannelData(0);
+    const patterns = {
+        lofi:       { kick: [0, 7, 10], snare: [4, 12], hat: [2, 6, 10, 14], swing: 0.12 },
+        triphop:    { kick: [0, 3, 10], snare: [4, 12], hat: [2, 6, 11, 14], swing: 0.18 },
+        hiphop:     { kick: [0, 6, 10, 15], snare: [4, 12], hat: [0, 2, 6, 8, 10, 14], swing: 0.1 },
+        electronic: { kick: [0, 4, 8, 12], snare: [4, 12], hat: [2, 6, 10, 14], swing: 0 },
+        dubstep:    { kick: [0, 10], snare: [4, 12], hat: [2, 7, 10, 14, 15], swing: 0.04 },
+        techno:     { kick: [0, 4, 8, 12], snare: [4, 12], hat: [2, 6, 10, 14], swing: 0 },
+        dnb:        { kick: [0, 3, 10], snare: [4, 12], hat: [0, 2, 6, 8, 10, 14, 15], swing: 0.03 },
+        jungle:     { kick: [0, 3, 7, 10, 15], snare: [4, 9, 12], hat: [0, 2, 5, 6, 8, 10, 13, 14, 15], swing: 0.08 },
+    };
+    const p = patterns[def.rhythm] || patterns.lofi;
+    let seed = 173;
+    const noise = () => { seed = (seed * 16807) % 2147483647; return seed / 1073741824 - 1; };
+    const hit = (at, kind, gain) => {
+        const start = Math.floor(at * rate), dur = Math.floor((kind === 'kick' ? 0.22 : kind === 'snare' ? 0.14 : 0.045) * rate);
+        for (let i = 0; i < dur && start + i < data.length; i++) {
+            const t = i / rate, env = Math.exp(-t * (kind === 'kick' ? 18 : kind === 'snare' ? 28 : 65));
+            const sample = kind === 'kick'
+                ? Math.sin(PI2 * (72 - t * 155) * t)
+                : noise() * (kind === 'snare' ? 0.72 : 0.34) + (kind === 'snare' ? Math.sin(PI2 * 180 * t) * 0.22 : 0);
+            data[start + i] += sample * env * gain;
+        }
+    };
+    for (let bar = 0; bar < bars; bar++) {
+        for (let s = 0; s < 16; s++) {
+            const at = (bar * 16 + s) * step + (s % 2 ? step * p.swing : 0);
+            if (p.kick.includes(s)) hit(at, 'kick', 0.72);
+            if (p.snare.includes(s)) hit(at, 'snare', 0.52);
+            if (p.hat.includes(s)) hit(at, 'hat', def.rhythm === 'jungle' || def.rhythm === 'dnb' ? 0.34 : 0.22);
+        }
+    }
+    _musicBuf[cacheKey] = buffer;
+    return buffer;
 }
 
 async function startMusicSlot(slot) {
@@ -761,14 +806,15 @@ async function startMusicSlot(slot) {
     const wanted = def.bed ? [{ name: def.bed, vol: 0.34, kind: 'bed' }] : [];
     const beat = beatFor(slot);
     if (beat) wanted.push({ name: beat, vol: 0.5, kind: 'beat' });
+    if (def.rhythm) wanted.push({ name: `_rhythm_${def.rhythm}`, vol: slot === 'lofi' || slot === 'title' ? 0.08 : 0.13, kind: 'rhythm', procedural: true });
     for (const wtd of wanted) {
-        const buf = await musicBuffer(wtd.name);
+        const buf = wtd.procedural ? rhythmBuffer(def) : await musicBuffer(wtd.name);
         if (!buf || _music.slot !== slot) continue;   // file missing, or zone moved on mid-decode
         const src = audioCtx.createBufferSource();
         src.buffer = buf; src.loop = true;
         const g = audioCtx.createGain(); g.gain.value = 0;
         let head = src, filter = null;
-        if (wtd.kind === 'beat') {
+        if (wtd.kind === 'beat' || wtd.kind === 'rhythm') {
             filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 9000;
             src.connect(filter); head = filter;
         }
@@ -807,7 +853,7 @@ function updateMusic(dt) {
     // Corruption drags the beat under: slight detune, then 60→90 the beat
     // "drowns" (lowpass sweeps 9kHz→300Hz) leaving bed + heartbeat.
     for (const L of _music.layers) {
-        if (L.kind !== 'beat') continue;
+        if (L.kind !== 'beat' && L.kind !== 'rhythm') continue;
         try { L.src.playbackRate.value = 1 - Math.min(0.035, corr * 0.0004); } catch (err) { /* stopped */ }
         if (L.filter) {
             const clear = corr <= 60 ? 1 : Math.max(0, 1 - (corr - 60) / 30);
@@ -1348,7 +1394,7 @@ function mulberry32(a) {
 }
 function seedFromString(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return h >>> 0; }
 function RND() { return dailyRng ? dailyRng() : Math.random(); }
-const DEEP_SWARM_BUILD = '2026.07.26-campaign';
+const DEEP_SWARM_BUILD = '2026.07.26-blueprint';
 const RUN_TRACE_LIMIT = 30;
 let runTrace = [];
 let lastRuntimeError = null;
@@ -2109,10 +2155,26 @@ function nereidFilter(g, text) {
     return t;
 }
 function addNereidLog(g, text) {
-    if (!text) return;
+    if (!g || !text) return;
     if (!g.nereidLog) g.nereidLog = [];
-    g.nereidLog.unshift({ text: nereidFilter(g, text), time: g.runTime });
+    if (!g.nereidQueue) g.nereidQueue = [];
+    const filtered = nereidFilter(g, text);
+    const urgent = /\b(NOW|SURFACE|ALERT|AMBUSH|FAILING|BREACH|TAKING WATER|MARKED|CRITICAL|IMPACT)\b/i.test(text);
+    if (!urgent && (g.runTime || 0) - (g._nereidLastAt || 0) < 8) {
+        if (!g.nereidQueue.some(item => item.text === filtered)) g.nereidQueue.push({ text: filtered, queuedAt: g.runTime || 0 });
+        if (g.nereidQueue.length > 4) g.nereidQueue.shift();
+        return;
+    }
+    g.nereidLog.unshift({ text: filtered, time: g.runTime });
     if (g.nereidLog.length > 5) g.nereidLog.pop();
+    g._nereidLastAt = g.runTime || 0;
+}
+function updateNereidCadence(g) {
+    if (!g.nereidQueue || !g.nereidQueue.length || (g.runTime || 0) - (g._nereidLastAt || 0) < 8) return;
+    const next = g.nereidQueue.shift();
+    g.nereidLog.unshift({ text: next.text, time: g.runTime });
+    if (g.nereidLog.length > 5) g.nereidLog.pop();
+    g._nereidLastAt = g.runTime || 0;
 }
 
 // Role-based field notes revealed by research tiers (bespoke per-creature
@@ -2980,7 +3042,7 @@ function createGame() {
         _lastDamageCause: 'UNKNOWN',
         _lastTraceSecond: -1,
         enemies: [], gems: [], projectiles: [], effects: [], floatingTexts: [],
-        depthCharges: [], lures: [],
+        depthCharges: [], lures: [], deployables: [],
         wave: 1, waveTimer: 0, spawnTimer: 0, spawnRate: 2.4,
         runTime: 0, kills: 0, gemsCollected: 0, comboTimer: 0, combo: 0, bestCombo: 0,
         streak: '', streakTimer: 0,
@@ -3372,6 +3434,7 @@ function firePing(g) {
 
 function fireWeapons(g, dt) {
     if ((g.player.battery || 100) <= 1) return;
+    if (!g.deployables) g.deployables = [];
     // SILENT RUNNING — weapons hold fire; cooldowns still recover, ready the moment you go loud
     if (g.silent) {
         for (const w of g.player.weapons) w.cooldown = Math.max(0, w.cooldown - dt);
@@ -4209,7 +4272,7 @@ function spawnWorldObjects(g, dt) {
             salvaged: false,
             // A third of hulls sank with their bays LOCKED — the junction
             // minigame is the crowbar, and sealed cargo pays half again more
-            sealed: Math.random() < 0.3,
+            sealed: Math.random() < 0.12,
             seed: Math.random() * 100,
             spawnedAt: g.runTime,
             obDepth,
@@ -4226,7 +4289,9 @@ function spawnWorldObjects(g, dt) {
             x: g.player.x + Math.cos(a) * range, y: g.player.y + Math.sin(a) * range,
             r: 48, loot: WRECK_LOOT_TABLE.find(l => l.id === 'weapon_lv') || pickWreckLoot(),
             name: storySite.name, log: storySite.log, storySite: storySite.id, storyFragment: storySite.fragment,
-            revealed: false, salvaged: false, sealed: true, seed: Math.random() * 100,
+            revealed: false, salvaged: false,
+            sealed: storySite.id === 'nereid_husk' || storySite.id === 'aoshen_relay',
+            seed: Math.random() * 100,
             spawnedAt: g.runTime, obDepth: g.depth + 8,
         });
         addNereidLog(g, `Priority site detected: ${storySite.name}. Archive carrier intact.`);
@@ -5137,6 +5202,7 @@ function update(dt) {
     dt *= timeScale;
 
     g.runTime += dt;
+    updateNereidCadence(g);
     g.shake = Math.min(g.shake, 5) * 0.85; // hard cap 5px, fast decay
     if (g.flashTimer > 0) g.flashTimer -= realDt; // flash uses real time
     if (g.sonarReveal > 0) g.sonarReveal = Math.max(0, g.sonarReveal - dt * (p._passiveSonar ? 0.25 : 0.5));
@@ -12161,77 +12227,88 @@ function drawSystems(w, h) {
     ctx.fillText(targetId ? `FAULT: ${systemIncident.fault.toUpperCase()}  ·  SELECT THE PULSING ASSEMBLY` : 'DIAGNOSTIC VIEW', w / 2, 60);
 
     const cx = w / 2, cy = Math.min(h * 0.48, 350);
-    const bodyL = Math.min(255, w * 0.34), bodyR = Math.min(76, h * 0.11);
+    const bodyR = Math.min(112, h * 0.17), bodyL = bodyR + 58;
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.transform(1, 0, -0.18, 1, 0, 0);
+    ctx.transform(1, 0, -0.12, 1, 0, 0);
+    ctx.fillStyle = 'rgba(7,28,36,0.72)';
+    ctx.strokeStyle = 'rgba(90,223,207,0.78)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(20, 0, bodyR, 0, PI2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(90,223,207,0.24)'; ctx.lineWidth = 1;
+    for (const r of [bodyR - 8, bodyR - 17]) { ctx.beginPath(); ctx.arc(20, 0, r, 0, PI2); ctx.stroke(); }
+    for (let a = 0; a < PI2; a += Math.PI / 8) {
+        ctx.beginPath(); ctx.moveTo(20 + Math.cos(a) * (bodyR - 17), Math.sin(a) * (bodyR - 17));
+        ctx.lineTo(20 + Math.cos(a) * bodyR, Math.sin(a) * bodyR); ctx.stroke();
+    }
+    ctx.setLineDash([4, 5]);
+    ctx.beginPath(); ctx.moveTo(20 - bodyR, 0); ctx.lineTo(20 + bodyR, 0); ctx.moveTo(20, -bodyR); ctx.lineTo(20, bodyR); ctx.stroke();
+    ctx.setLineDash([]);
 
-    for (let layer = 3; layer >= 0; layer--) {
-        const ox = layer * 4, oy = -layer * 5;
-        ctx.strokeStyle = layer ? `rgba(45,110,125,${0.08 + layer * 0.035})` : 'rgba(90,223,207,0.72)';
-        ctx.lineWidth = layer ? 1 : 1.8;
-        ctx.beginPath();
-        ctx.moveTo(-bodyL + ox, oy);
-        ctx.bezierCurveTo(-bodyL * 0.72 + ox, -bodyR + oy, bodyL * 0.55 + ox, -bodyR * 0.92 + oy, bodyL + ox, oy);
-        ctx.bezierCurveTo(bodyL * 0.58 + ox, bodyR * 0.9 + oy, -bodyL * 0.72 + ox, bodyR + oy, -bodyL + ox, oy);
-        ctx.stroke();
+    // Forward acrylic viewport and titanium retaining ring.
+    ctx.strokeStyle = 'rgba(156,238,244,0.9)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(70, -8, 56, -1.08, 1.08); ctx.stroke();
+    ctx.beginPath(); ctx.arc(70, -8, 45, -1.08, 1.08); ctx.stroke();
+    for (let a = -0.9; a <= 0.9; a += 0.3) {
+        ctx.beginPath(); ctx.arc(70 + Math.cos(a) * 50, -8 + Math.sin(a) * 50, 2.2, 0, PI2); ctx.stroke();
     }
-    ctx.setLineDash([5, 6]); ctx.strokeStyle = 'rgba(90,223,207,0.25)';
-    ctx.beginPath(); ctx.moveTo(-bodyL, 0); ctx.lineTo(bodyL, 0); ctx.stroke(); ctx.setLineDash([]);
-    for (const rx of [-150, -80, 0, 80, 150]) {
-        const rr = bodyR * (1 - Math.pow(Math.abs(rx) / (bodyL + 25), 1.7));
-        ctx.strokeStyle = 'rgba(90,223,207,0.28)'; ctx.beginPath(); ctx.ellipse(rx, 0, 10, Math.max(18, rr), 0, 0, PI2); ctx.stroke();
+
+    // Internal distribution: pilot sphere, life support, batteries, ballast and trim.
+    ctx.strokeStyle = 'rgba(90,223,207,0.58)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.ellipse(55, -4, 43, 55, 0, 0, PI2); ctx.stroke();
+    ctx.strokeRect(-46, -63, 43, 45); ctx.strokeRect(-46, -8, 43, 45);
+    for (const yy of [-51, -39, -27, 4, 16, 28]) { ctx.beginPath(); ctx.moveTo(-42, yy); ctx.lineTo(-7, yy); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(-58, 60, 25, 0, PI2); ctx.arc(-3, 72, 22, 0, PI2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-82, 60); ctx.lineTo(20, 60); ctx.moveTo(-27, -63); ctx.lineTo(-27, 46); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(49, 33, 21, 12, -0.35, 0, PI2); ctx.stroke();
+
+    // External skid carries hot/noisy machinery outside the crew sphere.
+    ctx.strokeStyle = 'rgba(90,223,207,0.72)';
+    ctx.strokeRect(-bodyR - 82, -70, 66, 140);
+    ctx.strokeRect(-bodyR - 72, -57, 46, 46); ctx.strokeRect(-bodyR - 72, 11, 46, 46);
+    for (const yy of [-48, -35, -22, 20, 33, 46]) { ctx.beginPath(); ctx.moveTo(-bodyR - 67, yy); ctx.lineTo(-bodyR - 31, yy); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(-bodyR - 16, -48); ctx.lineTo(20 - bodyR, -38); ctx.moveTo(-bodyR - 16, 48); ctx.lineTo(20 - bodyR, 38); ctx.stroke();
+    for (const py of [-50, 50]) {
+        ctx.beginPath(); ctx.moveTo(-bodyR - 82, py); ctx.lineTo(-bodyR - 117, py); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(-bodyR - 127, py, 14, 29, 0, 0, PI2); ctx.stroke();
+        for (let blade = 0; blade < 3; blade++) {
+            const a = blade * PI2 / 3;
+            ctx.beginPath(); ctx.moveTo(-bodyR - 127, py); ctx.lineTo(-bodyR - 127 + Math.cos(a) * 12, py + Math.sin(a) * 24); ctx.stroke();
+        }
     }
-    // Cutaway machinery gives the silhouette the visual grammar of a research-sub blueprint.
-    ctx.strokeStyle = 'rgba(90,223,207,0.52)';
-    ctx.beginPath(); ctx.ellipse(94, -2, 48, 48, 0, 0, PI2); ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(94, -2, 38, 38, 0, 0, PI2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(122, -7, 9, 0, PI2); ctx.stroke();
-    for (const mx of [-120, -76, -32]) {
-        ctx.strokeRect(mx, -31, 34, 62);
-        ctx.beginPath(); ctx.moveTo(mx, -21); ctx.lineTo(mx + 34, -21); ctx.moveTo(mx, 21); ctx.lineTo(mx + 34, 21); ctx.stroke();
-    }
-    ctx.strokeStyle = 'rgba(90,223,207,0.65)';
-    ctx.strokeRect(-48, -bodyR - 34, 82, 34);
-    ctx.beginPath(); ctx.moveTo(-32, -bodyR - 34); ctx.lineTo(-18, -bodyR - 55); ctx.lineTo(10, -bodyR - 55); ctx.lineTo(22, -bodyR - 34); ctx.stroke();
-    ctx.beginPath(); ctx.arc(bodyL - 52, -5, 20, 0, PI2); ctx.stroke();
-    for (const py of [-30, 30]) {
-        ctx.beginPath(); ctx.moveTo(-bodyL, 0); ctx.lineTo(-bodyL - 42, py); ctx.stroke();
-        ctx.beginPath(); ctx.ellipse(-bodyL - 48, py, 10, 25, 0, 0, PI2); ctx.stroke();
-    }
-    ctx.beginPath();
-    ctx.moveTo(bodyL - 18, 24); ctx.lineTo(bodyL + 28, 45); ctx.lineTo(bodyL + 55, 72);
-    ctx.lineTo(bodyL + 39, 87); ctx.lineTo(bodyL + 18, 63); ctx.lineTo(bodyL - 4, 55);
-    ctx.stroke();
-    ctx.beginPath(); ctx.arc(bodyL + 28, 45, 6, 0, PI2); ctx.arc(bodyL + 55, 72, 6, 0, PI2); ctx.stroke();
+    // Sonar crown, syntactic-foam collar and two-joint manipulator.
+    ctx.strokeRect(-13, -bodyR - 31, 68, 25);
+    ctx.beginPath(); ctx.moveTo(3, -bodyR - 31); ctx.lineTo(14, -bodyR - 53); ctx.lineTo(37, -bodyR - 53); ctx.lineTo(48, -bodyR - 31); ctx.stroke();
+    ctx.beginPath(); ctx.arc(26, -bodyR - 58, 8, 0, PI2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(68, bodyR - 20); ctx.lineTo(114, bodyR + 5); ctx.lineTo(143, bodyR + 35); ctx.lineTo(127, bodyR + 48); ctx.lineTo(99, bodyR + 19); ctx.lineTo(58, bodyR + 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(114, bodyR + 5, 6, 0, PI2); ctx.arc(143, bodyR + 35, 6, 0, PI2); ctx.stroke();
     ctx.restore();
 
-    // Overall dimensions and frame stations mirror a naval lines plan.
     const dimY = cy - bodyR - 82;
     ctx.strokeStyle = 'rgba(90,223,207,0.34)'; ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(cx - bodyL, dimY); ctx.lineTo(cx + bodyL, dimY);
-    ctx.moveTo(cx - bodyL, dimY - 6); ctx.lineTo(cx - bodyL, dimY + 6);
+    ctx.moveTo(cx - bodyL - 78, dimY); ctx.lineTo(cx + bodyL, dimY);
+    ctx.moveTo(cx - bodyL - 78, dimY - 6); ctx.lineTo(cx - bodyL - 78, dimY + 6);
     ctx.moveTo(cx + bodyL, dimY - 6); ctx.lineTo(cx + bodyL, dimY + 6);
     ctx.stroke();
     ctx.fillStyle = '#628995'; ctx.font = '8px monospace'; ctx.textAlign = 'center';
-    ctx.fillText('OVERALL LENGTH 7.2 m', cx, dimY - 5);
-    const stations = [-150, -80, 0, 80, 150];
+    ctx.fillText('OVERALL LENGTH 4.85 m · PRESSURE SPHERE Ø 2.25 m', cx, dimY - 5);
+    const stations = [-170, -85, 0, 85, 150];
     for (let i = 0; i < stations.length; i++) {
         const sx = cx + stations[i];
         ctx.beginPath(); ctx.moveTo(sx, cy + bodyR + 5); ctx.lineTo(sx, cy + bodyR + 13); ctx.stroke();
         ctx.fillText(`F${String(i * 6 + 1).padStart(2, '0')}`, sx, cy + bodyR + 24);
     }
     ctx.textAlign = 'left';
-    ctx.fillText('BATTERY / POWER BUS', cx - 132, cy - 39);
-    ctx.fillText('PRESSURE SPHERE', cx + 58, cy - 58);
-    ctx.fillText('VIEWPORT', cx + bodyL - 78, cy - 34);
-    ctx.fillText('MANIPULATOR', cx + bodyL - 18, cy + 101);
+    ctx.fillText('EXTERNAL BATTERY / REACTOR SKID', cx - 245, cy - 84);
+    ctx.fillText('TITANIUM PRESSURE SPHERE', cx - 25, cy - bodyR - 12);
+    ctx.fillText('ACRYLIC VIEWPORT', cx + 72, cy - 67);
+    ctx.fillText('TRIM / BALLAST', cx - 80, cy + 98);
+    ctx.fillText('MANIPULATOR', cx + 126, cy + bodyR + 66);
 
     const nodes = {
-        reactor: [cx - 42, cy], propulsion: [cx - bodyL + 34, cy + 18],
-        sonar: [cx + bodyL - 46, cy - 7], weapons: [cx + 42, cy - bodyR + 5],
-        ballast: [cx - 24, cy + bodyR - 8], hull: [cx + 104, cy + bodyR * 0.48],
+        reactor: [cx - bodyR - 47, cy - 32], propulsion: [cx - bodyR - 127, cy + 50],
+        sonar: [cx + 26, cy - bodyR - 58], weapons: [cx + 114, cy + bodyR + 5],
+        ballast: [cx - 3, cy + 72], hull: [cx + bodyR - 12, cy + 45],
     };
     const cards = {
         reactor: [24, 118], propulsion: [24, 222], ballast: [24, 326],
@@ -12436,7 +12513,7 @@ function drawContracts(w, h) {
 // toggling a node flips it + its neighbours; bring all 9 online. Always
 // solvable (scrambled from the solved state). Solve → crafting materials.
 // =====================================================================
-let puzzleGrid = [], puzzleInitial = [], puzzleMoves = 0, puzzleSolved = false, puzzleHint = -1, puzzleLast = -1;
+let puzzleGrid = [], puzzleInitial = [], puzzleMoves = 0, puzzleSolved = false, puzzleHint = -1, puzzleLast = -1, puzzlePar = 0;
 function _puzzleToggle(grid, i) {
     const r = Math.floor(i / 3), c = i % 3;
     const idxs = [i];
@@ -12530,8 +12607,9 @@ function drawPatch(w, h) {
 
 function openPuzzle() {
     puzzleGrid = new Array(9).fill(true);
-    let n = 4 + Math.floor(Math.random() * 4);
-    while (n-- > 0) _puzzleToggle(puzzleGrid, Math.floor(Math.random() * 9));
+    const scramble = [...Array(9).keys()].sort(() => Math.random() - 0.5).slice(0, 2 + Math.floor(Math.random() * 2));
+    for (const i of scramble) _puzzleToggle(puzzleGrid, i);
+    puzzlePar = scramble.length;
     if (puzzleGrid.every(v => v)) _puzzleToggle(puzzleGrid, 4); // never start solved
     puzzleInitial = [...puzzleGrid];
     puzzleMoves = 0; puzzleSolved = false; puzzleHint = -1; puzzleLast = -1;
@@ -13084,27 +13162,100 @@ function fabricatePdaSelection() {
     craftOrToggleModule(selected);
 }
 function drawPdaVessel(cx, cy, scale = 1) {
-    ctx.save(); ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.transform(1, 0, -0.16, 1, 0, 0);
-    ctx.strokeStyle = 'rgba(90,223,207,0.7)'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(-175, 0);
-    ctx.bezierCurveTo(-135, -54, 105, -54, 185, 0);
-    ctx.bezierCurveTo(110, 54, -135, 54, -175, 0); ctx.stroke();
-    ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.moveTo(-175, 0); ctx.lineTo(185, 0); ctx.stroke(); ctx.setLineDash([]);
-    for (const x of [-110, -45, 25, 95]) { ctx.beginPath(); ctx.ellipse(x, 0, 8, 43, 0, 0, PI2); ctx.stroke(); }
-    ctx.beginPath(); ctx.ellipse(80, 0, 39, 39, 0, 0, PI2); ctx.stroke();
-    ctx.strokeRect(-22, -76, 58, 28);
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.transform(1, 0, -0.12, 1, 0, 0);
+    const r = 104;
+    ctx.fillStyle = 'rgba(8,35,43,0.5)'; ctx.strokeStyle = 'rgba(90,223,207,0.78)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(25, 0, r, 0, PI2); ctx.fill(); ctx.stroke();
+    for (const rr of [95, 86]) { ctx.strokeStyle = 'rgba(90,223,207,0.22)'; ctx.beginPath(); ctx.arc(25, 0, rr, 0, PI2); ctx.stroke(); }
+    ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.moveTo(25 - r, 0); ctx.lineTo(25 + r, 0); ctx.moveTo(25, -r); ctx.lineTo(25, r); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(90,223,207,0.62)';
+    ctx.beginPath(); ctx.ellipse(61, -4, 42, 54, 0, 0, PI2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(76, -5, 52, -1.05, 1.05); ctx.stroke();
+    ctx.strokeRect(-48, -62, 40, 45); ctx.strokeRect(-48, -7, 40, 45);
+    for (const yy of [-50, -38, -26, 5, 17, 29]) { ctx.beginPath(); ctx.moveTo(-44, yy); ctx.lineTo(-12, yy); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(-54, 62, 23, 0, PI2); ctx.arc(0, 73, 20, 0, PI2); ctx.stroke();
+    ctx.strokeRect(-159, -67, 62, 134);
+    ctx.strokeRect(-149, -54, 42, 43); ctx.strokeRect(-149, 11, 42, 43);
+    for (const py of [-48, 48]) {
+        ctx.beginPath(); ctx.moveTo(-159, py); ctx.lineTo(-196, py); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(-208, py, 13, 28, 0, 0, PI2); ctx.stroke();
+    }
+    ctx.strokeRect(-8, -130, 66, 24);
+    ctx.beginPath(); ctx.moveTo(7, -130); ctx.lineTo(18, -151); ctx.lineTo(40, -151); ctx.lineTo(50, -130); ctx.stroke();
+    ctx.beginPath(); ctx.arc(29, -157, 8, 0, PI2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(72, 86); ctx.lineTo(122, 111); ctx.lineTo(151, 141); ctx.lineTo(134, 154); ctx.lineTo(105, 125); ctx.lineTo(61, 106); ctx.stroke();
     for (const id of (meta.modulesEquipped || [])) {
         const a = SUB_ASSEMBLY_DEFS[id]; if (!a) continue;
         ctx.strokeStyle = a.color; ctx.fillStyle = hexA(a.color, 0.18); ctx.lineWidth = 2;
-        if (a.socket === 'hull_ring') { ctx.beginPath(); ctx.ellipse(5, 0, 16, 49, 0, 0, PI2); ctx.stroke(); }
-        else if (a.socket === 'hull_skin') { ctx.beginPath(); ctx.ellipse(-25, 0, 105, 48, 0, 0, PI2); ctx.stroke(); }
-        else if (a.socket === 'aft_drive') { ctx.beginPath(); ctx.ellipse(-185, -26, 9, 22, 0, 0, PI2); ctx.ellipse(-185, 26, 9, 22, 0, 0, PI2); ctx.stroke(); }
-        else if (a.socket === 'sensor_mast') { ctx.beginPath(); ctx.moveTo(0, -76); ctx.lineTo(0, -105); ctx.arc(0, -108, 9, 0, PI2); ctx.stroke(); }
-        else if (a.socket === 'power_bay') { ctx.fillRect(-92, -27, 45, 54); ctx.strokeRect(-92, -27, 45, 54); }
-        else if (a.socket === 'weapon_mount') { ctx.fillRect(-10, 45, 56, 11); ctx.strokeRect(-10, 45, 56, 11); }
-        else if (a.socket === 'prow_tool') { ctx.beginPath(); ctx.moveTo(150, 20); ctx.lineTo(205, 48); ctx.lineTo(228, 36); ctx.stroke(); }
+        if (a.socket === 'hull_ring') { ctx.beginPath(); ctx.arc(25, 0, 109, 0, PI2); ctx.stroke(); }
+        else if (a.socket === 'hull_skin') { ctx.beginPath(); ctx.arc(25, 0, 98, 0, PI2); ctx.stroke(); }
+        else if (a.socket === 'aft_drive') { ctx.beginPath(); ctx.ellipse(-208, -48, 17, 32, 0, 0, PI2); ctx.ellipse(-208, 48, 17, 32, 0, 0, PI2); ctx.stroke(); }
+        else if (a.socket === 'sensor_mast') { ctx.beginPath(); ctx.moveTo(29, -157); ctx.lineTo(29, -181); ctx.arc(29, -186, 9, 0, PI2); ctx.stroke(); }
+        else if (a.socket === 'power_bay') { ctx.fillRect(-149, -54, 42, 108); ctx.strokeRect(-149, -54, 42, 108); }
+        else if (a.socket === 'weapon_mount') { ctx.fillRect(72, 88, 61, 12); ctx.strokeRect(72, 88, 61, 12); }
+        else if (a.socket === 'prow_tool') { ctx.beginPath(); ctx.moveTo(72, 86); ctx.lineTo(151, 141); ctx.lineTo(175, 129); ctx.stroke(); }
     }
     ctx.restore();
+}
+function drawPdaSpecimen(id, x, y, w, h, t, col) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    ctx.strokeStyle = 'rgba(90,223,207,0.07)'; ctx.lineWidth = 1;
+    for (let gx = x; gx <= x + w; gx += 18) { ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx, y + h); ctx.stroke(); }
+    for (let gy = y; gy <= y + h; gy += 18) { ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x + w, gy); ctx.stroke(); }
+    const cx = x + w * 0.48, cy = y + h * 0.52, s = Math.min(w / 190, h / 125);
+    ctx.translate(cx, cy); ctx.scale(s, s);
+    ctx.strokeStyle = col; ctx.fillStyle = hexA(col, 0.22); ctx.lineWidth = 1.5;
+    if (id === 'jellyfish') {
+        ctx.beginPath(); ctx.moveTo(-48, 4); ctx.bezierCurveTo(-42, -47, 42, -47, 48, 4); ctx.quadraticCurveTo(0, 24, -48, 4); ctx.fill(); ctx.stroke();
+        for (let i = -4; i <= 4; i++) {
+            ctx.beginPath(); ctx.moveTo(i * 9, 8); ctx.bezierCurveTo(i * 11 + Math.sin(t + i) * 5, 28, i * 7, 44, i * 10 + Math.sin(t * 1.4 + i) * 7, 58); ctx.stroke();
+        }
+        ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.arc(0, -3, 26, 0, PI2); ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(27, -20); ctx.lineTo(68, -39); ctx.stroke();
+        ctx.fillStyle = col; ctx.font = '7px monospace'; ctx.fillText('PRESSURE RING', 70, -37);
+    } else if (id === 'piranha') {
+        ctx.beginPath(); ctx.moveTo(54, 0); ctx.quadraticCurveTo(18, -32, -44, -20); ctx.lineTo(-72, -39); ctx.lineTo(-63, 0); ctx.lineTo(-72, 39); ctx.lineTo(-44, 20); ctx.quadraticCurveTo(18, 32, 54, 0); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(28, -12); ctx.lineTo(56, 0); ctx.lineTo(28, 12); ctx.stroke();
+        for (let i = 0; i < 6; i++) { const xx = 29 + i * 4; ctx.beginPath(); ctx.moveTo(xx, -7); ctx.lineTo(xx + 3, 0); ctx.lineTo(xx, 7); ctx.stroke(); }
+        for (const yy of [-15, 15]) { ctx.beginPath(); ctx.arc(-5, yy, 5, 0, PI2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-5, yy); ctx.lineTo(-5, yy + Math.sign(yy) * 30); ctx.stroke(); }
+        ctx.fillStyle = col; ctx.font = '7px monospace'; ctx.fillText('RELAY NODES', -30, -50);
+    } else if (id === 'anglerfish') {
+        ctx.beginPath(); ctx.moveTo(58, 0); ctx.quadraticCurveTo(30, -42, -44, -31); ctx.quadraticCurveTo(-73, 0, -44, 31); ctx.quadraticCurveTo(30, 42, 58, 0); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#061016'; ctx.beginPath(); ctx.ellipse(34, 5, 28, 20, 0, 0, PI2); ctx.fill(); ctx.stroke();
+        for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(18 + i * 6, -11); ctx.lineTo(22 + i * 6, 0); ctx.lineTo(18 + i * 6, 11); ctx.stroke(); }
+        ctx.beginPath(); ctx.moveTo(4, -31); ctx.quadraticCurveTo(24, -64, 54, -53); ctx.stroke();
+        ctx.fillStyle = '#C8FFF0'; ctx.beginPath(); ctx.arc(58, -52, 7 + Math.sin(t * 2) * 1.5, 0, PI2); ctx.fill();
+        ctx.fillStyle = col; ctx.font = '7px monospace'; ctx.fillText('MIMETIC LURE', 66, -50);
+    } else if (id === 'manta') {
+        const beat = Math.sin(t * 1.3) * 4;
+        ctx.beginPath(); ctx.moveTo(62, 0); ctx.quadraticCurveTo(5, -58 - beat, -65, -19); ctx.quadraticCurveTo(-35, 0, -65, 19); ctx.quadraticCurveTo(5, 58 + beat, 62, 0); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-48, 0); ctx.quadraticCurveTo(-80, 8, -91, 48); ctx.stroke();
+        for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(17, 0); ctx.quadraticCurveTo(-6, side * 23, -48, side * 18); ctx.stroke(); }
+        ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(-52, -18); ctx.lineTo(45, 0); ctx.lineTo(-52, 18); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = col; ctx.font = '7px monospace'; ctx.fillText('PRESSURE RIBS', -19, -48);
+    } else if (id === 'lamprey') {
+        ctx.lineWidth = 7; ctx.strokeStyle = hexA(col, 0.34); ctx.beginPath(); ctx.moveTo(-78, 31);
+        for (let i = 0; i <= 12; i++) ctx.lineTo(-78 + i * 11, Math.sin(t * 2 + i * 0.5) * 13); ctx.stroke();
+        ctx.lineWidth = 1.4; ctx.strokeStyle = col;
+        for (let i = 0; i < 11; i++) { const xx = -69 + i * 11, yy = Math.sin(t * 2 + i * 0.5) * 13; ctx.beginPath(); ctx.arc(xx, yy, 6, 0, PI2); ctx.stroke(); }
+        ctx.beginPath(); ctx.ellipse(58, 0, 28, 22, 0, 0, PI2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#21070B'; ctx.beginPath(); ctx.arc(77, 0, 13, 0, PI2); ctx.fill(); ctx.stroke();
+        for (let a = 0; a < PI2; a += Math.PI / 6) { ctx.beginPath(); ctx.moveTo(77 + Math.cos(a) * 7, Math.sin(a) * 7); ctx.lineTo(77 + Math.cos(a) * 13, Math.sin(a) * 13); ctx.stroke(); }
+        ctx.fillStyle = col; ctx.font = '7px monospace'; ctx.fillText('INDUCTION ORGANS', -42, -43);
+    } else if (id === 'listener') {
+        ctx.lineWidth = 11; ctx.strokeStyle = hexA(col, 0.34); ctx.beginPath(); ctx.moveTo(0, 52); ctx.quadraticCurveTo(-10, 5, 5, -18); ctx.stroke();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = col;
+        ctx.beginPath(); ctx.ellipse(10, -27, 43, 21, -0.18 + Math.sin(t * 0.4) * 0.08, 0, PI2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(10, -27, 8, 0, PI2); ctx.stroke();
+        for (let a = 0; a < PI2; a += Math.PI / 7) { ctx.beginPath(); ctx.moveTo(0, 50); ctx.quadraticCurveTo(Math.cos(a) * 35, 49, Math.cos(a) * 68, 57 + Math.sin(a) * 12); ctx.stroke(); }
+        ctx.setLineDash([2, 3]); for (const r of [56, 70]) { ctx.beginPath(); ctx.arc(10, -27, r, -2.8, -0.25); ctx.stroke(); } ctx.setLineDash([]);
+        ctx.fillStyle = col; ctx.font = '7px monospace'; ctx.fillText('RESONANT DISH', 48, -57); ctx.fillText('SIGNAL RHIZOME', 38, 56);
+    }
+    ctx.restore();
+    ctx.strokeStyle = hexA(col, 0.55); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x + 12, y + h - 14); ctx.lineTo(x + 62, y + h - 14); ctx.stroke();
+    ctx.fillStyle = col; ctx.font = '7px monospace'; ctx.textAlign = 'left'; ctx.fillText('RELATIVE SCALE', x + 67, y + h - 11);
 }
 function drawPDA(w, h) {
     ctx.fillStyle = '#01070d'; ctx.fillRect(0, 0, w, h);
@@ -13162,8 +13313,7 @@ function drawPDA(w, h) {
         ctx.fillStyle = '#06151C'; ctx.fillRect(dx, 120, w - dx - 28, 158);
         ctx.strokeStyle = tier ? '#326A72' : '#1D3036'; ctx.strokeRect(dx, 120, w - dx - 28, 158);
         if (tier) {
-            ctx.save(); ctx.translate(dx + 120, 198); ctx.rotate(Math.sin(performance.now() * 0.0006) * 0.08);
-            drawBodyPlan({ typeId: id, vseed: 7, phase: 1 }, 48, def.color || '#5ADFCF', performance.now() * 0.001); ctx.restore();
+            drawPdaSpecimen(id, dx + 4, 124, 210, 150, performance.now() * 0.001, def.color || '#5ADFCF');
         }
         ctx.textAlign = 'left'; ctx.fillStyle = tier ? '#A5FFF0' : '#40535B'; ctx.font = 'bold 14px monospace';
         ctx.fillText(tier ? def.name.toUpperCase() : 'CONTACT UNRESOLVED', dx + 225, 150);
@@ -14053,12 +14203,14 @@ window.__deepSwarm = {
         game: game ? {
             depth: game.depth, wave: game.wave, hp: game.player.hp, battery: game.player.battery,
             systems: game.systems, inventory: game.inventory.length, zone: zoneFromDepth(game.depth),
-            minedDeposits: game._minedDeposits || 0,
+            minedDeposits: game._minedDeposits || 0, deployables: (game.deployables || []).length,
+            nereidQueue: (game.nereidQueue || []).length,
         } : null,
         campaign: {
             act: campaignAct().id, evidence: meta.campaign.evidence || 0,
             geology: [...meta.geologyScans], components: { ...meta.components },
             equipped: [...(meta.modulesEquipped || [])], pdaTab,
+            musicStage: musicSlot(), musicGenre: (MUSIC[musicSlot()] || {}).genre || null,
         },
     }),
     startSeeded(seed = 'test') {
@@ -14083,6 +14235,26 @@ window.__deepSwarm = {
     triggerSystemIncident(id = 'reactor', amount = 50) {
         if (!game) this.startSeeded('system-incident');
         openSystemIncident(id, 'debug incident', amount);
+        return this.getState();
+    },
+    triggerDeployableWeapon(id = 'decoy_launcher') {
+        if (!game) this.startSeeded('deployable-weapon');
+        game.deployables = undefined;
+        game.player.weapons = [{ id, level: 1, cooldown: 0 }];
+        fireWeapons(game, 1);
+        return this.getState();
+    },
+    openJunctionTest() {
+        if (!game) this.startSeeded('junction-test');
+        openPuzzle();
+        return { ...this.getState(), solutionLength: puzzlePar };
+    },
+    queueNereidTest() {
+        if (!game) this.startSeeded('nereid-cadence');
+        game.runTime = 1;
+        addNereidLog(game, 'Routine survey observation one.');
+        addNereidLog(game, 'Routine survey observation two.');
+        addNereidLog(game, 'Routine survey observation three.');
         return this.getState();
     },
     prepareCampaignTest() {

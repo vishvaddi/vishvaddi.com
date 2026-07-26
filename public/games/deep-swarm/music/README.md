@@ -1,6 +1,6 @@
 # Deep Swarm — music & sampled SFX
 
-All files OGG Vorbis. Loaded lazily by name from `MUSIC` / `SFX_SAMPLES` in index.html;
+All files OGG Vorbis. Loaded lazily by name from `MUSIC` / `SFX_SAMPLES` in `game.js`;
 a missing file fails silent (game never breaks over audio).
 
 ## Current sources (owned packs, royalty-free, no attribution required)
@@ -12,27 +12,42 @@ a missing file fails silent (game never breaks over audio).
 - `beat_*` — Epic Stock Media "Hybrid Game" Music_Loops (retired from default slots 16/07 — Vish: "glitchy"; files kept as spares)
 - `sfx_glitch*`, `sfx_ui`, `sfx_impact`, `sfx_stinger`, `sfx_tear` — Shapeforms free packs (Glitch and Noise / Future UI / Hit and Punch / Dystopia)
 
-## Slot map (index.html `MUSIC`)
+## Dive arc (`game.js` `MUSIC`)
 
-| Slot | Bed | Beat candidates ([N] in pause cycles) |
-|---|---|---|
-| title/menus | bed_signal | beat_looming |
-| sunlight | bed_signal | beat_discovery, beat_rabbit |
-| twilight | bed_tundra | beat_tribe, beat_timesensitive |
-| midnight | bed_hold | beat_twisted, beat_redflag |
-| abyssal | bed_wind | beat_looming, beat_trust |
-| hadal | bed_heartbeat | beat_faultering |
-| P3 (Scar) | bed_powerstation | beat_alerting, beat_twisted |
+Existing Purrple Cat tracks supply the tonal beds. A generated PCM rhythm layer changes
+tempo, swing and drum grammar by depth so escalation does not depend on another audio
+download.
 
-## Dropping in better beats (trip-hop / jungle / dubstep)
+| Depth | Stage | BPM |
+|---|---|---:|
+| 0–249 m | lo-fi | 76 |
+| 250–849 m | trip-hop | 84 |
+| 850–1,449 m | hip-hop | 94 |
+| 1,450–2,199 m | electronic | 112 |
+| 2,200–2,999 m | dubstep | 140 |
+| 3,000–3,899 m | techno | 128 |
+| 3,900–4,899 m | drum & bass | 174 |
+| 4,900 m+ | jungle | 168 |
 
-1. **White Bat Audio (Karl Casey)** — whitebataudio.com. Dark electronic/DnB/dubstep.
-   Game use allowed WITH credit: "Music by Karl Casey @ White Bat Audio" (add to title
-   screen bottom strip + site page when first track ships). No soundtrack resale.
-   Good albums to browse: the darker White Bat volumes (synthwave/DnB ones).
-2. **Pixabay Music** — pixabay.com/music, search "dark trip hop", "dark dubstep",
-   "jungle breaks". Pixabay licence: commercial OK, NO attribution needed.
-3. **OpenGameArt CC0 music** — opengameart.org, dark ambient / DnB tags.
+## Pixabay shortlist reviewed 26/07/26
+
+No new file from this shortlist has been imported. Verify the individual item licence
+and retain its source URL beside any future asset.
+
+- Genre searches: [lo-fi](https://pixabay.com/music/search/lofi-hip-hop/),
+  [trip-hop](https://pixabay.com/music/search/trip-hop/),
+  [hip-hop](https://pixabay.com/music/search/hiphop/),
+  [electronic](https://pixabay.com/music/search/electronic/),
+  [dubstep](https://pixabay.com/music/search/dubstep/),
+  [techno](https://pixabay.com/music/search/techno/) and
+  [drum & bass](https://pixabay.com/music/search/drum%20and%20bass/).
+- Candidate tracks:
+  [Trip Hop](https://pixabay.com/music/beats-trip-hop-278457/),
+  [Downtempo Chill Electronic](https://pixabay.com/music/beats-downtempo-chill-electronic-528322/),
+  [Melodic Techno 09](https://pixabay.com/music/electro-melodic-techno-09-513318/) and
+  [Neon Sky — Liquid Jungle Breakbeat Drum and Bass](https://pixabay.com/music/drum-n-bass-neon-sky-liquid-jungle-breakbeat-drum-and-bass-356503/).
+
+## Dropping in licensed tracks
 
 Convert: `ffmpeg -i in.mp3 -c:a libvorbis -q:a 4 out.ogg`, drop in this folder,
-add the name to a slot's `beats` array in index.html. [N] in pause auditions.
+add the name to a stage's `beats` array in `game.js`. [N] in pause auditions.

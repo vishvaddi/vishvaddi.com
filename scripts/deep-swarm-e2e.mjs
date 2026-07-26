@@ -26,7 +26,7 @@ try {
   await page.goto(`${BASE}/games/deep-swarm/`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => window.__deepSwarm?.build, null, { timeout: 15000 })
   const build = await page.evaluate(() => window.__deepSwarm.build)
-  check('boot: campaign build exposed', /campaign/.test(build), build)
+  check('boot: blueprint build exposed', /blueprint/.test(build), build)
 
   await page.evaluate(() => window.__deepSwarm.startSeeded('boundary-soak'))
   await page.keyboard.down('s')
@@ -48,6 +48,7 @@ try {
   await page.waitForTimeout(100)
   const systemsState = await page.evaluate(() => window.__deepSwarm.getState())
   check('systems: random incident opens blueprint', systemsState.phase === 'systems' && systemsState.game.systems.reactor.condition === 30)
+  if (process.env.DEEP_SWARM_SCREENSHOTS) await page.screenshot({ path: '.tmp-deep-swarm-systems.png' })
 
   const expectedErrors = errors.length
   await page.setViewportSize({ width: 844, height: 390 })
@@ -86,6 +87,30 @@ try {
   check('runtime: resume returns to the interrupted dive', recoveredState.phase === 'playing' && !recoveredState.error, recoveredState.phase)
   errors.splice(expectedErrors)
 
+  const deployableState = await page.evaluate(() => window.__deepSwarm.triggerDeployableWeapon('decoy_launcher'))
+  check('runtime: deployable weapons initialise their state',
+    deployableState.phase === 'playing' && deployableState.game.deployables === 1 && !deployableState.error,
+    `${deployableState.phase} · deployables ${deployableState.game.deployables}`)
+
+  const junctionState = await page.evaluate(() => window.__deepSwarm.openJunctionTest())
+  check('junction: scramble is limited to two or three moves',
+    junctionState.phase === 'puzzle' && junctionState.solutionLength >= 2 && junctionState.solutionLength <= 3,
+    `${junctionState.solutionLength} moves`)
+
+  await page.evaluate(() => {
+    window.__deepSwarm.startSeeded('music-arc')
+    window.__deepSwarm.jumpDepth(5200)
+  })
+  const musicState = await page.evaluate(() => window.__deepSwarm.getState())
+  check('music: depth arc reaches jungle in the hadal zone',
+    musicState.campaign.musicStage === 'jungle' && musicState.campaign.musicGenre === 'JUNGLE',
+    `${musicState.campaign.musicStage} · ${musicState.campaign.musicGenre}`)
+
+  const cadenceState = await page.evaluate(() => window.__deepSwarm.queueNereidTest())
+  check('NEREID: routine observations queue instead of talking over each other',
+    cadenceState.game.nereidQueue === 3 && cadenceState.phase === 'playing',
+    `${cadenceState.game.nereidQueue} queued`)
+
   await page.evaluate(() => {
     window.__deepSwarm.startSeeded('campaign-pda')
     window.__deepSwarm.prepareCampaignTest()
@@ -96,6 +121,10 @@ try {
   check('campaign: PDA exposes structured research state',
     pdaState.phase === 'codex' && pdaState.campaign.pdaTab === 1 && pdaState.campaign.geology.includes('conductive_vein'),
     `${pdaState.phase} · tab ${pdaState.campaign.pdaTab}`)
+  if (process.env.DEEP_SWARM_SCREENSHOTS) {
+    for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowDown')
+    await page.screenshot({ path: '.tmp-deep-swarm-pda.png' })
+  }
   await page.evaluate(() => window.__deepSwarm.showPDA(3))
   await page.keyboard.press('f')
   const fabricatedState = await page.evaluate(() => window.__deepSwarm.getState())
