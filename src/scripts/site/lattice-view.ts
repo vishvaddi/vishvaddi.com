@@ -952,7 +952,11 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
     } else {
       const hint = document.createElement('div')
       hint.className = 'lat-hint'
-      hint.textContent = 'Arrows walk cells AND the gaps between them — type on a gap to insert a row/col. Insert dives into a cell (creating a grid), PageUp climbs out. Shift+arrows select a block · Ctrl+arrows move a cell · =12*85 evaluates · [[Sheet]] links'
+      // The keyboard cursor model is noise on a phone — the host's help panel
+      // carries the full reference.
+      hint.textContent = window.matchMedia('(max-width: 760px)').matches
+        ? 'Tap a cell to select, tap again to edit. ▦ nests a grid inside a cell · press and hold to select a block · pinch to zoom in and out.'
+        : 'Arrows walk cells AND the gaps between them — type on a gap to insert a row/col. Insert dives into a cell (creating a grid), PageUp climbs out. Shift+arrows select a block · Ctrl+arrows move a cell · =12*85 evaluates · [[Sheet]] links'
       act.appendChild(hint)
     }
 
@@ -960,19 +964,63 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
 
     let dragSel: { owner: string | null; r: number; c: number } | null = null
     let dragMoved = false
+    let holdTimer: number | undefined
+    let holdStart: { x: number; y: number } | null = null
+    let touchDragging = false
+    let suppressClick = false
+
+    /** Repaint the block selection in place — a full redraw would detach `wrap` mid-drag. */
+    function paintRect(): void {
+      wrap.querySelectorAll('.lat-multi').forEach(x => x.classList.remove('lat-multi'))
+      wrap.querySelectorAll<HTMLElement>('.lat-cell').forEach(x => {
+        if ((x.dataset.owner || null) === rectSel!.owner && inRect(rectSel!.owner, Number(x.dataset.r), Number(x.dataset.c))) x.classList.add('lat-multi')
+      })
+    }
+
+    // Touch keeps firing at the original target, so the cell under the finger has
+    // to be hit-tested by coordinate rather than read off the event.
+    const cellAt = (e: PointerEvent): HTMLElement | null => e.pointerType === 'mouse'
+      ? (e.target as HTMLElement).closest<HTMLElement>('.lat-cell')
+      : (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>('.lat-cell') ?? null
+
+    function cancelHold(): void { clearTimeout(holdTimer); holdTimer = undefined; holdStart = null }
+
+    function endDrag(): void {
+      cancelHold()
+      if (touchDragging) { touchDragging = false; wrap.style.touchAction = '' }
+      dragSel = null
+    }
 
     wrap.addEventListener('pointerdown', (e) => {
-      if (editing || e.pointerType !== 'mouse') return
+      if (editing) return
       const cd = (e.target as HTMLElement).closest<HTMLElement>('.lat-cell')
       if (!cd?.dataset.id) return
       // innermost cell under the pointer belongs to some grid; drag selects in THAT grid
-      dragSel = { owner: cd.dataset.owner || null, r: Number(cd.dataset.r), c: Number(cd.dataset.c) }
+      const anchor = { owner: cd.dataset.owner || null, r: Number(cd.dataset.r), c: Number(cd.dataset.c) }
       dragMoved = false
+      if (e.pointerType === 'mouse') { dragSel = anchor; return }
+      // Press-and-hold arms block selection on touch; a plain tap still selects
+      // and edits, and an ordinary drag still scrolls the grid.
+      holdStart = { x: e.clientX, y: e.clientY }
+      holdTimer = window.setTimeout(() => {
+        holdTimer = undefined
+        dragSel = anchor
+        touchDragging = true
+        suppressClick = true
+        wrap.style.touchAction = 'none'          // stop the scroll container stealing the drag
+        rectSel = { owner: anchor.owner, r0: anchor.r, c0: anchor.c, r1: anchor.r, c1: anchor.c }
+        selectedId = null
+        lineSel = null
+        paintRect()
+      }, 350)
     })
 
     wrap.addEventListener('pointermove', (e) => {
-      if (!dragSel || editing) return
-      const cd = (e.target as HTMLElement).closest<HTMLElement>('.lat-cell')
+      if (editing) return
+      // Moving before the hold completes means they meant to scroll.
+      if (holdTimer !== undefined && holdStart && Math.hypot(e.clientX - holdStart.x, e.clientY - holdStart.y) > 10) cancelHold()
+      if (!dragSel) return
+      const cd = cellAt(e)
       if (!cd) return
       // walk up until we find a cell in the SAME grid as the anchor (TreeSheets:
       // crossing a child boundary selects the entire child)
@@ -987,20 +1035,21 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
         rectSel = { owner: dragSel.owner, r0: dragSel.r, c0: dragSel.c, r1: r, c1: c }
         selectedId = null
         lineSel = null
-        // live-paint without full redraw
-        wrap.querySelectorAll('.lat-multi').forEach(x => x.classList.remove('lat-multi'))
-        wrap.querySelectorAll<HTMLElement>('.lat-cell').forEach(x => {
-          if ((x.dataset.owner || null) === rectSel!.owner && inRect(rectSel!.owner, Number(x.dataset.r), Number(x.dataset.c))) x.classList.add('lat-multi')
-        })
+        paintRect()
       }
     })
 
     wrap.addEventListener('pointerup', () => {
-      if (dragSel && dragMoved) drawEditor()
-      dragSel = null
+      const wasTouchDrag = touchDragging
+      const had = dragSel
+      endDrag()
+      if (had && (dragMoved || wasTouchDrag)) drawEditor()
     })
 
+    wrap.addEventListener('pointercancel', endDrag)
+
     wrap.addEventListener('click', (e) => {
+      if (suppressClick) { suppressClick = false; dragMoved = false; return }   // the tap that ended a press-and-hold
       if (dragMoved) { dragMoved = false; return }
       if ((e.target as HTMLElement).closest('.lat-extlink')) return   // real <a>, let the browser open it
       const check = (e.target as HTMLElement).closest<HTMLElement>('.lat-check')

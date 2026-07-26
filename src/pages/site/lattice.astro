@@ -22,6 +22,10 @@ import "../../styles/site.css";
       this browser.
     </p>
 
+    <p class="lat-help-row">
+      <button id="lat-help" class="lat-help-btn" type="button">? Tutorial</button>
+    </p>
+
     <div id="lattice-root" aria-live="polite"></div>
 
     <p class="note-foot"><a href="/site">← all tools</a></p>
@@ -29,7 +33,10 @@ import "../../styles/site.css";
 
   <script>
     import { initLattice } from "../../scripts/site/lattice";
-    initLattice(document.getElementById("lattice-root")!);
+    import { createLatticeTutorial } from "../../scripts/site/lattice-tutorial";
+    const root = document.getElementById("lattice-root")!;
+    initLattice(root);
+    createLatticeTutorial(root, document.getElementById("lat-help")!);
   </script>
 
   <style>
@@ -99,5 +106,74 @@ import "../../styles/site.css";
     .lattice :global(.lat-map-node) { text-align: left; background: var(--code-bg); border: 1px solid var(--rule); border-radius: 8px; color: var(--fg); font: inherit; font-size: 0.78rem; padding: 0.3rem 0.5rem; cursor: pointer; overflow-wrap: anywhere; }
     .lattice :global(.lat-map-node.lat-selected) { border-color: var(--accent); outline: 1px solid var(--accent); }
     .lattice :global(.lat-done-node) { text-decoration: line-through; opacity: 0.55; }
+
+    .lat-help-row { margin: 0.25rem 0 0; }
+    .lat-help-btn { background: var(--code-bg); border: 1px solid var(--rule); border-radius: 6px; color: var(--muted); font: inherit; font-size: 0.8rem; padding: 0.35rem 0.7rem; min-height: 36px; cursor: pointer; }
+    .lat-help-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Responsive + touch ──
+       The toolbar packs 8 controls into one row and the action bar can render a
+       dozen buttons; both wrap rather than squeeze on a phone. Hit targets are
+       floored at 44px on coarse pointers — the markdown checkbox grows its tap
+       area with a pseudo-element so the text baseline does not shift. */
+    .lattice :global(.lat-toolbar) { flex-wrap: wrap; }
+
+    @media (max-width: 760px) {
+      .lattice :global(.lat-spacer) { display: none; }
+      .lattice :global(.lat-title) { flex: 1 1 8rem; max-width: none; }
+      .lattice :global(.lat-search) { width: auto; flex: 1 1 6rem; min-width: 5rem; }
+      .lattice :global(.lat-wrap) { margin-inline: calc(-1 * var(--gutter, 0px)); padding-inline: var(--gutter, 0px); }
+    }
+
+    @media (pointer: coarse) {
+      .lattice :global(.lat-tb) { min-width: 44px; min-height: 44px; }
+      .lattice :global(.lat-crumbs button) { min-height: 44px; }
+      .lattice :global(.lat-chip) { min-height: 44px; padding: 0.35rem 0.7rem; }
+      .lattice :global(.lat-backlink) { min-height: 44px; padding: 0.5rem 0.85rem; }
+      .lattice :global(.lat-check) { position: relative; }
+      .lattice :global(.lat-check)::after { content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
+    }
+
+    /* ── Tutorial overlay ──
+       Appended to <body>, so these selectors are top-level :global like .lat-toast. */
+    :global(.lat-tut[hidden]) { display: none; }
+    :global(.lat-tut) { position: fixed; inset: 0; z-index: 9000; }
+    :global(.lat-tut-shade) { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.5); }
+    :global(.lat-tut-target) {
+      position: relative; z-index: 9001 !important;
+      outline: 3px solid var(--accent) !important; outline-offset: 4px;
+      border-radius: 6px;
+      box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 25%, transparent), 0 0 24px color-mix(in srgb, var(--accent) 45%, transparent) !important;
+    }
+    :global(.lat-tut-card) {
+      position: absolute; right: 1rem; bottom: 1rem; z-index: 9002;
+      width: min(29rem, calc(100vw - 2rem));
+      max-height: min(30rem, calc(100vh - 2rem)); overflow-y: auto;
+      background: var(--bg); border: 1px solid var(--rule); border-radius: 10px;
+      padding: 1rem 1.1rem; box-shadow: 0 14px 44px rgba(0, 0, 0, 0.4);
+    }
+    :global(.lat-tut-card.lat-tut-browsing) { top: 1rem; max-height: none; }
+    :global(.lat-tut-step) { font-family: ui-monospace, monospace; font-size: 0.7rem; letter-spacing: 0.08em; color: var(--accent); }
+    :global(.lat-tut-title) { margin: 0.4rem 0 0.5rem; font-size: 1.05rem; }
+    :global(.lat-tut-text) { margin: 0 0 0.9rem; font-size: 0.88rem; line-height: 1.55; color: var(--muted); }
+    :global(.lat-tut-actions) { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.4rem; }
+    :global(.lat-tut-btn) { background: var(--code-bg); border: 1px solid var(--rule); border-radius: 6px; color: var(--fg); font: inherit; font-size: 0.82rem; padding: 0.4rem 0.7rem; min-height: 40px; cursor: pointer; }
+    :global(.lat-tut-btn:hover) { border-color: var(--accent); }
+    :global(.lat-tut-btn:disabled) { opacity: 0.4; cursor: default; }
+    :global(.lat-tut-btn[hidden]) { display: none; }
+    :global(.lat-tut-search) { width: 100%; background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; color: var(--fg); font: inherit; font-size: 0.85rem; padding: 0.45rem 0.6rem; margin-bottom: 0.6rem; }
+    :global(.lat-tut-sec) { font-family: ui-monospace, monospace; font-size: 0.66rem; letter-spacing: 0.09em; color: var(--accent); margin: 0.9rem 0 0.4rem; }
+    :global(.lat-tut-topic) { border-top: 1px solid var(--rule); padding-top: 0.5rem; margin-bottom: 0.5rem; }
+    :global(.lat-tut-topic-title) { margin: 0 0 0.25rem; font-size: 0.9rem; }
+    :global(.lat-tut-shortcuts) { margin-top: 0.5rem; }
+    :global(.lat-tut-sc-row) { display: flex; gap: 0.75rem; padding: 0.22rem 0; font-size: 0.8rem; }
+    :global(.lat-tut-key) { flex: 0 0 9.5rem; font-family: ui-monospace, monospace; color: var(--fg); }
+    :global(.lat-tut-desc) { color: var(--muted); }
+
+    @media (max-width: 760px) {
+      :global(.lat-tut-card) { right: 0.5rem; left: 0.5rem; bottom: 0.5rem; width: auto; max-height: 62vh; }
+      :global(.lat-tut-card.lat-tut-browsing) { top: 0.5rem; max-height: none; }
+      :global(.lat-tut-key) { flex-basis: 7.5rem; }
+    }
   </style>
 </Base>

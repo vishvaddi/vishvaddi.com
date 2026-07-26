@@ -6,7 +6,7 @@ import { createLatticeView } from './lattice-view'
 
 const LS_KEY = 'lattice_sheets_v1'
 
-function loadAll(): LatticeSheet[] {
+export function loadAll(): LatticeSheet[] {
   try {
     const all = JSON.parse(localStorage.getItem(LS_KEY) ?? '[]') as LatticeSheet[]
     return all.sort((a, b) => b.updated - a.updated)
@@ -19,7 +19,7 @@ function persist(sheet: LatticeSheet): void {
   localStorage.setItem(LS_KEY, JSON.stringify(all))
 }
 
-function remove(id: string): void {
+export function remove(id: string): void {
   localStorage.setItem(LS_KEY, JSON.stringify(loadAll().filter(s => s.id !== id)))
 }
 
