@@ -4,7 +4,7 @@
 // Unquantized by default: positions/lengths are float steps; snapping applies
 // only when the transport Grid selector is set (transport.quantizeGrid > 0).
 import { el, btn, help } from "./helpers";
-import { SCREEN_BG, SCREEN_FG } from "./helpers";
+import { SCREEN_BG, SCREEN_FG, screenRgba } from "./helpers";
 import { ROLL_NOTES, clip, transport, activeSynth, activeSynthNotes, SYNTH_LANES, SYNTH_LANE_LABELS, synthLaneNotes, patternLengths, patternDivisions } from "./state";
 import type { VNote, SynthLane } from "./state";
 import { ctx, gridRepainters } from "./ctx";
@@ -126,7 +126,7 @@ export function buildRoll(deps: RollDeps): Roll {
       const y = r * ROW_H;
       if (note.includes("#")) { g.fillStyle = "rgba(255,255,255,0.025)"; g.fillRect(GUTTER, y, w - GUTTER, ROW_H); }
       if (note.startsWith("C") && !note.startsWith("C#")) {
-        g.strokeStyle = "rgba(52,226,255,0.18)"; g.lineWidth = 1;
+        g.strokeStyle = screenRgba(0.18); g.lineWidth = 1;
         g.beginPath(); g.moveTo(GUTTER, y + ROW_H + 0.5); g.lineTo(w, y + ROW_H + 0.5); g.stroke();
       }
     });
@@ -134,7 +134,7 @@ export function buildRoll(deps: RollDeps): Roll {
     for (let s = 0; s <= steps(); s++) {
       const x = GUTTER + s * stepW;
       const quarter = s % 4 === 0;
-      g.strokeStyle = quarter ? "rgba(52,226,255,0.22)" : "rgba(52,226,255,0.07)";
+      g.strokeStyle = quarter ? screenRgba(0.22) : screenRgba(0.07);
       g.lineWidth = 1;
       g.beginPath(); g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, h); g.stroke();
     }
@@ -145,7 +145,7 @@ export function buildRoll(deps: RollDeps): Roll {
       const nw = Math.max(3, n.len * stepW - 1), nh = ROW_H - 3;
       const sel = n === selected;
       g.shadowBlur = sel ? 8 : 0; g.shadowColor = SCREEN_FG;
-      g.fillStyle = `rgba(52,226,255,${(0.35 + 0.55 * (n.vel / 127)).toFixed(3)})`;
+      g.fillStyle = screenRgba(0.35 + 0.55 * (n.vel / 127));
       g.beginPath(); g.roundRect(x, y, nw, nh, 3); g.fill();
       if (n.accent || n.slide) {
         g.fillStyle = "rgba(255,255,255,.92)"; g.font = "8px monospace";
@@ -188,14 +188,14 @@ export function buildRoll(deps: RollDeps): Roll {
     g.fillStyle = "#41505b"; g.font = "8px monospace"; g.fillText("VEL", 6, VEL_H / 2 + 3);
     for (let s = 0; s <= steps(); s += 4) {
       const x = GUTTER + s * stepW;
-      g.strokeStyle = "rgba(52,226,255,0.12)";
+      g.strokeStyle = screenRgba(0.12);
       g.beginPath(); g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, VEL_H); g.stroke();
     }
     notes().forEach((n) => {
       const x = GUTTER + n.step * stepW;
       const bh = Math.max(2, (n.vel / 127) * (VEL_H - 6));
       const sel = n === selected;
-      g.fillStyle = sel ? "#ffffff" : `rgba(52,226,255,${(0.4 + 0.5 * (n.vel / 127)).toFixed(3)})`;
+      g.fillStyle = sel ? "#ffffff" : screenRgba(0.4 + 0.5 * (n.vel / 127));
       g.fillRect(x, VEL_H - 3 - bh, 5, bh);
     });
   }

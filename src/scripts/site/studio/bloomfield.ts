@@ -14,7 +14,7 @@ const WORLD = 1700;
 const SCALE = [38, 40, 42, 45, 47, 50, 52, 54, 57, 59, 62, 64, 66, 69, 71, 74];
 const hueOf = (midi: number): number => {
   const pc = ((midi % 12) + 12) % 12;
-  const named: Record<number, number> = { 2: 186, 4: 172, 6: 196, 9: 160, 11: 204 };
+  const named: Record<number, number> = { 2: 170, 4: 158, 6: 182, 9: 40, 11: 190 };
   return named[pc] ?? 170 + pc * 4;
 };
 
@@ -126,9 +126,9 @@ export function buildBloomField(deps: { onReadout: (text: string) => void }): Bl
     const ox = cam.x - VW / 2, oy = cam.y - VW / 2;
     const sx = (wx: number): number => (wx - ox) * DPR, sy = (wy: number): number => (wy - oy) * DPR;
 
-    g.fillStyle = "#050a0c"; g.fillRect(0, 0, W, W);
+    g.fillStyle = "#0c100e"; g.fillRect(0, 0, W, W);
     const glow = g.createRadialGradient(W / 2, W / 2, 0, W / 2, W / 2, W * 0.7);
-    glow.addColorStop(0, "rgba(16,30,34,0.5)"); glow.addColorStop(1, "rgba(5,8,11,0)");
+    glow.addColorStop(0, "rgba(30,28,20,0.5)"); glow.addColorStop(1, "rgba(5,8,11,0)");
     g.fillStyle = glow; g.fillRect(0, 0, W, W);
 
     g.globalCompositeOperation = "lighter";
@@ -162,11 +162,11 @@ export function buildBloomField(deps: { onReadout: (text: string) => void }): Bl
     });
     const mpx = sx(me.x), mpy = sy(me.y), speed = Math.hypot(me.vx, me.vy);
     const aura = g.createRadialGradient(mpx, mpy, 0, mpx, mpy, 54 * DPR);
-    aura.addColorStop(0, `hsla(186,80%,70%,${0.5 + Math.min(0.4, speed * 0.05)})`);
-    aura.addColorStop(1, "hsla(186,80%,60%,0)");
+    aura.addColorStop(0, `hsla(170,80%,70%,${0.5 + Math.min(0.4, speed * 0.05)})`);
+    aura.addColorStop(1, "hsla(170,80%,60%,0)");
     g.fillStyle = aura; g.beginPath(); g.arc(mpx, mpy, 54 * DPR, 0, 6.28); g.fill();
     g.beginPath(); g.arc(mpx, mpy, 5.5 * DPR, 0, 6.28);
-    g.fillStyle = "hsla(186,90%,85%,0.95)"; g.fill();
+    g.fillStyle = "hsla(170,90%,85%,0.95)"; g.fill();
     g.globalCompositeOperation = "source-over";
 
     mg.clearRect(0, 0, mini.width, mini.height);

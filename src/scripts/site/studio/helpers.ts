@@ -108,8 +108,11 @@ export function euclideanPattern(steps: number, pulses: number, rotation: number
 }
 // Screen palette - cyan terminal (Studio v2 C1). Canvases cannot read CSS vars
 // cheaply, so screens draw from these constants; keep in sync with --wa-phos*.
-export const SCREEN_BG = "#050a0c";
-export const SCREEN_FG = "#34e2ff";
+// CV-80 screens: a warm-black LCD well with a teal phosphor trace.
+export const SCREEN_BG = "#0c100e";
+export const SCREEN_FG = "#4dd6c1";
+/** Same trace at an arbitrary alpha — canvases that draw their own grids. */
+export const screenRgba = (alpha: number): string => `rgba(77,214,193,${alpha})`;
 
 /** Beat ruler row for the 16-step grids: 1 2 3 4 at the quarters, ticks
  *  between. Lives INSIDE the scrolling grid so it tracks horizontal scroll. */

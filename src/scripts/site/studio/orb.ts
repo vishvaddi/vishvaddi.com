@@ -138,8 +138,8 @@ export function buildOrb(): Orb {
     g.globalCompositeOperation = "lighter";
     const bloomR = R * (1.4 + smoothB * 1.2 + smoothE * 1.0);
     const bloom = g.createRadialGradient(cx, cy, 0, cx, cy, bloomR);
-    bloom.addColorStop(0, `hsla(186, 90%, 50%, ${0.05 + smoothE * 0.2})`);
-    bloom.addColorStop(0.5, `hsla(196, 85%, 30%, ${0.025 + smoothE * 0.09})`);
+    bloom.addColorStop(0, `hsla(170, 90%, 50%, ${0.05 + smoothE * 0.2})`);
+    bloom.addColorStop(0.5, `hsla(178, 85%, 30%, ${0.025 + smoothE * 0.09})`);
     bloom.addColorStop(1, "hsla(0,0%,0%,0)");
     g.fillStyle = bloom;
     g.beginPath(); g.arc(cx, cy, bloomR, 0, Math.PI * 2); g.fill();
@@ -170,8 +170,8 @@ export function buildOrb(): Orb {
       g.globalAlpha = 1;
     };
     const flick = Math.random() < 0.06 + tear * 0.4 ? 0.4 : 1;
-    drawEdges(-split, (Math.random() - 0.5) * tear * 5, `hsla(4, 95%, 60%, ${0.55 * flick})`, 1.1);
-    drawEdges(split, (Math.random() - 0.5) * tear * 5, `hsla(186, 100%, 58%, ${0.8 * flick})`, 1.1);
+    drawEdges(-split, (Math.random() - 0.5) * tear * 5, `hsla(12, 95%, 60%, ${0.55 * flick})`, 1.1);
+    drawEdges(split, (Math.random() - 0.5) * tear * 5, `hsla(170, 100%, 58%, ${0.8 * flick})`, 1.1);
     drawEdges(split * 0.4, -split * 0.3, `hsla(38, 100%, 60%, ${0.4 * flick})`, 0.9);
     drawEdges(0, 0, `hsla(0, 0%, 96%, ${0.22 * flick})`, 0.8);
 
@@ -179,7 +179,7 @@ export function buildOrb(): Orb {
       const p = proj[i], depth = p.z / R;
       g.globalAlpha = 0.3 + (depth + 1) * 0.32;
       g.beginPath(); g.arc(p.x, p.y, (0.8 + (depth + 1) * 1.3) * DPR, 0, Math.PI * 2);
-      g.fillStyle = depth > 0 ? "hsla(186, 100%, 72%, 1)" : "hsla(38, 90%, 60%, 1)";
+      g.fillStyle = depth > 0 ? "hsla(170, 100%, 72%, 1)" : "hsla(38, 90%, 60%, 1)";
       g.fill();
     }
     g.globalAlpha = 1;
@@ -205,14 +205,14 @@ export function buildOrb(): Orb {
         try { g.drawImage(canvas, 0, y, W, h, dx, y, W, h); } catch { /* zero-size band */ }
         if (Math.random() < 0.4) {
           g.globalCompositeOperation = "lighter"; g.globalAlpha = 0.5;
-          g.fillStyle = Math.random() < 0.5 ? "rgba(255,60,80,0.2)" : "hsla(186,100%,50%,0.2)";
+          g.fillStyle = Math.random() < 0.5 ? "rgba(255,60,80,0.2)" : "hsla(170,100%,50%,0.2)";
           g.fillRect(0, y, W, h); g.globalAlpha = 1; g.globalCompositeOperation = "source-over";
         }
       }
     }
     if (flash > 0.05) {
       g.globalCompositeOperation = "lighter";
-      g.fillStyle = `hsla(186, 100%, 50%, ${flash * 0.1})`;
+      g.fillStyle = `hsla(170, 100%, 50%, ${flash * 0.1})`;
       g.fillRect(0, 0, W, H);
     }
   }
