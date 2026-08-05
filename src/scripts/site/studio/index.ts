@@ -6,7 +6,7 @@ import "../../../styles/studio.css";
 
 import {
   STEPS, SCENES, SCENE_LABELS, DRUMS, PAD_BANK_SIZE, ROLL_NOTES,
-  TRACKS, TRACK_LABELS, clip, transport, stepDur, audible,
+  TRACKS, TRACK_LABELS, clip, transport, stepDur, audible, song as songMeta,
   allPats, allVels, synthNotes, padEvents, arrangement,
   sampleParams, sampleBuffers, sampleData, dp, DP_DEF, DP_SPECS, mpc, rackState, fx, vsynthPatch, mute, solo,
 } from "./state";
@@ -69,9 +69,11 @@ export async function initStudio(): Promise<void> {
   const win = el("div", "wa-win");
   const titleBar = el("div", "wa-title");
   const projectName = document.createElement("input");
-  projectName.className = "wa-project-name"; projectName.value = localStorage.getItem("vv_studio_name") || "Untitled beat";
-  projectName.setAttribute("aria-label", "Project name");
-  projectName.addEventListener("change", () => { localStorage.setItem("vv_studio_name", projectName.value.trim() || "Untitled beat"); });
+  // The track title now lives in the project itself (v13), so it travels with
+  // saved songs and exported files instead of sitting in a stray local key.
+  projectName.className = "wa-project-name"; projectName.value = songMeta.title;
+  projectName.setAttribute("aria-label", "Track title"); projectName.maxLength = 48;
+  projectName.addEventListener("input", () => { songMeta.title = projectName.value.slice(0, 48) || "Untitled"; saveAll(); });
   // CV-80 header hardware: POWER (master mute with phosphor LED) + MASTER knob
   const powerBtn = el("button", "wa-power on") as HTMLButtonElement;
   powerBtn.type = "button";

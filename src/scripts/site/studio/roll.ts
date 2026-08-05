@@ -9,6 +9,7 @@ import { ROLL_NOTES, clip, transport, activeSynth, activeSynthNotes, SYNTH_LANES
 import type { VNote, SynthLane } from "./state";
 import { ctx, gridRepainters } from "./ctx";
 import { showVelocityPopup } from "./velpopup";
+import { midiToNote, noteToMidi } from "./vsynth";
 
 export interface RollDeps {
   audition: (note: string, vel?: number, lenSteps?: number) => void;
@@ -59,13 +60,29 @@ export function buildRoll(deps: RollDeps): Roll {
   [[3, "1/8 triplet"], [4, "1/16"], [6, "1/16 triplet"], [8, "1/32"], [12, "1/32 triplet"]].forEach(([value, label]) => divisionSelect.append(new Option(String(label), String(value))));
   divisionSelect.value = String(patternDivisions[clip.sel]);
   divisionSelect.addEventListener("change", () => { patternDivisions[clip.sel] = Number(divisionSelect.value); deps.saveAll(); });
+  // Roll range (CV-80 RANGE + octave keys): the canvas shows three octaves;
+  // these shift which three, so notes outside C3–B5 are reachable.
+  let rollOct = Math.max(-3, Math.min(3, Number(localStorage.getItem("vv_studio_rolloct") || 0)));
+  let rollNotes = ROLL_NOTES.map((n) => midiToNote(noteToMidi(n) + rollOct * 12));
+  const rangeLabel = el("span", "wa-roll-range", "");
+  const octDown = btn("OCT −", "wa-btn-sm"), octUp = btn("OCT ＋", "wa-btn-sm");
+  help(octDown, "Shift the visible three octaves down.");
+  help(octUp, "Shift the visible three octaves up.");
+  const setRollOct = (next: number): void => {
+    rollOct = Math.max(-3, Math.min(3, next));
+    rollNotes = ROLL_NOTES.map((n) => midiToNote(noteToMidi(n) + rollOct * 12));
+    localStorage.setItem("vv_studio_rolloct", String(rollOct));
+    paintRoll();
+  };
+  octDown.addEventListener("click", () => setRollOct(rollOct - 1));
+  octUp.addEventListener("click", () => setRollOct(rollOct + 1));
   const accentBtn = btn("Accent", "wa-btn-sm wa-note-expression") as HTMLButtonElement;
   const slideBtn = btn("Slide", "wa-btn-sm wa-note-expression") as HTMLButtonElement;
   help(accentBtn, "Toggle an accented note. Accents play louder and brighter.");
   help(slideBtn, "Glide into this note from the previous note in the lane.");
   accentBtn.addEventListener("click", () => { if (selected) { selected.accent = !selected.accent; deps.saveAll(); paintRoll(); } });
   slideBtn.addEventListener("click", () => { if (selected) { selected.slide = !selected.slide; deps.saveAll(); paintRoll(); } });
-  toolbar.append(laneGroup, el("span", "wa-roll-spacer"), lengthSelect, divisionSelect, accentBtn, slideBtn);
+  toolbar.append(laneGroup, el("span", "wa-roll-spacer"), lengthSelect, divisionSelect, octDown, rangeLabel, octUp, accentBtn, slideBtn);
   const scrollWrap = el("div", "wa-roll2-scroll");
   const canvas = document.createElement("canvas");
   canvas.className = "wa-roll2-canvas";
@@ -86,7 +103,7 @@ export function buildRoll(deps: RollDeps): Roll {
   const grid = (): number => (transport.quantizeGrid ? steps() / transport.quantizeGrid : 0);
   const snap = (v: number): number => { const g = grid(); return g ? Math.round(v / g) * g : v; };
   const minLen = (): number => grid() || MIN_LEN_FREE;
-  const rowOf = (n: VNote): number => ROLL_NOTES.indexOf(n.note);
+  const rowOf = (n: VNote): number => rollNotes.indexOf(n.note);
 
   const geom = () => {
     const w = scrollWrap.clientWidth || 720;
@@ -95,7 +112,7 @@ export function buildRoll(deps: RollDeps): Roll {
 
   function paintRoll(): void {
     const { w, stepW } = geom();
-    const h = ROLL_NOTES.length * ROW_H;
+    const h = rollNotes.length * ROW_H;
     const scale = window.devicePixelRatio || 1;
     canvas.style.height = `${h}px`;
     rollPlayhead.style.height = `${h}px`;
@@ -105,7 +122,7 @@ export function buildRoll(deps: RollDeps): Roll {
     g.fillStyle = SCREEN_BG; g.fillRect(0, 0, w, h);
 
     // row stripes: black-key rows darker, octave boundaries ruled
-    ROLL_NOTES.forEach((note, r) => {
+    rollNotes.forEach((note, r) => {
       const y = r * ROW_H;
       if (note.includes("#")) { g.fillStyle = "rgba(255,255,255,0.025)"; g.fillRect(GUTTER, y, w - GUTTER, ROW_H); }
       if (note.startsWith("C") && !note.startsWith("C#")) {
@@ -141,7 +158,7 @@ export function buildRoll(deps: RollDeps): Roll {
     });
     // key gutter on top
     g.fillStyle = "#0a0f13"; g.fillRect(0, 0, GUTTER, h);
-    ROLL_NOTES.forEach((note, r) => {
+    rollNotes.forEach((note, r) => {
       const y = r * ROW_H;
       const black = note.includes("#");
       g.fillStyle = black ? "#11161b" : "#e8ecef";
@@ -157,6 +174,7 @@ export function buildRoll(deps: RollDeps): Roll {
     divisionSelect.value = String(patternDivisions[clip.sel]);
     accentBtn.classList.toggle("active", !!selected?.accent); slideBtn.classList.toggle("active", !!selected?.slide);
     accentBtn.disabled = !selected; slideBtn.disabled = !selected;
+    rangeLabel.textContent = `${rollNotes[rollNotes.length - 1]}–${rollNotes[0]}`;
   }
 
   function paintVel(): void {
@@ -229,10 +247,10 @@ export function buildRoll(deps: RollDeps): Roll {
       else if (found.zone === "l") drag = { kind: "resize-l", note: found.note, origStep: found.note.step, origLen: found.note.len };
       else drag = { kind: "resize-r", note: found.note, origLen: found.note.len };
     } else {
-      if (row < 0 || row >= ROLL_NOTES.length || step < 0 || step >= steps()) return;
+      if (row < 0 || row >= rollNotes.length || step < 0 || step >= steps()) return;
       ctx.checkpoint();
       const start = Math.max(0, Math.min(steps() - minLen(), snap(step)));
-      const fresh: VNote = { note: ROLL_NOTES[row], step: start, len: Math.min(lastLen, steps() - start), vel: 100 };
+      const fresh: VNote = { note: rollNotes[row], step: start, len: Math.min(lastLen, steps() - start), vel: 100 };
       notes().push(fresh);
       selected = fresh;
       drag = { kind: "create", note: fresh };
@@ -256,8 +274,8 @@ export function buildRoll(deps: RollDeps): Roll {
     } else {
       const ns = Math.max(0, Math.min(steps() - n.len, (grid() ? snap(step - drag.grabOffset) : step - drag.grabOffset)));
       n.step = ns;
-      const newRow = Math.max(0, Math.min(ROLL_NOTES.length - 1, row));
-      if (ROLL_NOTES[newRow] !== n.note) { n.note = ROLL_NOTES[newRow]; deps.audition(n.note, n.vel, 1); }
+      const newRow = Math.max(0, Math.min(rollNotes.length - 1, row));
+      if (rollNotes[newRow] !== n.note) { n.note = rollNotes[newRow]; deps.audition(n.note, n.vel, 1); }
     }
     paintRoll();
   });
@@ -332,7 +350,7 @@ export function buildRoll(deps: RollDeps): Roll {
   new ResizeObserver(() => paintRoll()).observe(scrollWrap);
   gridRepainters.push(paintRoll);
   // start the scroll centred on the melodic middle rather than B5
-  requestAnimationFrame(() => { scrollWrap.scrollTop = Math.max(0, ROLL_NOTES.length * ROW_H * 0.4 - scrollWrap.clientHeight / 2); });
+  requestAnimationFrame(() => { scrollWrap.scrollTop = Math.max(0, rollNotes.length * ROW_H * 0.4 - scrollWrap.clientHeight / 2); });
 
   return { pianoRoll, rollPlayheadBar, paintRoll };
 }

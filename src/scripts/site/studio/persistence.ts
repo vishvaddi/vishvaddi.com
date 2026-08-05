@@ -136,7 +136,9 @@ export function applyProject(saved: Record<string, unknown>): void {
         pp.forEach((row, ri) => { if (ri < 8) row.forEach((v, ci) => { if (ci < STEPS) allVels[pi][ri][ci] = v; }); });
       });
       if (saved.dp) (saved.dp as Partial<DrumP>[]).forEach((d, i) => { if (i < 8) Object.assign(dp[i], d); });
+      // pre-v13 the title lived in its own localStorage key, outside the project
       if (typeof saved.title === "string") song.title = (saved.title as string).slice(0, 48) || "Untitled";
+      else song.title = (localStorage.getItem("vv_studio_name") || song.title).slice(0, 48);
       if (saved.bpm) transport.bpm = saved.bpm as number;
       // v4 projects carry a single curPat; v5 carries clipSel + per-track clipPlay.
       const sel = typeof saved.clipSel === "number" ? saved.clipSel : typeof saved.curPat === "number" ? saved.curPat : null;

@@ -1153,10 +1153,43 @@
 .wa-advanced-only { display: flex; flex-wrap: wrap; gap: 2px 4px; }
 .wa-off { opacity: 0.4; pointer-events: none; }
 
-/* Section-coloured knob caps: filter/default orange, env teal, FX blue, macros purple */
+/* Section-coloured knob caps (CV-80): each block of the console reads as its
+   own module at a glance, the way a hardware panel silk-screens its groups. */
 .wa-vblock:has(.wa-env-canvas) .wa-knob { --wa-knob-col: var(--wa-teal); }
 .wa-device .wa-knob { --wa-knob-col: var(--wa-blue); }
 .wa-combinator .wa-knob { --wa-knob-col: var(--wa-purple); }
+.wa-vblock:has(.wa-waveselect) .wa-knob { --wa-knob-col: var(--wa-amber); }
+.wa-vblock:has(.wa-waveselect) + .wa-vblock:has(.wa-waveselect) .wa-knob { --wa-knob-col: #ff8c5a; }
+.wa-lane-sends .wa-knob { --wa-knob-col: var(--wa-blue); }
+.wa-lane-knobs .wa-knob { --wa-knob-col: var(--wa-teal); }
+.wa-master-knob .wa-knob, .wa-transport .wa-knob { --wa-knob-col: #efe3cc; }
+
+/* Wave quick-picks — the classic four shapes as engraved SVG keys */
+.wa-waveselect { display: flex; gap: 3px; margin-bottom: 6px; }
+.wa-wbtn {
+  flex: 1; min-height: 26px; padding: 3px 0; cursor: pointer;
+  color: var(--wa-muted); background: var(--wa-surface-2);
+  border: 1px solid var(--wa-border-2); border-radius: 4px;
+}
+.wa-wbtn svg { display: block; width: 100%; height: 12px; }
+.wa-wbtn path { fill: none; stroke: currentColor; stroke-width: 1.6; }
+.wa-wbtn:hover { color: var(--wa-text); border-color: var(--wa-accent-dim); }
+.wa-wbtn.on { color: #071114; background: var(--wa-amber); border-color: var(--wa-amber); }
+
+/* Screens carry film grain, scanlines and a vignette — the LYSERGIC read.
+   Purely decorative, so the overlay never eats pointer events. */
+.wa-xy-field, .wa-bloom-canvas, .wa-orb, .wa-scope, .wa-roll2-canvas, .wa-lcd { position: relative; }
+.wa-xy-wrap, .wa-bloomfield, .wa-roll2-scroll { position: relative; }
+.wa-xy-wrap::after, .wa-bloomfield::after, .wa-roll2-scroll::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: 4px;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.45) 100%);
+  opacity: 0.55; mix-blend-mode: multiply;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wa-xy-wrap::after, .wa-bloomfield::after, .wa-roll2-scroll::after { opacity: 0.3; }
+}
 
 /* ----- POWER + MASTER header controls ----- */
 .wa-power {

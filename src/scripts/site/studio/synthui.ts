@@ -13,6 +13,7 @@ import { el, btn, help, sliderRow, drawScope, drawEnvelopeShape, download, askTe
 import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
 import { showVelocityPopup } from "./velpopup";
 import { buildKeys, setKeysLatch } from "./keys";
+import type { KeyMods } from "./keys";
 import { buildRoll } from "./roll";
 import { buildXYField } from "./xyfield";
 
@@ -289,9 +290,36 @@ export function buildSynth(): SynthUI {
       box.append(waveCanvas);
       const redrawWave = () => drawWavetableStack(waveCanvas, o.table, o.pos);
       waveRedraws.push(redrawWave);
+      // CV-80 quick picks: the four classic shapes are positions on the basic
+      // table, so these jump straight there without leaving the wavetable model.
+      const waveRow = el("div", "wa-waveselect");
+      const SHAPES: Array<[string, number, string]> = [
+        ["sine", 0, "M1 7 Q5.5 -1 9 7 T17 7"],
+        ["triangle", 1 / 3, "M1 11 L5.5 3 L11 11 L17 3"],
+        ["sawtooth", 2 / 3, "M1 12 L9 3 L9 12 L17 3"],
+        ["square", 1, "M1 12 L1 3 L9 3 L9 12 L17 12 L17 3"],
+      ];
+      const paintWaveBtns = (): void => {
+        Array.from(waveRow.children).forEach((child, idx) => {
+          const [, pos] = SHAPES[idx];
+          child.classList.toggle("on", o.table === "basic" && Math.abs(o.pos - pos) < 0.02);
+        });
+      };
+      SHAPES.forEach(([name, pos, path]) => {
+        const b = el("button", "wa-wbtn") as HTMLButtonElement;
+        b.type = "button"; b.title = name; b.setAttribute("aria-label", name);
+        b.innerHTML = `<svg viewBox="0 0 18 14" aria-hidden="true"><path d="${path}"/></svg>`;
+        b.addEventListener("click", () => {
+          o.table = "basic"; o.pos = pos; saveAll(); redrawWave(); paintWaveBtns();
+          const tableSel = box.querySelector<HTMLSelectElement>("select"); if (tableSel) tableSel.value = "basic";
+        });
+        waveRow.append(b);
+      });
+      box.append(waveRow);
       const tableOptions: Array<[string, string]> = TABLE_NAMES.map((n) => [n, n.toUpperCase()]);
       if (o.table.startsWith("text:")) tableOptions.push([o.table, `TEXT "${o.table.slice(5)}"`]);
-      box.append(selRow("Table", tableOptions, o.table, (v) => { o.table = v; saveAll(); redrawWave(); }));
+      box.append(selRow("Table", tableOptions, o.table, (v) => { o.table = v; saveAll(); redrawWave(); paintWaveBtns(); }));
+      paintWaveBtns();
       const oscAdvanced = el("div", "wa-advanced-only");
       const textRow = el("div", "wa-export");
       const textInput = document.createElement("input");
@@ -450,11 +478,15 @@ export function buildSynth(): SynthUI {
     octaveLabel.textContent = `OCT ${octaveShift >= 0 ? "+" : ""}${octaveShift}`;
   }
   buildKeys(synthKeys,
-    (note) => {
+    (note, mods) => {
       ensureNodes();
       const n = midiToNote(noteToMidi(note) + octaveShift * 12);
-      liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, n);
-      recordSynthOn(n);
+      // A slid key glides in like a 303 tie; an accent hits harder and brighter.
+      const patch = mods?.slide && (vsynthPatch.glide ?? 0) < 0.08
+        ? { ...vsynthPatch, glide: 0.08 } as typeof vsynthPatch
+        : vsynthPatch;
+      liveKeys.noteOn(ac(), engine.synthGain!, patch, n, mods?.accent ? 122 : 105);
+      recordSynthOn(n, mods);
     },
     (note) => {
       const n = midiToNote(noteToMidi(note) + octaveShift * 12);
@@ -473,7 +505,11 @@ export function buildSynth(): SynthUI {
   function synthRecTarget(): number { return (playhead.playing ? clip.play.synth : null) ?? clip.sel; }
   // Unquantized capture (C3): notes land exactly where they were played;
   // set the transport Grid to quantize instead.
-  function recordSynthOn(note: string): void {
+  // Expression captured at note-on rides through to the recorded note, so a
+  // shift-click on a key writes an accented note and alt-click a slide.
+  const recMods = new Map<string, KeyMods>();
+  function recordSynthOn(note: string, mods?: KeyMods): void {
+    if (mods?.accent || mods?.slide) recMods.set(note, mods); else recMods.delete(note);
     if (!synthRec || !playhead.playing) return;
     const pos = currentStepFloat(); if (pos < 0) return;
     heldRec.set(note, pos % patternLengths[synthRecTarget()]);
@@ -488,7 +524,11 @@ export function buildSynth(): SynthUI {
     if (len <= 0) len += patternLength;
     len = Math.max(0.25, Math.min(patternLength - start, len));
     const target = synthRecTarget();
-    synthLaneNotes[activeSynth.lane][target].push({ note, step: start, len, vel: 100 });
+    const mods = recMods.get(note); recMods.delete(note);
+    synthLaneNotes[activeSynth.lane][target].push({
+      note, step: start, len, vel: mods?.accent ? 122 : 100,
+      accent: !!mods?.accent, slide: !!mods?.slide,
+    });
     if (target === clip.sel) paintRoll();
     saveAll();
   }
