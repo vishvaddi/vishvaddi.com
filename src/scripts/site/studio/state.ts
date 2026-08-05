@@ -251,7 +251,7 @@ export const laneRate = (scene: number, r: number): number => laneRates[scene]?.
 // default — it takes the wider jitter and the ghost hits.
 export type LaneVoice = "auto" | "glitch";
 export const laneVoices: LaneVoice[] = DRUMS.map(() => "auto");
-export const laneSends = DRUMS.map(() => ({ echo: 0, space: 0 }));
+export const laneSends = DRUMS.map(() => ({ echo: 0, space: 0, pan: 0 }));
 export const glitchLane = { row: DRUMS.length - 1 };
 export const songChain = Array.from({ length: SONG_SLOTS }, (_, i) => i % 4);
 export const padEvents: PadEvent[][] = Array.from({ length: SCENES }, () => []);

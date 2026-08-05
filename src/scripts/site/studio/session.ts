@@ -64,34 +64,38 @@ export function buildSession(): SessionView {
     if (clip.sel !== scene) ctx.selectScene(scene);
     paintSession(); saveAll();
   }
-  // Header: track names double as stop buttons.
+  // Transposed launcher: 3 track ROWS × 16 scene COLUMNS. Sixteen scenes as
+  // rows cannot fit the aperture; as columns they do, and time then runs
+  // left-to-right on the same axis as the chain composer below. Cells are
+  // still addressed [scene][track] so paintSession is untouched.
+  SCENE_LABELS.forEach(() => sessionCells.push([]));
   const headRow = el("div", "wa-session-row wa-session-head");
   headRow.append(el("span", "wa-session-scene", "Scene"));
+  SCENE_LABELS.forEach((label, scene) => {
+    const launch = btn(label, "wa-scene-launch");
+    launch.classList.remove("wa-btn");
+    help(launch, `Launch every track's clip ${label} together (a scene).`);
+    launch.addEventListener("click", () => launchScene(scene));
+    sceneLaunchBtns.push(launch);
+    headRow.append(launch);
+  });
+  sessionGrid.append(headRow);
   TRACKS.forEach((track) => {
+    const row = el("div", "wa-session-row");
     const stop = btn(`${TRACK_LABELS[track]} ■`, "wa-clip-stop");
     stop.classList.remove("wa-btn");
     help(stop, `Stop the ${TRACK_LABELS[track].toLowerCase()} track at the next bar.`);
     stop.addEventListener("click", () => launchClip(track, null));
-    headRow.append(stop);
-  });
-  sessionGrid.append(headRow);
-  SCENE_LABELS.forEach((label, scene) => {
-    const row = el("div", "wa-session-row");
-    const launch = btn(`▶ ${label}`, "wa-scene-launch");
-    help(launch, `Launch every track's clip ${label} together (a scene).`);
-    launch.addEventListener("click", () => launchScene(scene));
-    sceneLaunchBtns.push(launch);
-    row.append(launch);
-    const rowCells: HTMLButtonElement[] = [];
-    TRACKS.forEach((track) => {
+    row.append(stop);
+    SCENE_LABELS.forEach((label, scene) => {
       const cell = btn("", "wa-clip");
       cell.classList.remove("wa-btn");
       cell.style.setProperty("--scene-color", SCENE_COLORS[scene]);
       help(cell, `Launch ${TRACK_LABELS[track].toLowerCase()} clip ${label}. Tracks can play clips from different scenes.`);
       cell.addEventListener("click", () => launchClip(track, scene));
-      rowCells.push(cell); row.append(cell);
+      sessionCells[scene].push(cell);
+      row.append(cell);
     });
-    sessionCells.push(rowCells);
     sessionGrid.append(row);
   });
   // Compact pattern-chain composer. It maps Anchor's repeat/reorder workflow

@@ -2351,3 +2351,331 @@
     box-shadow: inset 0 -3px var(--wa-accent);
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   APERTURE ARMATURE — "metal never scrolls, only glass does"
+   Every mode is one faceplate cut to the chassis aperture (.wa-pagehost). The
+   faceplate stretches to fill it and is forbidden to overflow; anything
+   genuinely larger lives in a recessed well that scrolls on its own.
+   Last block in the file deliberately: studio.css carries several historical
+   override blocks, and this armature has to win over all of them.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.immersive-page .wa-win {
+  --wa-gap: 12px;      /* between modules */
+  --wa-gap-in: 8px;    /* inside a module */
+  --wa-pad: 14px;      /* faceplate padding */
+  --wa-rail: 280px;    /* the inspector rail, identical in every mode */
+}
+.immersive-page .wa-pagehost {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  padding: var(--wa-pad);
+  overflow: hidden;
+}
+.immersive-page .wa-page {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  gap: var(--wa-gap);
+  overflow: hidden;
+}
+/* Glass: the only things allowed to scroll. */
+.immersive-page .wa-glass {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+/* Rails are identical everywhere and always reach the aperture floor. */
+.immersive-page .wa-inspector {
+  flex: 0 0 var(--wa-rail);
+  width: var(--wa-rail);
+  max-height: none;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--wa-gap-in);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* Screws belong to the outermost plate only — on every sub-module they read
+   as toy rather than tool. */
+.immersive-page .wa-panel .wa-panel { background-image: none; }
+
+/* ── MIX: one console faceplate ─────────────────────────────────────────── */
+.immersive-page .wa-page-mix {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 26%);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--wa-gap);
+}
+/* align-self: stretch is load-bearing — an earlier override block sets
+   `align-self: start` on these three, which is what left MIX half empty. */
+.immersive-page .wa-page-mix > .wa-mix-channels {
+  grid-column: 1; grid-row: 1; min-height: 0; align-self: stretch; display: flex;
+}
+.immersive-page .wa-page-mix > .wa-mix-scope {
+  grid-column: 2; grid-row: 1; min-height: 0; align-self: stretch;
+  display: flex; flex-direction: column; gap: var(--wa-gap-in);
+}
+.immersive-page .wa-page-mix > .wa-mix-flex {
+  grid-column: 1 / -1; grid-row: 2; align-self: stretch;
+  max-height: 30dvh; min-height: 0;
+  display: flex; flex-direction: column;
+}
+/* MASTER OUT well: trace on top, orb below — a tall empty scope is a void,
+   and the orb already exists. */
+.immersive-page .wa-master-scope { flex: 0 0 clamp(80px, 14dvh, 150px); height: auto; min-height: 0; margin: 0; }
+.immersive-page .wa-mix-scope .wa-orb { flex: 1; min-height: 0; height: auto; margin: 0; }
+
+/* Channel strips fill the plate; fader + ladder take the leftover height. */
+.immersive-page .wa-page-mix .wa-mixer {
+  flex: 1; min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: var(--wa-gap-in);
+  padding: 0;
+}
+.immersive-page .wa-page-mix .wa-ch {
+  min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 8px 4px;
+  background: linear-gradient(180deg, rgba(255, 235, 200, 0.04), rgba(0, 0, 0, 0.18)), var(--wa-surface-3);
+  border: 1px solid #0e0d0b; border-radius: 4px;
+  box-shadow: inset 0 1px 0 rgba(255, 235, 200, 0.07);
+}
+.immersive-page .wa-ch-master { background: linear-gradient(180deg, rgba(255, 176, 77, 0.1), rgba(0, 0, 0, 0.2)), var(--wa-surface-3); }
+.immersive-page .wa-ch-name {
+  font-size: 9px; letter-spacing: .18em; color: var(--wa-muted);
+  text-transform: uppercase; text-shadow: 0 1px 0 rgba(0, 0, 0, .7);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.immersive-page .wa-ch-pan { margin: 0; }
+.immersive-page .wa-ch-pan { width: 100%; }
+.immersive-page .wa-ch-pan .wa-knob { width: 38px; height: 38px; --wa-knob-col: var(--wa-teal); }
+.immersive-page .wa-ch-pan .wa-knob-lbl { display: none; }
+.immersive-page .wa-ch-pan .wa-knob-val { font-size: 8px; }
+.immersive-page .wa-ch-well {
+  flex: 1; min-height: 48px;
+  display: flex; align-items: stretch; justify-content: center; gap: 6px;
+  width: 100%;
+}
+.immersive-page .wa-page-mix .wa-fader { height: auto; width: 34px; align-self: stretch; }
+.immersive-page .wa-meter {
+  display: flex; flex-direction: column; justify-content: flex-start; gap: 1px;
+  width: 15px; padding: 2px;
+  background: var(--wa-phos-bg); border: 1px solid #0a0908; border-radius: 2px;
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, .8);
+}
+.immersive-page .wa-meter-seg { flex: 1; min-height: 2px; border-radius: 1px; background: rgba(77, 214, 193, .1); }
+.immersive-page .wa-meter-seg.lit { background: var(--wa-teal); box-shadow: 0 0 4px rgba(77, 214, 193, .6); }
+.immersive-page .wa-meter-seg.warm.lit { background: var(--wa-amber); box-shadow: 0 0 4px rgba(255, 210, 77, .6); }
+.immersive-page .wa-meter-seg.hot.lit { background: var(--wa-red); box-shadow: 0 0 5px rgba(255, 77, 77, .7); }
+.immersive-page .wa-ch-db {
+  font: 500 9px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color: var(--wa-phos); letter-spacing: .04em;
+}
+.immersive-page .wa-ms { display: flex; gap: 3px; width: 100%; }
+.immersive-page .wa-ms .wa-mute, .immersive-page .wa-ms .wa-solo {
+  flex: 1; min-width: 22px; height: 22px; font-size: 9px; font-weight: 700;
+  color: var(--wa-muted); background: var(--wa-inset);
+  border: 1px solid #0a0908; border-radius: 3px; cursor: pointer;
+}
+.immersive-page .wa-ms .wa-mute.active { color: #1a0f06; background: var(--wa-amber); }
+.immersive-page .wa-ms .wa-solo.active { color: #06140f; background: var(--wa-teal); }
+/* Device rail across the bottom: tabs horizontal, detail scrolls as glass. */
+.immersive-page .wa-page-mix .wa-devbrowser { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.immersive-page .wa-page-mix .wa-devtabs { flex-direction: row; flex-wrap: wrap; gap: 4px; flex: 0 0 auto; }
+.immersive-page .wa-page-mix .wa-devtab { flex: 0 0 auto; height: 30px; padding: 0 12px; }
+.immersive-page .wa-page-mix .wa-devdetail { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+/* Export modal — the panel that used to hold permanent space on MIX. */
+.wa-export-dialog {
+  max-width: min(680px, 92vw); padding: 16px;
+  color: var(--wa-text); background: var(--wa-surface-2);
+  border: 1px solid #0a0908; border-radius: 6px;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, .7);
+}
+.wa-export-dialog::backdrop { background: rgba(0, 0, 0, .6); }
+.wa-export-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.wa-export-dialog-head .wa-fx-title { margin: 0; }
+/* Device rail: controls flow across the width instead of stacking in a column
+   and leaving the rail empty. */
+.immersive-page .wa-page-mix .wa-devdetail .wa-device {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--wa-gap-in) var(--wa-gap);
+  margin: 0;
+}
+.immersive-page .wa-page-mix .wa-devdetail .wa-device-header { flex: 1 0 100%; }
+.immersive-page .wa-page-mix .wa-devdetail .wa-combinator { display: flex; flex-wrap: wrap; align-items: flex-end; }
+
+/* ── CLIPS: transposed launcher (3 track rows × 16 scene columns) ───────── */
+.immersive-page .wa-page-song { display: flex; flex-direction: column; }
+.immersive-page .wa-page-song > .wa-panel {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--wa-gap);
+}
+.immersive-page .wa-session {
+  flex: 0 0 auto; margin: 0; padding: var(--wa-gap-in);
+  display: flex; flex-direction: column; gap: 4px;
+}
+/* One shared column template so the chain composer below lines up with the
+   scene columns above it. */
+.immersive-page .wa-session-row,
+.immersive-page .wa-chainstrip {
+  display: grid;
+  grid-template-columns: 104px repeat(16, minmax(0, 1fr));
+  gap: 4px;
+  align-items: stretch;
+}
+.immersive-page .wa-session-row { min-height: 0; }
+.immersive-page .wa-session-head { margin: 0; }
+.immersive-page .wa-session-head .wa-scene-launch {
+  min-width: 0; height: 30px; padding: 0; font-size: 10px; font-weight: 700; letter-spacing: .06em;
+  color: var(--wa-muted); background: var(--wa-inset);
+  border: 1px solid #0a0908; border-radius: 3px; cursor: pointer;
+}
+.immersive-page .wa-session-head .wa-scene-launch:hover { color: var(--wa-accent); }
+.immersive-page .wa-session .wa-clip {
+  min-width: 0; height: clamp(44px, 13dvh, 132px);
+  border-radius: 3px;
+}
+.immersive-page .wa-clip-stop {
+  min-width: 0; font-size: 10px; letter-spacing: .1em;
+  display: flex; align-items: center; justify-content: flex-start; padding: 0 8px;
+}
+.immersive-page .wa-session-scene {
+  display: flex; align-items: center; font-size: 9px; letter-spacing: .24em;
+}
+/* Composer takes the remainder; the automation list is glass. */
+.immersive-page .wa-composer {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--wa-gap-in);
+}
+.immersive-page .wa-chainstrip { align-content: start; }
+.immersive-page .wa-chain-block { min-width: 0; height: 30px; }
+.immersive-page .wa-automation-editor { flex: 0 0 auto; }
+.immersive-page .wa-ramp-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+/* ── DRUMS: lanes derive from the aperture, never dictate it ────────────── */
+.immersive-page .wa-page-drums { display: flex; gap: var(--wa-gap); }
+.immersive-page .wa-drums-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--wa-gap-in); }
+.immersive-page .wa-page-drums > .wa-drums-main > .wa-panel {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--wa-gap-in);
+}
+.immersive-page .wa-page-drums .wa-pat-row {
+  flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 3px; align-items: center;
+}
+.immersive-page .wa-page-drums .wa-pat-btn {
+  min-width: 26px; height: 26px; padding: 0 7px; font-size: 10px; font-weight: 700;
+  color: var(--wa-muted); background: var(--wa-inset);
+  border: 1px solid #0a0908; border-radius: 3px;
+}
+.immersive-page .wa-page-drums .wa-pat-btn.active {
+  color: #1a0f06; background: var(--wa-accent); border-color: var(--wa-accent);
+}
+.immersive-page .wa-page-drums .wa-grid { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 3px; }
+.immersive-page .wa-page-drums .wa-row { flex: 1; min-height: 0; display: flex; gap: 3px; }
+/* the clamp is the whole fix: eight lanes divide whatever height is left */
+.immersive-page .wa-page-drums .wa-grid .wa-cell,
+.immersive-page .wa-page-drums .wa-drum {
+  height: auto; min-height: 0; align-self: stretch;
+}
+.immersive-page .wa-page-drums .wa-grid .wa-cell { flex: 1; min-width: 0; }
+.immersive-page .wa-page-drums .wa-drum { flex: 0 0 108px; width: 108px; font-size: 11px; }
+.immersive-page .wa-page-drums .wa-ruler-spacer { flex: 0 0 108px; width: 108px; }
+.immersive-page .wa-page-drums .wa-row-tools { flex: 0 0 auto; }
+
+/* ── PADS: performance rail · deck · inspector ──────────────────────────── */
+.immersive-page .wa-page-pads { display: flex; gap: var(--wa-gap); }
+.immersive-page .wa-page-pads > .wa-pads-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--wa-gap-in); }
+.immersive-page .wa-page-pads > .wa-pads-main > .wa-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.immersive-page .wa-page-pads .wa-mpc-deck { flex: 1; min-height: 0; display: flex; gap: var(--wa-gap); align-items: stretch; }
+.immersive-page .wa-page-pads .wa-mpc-pad-area { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.immersive-page .wa-page-pads .wa-mpc-pads {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr));
+  gap: clamp(6px, 0.9vw, 14px); max-width: none; margin: 0;
+}
+.immersive-page .wa-page-pads .wa-pad { min-height: 0; height: auto; }
+/* the side toolbar becomes the left performance rail */
+.immersive-page .wa-page-pads .wa-mpc-side {
+  flex: 0 0 210px; width: 210px; min-height: 0;
+  display: flex; flex-direction: column; gap: 5px;
+  overflow-y: auto; overscroll-behavior: contain;
+  order: -1;
+}
+
+/* Corrections — the two rails these rules were actually meant to hit. */
+/* The DRUMS lane sampler is its own element, not a .wa-inspector, so the rail
+   treatment missed it entirely and it grew to 1031px. */
+.immersive-page .wa-page-drums > .wa-lane-inspector,
+.immersive-page .wa-page-drums .wa-inspector {
+  flex: 0 0 var(--wa-rail); width: var(--wa-rail);
+  min-height: 0; height: 100%; max-height: none;
+  overflow-y: auto; overscroll-behavior: contain;
+}
+.immersive-page .wa-page-pads .wa-mpc-pad { min-height: 0; height: auto; aspect-ratio: auto; }
+/* The DRUMS sampler rail is .wa-inspector.wa-lane-aside; without an explicit
+   height it grew to 1030px and pushed the page past the aperture. */
+.immersive-page .wa-page-drums > .wa-lane-aside {
+  flex: 0 0 var(--wa-rail); width: var(--wa-rail);
+  min-height: 0; height: 100%; max-height: none;
+  overflow-y: auto; overscroll-behavior: contain;
+}
+/* Laptop: the keys strip and the launcher were each a few px proud of the
+   aperture. Trim rather than let metal spill. */
+@media (max-height: 780px) {
+  .immersive-page .wa-synth-keys, .immersive-page .wa-keys { max-height: 96px; }
+  .immersive-page .wa-session .wa-clip { height: clamp(40px, 12dvh, 110px); }
+}
+
+/* ── SYNTH: conform to the armature ─────────────────────────────────────── */
+.immersive-page .wa-page-synth { display: flex; flex-direction: column; }
+.immersive-page .wa-page-synth > .wa-subtabs,
+.immersive-page .wa-page-synth > .wa-export,
+.immersive-page .wa-page-synth > .wa-keys,
+.immersive-page .wa-page-synth > .wa-synth-keys { flex: 0 0 auto; }
+/* the editor absorbs the slack so the pinned keys strip never spills */
+.immersive-page .wa-synth-main { flex: 1; min-height: 0; align-items: stretch; }
+.immersive-page .wa-synth-side { flex: 0 0 var(--wa-rail); width: var(--wa-rail); min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.immersive-page .wa-synth-viewhost { min-height: 0; }
+
+/* Narrow screens: sixteen scene columns cannot fit 390px, so the launcher and
+   the chain strip become one horizontally-scrolling well — glass, sharing a
+   column width so they stay aligned with each other. */
+@media (max-width: 900px) {
+  .immersive-page .wa-session {
+    overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: thin;
+  }
+  .immersive-page .wa-session-row,
+  .immersive-page .wa-chainstrip {
+    grid-template-columns: 76px repeat(16, minmax(52px, 1fr));
+    min-width: max-content;
+  }
+  .immersive-page .wa-session .wa-clip { height: clamp(40px, 9dvh, 64px); }
+  .immersive-page .wa-composer { flex: 0 0 auto; }
+  .immersive-page .wa-page-song > .wa-panel { overflow-y: auto; overscroll-behavior: contain; }
+  /* rails stack under the main area rather than eating the width */
+  .immersive-page .wa-page-drums, .immersive-page .wa-page-pads { flex-direction: column; }
+  .immersive-page .wa-page-drums > .wa-lane-aside,
+  .immersive-page .wa-page-pads > .wa-inspector {
+    flex: 0 0 auto; width: 100%; height: auto; max-height: 42dvh;
+  }
+  .immersive-page .wa-page-pads .wa-mpc-side { flex: 0 0 auto; width: 100%; order: 0; }
+  .immersive-page .wa-page-pads .wa-mpc-deck { flex-direction: column; }
+}
+/* The chain strip takes the composer's slack as a recessed arrangement well,
+   so the space below the launcher reads as a track you drop scenes into
+   rather than as bare plate. */
+.immersive-page .wa-chainstrip {
+  flex: 1; min-height: 64px; align-content: start;
+  padding: var(--wa-gap-in);
+  background: var(--wa-phos-bg);
+  border: 1px solid #0a0908; border-radius: 4px;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, .75);
+}
+.immersive-page .wa-chain-empty {
+  grid-column: 1 / -1; align-self: center; justify-self: center;
+  color: var(--wa-phos-dim); font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
+}
+.immersive-page .wa-composer > .wa-song-library { flex: 0 0 auto; }

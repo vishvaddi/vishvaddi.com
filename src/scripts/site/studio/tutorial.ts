@@ -15,13 +15,13 @@ export interface TutorialTargets {
   presetRow: HTMLElement;
   sessionGrid: HTMLElement;
   devicePanel: HTMLElement;
-  exp: HTMLElement;
+  exportBtn: HTMLElement;
   transportBar: HTMLElement;
   tutorialBtn: HTMLElement;
 }
 
 export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: number) => void } {
-  const { tabBtns, padGrid, selectedSampleEditor, waveform, eventLane, pianoRoll, gridSel, presetRow, sessionGrid, devicePanel, exp, transportBar, tutorialBtn } = t;
+  const { tabBtns, padGrid, selectedSampleEditor, waveform, eventLane, pianoRoll, gridSel, presetRow, sessionGrid, devicePanel, exportBtn, transportBar, tutorialBtn } = t;
   const shortcutsBox = el("div", "wa-help-shortcuts");
   shortcutsBox.append(el("div", "wa-fx-title", "KEYBOARD SHORTCUTS"));
   ([
@@ -117,7 +117,7 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
     { workspace: 6, target: presetRow, title: "The VV-1 synth", text: "The Patch view holds the full editor. Search or randomize a patch, or drag the envelope shape and watch the live waveform preview react. Simple view collapses the editor to the essentials — Advanced view reveals the full mod matrix." },
     { workspace: 4, target: sessionGrid, title: "Launch clips and scenes", text: "Each column is a track and each row a scene. Launch single clips or a whole row — changes wait for the next bar so transitions stay in time." },
     { workspace: 5, target: devicePanel, title: "Process the sound", text: "Use macros, groove controls and device bypass switches to shape the complete signal chain." },
-    { workspace: 5, target: exp, title: "Save and export", text: "Save an editable project before exporting. WAV preserves full quality; MP3 is smaller for sharing." },
+    { workspace: 5, target: exportBtn, title: "Save and export", text: "Save an editable project before exporting. WAV preserves full quality; MP3 is smaller for sharing." },
     { workspace: 5, target: transportBar, title: "Transport stays available", text: "Playback, BPM, grid, metronome, undo and tutorial controls remain visible in every mode. Space plays/stops; Ctrl+Z undoes." },
     { workspace: 5, target: tutorialBtn, title: "Come back anytime", text: "This same button reopens things later — Browse Help (top of this card) is a searchable reference for every section plus the full keyboard-shortcut list, or replay this tour from the start." },
   ];

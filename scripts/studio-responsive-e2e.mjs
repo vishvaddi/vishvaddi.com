@@ -59,7 +59,9 @@ for (const [name, width, height] of viewports) {
           }
           const channelTops = [...document.querySelectorAll('.wa-mixer .wa-ch')].map((channel) => Math.round(channel.getBoundingClientRect().top))
           return {
-            gaps: [gap('.wa-mix-export', '.wa-mix-export .wa-export:last-child'), gap('.wa-mix-flex', '.wa-devbrowser')],
+            // export moved to a transport-key modal; the device rail and the
+            // channel plate are what must stay tight now
+            gaps: [gap('.wa-mix-flex', '.wa-devbrowser'), gap('.wa-mix-channels', '.wa-mixer')],
             channelRows: new Set(channelTops).size,
           }
         })

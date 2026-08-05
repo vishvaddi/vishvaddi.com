@@ -216,8 +216,11 @@ export function applyProject(saved: Record<string, unknown>): void {
       if (Array.isArray(saved.laneVoices)) (saved.laneVoices as string[]).forEach((v, r) => {
         if (r < DRUMS.length) laneVoices[r] = v === "glitch" ? "glitch" : "auto";
       });
-      if (Array.isArray(saved.laneSends)) (saved.laneSends as Array<{ echo?: number; space?: number }>).forEach((v, r) => {
-        if (r < DRUMS.length && v) { laneSends[r].echo = Number(v.echo) || 0; laneSends[r].space = Number(v.space) || 0; }
+      if (Array.isArray(saved.laneSends)) (saved.laneSends as Array<{ echo?: number; space?: number; pan?: number }>).forEach((v, r) => {
+        if (r < DRUMS.length && v) {
+          laneSends[r].echo = Number(v.echo) || 0; laneSends[r].space = Number(v.space) || 0;
+          laneSends[r].pan = Math.max(-1, Math.min(1, Number(v.pan) || 0));
+        }
       });
       if (saved.songChain) (saved.songChain as number[]).forEach((v, i) => {
         if (i < SONG_SLOTS) songChain[i] = Math.max(0, Math.min(SCENES - 1, Number(v) || 0));

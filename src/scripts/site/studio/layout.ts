@@ -3,8 +3,27 @@
 // function per screen, each sized to fit its viewport with no page scroll
 // (SOUND is the sole browse-and-scroll exception, by design).
 // This module RE-HOUSES panels built elsewhere — it builds no instruments.
-import { el, btn, help } from "./helpers";
+import { el, btn, help, drawScope, SCREEN_FG } from "./helpers";
 import { buildOrb } from "./orb";
+import { masterAnalyser } from "./engine";
+
+/** Master output trace on the MIX faceplate. Idles as a flat line until audio
+ *  starts, same rule the synth scope follows. */
+function drawMasterScope(canvas: HTMLCanvasElement, page: HTMLElement): void {
+  const data = new Uint8Array(2048);
+  const frame = (): void => {
+    requestAnimationFrame(frame);
+    if (page.hidden || !page.offsetParent) return;
+    const an = masterAnalyser;
+    const out = new Float32Array(an ? an.fftSize : 256);
+    if (an) {
+      an.getByteTimeDomainData(data.subarray(0, an.fftSize));
+      for (let i = 0; i < an.fftSize; i++) out[i] = (data[i] - 128) / 128;
+    }
+    drawScope(canvas, out, SCREEN_FG);
+  };
+  frame();
+}
 
 export type ModeId = "drums" | "pads" | "synth" | "song" | "mix";
 
@@ -25,7 +44,6 @@ export interface LayoutPanels {
   song: HTMLElement;                // arrangement lanes + help (grid/status re-homed here)
   mixer: HTMLElement;
   devicePanel: HTMLElement;
-  exp: HTMLElement;
   chop: HTMLElement;
   scratchPanel: HTMLElement;
   inspector: HTMLElement;
@@ -189,13 +207,19 @@ export function buildLayout(p: LayoutPanels): Layout {
   const songPage = el("div", "wa-page wa-page-song");
   songPage.append(p.song);
 
-  // ── MIX ── mixer + export up front (export must not need a scroll to find),
-  // devices flex below and scroll internally
+  // ── MIX ── one console faceplate: channel strips fill the upper aperture
+  // beside a master scope well, devices span the bottom as a rail. Export is
+  // a rare terminal action, so it lives behind a transport key, not here.
   const mixPage = el("div", "wa-page wa-page-mix");
   p.mixer.classList.add("wa-mix-channels");
-  p.exp.classList.add("wa-mix-export");
   p.devicePanel.classList.add("wa-mix-flex");
-  mixPage.append(p.mixer, p.exp, p.devicePanel);
+  const scopeWell = el("div", "wa-panel wa-mix-scope");
+  const masterScope = document.createElement("canvas"); masterScope.className = "wa-scope wa-master-scope";
+  const mixOrb = buildOrb();
+  help(scopeWell, "Master output — the finished mix, post-limiter.");
+  scopeWell.append(el("div", "wa-fx-title", "MASTER OUT"), masterScope, mixOrb.canvas);
+  mixPage.append(p.mixer, scopeWell, p.devicePanel);
+  drawMasterScope(masterScope, mixPage);
 
   const pages: Record<ModeId, HTMLElement> = {
     drums: drumsPage, pads: padsPage,
@@ -216,6 +240,7 @@ export function buildLayout(p: LayoutPanels): Layout {
     modeKeyBtns.forEach((b, i) => b.classList.toggle("active", MODES[i].id === next));
     (Object.keys(pages) as ModeId[]).forEach((id) => { pages[id].hidden = id !== next; });
     if (next === "synth") p.onSynthVisible();
+    mixOrb.setActive(next === "mix");
     p.onModeChange(MODES.find((m) => m.id === next)!.label);
     localStorage.setItem("vv_studio_mode", next);
   }

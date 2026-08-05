@@ -166,10 +166,14 @@ export async function initStudio(): Promise<void> {
   songBtn.classList.toggle("active", transport.songMode);
   // songBtn (Session/Arrange toggle) retired with the timeline (E) — the
   // element survives detached because session.ts still pokes ctx.songBtn.
+  // EXPORT is a rare terminal action — a chassis key opening a modal, rather
+  // than a panel holding permanent space on the MIX faceplate.
+  const exportBtn = btn("EXPORT", "wa-btn-sm wa-export-key");
+  help(exportBtn, "Render the track to WAV, MP3 or stems, or save and open project files.");
   transportBar.append(
     playBtn, stopBtn, el("span", "wa-sep"), el("span", "wa-lbl", "BPM"), bpmDown, bpmInput, bpmUp, el("span", "wa-sep"),
     swingWrap, el("span", "wa-lbl", "Grid"), gridSel, metroBtn, metroVolIn, countBtn, el("span", "wa-sep"),
-    undoBtn, redoBtn, tutorialBtn,
+    undoBtn, redoBtn, exportBtn, tutorialBtn,
   );
   const undoStack: HistoryState[] = [], redoStack: HistoryState[] = [];
   function checkpoint(): void {
@@ -192,6 +196,15 @@ export async function initStudio(): Promise<void> {
   // the resample feature can take renderBuffer directly)
   const { panel: exp, renderSel, renderBuffer } = buildProjectExport();
   ctx.renderSel = renderSel;
+  // Export panel re-housed into a modal (same <dialog> idiom as askText).
+  const exportDialog = document.createElement("dialog");
+  exportDialog.className = "wa-export-dialog";
+  const exportClose = btn("Close", "wa-btn-sm");
+  exportClose.addEventListener("click", () => exportDialog.close());
+  const exportHead = el("div", "wa-export-dialog-head");
+  exportHead.append(el("div", "wa-fx-title", "EXPORT / PROJECT"), exportClose);
+  exportDialog.append(exportHead, exp);
+  exportBtn.addEventListener("click", () => { if (!exportDialog.isConnected) win.append(exportDialog); exportDialog.showModal(); });
 
   // ── MPC performance ── (padsui.ts — Phase 0 split)
   const { mpcPanel, padSeqPanel, padButtons, paintMpcPads, paintEventLane, triggerPerformancePad, padGrid, eventLane, selectedPadLabel, selectedSampleEditor } = buildPads({ renderBuffer });
@@ -226,7 +239,7 @@ export async function initStudio(): Promise<void> {
   const layout = buildLayout({
     beat, mpcPanel, padSeqPanel, padGrid, pianoRoll, synthKeys,
     keysHeader: synth.keysHeader, synthPanel, xyPanel: synth.xyPanel, scope: synth.scope, chordPanel: synth.chordPanel,
-    sessionGrid, launchStatus, song, mixer, devicePanel, exp,
+    sessionGrid, launchStatus, song, mixer, devicePanel,
     chop, scratchPanel, inspector, laneInspector,
     onSynthVisible: () => synth.waveRedraws().forEach((fn) => fn()),
     onModeChange: (label) => { lcdMode.textContent = label; },
@@ -247,7 +260,7 @@ export async function initStudio(): Promise<void> {
   // ── Help and tutorial ── (tutorial.ts — Phase 0 split)
   const { showTutorialStep } = buildTutorial({
     tabBtns, padGrid, selectedSampleEditor, waveform, eventLane, pianoRoll,
-    gridSel, presetRow, sessionGrid, devicePanel, exp,
+    gridSel, presetRow, sessionGrid, devicePanel, exportBtn,
     transportBar, tutorialBtn,
   });
   tutorialBtn.addEventListener("click", () => showTutorialStep(0));

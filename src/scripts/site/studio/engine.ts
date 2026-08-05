@@ -126,25 +126,43 @@ export function ac(): AudioContext {
  *  and offline. `gainOf` lets the offline render copy the live fader values. */
 export function buildTracks(
   a: BaseAudioContext, chain: MasterChain, gainOf: (i: number) => number,
-): { tracks: GainNode[]; echoSends: GainNode[]; spaceSends: GainNode[]; synth: GainNode } {
-  const tracks: GainNode[] = [], echoSends: GainNode[] = [], spaceSends: GainNode[] = [];
+): { tracks: GainNode[]; echoSends: GainNode[]; spaceSends: GainNode[]; pans: StereoPannerNode[]; synth: GainNode } {
+  const tracks: GainNode[] = [], echoSends: GainNode[] = [], spaceSends: GainNode[] = [], pans: StereoPannerNode[] = [];
   for (let i = 0; i < 8; i++) {
-    const g = a.createGain(); g.gain.value = gainOf(i); g.connect(chain.bus); tracks.push(g);
+    const g = a.createGain(); g.gain.value = gainOf(i); tracks.push(g);
+    // Fader → pan → bus. Sends tap pre-pan so a hard-panned lane still feeds
+    // the echo and space returns centred.
+    const pan = a.createStereoPanner(); pan.pan.value = laneSends[i]?.pan ?? 0;
+    g.connect(pan); pan.connect(chain.bus); pans.push(pan);
     const e = a.createGain(); e.gain.value = laneSends[i]?.echo ?? 0; g.connect(e); e.connect(chain.echoDelay); echoSends.push(e);
     const s = a.createGain(); s.gain.value = laneSends[i]?.space ?? 0; g.connect(s); s.connect(chain.spaceHp); spaceSends.push(s);
   }
   // VV-1 voices carry their own per-note filters — the synth bus is just a fader.
   const synth = a.createGain(); synth.gain.value = 0.7; synth.connect(chain.bus);
-  return { tracks, echoSends, spaceSends, synth };
+  return { tracks, echoSends, spaceSends, pans, synth };
 }
-let liveEchoSends: GainNode[] = [], liveSpaceSends: GainNode[] = [];
+let liveEchoSends: GainNode[] = [], liveSpaceSends: GainNode[] = [], livePans: StereoPannerNode[] = [];
+/** Per-channel meters for the MIX console. Live context only — an offline
+ *  render has nothing to meter. */
+export const trackMeters: AnalyserNode[] = [];
+export let synthMeter: AnalyserNode | null = null;
 export function ensureNodes(): void {
   const a = ac();
   if (trackGain.length) return;
   const built = buildTracks(a, liveChain!, () => 0.8);
   trackGain.push(...built.tracks);
-  liveEchoSends = built.echoSends; liveSpaceSends = built.spaceSends;
+  liveEchoSends = built.echoSends; liveSpaceSends = built.spaceSends; livePans = built.pans;
   synthGain = built.synth;
+  built.pans.forEach((p) => {
+    const m = a.createAnalyser(); m.fftSize = 256; m.smoothingTimeConstant = 0.6;
+    p.connect(m); trackMeters.push(m);
+  });
+  synthMeter = a.createAnalyser(); synthMeter.fftSize = 256; synthMeter.smoothingTimeConstant = 0.6;
+  built.synth.connect(synthMeter);
+}
+export function setTrackPan(i: number, v: number): void {
+  if (laneSends[i]) laneSends[i].pan = v;
+  if (livePans[i]) livePans[i].pan.value = Math.max(-1, Math.min(1, v));
 }
 export function applyLaneSends(): void {
   liveEchoSends.forEach((g, i) => { g.gain.value = laneSends[i]?.echo ?? 0; });

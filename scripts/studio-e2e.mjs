@@ -72,9 +72,10 @@ try {
   const cellAfter = page.locator('.wa-grid .wa-row .wa-cell').nth(0)
   check('autosave: step survives reload', await cellAfter.evaluate((n) => n.classList.contains('on')))
 
-  // ── export WAV is non-trivial (export lives on the MIX mode page) ──
-  await page.click('.wa-modekey:has-text("MIX")')
-  await page.waitForTimeout(200)
+  // ── export WAV is non-trivial (export is a transport key opening a modal) ──
+  await page.click('.wa-transport button:has-text("EXPORT")')
+  await page.waitForTimeout(300)
+  check('export: modal opens from the transport key', await page.locator('.wa-export-dialog[open]').count() === 1)
   const dl = page.waitForEvent('download', { timeout: 60000 }).catch(() => null)
   await page.click('button:has-text("Export WAV")')
   const download = await dl
