@@ -3,13 +3,16 @@
 // (playDrum already routes through playSample, so every knob is live), and
 // the lane's synth-drum design sliders. Replaces both the inline sound-design
 // panels and the old SAMPLE RACK overlay.
-import { DRUMS, dp, DP_DEF, DP_SPECS, sampleParams, sampleBuffers, sampleData } from "./state";
+import {
+  DRUMS, STEPS, dp, DP_DEF, DP_SPECS, sampleParams, sampleBuffers, sampleData,
+  clip, laneLengths, laneRates, laneVoices, laneSends, LANE_RATES, LANE_RATE_LABELS,
+} from "./state";
 import type { SamplerP } from "./state";
-import { ac, ensureNodes, trackGain, playDrum, hydrateSample } from "./engine";
+import { ac, ensureNodes, trackGain, playDrum, hydrateSample, applyLaneSends } from "./engine";
 import { saveAll } from "./persistence";
 import { el, btn, help, readAsDataUrl, drawWaveform, download, askText } from "./helpers";
 import { knob } from "./knob";
-import { ctx } from "./ctx";
+import { ctx, gridRepainters } from "./ctx";
 
 export interface LaneInspector {
   panel: HTMLElement;
@@ -104,6 +107,30 @@ export function buildLaneInspector(): LaneInspector {
     laneKnob("Choke", "choke", 0, 8, 1),
   );
 
+  // ── Polymeter + voice (B2) — per lane, per scene ──
+  const stepBlock = el("div", "wa-lane-step");
+  const lenSel = document.createElement("select"); lenSel.setAttribute("aria-label", "Lane step count");
+  lenSel.append(new Option("Follow", "0"));
+  for (let n = 1; n <= STEPS; n++) lenSel.append(new Option(String(n), String(n)));
+  const rateSel = document.createElement("select"); rateSel.setAttribute("aria-label", "Lane step rate");
+  rateSel.append(new Option("Follow", "0"));
+  LANE_RATES.forEach((r, i) => rateSel.append(new Option(LANE_RATE_LABELS[i], String(r))));
+  const gltBtn = btn("GLT", "wa-toggle wa-btn-sm");
+  help(lenSel, "How many steps this lane cycles through — set it shorter than the pattern for polymeter.");
+  help(rateSel, "How fast this lane steps. The T rates are triplets.");
+  help(gltBtn, "Swap this lane's voice for the glitch generator — a different burst of noise, square or sweep every hit.");
+  lenSel.addEventListener("change", () => { ctx.checkpoint(); laneLengths[clip.sel][lane] = Number(lenSel.value); saveAll(); });
+  rateSel.addEventListener("change", () => { ctx.checkpoint(); laneRates[clip.sel][lane] = Number(rateSel.value); saveAll(); });
+  gltBtn.addEventListener("click", () => {
+    laneVoices[lane] = laneVoices[lane] === "glitch" ? "auto" : "glitch";
+    gltBtn.classList.toggle("active", laneVoices[lane] === "glitch"); saveAll(); audition();
+  });
+  const sendRow = el("div", "wa-lane-sends");
+  const echoSend = knob("Echo", 0, 1, 0, 0.01, (v) => { laneSends[lane].echo = v; applyLaneSends(); saveAll(); });
+  const spaceSend = knob("Space", 0, 1, 0, 0.01, (v) => { laneSends[lane].space = v; applyLaneSends(); saveAll(); });
+  sendRow.append(echoSend.root, spaceSend.root);
+  stepBlock.append(el("div", "wa-fx-title", "STEP"), el("span", "wa-lbl", "LEN"), lenSel, el("span", "wa-lbl", "RATE"), rateSel, gltBtn);
+
   // Synth-drum design sliders — specs differ per lane, so this rebuilds on select
   const sdBlock = el("div", "wa-lane-sd");
 
@@ -149,6 +176,10 @@ export function buildLaneInspector(): LaneInspector {
     reverseBtn.classList.toggle("active", p.reverse);
     reverseBtn.disabled = !hasSample;
     reverseBtn.classList.toggle("wa-off", !hasSample);
+    lenSel.value = String(laneLengths[clip.sel][lane] ?? 0);
+    rateSel.value = String(laneRates[clip.sel][lane] ?? 0);
+    gltBtn.classList.toggle("active", laneVoices[lane] === "glitch");
+    echoSend.set(laneSends[lane].echo); spaceSend.set(laneSends[lane].space);
     paintWave();
     paintSd();
   }
@@ -176,8 +207,9 @@ export function buildLaneInspector(): LaneInspector {
     paint(); saveAll(); audition();
   });
 
-  panel.append(kitRow, titleRow, waveCanvas, waveEmpty, fileName, actions, knobRow, sdBlock);
+  panel.append(kitRow, titleRow, waveCanvas, waveEmpty, fileName, actions, stepBlock, sendRow, knobRow, sdBlock);
   paint();
+  gridRepainters.push(paint);
 
   return {
     panel,

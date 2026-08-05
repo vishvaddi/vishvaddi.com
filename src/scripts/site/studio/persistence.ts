@@ -7,6 +7,7 @@ import {
   allPats, allVels, synthNotes, padEvents, songChain, arrangement, songLoop, sampleParams, sampleData, sampleBuffers,
   padLayers, padLayerBuffers, padLayerMode,
   dp, mpc, rackState, fx, vsynthPatch, synthLaneNotes, synthPatches, patternLengths, patternDivisions, SYNTH_LANES,
+  DRUMS, laneLengths, laneRates, laneVoices, laneSends, LANE_RATES,
 } from "./state";
 import type { ArrangeBlock, HistoryState, PadEvent, PadLayer, PadLayerMode, SamplerP, DrumP, RackState, TrackId, VNote, SynthLane } from "./state";
 import type { VPatch } from "./vsynth";
@@ -27,6 +28,8 @@ export function historyState(): HistoryState {
     synthPatches: Object.fromEntries(SYNTH_LANES.map((lane) => [lane, JSON.parse(JSON.stringify(synthPatches[lane]))])) as Record<SynthLane, VPatch>,
     patternLengths: [...patternLengths],
     patternDivisions: [...patternDivisions],
+    laneLengths: laneLengths.map((row) => [...row]),
+    laneRates: laneRates.map((row) => [...row]),
     padEvents: padEvents.map((events) => events.map((event) => ({ ...event }))),
     sampleParams: sampleParams.map((params) => ({ ...params })),
     sampleData: [...sampleData],
@@ -51,6 +54,8 @@ export function restoreHistory(state: HistoryState): void {
   if (state.synthPatches) SYNTH_LANES.forEach((lane) => Object.assign(synthPatches[lane], JSON.parse(JSON.stringify(state.synthPatches![lane]))));
   state.patternLengths?.forEach((value, i) => { if (i < SCENES) patternLengths[i] = value; });
   state.patternDivisions?.forEach((value, i) => { if (i < SCENES) patternDivisions[i] = value; });
+  state.laneLengths?.forEach((row, i) => { if (i < SCENES) row.forEach((v, r) => { laneLengths[i][r] = v; }); });
+  state.laneRates?.forEach((row, i) => { if (i < SCENES) row.forEach((v, r) => { laneRates[i][r] = v; }); });
   state.padEvents.forEach((events, i) => { padEvents[i] = events.map((event) => ({ ...event })); });
   state.sampleParams.forEach((params, i) => Object.assign(sampleParams[i], params));
   state.sampleData.forEach((data, i) => { sampleData[i] = data; sampleBuffers[i] = null; if (data) void hydrateSample(i); });
@@ -76,7 +81,7 @@ export function projectState(includeSamples = true): object {
     return index;
   });
   return {
-    version: 11, // v11: CV-80 master chain (drive, tape-echo tone/wow, space size)
+    version: 12, // v12: per-lane polymeter (length/rate), lane voices and drum sends
     pats: allPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
     vels: allVels,
     dp,
@@ -88,6 +93,10 @@ export function projectState(includeSamples = true): object {
     synthPatches,
     patternLengths,
     patternDivisions,
+    laneLengths,
+    laneRates,
+    laneVoices,
+    laneSends,
     vsynth: synthPatches.bass,
     songChain, // kept read-only for one version so older saves aren't stranded
     arrangement,
@@ -191,6 +200,20 @@ export function applyProject(saved: Record<string, unknown>): void {
       });
       if (Array.isArray(saved.patternDivisions)) (saved.patternDivisions as number[]).forEach((value, i) => {
         if (i < SCENES) patternDivisions[i] = [3, 4, 6, 8, 12, 16].includes(value) ? value : 4;
+      });
+      // v12 per-lane settings. Absent in older projects, which then read as
+      // "follow the scene" — exactly the pre-polymeter behaviour.
+      if (Array.isArray(saved.laneLengths)) (saved.laneLengths as number[][]).forEach((row, i) => {
+        if (i < SCENES && Array.isArray(row)) row.forEach((v, r) => { if (r < DRUMS.length) laneLengths[i][r] = Math.max(0, Math.min(STEPS, Number(v) || 0)); });
+      });
+      if (Array.isArray(saved.laneRates)) (saved.laneRates as number[][]).forEach((row, i) => {
+        if (i < SCENES && Array.isArray(row)) row.forEach((v, r) => { if (r < DRUMS.length) laneRates[i][r] = LANE_RATES.includes(Number(v)) ? Number(v) : 0; });
+      });
+      if (Array.isArray(saved.laneVoices)) (saved.laneVoices as string[]).forEach((v, r) => {
+        if (r < DRUMS.length) laneVoices[r] = v === "glitch" ? "glitch" : "auto";
+      });
+      if (Array.isArray(saved.laneSends)) (saved.laneSends as Array<{ echo?: number; space?: number }>).forEach((v, r) => {
+        if (r < DRUMS.length && v) { laneSends[r].echo = Number(v.echo) || 0; laneSends[r].space = Number(v.space) || 0; }
       });
       if (saved.songChain) (saved.songChain as number[]).forEach((v, i) => {
         if (i < SONG_SLOTS) songChain[i] = Math.max(0, Math.min(SCENES - 1, Number(v) || 0));

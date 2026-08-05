@@ -19,7 +19,9 @@ export const ctx = {} as StudioCtx
 
 // Live playhead state — written by the scheduler (still in index.ts until
 // playback.ts lands), read by pad/synth recording to place captured events.
-export const playhead = { playing: false, schStep: 0, lastHi: -1, lastStepStartedMs: 0 };
+// `schStep` wraps at the display cycle (highlight, clip launching); `absStep`
+// never wraps, so polymeter lanes keep their phase across pattern loops.
+export const playhead = { playing: false, schStep: 0, absStep: 0, lastHi: -1, lastStepStartedMs: 0 };
 
 // Populated by the drum grid, pad-event grid and piano roll as they build
 // themselves; re-run whenever the Grid selector changes so all three

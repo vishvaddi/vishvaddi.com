@@ -261,6 +261,9 @@ export async function initStudio(): Promise<void> {
     paintRoll();
     paintEventLane();
     paintSession();
+    // Scene-dependent shading (pattern length, per-lane polymeter) has to
+    // follow the scene, not just the Grid selector.
+    gridRepainters.forEach((fn) => fn());
     arrangeLanePaints.forEach((fn) => fn());
   }
   function refreshVisibleState(): void {

@@ -1,7 +1,7 @@
 // Transport scheduler — the 25ms lookahead loop, per-track arrangement
 // playback, queued-clip application, step highlighting, play/stop wiring.
 // Extracted verbatim from index.ts (Phase 0 split). Owns ctx.playhead writes.
-import { STEPS, PAD_BANK_SIZE, TRACKS, clip, transport, stepDur, patternStepDur, audible, mpc, rackState, allPats, allVels, synthLaneNotes, synthPatches, SYNTH_LANES, patternLengths, padEvents, blockAt, songPos, songLoop, songEndBar } from "./state";
+import { STEPS, PAD_BANK_SIZE, TRACKS, clip, transport, stepDur, patternStepDur, audible, mpc, rackState, allPats, allVels, synthLaneNotes, synthPatches, SYNTH_LANES, patternLengths, laneLength, laneRate, glitchLane, padEvents, blockAt, songPos, songLoop, songEndBar } from "./state";
 import type { TrackId } from "./state";
 import { ac, ensureNodes, trackGain, playDrum, playPad, metroClick } from "./engine";
 import * as engine from "./engine";
@@ -58,13 +58,43 @@ export function buildPlayback(deps: PlaybackDeps): void {
     const masterReverb = automatedValue("master", "reverb");
     if (masterReverb !== null) engine.initReverb(Math.max(0, Math.min(1, masterReverb)));
     if (drumClip !== null) {
-      const localStep = s % patternLengths[drumClip];
+      // Polymeter: each lane runs its own length and rate, so instead of one
+      // index we ask which of THIS lane's steps fall inside this global step's
+      // time window. Handles triplet rates against straight ones exactly.
+      const glitch = rackState.devices.player ? rackState.glitch / 100 : 0;
+      const globalDur = patternStepDur(drumClip), absStep = playhead.absStep;
+      const windowStart = absStep * globalDur, windowEnd = windowStart + globalDur;
       for (let r = 0; r < 8; r++) {
-        if (!allPats[drumClip][r][localStep] || !audible(r)) continue;
-        const glitch = rackState.devices.player ? rackState.glitch / 100 : 0;
-        if (glitch > 0 && Math.random() < glitch * 0.12) continue;
-        const repeats = glitch > 0 && Math.random() < glitch * 0.38 ? 2 + Math.floor(Math.random() * 3) : 1;
-        for (let repeat = 0; repeat < repeats; repeat++) playDrum(a, trackGain[r], r, allVels[drumClip][r][localStep] / 127 * Math.pow(0.88, repeat), when + repeat * patternStepDur(drumClip) / repeats);
+        if (!audible(r)) continue;
+        const len = laneLength(drumClip, r), rateDur = 60 / transport.bpm / laneRate(drumClip, r);
+        const isGlitchLane = r === glitchLane.row;
+        const first = Math.ceil(windowStart / rateDur - 1e-9), last = Math.ceil(windowEnd / rateDur - 1e-9);
+        for (let k = first; k < last; k++) {
+          const localStep = ((k % len) + len) % len;
+          const at = when + (k * rateDur - windowStart);
+          if (!allPats[drumClip][r][localStep]) {
+            // ghost hits: the glitch lane fires on empty steps as glitch rises
+            if (isGlitchLane && glitch > 0 && Math.random() < glitch * 0.14) {
+              playDrum(a, trackGain[r], r, 0.5, at + Math.random() * rateDur, { decayMul: 0.6 });
+            }
+            continue;
+          }
+          if (glitch > 0 && Math.random() < glitch * 0.12) continue;   // dropouts
+          const vel = allVels[drumClip][r][localStep] / 127;
+          const jitter = (Math.random() - 0.5) * glitch * rateDur * (isGlitchLane ? 1.3 : 0.7);
+          const hitAt = Math.max(baseWhen, at + jitter);
+          if (glitch > 0 && Math.random() < glitch * 0.42) {
+            const n = 2 + Math.floor(Math.random() * (isGlitchLane ? 4 : 2));
+            for (let i = 0; i < n; i++) {
+              const sub = hitAt + i * (rateDur / n) * (0.5 + Math.random() * 0.6);
+              playDrum(a, trackGain[r], r, vel * Math.pow(0.88, i), sub, {
+                pitchMul: 1 + (Math.random() - 0.5) * glitch, decayMul: 0.35 + Math.random() * 0.5,
+              });
+            }
+          } else {
+            playDrum(a, trackGain[r], r, vel, hitAt, { pitchMul: 1 + (Math.random() - 0.5) * glitch * 0.5 });
+          }
+        }
       }
     }
     if (padClip !== null) {
@@ -116,7 +146,7 @@ export function buildPlayback(deps: PlaybackDeps): void {
       scheduleStep(playhead.schStep, nextTime);
       const clockScene = clip.play.drums ?? clip.play.pads ?? clip.play.synth ?? clip.sel;
       nextTime += patternStepDur(clockScene);
-      playhead.schStep++;
+      playhead.schStep++; playhead.absStep++;
       const cycleLength = Math.max(1, ...[clip.play.drums, clip.play.pads, clip.play.synth].filter((v): v is number => v !== null).map((scene) => patternLengths[scene]));
       if (playhead.schStep >= cycleLength) {
         playhead.schStep = 0;
@@ -134,7 +164,7 @@ export function buildPlayback(deps: PlaybackDeps): void {
   }
   deps.playBtn.addEventListener("click", () => {
     if (playhead.playing) return;
-    ensureNodes(); playhead.playing = true; playhead.schStep = 0;
+    ensureNodes(); playhead.playing = true; playhead.schStep = 0; playhead.absStep = 0;
     songPos.bar = songLoop.on ? songLoop.startBar : 0;
     applyQueued();
     if (transport.songMode) applySongBar();

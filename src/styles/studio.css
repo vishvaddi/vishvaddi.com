@@ -1303,6 +1303,14 @@
 }
 .wa-lane-knobs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .wa-lane-sd { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--wa-border); }
+/* Polymeter block — LEN / RATE / GLT sit together above the send knobs */
+.wa-lane-step {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--wa-border);
+}
+.wa-lane-step .wa-fx-title { flex: 1 0 100%; }
+.wa-lane-step select { min-width: 68px; }
+.wa-lane-sends { display: flex; gap: 4px; margin-top: 6px; }
 /* Drum rows at their natural chunky size — no more viewport squeezing */
 .wa-page-drums .wa-grid { display: flex; flex-direction: column; gap: 4px; }
 .wa-page-drums .wa-grid .wa-cell { height: 34px; }

@@ -12,6 +12,7 @@ export interface DrumP {
   filter: number;     // noise HPF/BPF Hz
   toneLevel: number;  // 0–1 tone layer mix (snare, rim)
   spread: number;     // clap stagger ms
+  drive?: number;     // 0–1 waveshaper grit (v12; kick also gains a square sub-layer)
 }
 export interface ParamSpec {
   key: keyof DrumP; label: string; min: number; max: number; step: number; unit?: string;
@@ -82,6 +83,8 @@ export interface HistoryState {
   synthPatches?: Record<SynthLane, VPatch>;
   patternLengths?: number[];
   patternDivisions?: number[];
+  laneLengths?: number[][];
+  laneRates?: number[][];
   padEvents: PadEvent[][];
   sampleParams: SamplerP[];
   sampleData: Array<string | null>;
@@ -147,10 +150,12 @@ export const dp: DrumP[] = DP_DEF.map((d) => ({ ...d }));
 export const DP_SPECS: ParamSpec[][] = [
   [{ key:"pitch",    label:"Punch",  min:40,   max:400,   step:5,    unit:"Hz" },
    { key:"pitchEnd", label:"Body",   min:20,   max:150,   step:5,    unit:"Hz" },
-   { key:"decay",    label:"Decay",  min:0.1,  max:2.0,   step:0.05, unit:"s"  }],
+   { key:"decay",    label:"Decay",  min:0.1,  max:2.0,   step:0.05, unit:"s"  },
+   { key:"drive",    label:"Drive",  min:0,    max:1,     step:0.02            }],
   [{ key:"filter",    label:"Snap",   min:200,  max:5000,  step:50,   unit:"Hz" },
    { key:"decay",     label:"Decay",  min:0.05, max:0.5,   step:0.01, unit:"s"  },
-   { key:"toneLevel", label:"Body",   min:0,    max:1,     step:0.05            }],
+   { key:"toneLevel", label:"Body",   min:0,    max:1,     step:0.05            },
+   { key:"drive",     label:"Drive",  min:0,    max:1,     step:0.02            }],
   [{ key:"filter", label:"Bite",  min:4000, max:18000, step:200,  unit:"Hz" },
    { key:"decay",  label:"Decay", min:0.01, max:0.25,  step:0.005,unit:"s"  }],
   [{ key:"filter", label:"Bite",  min:2000, max:12000, step:200,  unit:"Hz" },
@@ -226,6 +231,25 @@ export const activeSynthNotes = (): VNote[] => synthLaneNotes[activeSynth.lane][
 // older projects.
 export const patternLengths = Array.from({ length: SCENES }, () => DEFAULT_STEPS);
 export const patternDivisions = Array.from({ length: SCENES }, () => 4);
+
+// ─── Per-lane polymeter (v12) ────────────────────────────────────────────────
+// Each drum lane may run its own step count and its own rate, so a 5-step hat
+// can cycle against a 16-step kick and either can swing in triplets. 0 means
+// "follow the scene", which is what every pre-v12 project loads as.
+export const LANE_RATES = [2, 3, 4, 6, 12];
+export const LANE_RATE_LABELS = ["1/8", "1/8T", "1/16", "1/16T", "1/32T"];
+export const laneLengths: number[][] = Array.from({ length: SCENES }, () => DRUMS.map(() => 0));
+export const laneRates: number[][] = Array.from({ length: SCENES }, () => DRUMS.map(() => 0));
+export const laneLength = (scene: number, r: number): number => laneLengths[scene]?.[r] || patternLengths[scene];
+export const laneRate = (scene: number, r: number): number => laneRates[scene]?.[r] || (patternDivisions[scene] || 4);
+
+// Per-lane voice: "auto" keeps the existing sample-else-synth-drum behaviour;
+// "glitch" swaps in the LYSERGIC GLT voice. Lane 7 is the glitch lane by
+// default — it takes the wider jitter and the ghost hits.
+export type LaneVoice = "auto" | "glitch";
+export const laneVoices: LaneVoice[] = DRUMS.map(() => "auto");
+export const laneSends = DRUMS.map(() => ({ echo: 0, space: 0 }));
+export const glitchLane = { row: DRUMS.length - 1 };
 export const songChain = Array.from({ length: SONG_SLOTS }, (_, i) => i % 4);
 export const padEvents: PadEvent[][] = Array.from({ length: SCENES }, () => []);
 

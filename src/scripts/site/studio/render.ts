@@ -3,11 +3,11 @@
 // mirror the live engine chain so exports match what you hear.
 import {
   STEPS, PAD_BANK_SIZE, TRACKS, clip, transport,
-  allPats, allVels, synthLaneNotes, synthPatches, SYNTH_LANES, patternLengths, patternDivisions, padEvents, blockAt, songEndBar,
+  allPats, allVels, synthLaneNotes, synthPatches, SYNTH_LANES, patternLengths, patternDivisions, laneLength, laneRate, padEvents, blockAt, songEndBar,
   rackState, audible,
 } from "./state";
 import type { TrackId } from "./state";
-import { ensureNodes, trackGain, playDrum, playPad, metroClick, buildMasterChain } from "./engine";
+import { ensureNodes, trackGain, playDrum, playPad, metroClick, buildMasterChain, buildTracks } from "./engine";
 import * as engine from "./engine";
 import { playNote } from "./vsynth";
 import { projectState, pendingProjectStore } from "./persistence";
@@ -69,9 +69,9 @@ export function buildProjectExport(): ProjectExport {
     const chain = buildMasterChain(off, off.destination);
     const om = chain.bus; om.gain.value = engine.master!.gain.value;
     const reverbWet: GainNode = chain.spaceWet;
-    const ot: GainNode[] = [];
-    for (let i = 0; i < 8; i++) { const g = off.createGain(); g.gain.value = trackGain[i].gain.value; g.connect(om); ot.push(g); }
-    const osg = off.createGain(); osg.gain.value = engine.synthGain!.gain.value; osg.connect(om);
+    const built = buildTracks(off, chain, (i) => trackGain[i].gain.value);
+    const ot = built.tracks;
+    const osg = built.synth; osg.gain.value = engine.synthGain!.gain.value;
     for (let bar = 0; bar < bars; bar++) {
       const drumClip = sceneAt("drums", bar), padClip = sceneAt("pads", bar), synthClip = sceneAt("synth", bar);
       const arrangementBlock = mode === "song" ? blockAt("synth", bar) : null;
@@ -80,10 +80,22 @@ export function buildProjectExport(): ProjectExport {
         return ramp ? ramp.from + (ramp.to - ramp.from) * progress : null;
       };
       if ((!onlyTrack || onlyTrack === "drums") && drumClip !== null) {
+        // Mirrors playback.ts: each lane walks its own length at its own rate
+        // across the bar. Glitch is deliberately NOT applied — an export has to
+        // be reproducible, and the glitch engine is randomised per hit.
         const sd = beat / (patternDivisions[drumClip] || 4);
-        for (let s = 0; s < patternLengths[drumClip]; s++) {
-          const base = barStarts[bar] + s * sd, when = base + (s % 2 ? transport.swing * sd : 0) + (rackState.devices.player && s % 2 ? rackState.grooveTiming * sd * .5 : 0);
-          for (let r = 0; r < 8; r++) if (allPats[drumClip][r][s] && audible(r)) playDrum(off, ot[r], r, allVels[drumClip][r][s] / 127, when);
+        const barDur = patternLengths[drumClip] * sd;
+        for (let r = 0; r < 8; r++) {
+          if (!audible(r)) continue;
+          const len = laneLength(drumClip, r), rateDur = beat / laneRate(drumClip, r);
+          const hits = Math.ceil(barDur / rateDur - 1e-9);
+          for (let k = 0; k < hits; k++) {
+            const localStep = k % len;
+            if (!allPats[drumClip][r][localStep]) continue;
+            const offset = k * rateDur;
+            const when = barStarts[bar] + offset + (k % 2 ? transport.swing * rateDur : 0) + (rackState.devices.player && k % 2 ? rackState.grooveTiming * rateDur * .5 : 0);
+            playDrum(off, ot[r], r, allVels[drumClip][r][localStep] / 127, when);
+          }
         }
       }
       if ((!onlyTrack || onlyTrack === "pads") && padClip !== null) {
