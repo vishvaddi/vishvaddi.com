@@ -459,6 +459,14 @@
   display: block; width: 100%; height: 90px; margin: 10px 0;
   border: 1px solid var(--wa-border-2); border-radius: var(--wa-radius-sm);
 }
+.wa-scope-head { display: flex; align-items: center; gap: 5px; }
+.wa-scope-head .wa-fx-title { flex: 1; }
+.wa-orb {
+  display: block; width: 100%; height: clamp(120px, 18dvh, 220px); margin: 10px 0;
+  background: #050a0c; border: 1px solid #123640; border-radius: 4px;
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.8), 0 0 10px rgba(52, 226, 255, 0.12);
+}
+.wa-scope[hidden], .wa-orb[hidden] { display: none; }
 .wa-wave-mini {
   display: block; width: 100%; height: 40px; margin-bottom: 8px;
   border: 1px solid var(--wa-border-2); border-radius: 4px;
@@ -1766,19 +1774,21 @@
 .wa-name-actions { display: flex; justify-content: flex-end; gap: 7px; }
 
 .wa-field-modes { display: flex; gap: 4px; margin-bottom: 6px; }
-.wa-tone-terrain {
-  position: relative; height: clamp(150px, 20dvh, 220px); overflow: hidden; cursor: crosshair; touch-action: none;
-  background:
-    radial-gradient(circle at 18% 70%, rgba(255,158,44,.2), transparent 22%),
-    radial-gradient(circle at 75% 26%, rgba(143,123,255,.22), transparent 28%),
-    repeating-linear-gradient(90deg, transparent 0 calc(4.76% - 1px), rgba(52,226,255,.11) calc(4.76% - 1px) 4.76%),
-    repeating-linear-gradient(0deg, transparent 0 calc(14.28% - 1px), rgba(52,226,255,.08) calc(14.28% - 1px) 14.28%),
-    #050a0c;
-  border: 1px solid #123640; border-radius: 4px; outline: none;
+/* FIELD — the walkable bloom world. Square canvas, minimap pinned bottom-right. */
+.wa-bloomfield { position: relative; outline: none; }
+.wa-bloomfield[hidden] { display: none; }
+.wa-bloom-canvas {
+  display: block; width: 100%; aspect-ratio: 1; max-height: clamp(150px, 26dvh, 300px);
+  margin: 0 auto; cursor: crosshair; touch-action: none;
+  background: #050a0c; border: 1px solid #123640; border-radius: 4px;
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.8), 0 0 10px rgba(52, 226, 255, 0.1);
 }
-.wa-tone-terrain:focus-visible { box-shadow: 0 0 0 2px var(--wa-accent); }
-.wa-terrain-dot { position: absolute; width: 14px; height: 14px; transform: translate(-50%,-50%); border: 2px solid #fff; border-radius: 50%; background: var(--wa-amber); box-shadow: 0 0 16px var(--wa-amber); pointer-events: none; }
-.wa-terrain-mini { position: absolute; right: 7px; bottom: 7px; width: 52px; height: 36px; border: 1px solid rgba(52,226,255,.4); background: radial-gradient(circle at var(--x) var(--y), #fff 0 2px, var(--wa-accent) 3px, transparent 5px), rgba(0,0,0,.6); pointer-events: none; }
+.wa-bloomfield:focus-visible .wa-bloom-canvas { box-shadow: 0 0 0 2px var(--wa-accent); }
+.wa-bloom-mini {
+  position: absolute; right: 7px; bottom: 34px; width: 52px; height: 52px;
+  border: 1px solid rgba(52, 226, 255, 0.4); background: rgba(0, 0, 0, 0.6); pointer-events: none;
+}
+.wa-bloom-tools { display: flex; justify-content: flex-end; margin-top: 4px; }
 
 @media (max-width: 700px) {
   .immersive-page .wa-win { padding: 4px 4px 64px; border-left: 0; border-right: 0; }

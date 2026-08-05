@@ -5,9 +5,7 @@
 import { el, btn, help } from "./helpers";
 import { vsynthPatch } from "./state";
 import { saveAll } from "./persistence";
-import { ac, ensureNodes } from "./engine";
-import * as engine from "./engine";
-import { midiToNote, playNote } from "./vsynth";
+import { buildBloomField } from "./bloomfield";
 
 export interface XYField {
   root: HTMLElement;
@@ -22,55 +20,25 @@ export function buildXYField(deps: { onLight: () => void; onCommit: () => void; 
   const root = el("div", "wa-xy-wrap");
   const title = el("div", "wa-fx-title", "FIELD — walk the tone");
   const modeRow = el("div", "wa-field-modes");
-  const morphBtn = btn("Morph", "wa-btn-sm active"), terrainBtn = btn("Terrain", "wa-btn-sm");
+  const morphBtn = btn("Morph", "wa-btn-sm active"), terrainBtn = btn("Field", "wa-btn-sm");
   modeRow.append(morphBtn, terrainBtn);
   const field = el("div", "wa-xy-field");
   const dot = el("div", "wa-xy-dot");
   const readout = el("div", "wa-xy-readout", "");
   field.append(dot);
   help(field, "Drag to morph: left–right opens the filter, up–down morphs the wavetable. ORBIT keeps the point moving on its own.");
-  const terrain = el("div", "wa-tone-terrain"); terrain.hidden = true; terrain.tabIndex = 0;
-  const terrainDot = el("div", "wa-terrain-dot"), terrainMini = el("div", "wa-terrain-mini");
-  terrain.append(terrainDot, terrainMini);
+  // FIELD (B4) — the walkable bloom world replaces the old one-note terrain pad.
+  const bloom = buildBloomField({ onReadout: (text) => { if (!bloom.root.hidden) readout.textContent = text; } });
+  bloom.root.hidden = true;
 
   let px = cutToX(vsynthPatch.filter.cutoff);
   let py = Math.max(0, Math.min(1, vsynthPatch.osc1.pos));
-  let terrainX = 0.5, terrainY = 0.5, terrainCell = -1;
-  const terrainScale = [0, 2, 3, 5, 7, 9, 10];
-  const paintTerrain = (): void => {
-    terrainDot.style.left = `${terrainX * 100}%`; terrainDot.style.top = `${terrainY * 100}%`;
-    terrainMini.style.setProperty("--x", `${terrainX * 100}%`); terrainMini.style.setProperty("--y", `${terrainY * 100}%`);
-  };
-  const soundTerrain = (force = false): void => {
-    const column = Math.max(0, Math.min(20, Math.floor(terrainX * 21)));
-    if (!force && column === terrainCell) return;
-    terrainCell = column;
-    const midi = 36 + Math.floor(column / terrainScale.length) * 12 + terrainScale[column % terrainScale.length];
-    const patch = JSON.parse(JSON.stringify(vsynthPatch)) as typeof vsynthPatch;
-    patch.filter.cutoff = 100 * Math.pow(120, 1 - terrainY); patch.osc1.pos = 1 - terrainY; patch.osc2.pos = 1 - terrainY;
-    ensureNodes(); playNote(ac(), engine.synthGain!, patch, midiToNote(midi), 96, ac().currentTime, 0.34);
-    readout.textContent = `${midiToNote(midi)} · CUT ${Math.round(patch.filter.cutoff)}Hz · drag / WASD`;
-  };
-  const moveTerrain = (x: number, y: number, sound = true): void => {
-    terrainX = Math.max(0, Math.min(1, x)); terrainY = Math.max(0, Math.min(1, y)); paintTerrain(); if (sound) soundTerrain();
-  };
-  let terrainDragging = false;
-  const terrainFromEvent = (ev: PointerEvent): void => { const rect = terrain.getBoundingClientRect(); moveTerrain((ev.clientX - rect.left) / rect.width, (ev.clientY - rect.top) / rect.height); };
-  terrain.addEventListener("pointerdown", (ev) => { ev.preventDefault(); terrainDragging = true; terrain.setPointerCapture(ev.pointerId); terrain.focus(); terrainFromEvent(ev); });
-  terrain.addEventListener("pointermove", (ev) => { if (terrainDragging) terrainFromEvent(ev); });
-  terrain.addEventListener("pointerup", () => { terrainDragging = false; });
-  terrain.addEventListener("pointercancel", () => { terrainDragging = false; });
-  window.addEventListener("keydown", (ev) => {
-    if (terrain.hidden || !root.offsetParent || !["w", "a", "s", "d"].includes(ev.key.toLowerCase())) return;
-    const active = document.activeElement; if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement) return;
-    ev.preventDefault(); const key = ev.key.toLowerCase();
-    moveTerrain(terrainX + (key === "d" ? 0.05 : key === "a" ? -0.05 : 0), terrainY + (key === "s" ? 0.05 : key === "w" ? -0.05 : 0));
-  });
   const setFieldMode = (mode: "morph" | "terrain"): void => {
-    const isTerrain = mode === "terrain"; field.hidden = isTerrain; terrain.hidden = !isTerrain;
-    morphBtn.classList.toggle("active", !isTerrain); terrainBtn.classList.toggle("active", isTerrain);
-    readout.textContent = isTerrain ? "Drag or use WASD to walk the scale" : `CUT ${xToCut(px)}Hz · POS ${py.toFixed(2)}`;
-    if (isTerrain) { paintTerrain(); terrain.focus(); }
+    const isField = mode === "terrain"; field.hidden = isField; bloom.root.hidden = !isField;
+    morphBtn.classList.toggle("active", !isField); terrainBtn.classList.toggle("active", isField);
+    readout.textContent = isField ? "open field · WASD or drag to walk" : `CUT ${xToCut(px)}Hz · POS ${py.toFixed(2)}`;
+    bloom.setActive(isField);
+    if (isField) bloom.root.focus();
   };
   morphBtn.addEventListener("click", () => setFieldMode("morph")); terrainBtn.addEventListener("click", () => setFieldMode("terrain"));
 
@@ -128,11 +96,11 @@ export function buildXYField(deps: { onLight: () => void; onCommit: () => void; 
 
   const silenceBtn = btn("SILENCE", "wa-btn-sm wa-silence");
   help(silenceBtn, "Release every sounding voice, including held and latched notes.");
-  silenceBtn.addEventListener("click", deps.onSilence);
+  silenceBtn.addEventListener("click", () => { bloom.silence(); deps.onSilence(); });
 
   const perfRow = el("div", "wa-xy-perf");
   perfRow.append(orbitBtn, silenceBtn);
-  root.append(title, modeRow, field, terrain, readout, perfRow);
+  root.append(title, modeRow, field, bloom.root, readout, perfRow);
   paint();
 
   return {

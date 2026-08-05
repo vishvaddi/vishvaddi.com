@@ -4,6 +4,7 @@
 // (SOUND is the sole browse-and-scroll exception, by design).
 // This module RE-HOUSES panels built elsewhere — it builds no instruments.
 import { el, btn, help } from "./helpers";
+import { buildOrb } from "./orb";
 
 export type ModeId = "drums" | "pads" | "synth" | "song" | "mix";
 
@@ -149,8 +150,25 @@ export function buildLayout(p: LayoutPanels): Layout {
   // XY field column on the left of whichever view is up (LYSERGIC, F)
   const synthMain = el("div", "wa-synth-main");
   const synthSide = el("div", "wa-synth-side");
+  // SCOPE ⇄ ORB share one screen slot; the orb reads the master bus, the
+  // scope the synth bus, so they answer different questions.
   const scopeWrap = el("div", "wa-xy-wrap");
-  scopeWrap.append(el("div", "wa-fx-title", "SCOPE"), p.scope);
+  const scopeHead = el("div", "wa-scope-head");
+  const scopeTab = btn("SCOPE", "wa-btn-sm active"), orbTab = btn("ORB", "wa-btn-sm");
+  help(orbTab, "The geodesic orb — a wireframe sphere the whole mix pushes around.");
+  const orb = buildOrb();
+  orb.canvas.hidden = true;
+  scopeHead.append(el("div", "wa-fx-title", "SCREEN"), scopeTab, orbTab);
+  const showOrb = (on: boolean): void => {
+    p.scope.hidden = on; orb.canvas.hidden = !on;
+    scopeTab.classList.toggle("active", !on); orbTab.classList.toggle("active", on);
+    orb.setActive(on);
+    localStorage.setItem("vv_studio_screen", on ? "orb" : "scope");
+  };
+  scopeTab.addEventListener("click", () => showOrb(false));
+  orbTab.addEventListener("click", () => showOrb(true));
+  scopeWrap.append(scopeHead, p.scope, orb.canvas);
+  showOrb(localStorage.getItem("vv_studio_screen") === "orb");
   synthSide.append(p.xyPanel, scopeWrap, p.chordPanel);
   synthMain.append(synthSide, synthViewHost);
   soundPage.append(synthBar, synthMain, p.keysHeader, p.synthKeys);
