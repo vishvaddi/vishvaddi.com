@@ -3,7 +3,7 @@
 // pattern projects still load), undo history.
 
 import {
-  SCENES, STEPS, SONG_SLOTS, PAD_COUNT, PAD_LAYER_MAX, PIANO_NOTES, TRACKS, clip, transport,
+  SCENES, STEPS, SONG_SLOTS, PAD_COUNT, PAD_LAYER_MAX, PIANO_NOTES, TRACKS, clip, transport, song,
   allPats, allVels, synthNotes, padEvents, songChain, arrangement, songLoop, sampleParams, sampleData, sampleBuffers,
   padLayers, padLayerBuffers, padLayerMode,
   dp, mpc, rackState, fx, vsynthPatch, synthLaneNotes, synthPatches, patternLengths, patternDivisions, SYNTH_LANES,
@@ -81,7 +81,8 @@ export function projectState(includeSamples = true): object {
     return index;
   });
   return {
-    version: 12, // v12: per-lane polymeter (length/rate), lane voices and drum sends
+    version: 13, // v13: 16 pattern slots and a track title
+    title: song.title,
     pats: allPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
     vels: allVels,
     dp,
@@ -135,6 +136,7 @@ export function applyProject(saved: Record<string, unknown>): void {
         pp.forEach((row, ri) => { if (ri < 8) row.forEach((v, ci) => { if (ci < STEPS) allVels[pi][ri][ci] = v; }); });
       });
       if (saved.dp) (saved.dp as Partial<DrumP>[]).forEach((d, i) => { if (i < 8) Object.assign(dp[i], d); });
+      if (typeof saved.title === "string") song.title = (saved.title as string).slice(0, 48) || "Untitled";
       if (saved.bpm) transport.bpm = saved.bpm as number;
       // v4 projects carry a single curPat; v5 carries clipSel + per-track clipPlay.
       const sel = typeof saved.clipSel === "number" ? saved.clipSel : typeof saved.curPat === "number" ? saved.curPat : null;

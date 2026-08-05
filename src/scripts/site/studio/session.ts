@@ -1,7 +1,7 @@
 // Session view + per-track arrangement lanes — extracted verbatim from
 // index.ts (Phase 0 split). Cross-section wiring goes through ctx.
 import {
-  TRACKS, TRACK_LABELS, SCENE_LABELS, clip, transport,
+  TRACKS, TRACK_LABELS, SCENE_LABELS, clip, transport, song as songState,
   allPats, synthLaneNotes, SYNTH_LANES, padEvents, arrangement,
 } from "./state";
 import type { TrackId, ArrangeBlock, AutomationRamp } from "./state";
@@ -148,6 +148,7 @@ export function buildSession(): SessionView {
   });
   automation.append(el("span", "wa-lbl", "AUTOMATION"), laneSel, paramSel, el("span", "wa-lbl", "FROM"), fromInput, el("span", "wa-lbl", "TO"), toInput, addRampBtn, ramps);
 
+  const arrangeLanePaintsSeed: Array<() => void> = [];
   const songLibrary = el("div", "wa-song-library");
   const songKey = "vv_studio_user_songs"; let songs: Record<string, Record<string, unknown>> = {};
   try { songs = JSON.parse(localStorage.getItem(songKey) || "{}"); } catch { songs = {}; }
@@ -188,14 +189,22 @@ export function buildSession(): SessionView {
   saveSongBtn.addEventListener("click", async () => { const name = await askText("Save song", "Untitled song"); if (!name) return; songs[name] = projectState(false) as Record<string, unknown>; localStorage.setItem(songKey, JSON.stringify(songs)); refreshSongs(); songSel.value = `user:${name}`; });
   loadSongBtn.addEventListener("click", async () => { const saved = songSel.value.startsWith("factory:") ? factorySong(songSel.value.slice(8)) : songs[songSel.value.slice(5)]; if (!saved) return; await pendingProjectStore("put", saved); location.reload(); });
   deleteSongBtn.addEventListener("click", () => { if (!songSel.value.startsWith("user:")) return; delete songs[songSel.value.slice(5)]; localStorage.setItem(songKey, JSON.stringify(songs)); refreshSongs(); });
-  exportSongBtn.addEventListener("click", () => download("vishamp-song.json", new Blob([JSON.stringify({ format: "vishamp-song", version: 1, song: projectState(false) }, null, 2)], { type: "application/json" })));
+  const slug = (): string => songState.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "song";
+  exportSongBtn.addEventListener("click", () => download(`vishamp-${slug()}.json`, new Blob([JSON.stringify({ format: "vishamp-song", version: 1, title: songState.title, song: projectState(false) }, null, 2)], { type: "application/json" })));
   importSongBtn.addEventListener("click", () => songInput.click());
   songInput.addEventListener("change", async () => { const file = songInput.files?.[0]; if (!file) return; try { const parsed = JSON.parse(await file.text()) as { song?: Record<string, unknown> }; if (parsed.song?.pats) { await pendingProjectStore("put", parsed.song); location.reload(); } } catch { launchStatus.textContent = "Song file is invalid"; } songInput.value = ""; });
-  refreshSongs(); songLibrary.append(el("span", "wa-lbl", "SONGS"), songSel, loadSongBtn, saveSongBtn, deleteSongBtn, exportSongBtn, importSongBtn, songInput);
+  const titleInput = document.createElement("input");
+  titleInput.type = "text"; titleInput.className = "wa-song-title"; titleInput.value = songState.title;
+  titleInput.setAttribute("aria-label", "Track title"); titleInput.maxLength = 48;
+  help(titleInput, "Names the track — carried into saved songs and exported song files.");
+  titleInput.addEventListener("input", () => { songState.title = titleInput.value.slice(0, 48) || "Untitled"; saveAll(); });
+  refreshSongs();
+  songLibrary.append(el("span", "wa-lbl", "TITLE"), titleInput, el("span", "wa-lbl", "SONGS"), songSel, loadSongBtn, saveSongBtn, deleteSongBtn, exportSongBtn, importSongBtn, songInput);
+  arrangeLanePaintsSeed.push(() => { titleInput.value = songState.title; });
 
   composerHead.append(el("span", "wa-fx-title", "ARRANGEMENT"), addBtn, leftBtn, rightBtn, shorterBtn, longerBtn, deleteBtn, clearBtn);
   composer.append(composerHead, chain, automation, songLibrary); paintChain(); paintAutomation();
-  const arrangeLanePaints: Array<() => void> = [paintChain];
+  const arrangeLanePaints: Array<() => void> = [paintChain, ...arrangeLanePaintsSeed];
   help(sessionGrid, "Each column is a track, each row a scene — launch single clips or whole scenes; changes land on the next bar so transitions stay in time.");
   song.append(launchStatus, sessionGrid, composer);
 

@@ -1746,11 +1746,12 @@
 .wa-roll-lanes { display: flex; gap: 4px; }
 .wa-roll-spacer { flex: 1; }
 .wa-roll-toolbar select, .wa-kit-library select, .wa-song-library select, .wa-automation-editor select,
-.wa-automation-editor input {
+.wa-automation-editor input, .wa-song-title {
   min-height: 30px; min-width: 0; padding: 4px 7px; color: var(--wa-text);
   background: var(--wa-surface-2); border: 1px solid var(--wa-border-2); border-radius: 4px; font: inherit;
 }
 .wa-automation-editor input { width: 58px; }
+.wa-song-title { width: 150px; letter-spacing: .04em; }
 .wa-roll-lane.active { color: #071114; background: var(--wa-accent); border-color: var(--wa-accent); }
 .wa-note-expression.active { color: #171009; background: var(--wa-amber); border-color: var(--wa-amber); }
 .wa-cell.outside-pattern { opacity: .18 !important; cursor: not-allowed; }

@@ -35,4 +35,7 @@ export function isGridLine(step: number): boolean { return step % Math.max(1, st
 
 // One color per scene (A-H), distinct from the accent/amber/blue already
 // used for state (playing/queued/selected) — identity, not status.
-export const SCENE_COLORS = ["#ff6b8a", "#b98bff", "#ffe066", "#5fd9d9", "#ff8c5a", "#7c8cff", "#b4e66e", "#ff6bd6"];
+export const SCENE_COLORS = [
+  "#ff6b8a", "#b98bff", "#ffe066", "#5fd9d9", "#ff8c5a", "#7c8cff", "#b4e66e", "#ff6bd6",
+  "#ff9aa8", "#8f7bff", "#ffd24d", "#3fc8c8", "#ff7a3d", "#5f74ff", "#8fd94e", "#ff4db8",
+];

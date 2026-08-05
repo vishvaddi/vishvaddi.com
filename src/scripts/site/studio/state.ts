@@ -118,8 +118,10 @@ export interface FxState {
 // ─── Constants ───────────────────────────────────────────────────────────────
 export const STEPS = 32;
 export const DEFAULT_STEPS = 16;
-export const SCENES = 8;
-export const SCENE_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+// 16 pattern slots (CV-80 parity). Pre-v13 projects carry 8 and load into the
+// first eight — every restore path is bounded by `i < SCENES`.
+export const SCENES = 16;
+export const SCENE_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P"];
 export const SONG_SLOTS = 8;
 export const DRUMS = ["Kick", "Snare", "HH Cl", "HH Op", "Clap", "Tom", "Rim", "Crash"];
 export const PAD_COUNT = 64;
@@ -174,6 +176,7 @@ export const DP_SPECS: ParamSpec[][] = [
 ];
 
 // ─── Transport ───────────────────────────────────────────────────────────────
+export const song = { title: "Untitled" };
 export const transport = {
   bpm: 120, swing: 0, metro: false, metroVolume: 1, songMode: false,
   // Snap/grid resolution shared by the drum, pad-event and piano-roll
