@@ -12,31 +12,112 @@ import { dataUrlToBytes } from "./helpers";
 // ─── Audio graph ─────────────────────────────────────────────────────────────
 export let AC: AudioContext | null = null;
 export let master: GainNode | null = null;
-let eqLow: BiquadFilterNode | null = null;
-let eqMid: BiquadFilterNode | null = null;
-let eqHigh: BiquadFilterNode | null = null;
-let compressor: DynamicsCompressorNode | null = null;
-let limiter: DynamicsCompressorNode | null = null;
+export let masterAnalyser: AnalyserNode | null = null;
 export const trackGain: GainNode[] = [];
 export let synthGain: GainNode | null = null;
-let reverbConv: ConvolverNode | null = null;
-let reverbWetGain: GainNode | null = null;
-let delayNode: DelayNode | null = null;
-let delayFeedbackGain: GainNode | null = null;
-let delayWetGain: GainNode | null = null;
+let liveChain: MasterChain | null = null;
+
+// CV-80 master chain: bus → DRIVE → EQ → comp → LIMITER, with TAPE ECHO and
+// SPACE as parallel returns tapped after the drive. Built by one function so
+// the live context and the offline render context cannot drift apart.
+export interface MasterChain {
+  bus: GainNode;
+  drivePre: GainNode; driveShaper: WaveShaperNode; drivePost: GainNode;
+  eqLow: BiquadFilterNode; eqMid: BiquadFilterNode; eqHigh: BiquadFilterNode;
+  compressor: DynamicsCompressorNode; limiter: DynamicsCompressorNode;
+  echoDelay: DelayNode; echoFb: GainNode; echoDamp: BiquadFilterNode; echoWet: GainNode;
+  echoWowDepth: GainNode;
+  spaceHp: BiquadFilterNode; spaceConv: ConvolverNode; spaceWet: GainNode;
+  spaceSeconds: number;
+}
+
+/** tanh saturation, blended against dry so amount 0 is an exact bypass. */
+export function makeDriveCurve(amount: number, blend = 1) {
+  const n = 1024, curve = new Float32Array(n), k = Math.max(0.0001, amount);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    curve[i] = x * (1 - blend) + Math.tanh(x * k) * 0.86 * blend;
+  }
+  return curve;
+}
+function makeImpulse(a: BaseAudioContext, seconds: number): AudioBuffer {
+  const sr = a.sampleRate, len = Math.max(1, Math.floor(sr * seconds));
+  const ir = a.createBuffer(2, len, sr);
+  for (let c = 0; c < 2; c++) {
+    const d = ir.getChannelData(c);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 4.0);
+  }
+  return ir;
+}
+
+export function buildMasterChain(a: BaseAudioContext, dest: AudioNode): MasterChain {
+  const bus = a.createGain(); bus.gain.value = 0.8;
+  const drivePre = a.createGain(), drivePost = a.createGain();
+  const driveShaper = a.createWaveShaper(); driveShaper.oversample = "4x";
+  const eqLow = a.createBiquadFilter(); eqLow.type = "lowshelf"; eqLow.frequency.value = 180;
+  const eqMid = a.createBiquadFilter(); eqMid.type = "peaking"; eqMid.frequency.value = 1200; eqMid.Q.value = 0.8;
+  const eqHigh = a.createBiquadFilter(); eqHigh.type = "highshelf"; eqHigh.frequency.value = 6500;
+  const compressor = a.createDynamicsCompressor(), limiter = a.createDynamicsCompressor();
+  bus.connect(drivePre); drivePre.connect(driveShaper); driveShaper.connect(drivePost);
+  drivePost.connect(eqLow); eqLow.connect(eqMid); eqMid.connect(eqHigh);
+  eqHigh.connect(compressor); compressor.connect(limiter); limiter.connect(dest);
+
+  // TAPE ECHO — the damping filter sits INSIDE the feedback loop, so each
+  // repeat loses top end the way tape does; a slow LFO on delayTime is wow.
+  const echoDelay = a.createDelay(2), echoFb = a.createGain(), echoWet = a.createGain();
+  const echoDamp = a.createBiquadFilter(); echoDamp.type = "lowpass";
+  const echoWow = a.createOscillator(); echoWow.type = "sine"; echoWow.frequency.value = 0.6;
+  const echoWowDepth = a.createGain();
+  drivePost.connect(echoDelay);
+  echoDelay.connect(echoDamp); echoDamp.connect(echoFb); echoFb.connect(echoDelay);
+  echoDelay.connect(echoWet); echoWet.connect(eqLow);
+  echoWow.connect(echoWowDepth); echoWowDepth.connect(echoDelay.delayTime);
+  echoWow.start(0);
+
+  // SPACE — highpassed before the convolver so lows stay dry and defined.
+  const spaceSeconds = Math.max(0.3, fx.spaceSize ?? 2.2);
+  const spaceHp = a.createBiquadFilter(); spaceHp.type = "highpass"; spaceHp.frequency.value = 380;
+  const spaceConv = a.createConvolver(); spaceConv.buffer = makeImpulse(a, spaceSeconds);
+  const spaceWet = a.createGain();
+  drivePost.connect(spaceHp); spaceHp.connect(spaceConv); spaceConv.connect(spaceWet); spaceWet.connect(eqLow);
+
+  const chain: MasterChain = {
+    bus, drivePre, driveShaper, drivePost, eqLow, eqMid, eqHigh, compressor, limiter,
+    echoDelay, echoFb, echoDamp, echoWet, echoWowDepth, spaceHp, spaceConv, spaceWet, spaceSeconds,
+  };
+  applyChainParams(chain);
+  return chain;
+}
+
+export function applyChainParams(chain: MasterChain): void {
+  const d = rackState.devices.drive === false ? 0 : Math.max(0, Math.min(1, fx.drive ?? 0));
+  chain.driveShaper.curve = makeDriveCurve(1 + d * 15, d);
+  chain.drivePost.gain.value = 1 - d * 0.35;
+  chain.eqLow.gain.value = rackState.devices.eq ? fx.low : 0;
+  chain.eqMid.gain.value = rackState.devices.eq ? fx.mid : 0;
+  chain.eqHigh.gain.value = rackState.devices.eq ? fx.high : 0;
+  chain.compressor.threshold.value = rackState.devices.compressor ? fx.compThreshold : 0;
+  chain.compressor.ratio.value = rackState.devices.compressor ? fx.compRatio : 1;
+  chain.compressor.attack.value = 0.01; chain.compressor.release.value = 0.2; chain.compressor.knee.value = 12;
+  chain.limiter.threshold.value = rackState.devices.limiter ? fx.limiter : 0;
+  chain.limiter.ratio.value = rackState.devices.limiter ? 20 : 1;
+  chain.limiter.attack.value = 0.001; chain.limiter.release.value = 0.08; chain.limiter.knee.value = 0;
+  chain.echoDelay.delayTime.value = fx.delayTime;
+  chain.echoFb.gain.value = fx.delayFeedback;
+  chain.echoDamp.frequency.value = fx.echoDamp ?? 2200;
+  chain.echoWowDepth.gain.value = (fx.echoWow ?? 0.25) * 0.0022;
+  chain.echoWet.gain.value = rackState.devices.delay ? fx.delayMix : 0;
+  chain.spaceWet.gain.value = rackState.devices.reverb ? fx.reverb : 0;
+}
 
 export function ac(): AudioContext {
   if (!AC) {
     AC = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    master = AC.createGain();
-    master.gain.value = 0.8;
-    eqLow = AC.createBiquadFilter(); eqLow.type = "lowshelf"; eqLow.frequency.value = 180;
-    eqMid = AC.createBiquadFilter(); eqMid.type = "peaking"; eqMid.frequency.value = 1200; eqMid.Q.value = 0.8;
-    eqHigh = AC.createBiquadFilter(); eqHigh.type = "highshelf"; eqHigh.frequency.value = 6500;
-    compressor = AC.createDynamicsCompressor();
-    limiter = AC.createDynamicsCompressor();
-    applyFxState();
-    master.connect(eqLow); eqLow.connect(eqMid); eqMid.connect(eqHigh); eqHigh.connect(compressor); compressor.connect(limiter); limiter.connect(AC.destination);
+    liveChain = buildMasterChain(AC, AC.destination);
+    master = liveChain.bus;
+    // Post-limiter tap: the orb and any future meter read the finished mix.
+    masterAnalyser = AC.createAnalyser(); masterAnalyser.fftSize = 2048; masterAnalyser.smoothingTimeConstant = 0.7;
+    liveChain.limiter.connect(masterAnalyser);
   }
   if (AC.state === "suspended") AC.resume();
   return AC;
@@ -51,48 +132,24 @@ export function ensureNodes(): void {
   synthGain = a.createGain(); synthGain.gain.value = 0.7;
   synthGain.connect(master!);
 }
+/** SPACE wet level — also the target of the master reverb automation ramp. */
 export function initReverb(wet: number): void {
-  const a = ac();
-  if (!reverbConv) {
-    const sr = a.sampleRate, len = Math.floor(sr * 2.2);
-    const ir = a.createBuffer(2, len, sr);
-    for (let c = 0; c < 2; c++) {
-      const d = ir.getChannelData(c);
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 4.0);
-    }
-    reverbConv = a.createConvolver(); reverbConv.buffer = ir;
-    reverbWetGain = a.createGain(); reverbWetGain.gain.value = wet;
-    master!.connect(reverbConv); reverbConv.connect(reverbWetGain); reverbWetGain.connect(eqLow!);
-  } else {
-    reverbWetGain!.gain.value = wet;
-  }
+  ac();
+  fx.reverb = wet;
+  if (liveChain) liveChain.spaceWet.gain.value = rackState.devices.reverb ? wet : 0;
 }
-export function initDelay(): void {
-  if (delayNode) return;
-  const a = ac();
-  delayNode = a.createDelay(2); delayFeedbackGain = a.createGain(); delayWetGain = a.createGain();
-  master!.connect(delayNode); delayNode.connect(delayFeedbackGain); delayFeedbackGain.connect(delayNode);
-  delayNode.connect(delayWetGain); delayWetGain.connect(eqLow!);
-  applyFxState();
-}
+/** Kept for callers written against the old lazy-init API; the chain is eager now. */
+export function initDelay(): void { ac(); applyFxState(); }
 export function applyFxState(): void {
-  if (eqLow) eqLow.gain.value = rackState.devices.eq ? fx.low : 0;
-  if (eqMid) eqMid.gain.value = rackState.devices.eq ? fx.mid : 0;
-  if (eqHigh) eqHigh.gain.value = rackState.devices.eq ? fx.high : 0;
-  if (compressor) {
-    compressor.threshold.value = rackState.devices.compressor ? fx.compThreshold : 0;
-    compressor.ratio.value = rackState.devices.compressor ? fx.compRatio : 1;
-    compressor.attack.value = 0.01; compressor.release.value = 0.2; compressor.knee.value = 12;
-  }
-  if (limiter) {
-    limiter.threshold.value = rackState.devices.limiter ? fx.limiter : 0;
-    limiter.ratio.value = rackState.devices.limiter ? 20 : 1;
-    limiter.attack.value = 0.001; limiter.release.value = 0.08; limiter.knee.value = 0;
-  }
-  if (reverbWetGain) reverbWetGain.gain.value = rackState.devices.reverb ? fx.reverb : 0;
-  if (delayNode) delayNode.delayTime.value = fx.delayTime;
-  if (delayFeedbackGain) delayFeedbackGain.gain.value = fx.delayFeedback;
-  if (delayWetGain) delayWetGain.gain.value = rackState.devices.delay ? fx.delayMix : 0;
+  if (liveChain) applyChainParams(liveChain);
+}
+/** Rebuild the SPACE impulse after a size change (the buffer is baked, not a param). */
+export function refreshSpaceSize(): void {
+  if (!liveChain || !AC) return;
+  const seconds = Math.max(0.3, fx.spaceSize ?? 2.2);
+  if (Math.abs(seconds - liveChain.spaceSeconds) < 0.01) return;
+  liveChain.spaceConv.buffer = makeImpulse(AC, seconds);
+  liveChain.spaceSeconds = seconds;
 }
 
 // ─── Drum synthesis ──────────────────────────────────────────────────────────

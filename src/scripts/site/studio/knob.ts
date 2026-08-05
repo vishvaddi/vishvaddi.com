@@ -62,6 +62,7 @@ export function knob(
   let dragY = 0, dragStart = 0, dragging = false;
   dial.addEventListener("pointerdown", (e) => {
     e.preventDefault();
+    dial.focus();   // preventDefault suppresses the implicit focus, killing click-then-arrow
     dial.setPointerCapture(e.pointerId);
     dragging = true; dragY = e.clientY; dragStart = current;
     dial.classList.add("active");

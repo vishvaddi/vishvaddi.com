@@ -76,7 +76,7 @@ export function projectState(includeSamples = true): object {
     return index;
   });
   return {
-    version: 10, // v10: bass/lead/harmony lanes, expressive notes and per-scene pattern settings
+    version: 11, // v11: CV-80 master chain (drive, tape-echo tone/wow, space size)
     pats: allPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
     vels: allVels,
     dp,

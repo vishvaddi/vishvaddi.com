@@ -104,6 +104,12 @@ export interface FxState {
   delayTime: number;
   delayFeedback: number;
   delayMix: number;
+  // CV-80 master chain (v11). Optional so pre-v11 projects load with the
+  // drive bypassed and the echo/space at their default character.
+  drive?: number;
+  echoDamp?: number;
+  echoWow?: number;
+  spaceSize?: number;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -251,12 +257,13 @@ export const mpc: MpcState = {
 export const rackState: RackState = {
   grooveTiming: 0, grooveVelocity: 0, grooveRandom: 0,
   noteEcho: 0, echoDecay: 0.65, glitch: 0, macros: [0, 0, 0, 0],
-  devices: { player: true, eq: true, compressor: true, delay: true, reverb: true, limiter: true },
+  devices: { player: true, drive: true, eq: true, compressor: true, delay: true, reverb: true, limiter: true },
 };
 export const fx: FxState = {
   low: 0, mid: 0, high: 0,
   compThreshold: -18, compRatio: 3, limiter: -1,
   reverb: 0, delayTime: 0.25, delayFeedback: 0.25, delayMix: 0,
+  drive: 0, echoDamp: 2200, echoWow: 0.25, spaceSize: 2.2,
 };
 
 // ─── Synth ───────────────────────────────────────────────────────────────────

@@ -4,10 +4,10 @@
 import {
   STEPS, PAD_BANK_SIZE, TRACKS, clip, transport,
   allPats, allVels, synthLaneNotes, synthPatches, SYNTH_LANES, patternLengths, patternDivisions, padEvents, blockAt, songEndBar,
-  rackState, fx, audible,
+  rackState, audible,
 } from "./state";
 import type { TrackId } from "./state";
-import { ensureNodes, trackGain, playDrum, playPad, metroClick } from "./engine";
+import { ensureNodes, trackGain, playDrum, playPad, metroClick, buildMasterChain } from "./engine";
 import * as engine from "./engine";
 import { playNote } from "./vsynth";
 import { projectState, pendingProjectStore } from "./persistence";
@@ -64,28 +64,11 @@ export function buildProjectExport(): ProjectExport {
     barDurations.forEach((duration) => { barStarts.push(renderDuration); renderDuration += duration; });
     const dur = renderDuration + 2.2;
     const off = new OfflineAudioContext(2, Math.ceil(dur * sr), sr);
-    const om = off.createGain(); om.gain.value = engine.master!.gain.value;
-    const ol = off.createBiquadFilter(); ol.type = "lowshelf"; ol.frequency.value = 180; ol.gain.value = rackState.devices.eq ? fx.low : 0;
-    const omi = off.createBiquadFilter(); omi.type = "peaking"; omi.frequency.value = 1200; omi.Q.value = 0.8; omi.gain.value = rackState.devices.eq ? fx.mid : 0;
-    const oh = off.createBiquadFilter(); oh.type = "highshelf"; oh.frequency.value = 6500; oh.gain.value = rackState.devices.eq ? fx.high : 0;
-    const oc = off.createDynamicsCompressor(); oc.threshold.value = rackState.devices.compressor ? fx.compThreshold : 0; oc.ratio.value = rackState.devices.compressor ? fx.compRatio : 1; oc.knee.value = 12;
-    const oli = off.createDynamicsCompressor(); oli.threshold.value = rackState.devices.limiter ? fx.limiter : 0; oli.ratio.value = rackState.devices.limiter ? 20 : 1; oli.knee.value = 0; oli.attack.value = 0.001;
-    om.connect(ol); ol.connect(omi); omi.connect(oh); oh.connect(oc); oc.connect(oli); oli.connect(off.destination);
-    let reverbWet: GainNode | null = null;
-    if (rackState.devices.reverb && fx.reverb > 0) {
-      const len = Math.floor(sr * 2.2), ir = off.createBuffer(2, len, sr);
-      for (let c = 0; c < 2; c++) {
-        const data = ir.getChannelData(c);
-        for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 4);
-      }
-      const conv = off.createConvolver(), wet = off.createGain(); conv.buffer = ir; wet.gain.value = fx.reverb; reverbWet = wet;
-      om.connect(conv); conv.connect(wet); wet.connect(ol);
-    }
-    if (rackState.devices.delay && fx.delayMix > 0) {
-      const delay = off.createDelay(2), feedback = off.createGain(), wet = off.createGain();
-      delay.delayTime.value = fx.delayTime; feedback.gain.value = fx.delayFeedback; wet.gain.value = fx.delayMix;
-      om.connect(delay); delay.connect(feedback); feedback.connect(delay); delay.connect(wet); wet.connect(ol);
-    }
+    // One builder for live and offline — drive, tape echo and space cannot
+    // drift between what you hear and what you export.
+    const chain = buildMasterChain(off, off.destination);
+    const om = chain.bus; om.gain.value = engine.master!.gain.value;
+    const reverbWet: GainNode = chain.spaceWet;
     const ot: GainNode[] = [];
     for (let i = 0; i < 8; i++) { const g = off.createGain(); g.gain.value = trackGain[i].gain.value; g.connect(om); ot.push(g); }
     const osg = off.createGain(); osg.gain.value = engine.synthGain!.gain.value; osg.connect(om);

@@ -3,7 +3,7 @@
 // from index.ts (Phase 0 split). (Combinator deletion is a Phase 2 item —
 // kept as-is here.)
 import { clip, mpc, rackState, fx, sampleParams, padEvents, patternLengths } from "./state";
-import { ensureNodes, applyFxState, initReverb, initDelay } from "./engine";
+import { ensureNodes, applyFxState, initReverb, initDelay, refreshSpaceSize } from "./engine";
 import { saveAll } from "./persistence";
 import { el, btn, help, sliderRow, euclideanPattern } from "./helpers";
 
@@ -97,17 +97,25 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
     fxSlider("THRESH", -50, 0, fx.compThreshold, 1, (v) => { fx.compThreshold = v; }),
     fxSlider("RATIO", 1, 20, fx.compRatio, 0.5, (v) => { fx.compRatio = v; }),
   );
+  const driveDevice = el("div", "wa-device");
+  driveDevice.append(
+    deviceHeader("drive", "DRIVE · master saturation"),
+    fxSlider("AMT", 0, 1, fx.drive ?? 0, 0.01, (v) => { fx.drive = v; }),
+  );
   const delayDevice = el("div", "wa-device");
   delayDevice.append(
-    deviceHeader("delay", "FEEDBACK DELAY · parallel return"),
-    fxSlider("TIME", 0.05, 1, fx.delayTime, 0.01, (v) => { fx.delayTime = v; initDelay(); }),
-    fxSlider("FEEDBACK", 0, 0.85, fx.delayFeedback, 0.01, (v) => { fx.delayFeedback = v; initDelay(); }),
-    fxSlider("MIX", 0, 0.6, fx.delayMix, 0.02, (v) => { fx.delayMix = v; initDelay(); }),
+    deviceHeader("delay", "TAPE ECHO · damped feedback return"),
+    fxSlider("TIME", 0.05, 1, fx.delayTime, 0.01, (v) => { fx.delayTime = v; }),
+    fxSlider("REGEN", 0, 0.85, fx.delayFeedback, 0.01, (v) => { fx.delayFeedback = v; }),
+    fxSlider("MIX", 0, 0.6, fx.delayMix, 0.02, (v) => { fx.delayMix = v; }),
+    fxSlider("TONE", 600, 8000, fx.echoDamp ?? 2200, 50, (v) => { fx.echoDamp = v; }),
+    fxSlider("WOW", 0, 1, fx.echoWow ?? 0.25, 0.01, (v) => { fx.echoWow = v; }),
   );
   const reverbDevice = el("div", "wa-device");
   reverbDevice.append(
-    deviceHeader("reverb", "CONVOLUTION REVERB · parallel return"),
-    fxSlider("AMOUNT", 0, 0.6, fx.reverb, 0.02, (v) => { fx.reverb = v; initReverb(v); }),
+    deviceHeader("reverb", "SPACE · convolution return"),
+    fxSlider("MIX", 0, 0.6, fx.reverb, 0.02, (v) => { fx.reverb = v; initReverb(v); }),
+    fxSlider("SIZE", 0.4, 5, fx.spaceSize ?? 2.2, 0.1, (v) => { fx.spaceSize = v; refreshSpaceSize(); }),
   );
   const limiterDevice = el("div", "wa-device");
   limiterDevice.append(
@@ -118,10 +126,11 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
   const sections: Array<{ id: string; key: string | null; label: string; elx: HTMLElement }> = [
     { id: "macros", key: null, label: "MACROS", elx: combinator },
     { id: "player", key: "player", label: "PLAYER", elx: playerRack },
+    { id: "drive", key: "drive", label: "DRIVE", elx: driveDevice },
     { id: "eq", key: "eq", label: "CHANNEL EQ", elx: eqDevice },
     { id: "compressor", key: "compressor", label: "COMPRESSOR", elx: compDevice },
-    { id: "delay", key: "delay", label: "DELAY", elx: delayDevice },
-    { id: "reverb", key: "reverb", label: "REVERB", elx: reverbDevice },
+    { id: "delay", key: "delay", label: "TAPE ECHO", elx: delayDevice },
+    { id: "reverb", key: "reverb", label: "SPACE", elx: reverbDevice },
     { id: "limiter", key: "limiter", label: "LIMITER", elx: limiterDevice },
   ];
   const browser = el("div", "wa-devbrowser");
@@ -152,7 +161,7 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
   browser.append(tabList, detail);
   paintTabs();
   devicePanel.append(
-    el("p", "wa-help", "Signal flow: Player → MPC Program → EQ → compressor → parallel delay/reverb → limiter."),
+    el("p", "wa-help", "Signal flow: Player → MPC Program → DRIVE → EQ → compressor → parallel TAPE ECHO / SPACE → LIMITER."),
     browser,
   );
 
