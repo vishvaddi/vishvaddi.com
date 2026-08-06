@@ -13,6 +13,8 @@ import { dataUrlToBytes } from "./helpers";
 export let AC: AudioContext | null = null;
 export let master: GainNode | null = null;
 export let masterAnalyser: AnalyserNode | null = null;
+/** Per-channel taps for the vectorscope — L and R must stay separate. */
+export let masterSplit: { left: AnalyserNode; right: AnalyserNode } | null = null;
 export const trackGain: GainNode[] = [];
 export let synthGain: GainNode | null = null;
 let liveChain: MasterChain | null = null;
@@ -115,9 +117,17 @@ export function ac(): AudioContext {
     AC = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     liveChain = buildMasterChain(AC, AC.destination);
     master = liveChain.bus;
-    // Post-limiter tap: the orb and any future meter read the finished mix.
+    // Post-limiter taps: a summed analyser for scopes and meters, plus a
+    // channel split so the vectorscope can plot true L against R.
     masterAnalyser = AC.createAnalyser(); masterAnalyser.fftSize = 2048; masterAnalyser.smoothingTimeConstant = 0.7;
     liveChain.limiter.connect(masterAnalyser);
+    const splitter = AC.createChannelSplitter(2);
+    const la = AC.createAnalyser(), ra = AC.createAnalyser();
+    la.fftSize = 1024; ra.fftSize = 1024;
+    la.smoothingTimeConstant = 0; ra.smoothingTimeConstant = 0;
+    liveChain.limiter.connect(splitter);
+    splitter.connect(la, 0); splitter.connect(ra, 1);
+    masterSplit = { left: la, right: ra };
   }
   if (AC.state === "suspended") AC.resume();
   return AC;

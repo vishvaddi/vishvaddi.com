@@ -1,11 +1,11 @@
-// XY morph field (LYSERGIC, F): drag to walk the tone — X is filter cutoff
+// XY morph field: drag to walk the tone — X is filter cutoff
 // (log-mapped 60Hz–16kHz), Y is wavetable position on both oscillators.
 // ORBIT animates the point in a slow lissajous around where you left it;
 // SILENCE releases every sounding voice.
 import { el, btn, help } from "./helpers";
 import { vsynthPatch } from "./state";
 import { saveAll } from "./persistence";
-import { buildBloomField } from "./bloomfield";
+import { buildBandScan } from "./bandscan";
 
 export interface XYField {
   root: HTMLElement;
@@ -18,17 +18,18 @@ const xToCut = (x: number): number => Math.round(CUT_LO * Math.pow(CUT_HI / CUT_
 
 export function buildXYField(deps: { onLight: () => void; onCommit: () => void; onSilence: () => void }): XYField {
   const root = el("div", "wa-xy-wrap");
-  const title = el("div", "wa-fx-title", "FIELD — walk the tone");
+  const title = el("div", "wa-fx-title", "FIELD");
   const modeRow = el("div", "wa-field-modes");
-  const morphBtn = btn("Morph", "wa-btn-sm active"), terrainBtn = btn("Field", "wa-btn-sm");
+  const morphBtn = btn("Morph", "wa-btn-sm active"), terrainBtn = btn("Scan", "wa-btn-sm");
   modeRow.append(morphBtn, terrainBtn);
   const field = el("div", "wa-xy-field");
   const dot = el("div", "wa-xy-dot");
   const readout = el("div", "wa-xy-readout", "");
   field.append(dot);
   help(field, "Drag to morph: left–right opens the filter, up–down morphs the wavetable. ORBIT keeps the point moving on its own.");
-  // FIELD (B4) — the walkable bloom world replaces the old one-note terrain pad.
-  const bloom = buildBloomField({ onReadout: (text) => { if (!bloom.root.hidden) readout.textContent = text; } });
+  // SCAN — a receiver sweeping a band of transmitters. Replaces the bloom
+  // field, which followed its reference too closely.
+  const bloom = buildBandScan({ onReadout: (text) => { if (!bloom.root.hidden) readout.textContent = text; } });
   bloom.root.hidden = true;
 
   let px = cutToX(vsynthPatch.filter.cutoff);
@@ -36,7 +37,7 @@ export function buildXYField(deps: { onLight: () => void; onCommit: () => void; 
   const setFieldMode = (mode: "morph" | "terrain"): void => {
     const isField = mode === "terrain"; field.hidden = isField; bloom.root.hidden = !isField;
     morphBtn.classList.toggle("active", !isField); terrainBtn.classList.toggle("active", isField);
-    readout.textContent = isField ? "open field · WASD or drag to walk" : `CUT ${xToCut(px)}Hz · POS ${py.toFixed(2)}`;
+    readout.textContent = isField ? "tune with WASD or drag" : `CUT ${xToCut(px)}Hz · POS ${py.toFixed(2)}`;
     bloom.setActive(isField);
     if (isField) bloom.root.focus();
   };

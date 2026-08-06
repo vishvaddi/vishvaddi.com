@@ -106,13 +106,13 @@ export function euclideanPattern(steps: number, pulses: number, rotation: number
   const pattern = Array.from({ length: steps }, (_, step) => ((step * pulses) % steps) < pulses);
   return pattern.map((_, i) => pattern[(i - rotation + steps) % steps]);
 }
-// Screen palette - cyan terminal (Studio v2 C1). Canvases cannot read CSS vars
-// cheaply, so screens draw from these constants; keep in sync with --wa-phos*.
-// CV-80 screens: a warm-black LCD well with a teal phosphor trace.
-export const SCREEN_BG = "#0c100e";
-export const SCREEN_FG = "#4dd6c1";
+// Screen palette. Canvases cannot read CSS vars cheaply, so screens draw from
+// these constants; keep in sync with --wa-phos*.
+// Test-equipment screens: a cool graphite well with a verdigris trace.
+export const SCREEN_BG = "#0e1113";
+export const SCREEN_FG = "#5fa88a";
 /** Same trace at an arbitrary alpha — canvases that draw their own grids. */
-export const screenRgba = (alpha: number): string => `rgba(77,214,193,${alpha})`;
+export const screenRgba = (alpha: number): string => `rgba(95,168,138,${alpha})`;
 
 /** Beat ruler row for the 16-step grids: 1 2 3 4 at the quarters, ticks
  *  between. Lives INSIDE the scrolling grid so it tracks horizontal scroll. */
@@ -132,7 +132,7 @@ export function drawWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer, sli
   ctx.scale(scale, scale); ctx.fillStyle = SCREEN_BG; ctx.fillRect(0, 0, width, height);
   if (selected >= 0 && slices[selected]) {
     const [start, end] = slices[selected];
-    ctx.fillStyle = "rgba(52, 226, 255, 0.16)";
+    ctx.fillStyle = screenRgba(0.16);
     ctx.fillRect(start * width, 0, (end - start) * width, height);
   }
   const data = buffer.getChannelData(0), stride = Math.max(1, Math.floor(data.length / width));

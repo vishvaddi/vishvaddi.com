@@ -4,7 +4,7 @@
 // (SOUND is the sole browse-and-scroll exception, by design).
 // This module RE-HOUSES panels built elsewhere — it builds no instruments.
 import { el, btn, help, drawScope, SCREEN_FG } from "./helpers";
-import { buildOrb } from "./orb";
+import { buildVectorscope } from "./vectorscope";
 import { masterAnalyser } from "./engine";
 
 /** Master output trace on the MIX faceplate. Idles as a flat line until audio
@@ -168,13 +168,13 @@ export function buildLayout(p: LayoutPanels): Layout {
   // XY field column on the left of whichever view is up (LYSERGIC, F)
   const synthMain = el("div", "wa-synth-main");
   const synthSide = el("div", "wa-synth-side");
-  // SCOPE ⇄ ORB share one screen slot; the orb reads the master bus, the
-  // scope the synth bus, so they answer different questions.
+  // WAVE ⇄ VECTOR share one screen slot: the waveform reads the synth bus,
+  // the vectorscope the master bus, so they answer different questions.
   const scopeWrap = el("div", "wa-xy-wrap");
   const scopeHead = el("div", "wa-scope-head");
-  const scopeTab = btn("SCOPE", "wa-btn-sm active"), orbTab = btn("ORB", "wa-btn-sm");
-  help(orbTab, "The geodesic orb — a wireframe sphere the whole mix pushes around.");
-  const orb = buildOrb();
+  const scopeTab = btn("WAVE", "wa-btn-sm active"), orbTab = btn("VECTOR", "wa-btn-sm");
+  help(orbTab, "Stereo vectorscope — left against right. A vertical trace is mono, a wide cloud is stereo, horizontal means out of phase.");
+  const orb = buildVectorscope();
   orb.canvas.hidden = true;
   scopeHead.append(el("div", "wa-fx-title", "SCREEN"), scopeTab, orbTab);
   const showOrb = (on: boolean): void => {
@@ -215,7 +215,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   p.devicePanel.classList.add("wa-mix-flex");
   const scopeWell = el("div", "wa-panel wa-mix-scope");
   const masterScope = document.createElement("canvas"); masterScope.className = "wa-scope wa-master-scope";
-  const mixOrb = buildOrb();
+  const mixOrb = buildVectorscope();
   help(scopeWell, "Master output — the finished mix, post-limiter.");
   scopeWell.append(el("div", "wa-fx-title", "MASTER OUT"), masterScope, mixOrb.canvas);
   mixPage.append(p.mixer, scopeWell, p.devicePanel);
