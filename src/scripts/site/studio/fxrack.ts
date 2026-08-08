@@ -5,6 +5,7 @@
 import { clip, mpc, rackState, fx, sampleParams, padEvents, patternLengths } from "./state";
 import { ensureNodes, applyFxState, initReverb, initDelay, refreshSpaceSize } from "./engine";
 import { saveAll } from "./persistence";
+import { ctx } from "./ctx";
 import { el, btn, help, sliderRow, euclideanPattern } from "./helpers";
 
 export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLElement {
@@ -56,8 +57,9 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
       "Jungle Pressure": [0.72, 0.28, 0.08, 0.82],
       "Dub Space": [0.2, 0.9, 0.35, 0.35],
     };
+    ctx.checkpoint();
     presets[patchSelect.value].forEach((value, i) => applyMacro(i, value));
-    location.reload();
+    ctx.refreshVisibleState();
   });
   patchRow.append(patchSelect, loadPatchBtn); combinator.append(patchRow);
 

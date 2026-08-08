@@ -13,6 +13,9 @@ export interface StudioCtx {
   setBpm: (v: number) => void
   songBtn: HTMLButtonElement
   renderSel: HTMLSelectElement
+  /** Repaint every editor from current state — lets a library load apply in
+   *  place rather than restarting the page. */
+  refreshVisibleState: () => void
 }
 
 export const ctx = {} as StudioCtx

@@ -5,7 +5,7 @@ import {
   allPats, synthLaneNotes, SYNTH_LANES, padEvents, arrangement,
 } from "./state";
 import type { TrackId, ArrangeBlock, AutomationRamp } from "./state";
-import { saveAll, projectState, pendingProjectStore } from "./persistence";
+import { saveAll, projectState, applyProject, pendingProjectStore } from "./persistence";
 import { el, btn, help, download, askText } from "./helpers";
 import { ctx, SCENE_COLORS } from "./ctx";
 
@@ -16,6 +16,32 @@ export interface SessionView {
   arrangeLanePaints: Array<() => void>;
   // tutorial tour targets
   sessionGrid: HTMLElement;
+}
+
+/** A complete demo project. Also seeds an empty first run — see index.ts. */
+export function factorySong(name: string): Record<string, unknown> {
+  const state = JSON.parse(JSON.stringify(projectState(false))) as Record<string, unknown> & {
+    pats: number[][][]; vels: number[][][]; synthLaneNotes: Record<string, Array<Array<Record<string, unknown>>>>;
+    arrangement: Record<string, ArrangeBlock[]>; bpm: number;
+  };
+  state.pats = Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => Array(16).fill(0)));
+  state.vels = Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => Array(16).fill(96)));
+  const put = (scene: number, row: number, steps: number[]) => steps.forEach((step) => { state.pats[scene][row][step] = 1; });
+  [0, 1, 2, 3].forEach((scene) => {
+    put(scene, 0, name === "MIDNIGHT ACID" ? [0, 4, 8, 12] : [0, 6, 8, 14]);
+    put(scene, 1, [4, 12]); put(scene, 2, [2, 6, 10, 14]);
+    if (scene % 2) put(scene, 3, [7, 15]);
+  });
+  const note = (noteName: string, step: number, len = 1, accent = false, slide = false) => ({ note: noteName, step, len, vel: accent ? 116 : 94, accent, slide });
+  state.synthLaneNotes = { bass: Array.from({ length: 8 }, () => []), lead: Array.from({ length: 8 }, () => []), harmony: Array.from({ length: 8 }, () => []) };
+  state.synthLaneNotes.bass[0] = [note("C3", 0, 2, true), note("C3", 3), note("D#3", 6, 1, false, true), note("G3", 10), note("A#2", 14)];
+  state.synthLaneNotes.bass[1] = [note("F2", 0, 2, true), note("F2", 4), note("G#2", 8, 1, false, true), note("C3", 12)];
+  state.synthLaneNotes.lead[2] = [note("C4", 0), note("D#4", 2), note("G4", 4, 2, true), note("A#4", 8), note("G4", 12, 2)];
+  state.synthLaneNotes.harmony[3] = [note("C4", 0, 16)];
+  const blocks = [0, 1, 2, 3].map((scene, index) => ({ scene, bars: name === "NEON HORIZON" ? 2 : 1, startBar: index * (name === "NEON HORIZON" ? 2 : 1), automation: index === 2 ? [{ lane: "lead" as const, param: "cutoff" as const, from: .2, to: .9 }] : [] }));
+  state.arrangement = { drums: blocks, pads: blocks.map((b) => ({ ...b })), synth: blocks.map((b) => ({ ...b })) };
+  state.bpm = name === "MIDNIGHT ACID" ? 122 : name === "NEON HORIZON" ? 138 : 92;
+  return state;
 }
 
 export function buildSession(): SessionView {
@@ -124,13 +150,13 @@ export function buildSession(): SessionView {
     });
   };
   const commitChain = () => { normaliseStarts(); saveAll(); paintChain(); };
-  addBtn.addEventListener("click", () => { canonical().push({ scene: clip.sel, bars: 1, startBar: 0, automation: [] }); selectedBlock = canonical().length - 1; commitChain(); });
-  leftBtn.addEventListener("click", () => { if (selectedBlock <= 0) return; [canonical()[selectedBlock - 1], canonical()[selectedBlock]] = [canonical()[selectedBlock], canonical()[selectedBlock - 1]]; selectedBlock--; commitChain(); });
-  rightBtn.addEventListener("click", () => { if (selectedBlock < 0 || selectedBlock >= canonical().length - 1) return; [canonical()[selectedBlock + 1], canonical()[selectedBlock]] = [canonical()[selectedBlock], canonical()[selectedBlock + 1]]; selectedBlock++; commitChain(); });
-  shorterBtn.addEventListener("click", () => { const block = canonical()[selectedBlock]; if (!block) return; block.bars = Math.max(1, block.bars - 1); commitChain(); });
-  longerBtn.addEventListener("click", () => { const block = canonical()[selectedBlock]; if (!block) return; block.bars = Math.min(128, block.bars + 1); commitChain(); });
-  deleteBtn.addEventListener("click", () => { if (selectedBlock < 0) return; canonical().splice(selectedBlock, 1); selectedBlock = Math.min(selectedBlock, canonical().length - 1); commitChain(); paintAutomation(); });
-  clearBtn.addEventListener("click", () => { TRACKS.forEach((track) => { arrangement[track] = []; }); selectedBlock = -1; saveAll(); paintChain(); paintAutomation(); });
+  addBtn.addEventListener("click", () => { ctx.checkpoint(); canonical().push({ scene: clip.sel, bars: 1, startBar: 0, automation: [] }); selectedBlock = canonical().length - 1; commitChain(); });
+  leftBtn.addEventListener("click", () => { if (selectedBlock <= 0) return; ctx.checkpoint(); [canonical()[selectedBlock - 1], canonical()[selectedBlock]] = [canonical()[selectedBlock], canonical()[selectedBlock - 1]]; selectedBlock--; commitChain(); });
+  rightBtn.addEventListener("click", () => { if (selectedBlock < 0 || selectedBlock >= canonical().length - 1) return; ctx.checkpoint(); [canonical()[selectedBlock + 1], canonical()[selectedBlock]] = [canonical()[selectedBlock], canonical()[selectedBlock + 1]]; selectedBlock++; commitChain(); });
+  shorterBtn.addEventListener("click", () => { const block = canonical()[selectedBlock]; if (!block) return; ctx.checkpoint(); block.bars = Math.max(1, block.bars - 1); commitChain(); });
+  longerBtn.addEventListener("click", () => { const block = canonical()[selectedBlock]; if (!block) return; ctx.checkpoint(); block.bars = Math.min(128, block.bars + 1); commitChain(); });
+  deleteBtn.addEventListener("click", () => { if (selectedBlock < 0) return; ctx.checkpoint(); canonical().splice(selectedBlock, 1); selectedBlock = Math.min(selectedBlock, canonical().length - 1); commitChain(); paintAutomation(); });
+  clearBtn.addEventListener("click", () => { ctx.checkpoint(); TRACKS.forEach((track) => { arrangement[track] = []; }); selectedBlock = -1; saveAll(); paintChain(); paintAutomation(); });
 
   const automation = el("div", "wa-automation-editor");
   const laneSel = document.createElement("select"); [["bass", "Bass"], ["lead", "Lead"], ["harmony", "Harmony"], ["master", "Master"]].forEach(([v, l]) => laneSel.append(new Option(l, v)));
@@ -142,11 +168,12 @@ export function buildSession(): SessionView {
     ramps.replaceChildren(); const block = canonical()[selectedBlock];
     block?.automation?.forEach((ramp, index) => {
       const row = el("div", "wa-ramp-row", `${ramp.lane} ${ramp.param} ${Math.round(ramp.from * 100)}→${Math.round(ramp.to * 100)}%`);
-      const remove = btn("×", "wa-btn-sm"); remove.addEventListener("click", () => { block.automation!.splice(index, 1); commitChain(); paintAutomation(); }); row.append(remove); ramps.append(row);
+      const remove = btn("×", "wa-btn-sm"); remove.addEventListener("click", () => { ctx.checkpoint(); block.automation!.splice(index, 1); commitChain(); paintAutomation(); }); row.append(remove); ramps.append(row);
     });
   };
   addRampBtn.addEventListener("click", () => {
     const block = canonical()[selectedBlock]; if (!block) return;
+    ctx.checkpoint();
     const ramp: AutomationRamp = { lane: laneSel.value as AutomationRamp["lane"], param: paramSel.value as AutomationRamp["param"], from: Number(fromInput.value) / 100, to: Number(toInput.value) / 100 };
     block.automation ??= []; block.automation.push(ramp); commitChain(); paintAutomation();
   });
@@ -155,30 +182,6 @@ export function buildSession(): SessionView {
   const songLibrary = el("div", "wa-song-library");
   const songKey = "vv_studio_user_songs"; let songs: Record<string, Record<string, unknown>> = {};
   try { songs = JSON.parse(localStorage.getItem(songKey) || "{}"); } catch { songs = {}; }
-  const factorySong = (name: string): Record<string, unknown> => {
-    const state = JSON.parse(JSON.stringify(projectState(false))) as Record<string, unknown> & {
-      pats: number[][][]; vels: number[][][]; synthLaneNotes: Record<string, Array<Array<Record<string, unknown>>>>;
-      arrangement: Record<string, ArrangeBlock[]>; bpm: number;
-    };
-    state.pats = Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => Array(16).fill(0)));
-    state.vels = Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => Array(16).fill(96)));
-    const put = (scene: number, row: number, steps: number[]) => steps.forEach((step) => { state.pats[scene][row][step] = 1; });
-    [0, 1, 2, 3].forEach((scene) => {
-      put(scene, 0, name === "MIDNIGHT ACID" ? [0, 4, 8, 12] : [0, 6, 8, 14]);
-      put(scene, 1, [4, 12]); put(scene, 2, [2, 6, 10, 14]);
-      if (scene % 2) put(scene, 3, [7, 15]);
-    });
-    const note = (noteName: string, step: number, len = 1, accent = false, slide = false) => ({ note: noteName, step, len, vel: accent ? 116 : 94, accent, slide });
-    state.synthLaneNotes = { bass: Array.from({ length: 8 }, () => []), lead: Array.from({ length: 8 }, () => []), harmony: Array.from({ length: 8 }, () => []) };
-    state.synthLaneNotes.bass[0] = [note("C3", 0, 2, true), note("C3", 3), note("D#3", 6, 1, false, true), note("G3", 10), note("A#2", 14)];
-    state.synthLaneNotes.bass[1] = [note("F2", 0, 2, true), note("F2", 4), note("G#2", 8, 1, false, true), note("C3", 12)];
-    state.synthLaneNotes.lead[2] = [note("C4", 0), note("D#4", 2), note("G4", 4, 2, true), note("A#4", 8), note("G4", 12, 2)];
-    state.synthLaneNotes.harmony[3] = [note("C4", 0, 16)];
-    const blocks = [0, 1, 2, 3].map((scene, index) => ({ scene, bars: name === "NEON HORIZON" ? 2 : 1, startBar: index * (name === "NEON HORIZON" ? 2 : 1), automation: index === 2 ? [{ lane: "lead" as const, param: "cutoff" as const, from: .2, to: .9 }] : [] }));
-    state.arrangement = { drums: blocks, pads: blocks.map((b) => ({ ...b })), synth: blocks.map((b) => ({ ...b })) };
-    state.bpm = name === "MIDNIGHT ACID" ? 122 : name === "NEON HORIZON" ? 138 : 92;
-    return state;
-  };
   const factorySongs = ["MIDNIGHT ACID", "NEON HORIZON", "DUST BREAK"];
   const songSel = document.createElement("select"); songSel.setAttribute("aria-label", "Saved song");
   const refreshSongs = () => {
@@ -190,7 +193,20 @@ export function buildSession(): SessionView {
   const saveSongBtn = btn("Save song", "wa-btn-sm"), loadSongBtn = btn("Load", "wa-btn-sm"), deleteSongBtn = btn("Delete", "wa-btn-sm"), exportSongBtn = btn("↓ Song", "wa-btn-sm"), importSongBtn = btn("↑ Song", "wa-btn-sm");
   const songInput = document.createElement("input"); songInput.type = "file"; songInput.accept = ".json,application/json"; songInput.hidden = true;
   saveSongBtn.addEventListener("click", async () => { const name = await askText("Save song", "Untitled song"); if (!name) return; songs[name] = projectState(false) as Record<string, unknown>; localStorage.setItem(songKey, JSON.stringify(songs)); refreshSongs(); songSel.value = `user:${name}`; });
-  loadSongBtn.addEventListener("click", async () => { const saved = songSel.value.startsWith("factory:") ? factorySong(songSel.value.slice(8)) : songs[songSel.value.slice(5)]; if (!saved) return; await pendingProjectStore("put", saved); location.reload(); });
+  // Loading applies in place. It used to reload the page, which threw away
+  // your position in the app and gave no warning that the current track was
+  // about to be replaced.
+  loadSongBtn.addEventListener("click", () => {
+    const saved = songSel.value.startsWith("factory:") ? factorySong(songSel.value.slice(8)) : songs[songSel.value.slice(5)];
+    if (!saved) return;
+    const label = songSel.value.replace(/^(factory|user):/, "");
+    if (!window.confirm(`Load "${label}"? It replaces everything currently in the studio.`)) return;
+    ctx.checkpoint();
+    applyProject(JSON.parse(JSON.stringify(saved)) as Record<string, unknown>);
+    ctx.refreshVisibleState();
+    saveAll();
+    launchStatus.textContent = `Loaded ${label}`;
+  });
   deleteSongBtn.addEventListener("click", () => { if (!songSel.value.startsWith("user:")) return; delete songs[songSel.value.slice(5)]; localStorage.setItem(songKey, JSON.stringify(songs)); refreshSongs(); });
   const slug = (): string => songState.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "song";
   exportSongBtn.addEventListener("click", () => download(`vishamp-${slug()}.json`, new Blob([JSON.stringify({ format: "vishamp-song", version: 1, title: songState.title, song: projectState(false) }, null, 2)], { type: "application/json" })));

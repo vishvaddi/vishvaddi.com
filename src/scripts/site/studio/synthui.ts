@@ -9,7 +9,7 @@ import * as engine from "./engine";
 import { playNote, LiveVoices, PRESETS, PRESET_CATEGORIES, TABLE_NAMES, MOD_SRCS, MOD_DESTS, sampleWaveform, noteToMidi, midiToNote } from "./vsynth";
 import type { ModSlot, VPatch } from "./vsynth";
 import { saveAll } from "./persistence";
-import { el, btn, help, sliderRow, drawScope, drawEnvelopeShape, download, askText, SCREEN_BG, SCREEN_FG } from "./helpers";
+import { el, btn, help, sliderRow, drawScope, drawEnvelopeShape, download, askText, SCREEN_BG, SCREEN_FG, screenRgba } from "./helpers";
 import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
 import { showVelocityPopup } from "./velpopup";
 import { buildKeys, setKeysLatch } from "./keys";
@@ -45,7 +45,7 @@ export interface SynthUI {
 
 // Stacked wavetable wireframe (Serum-style): the table's slices drawn as
 // perspective-offset polylines, the slice under the POSITION knob lit with a
-// cyan halo, neighbours ghosted by distance. Pure look — audio path untouched.
+// phosphor halo, neighbours ghosted by distance. Pure look — audio path untouched.
 const WT_SLICES = 12;
 function drawWavetableStack(canvas: HTMLCanvasElement, table: string, pos: number): void {
   const scale = window.devicePixelRatio || 1, width = canvas.clientWidth || 200, height = canvas.clientHeight || 92;
@@ -61,7 +61,7 @@ function drawWavetableStack(canvas: HTMLCanvasElement, table: string, pos: numbe
     const wave = sampleWaveform(table, t);
     const ox = 5 + t * spanX, oy = height - 8 - amp - t * spanY;
     const isCurrent = index === current;
-    g.strokeStyle = isCurrent ? SCREEN_FG : `rgba(52, 226, 255, ${(0.08 + 0.16 * (1 - Math.abs(t - pos))).toFixed(3)})`;
+    g.strokeStyle = isCurrent ? SCREEN_FG : screenRgba(0.08 + 0.16 * (1 - Math.abs(t - pos)));
     g.lineWidth = isCurrent ? 1.8 : 0.8;
     g.shadowBlur = isCurrent ? 9 : 0;
     g.shadowColor = SCREEN_FG;
@@ -478,8 +478,13 @@ export function buildSynth(): SynthUI {
     octaveLabel.textContent = `OCT ${octaveShift >= 0 ? "+" : ""}${octaveShift}`;
   }
   buildKeys(synthKeys,
-    (note, mods) => {
+    (note, clickMods) => {
       ensureNodes();
+      // armed toggles OR the click modifier — either route reaches the same place
+      const mods: KeyMods = {
+        accent: clickMods?.accent || armedMods.accent,
+        slide: clickMods?.slide || armedMods.slide,
+      };
       const n = midiToNote(noteToMidi(note) + octaveShift * 12);
       // A slid key glides in like a 303 tie; an accent hits harder and brighter.
       const patch = mods?.slide && (vsynthPatch.glide ?? 0) < 0.08
@@ -507,6 +512,8 @@ export function buildSynth(): SynthUI {
   // set the transport Grid to quantize instead.
   // Expression captured at note-on rides through to the recorded note, so a
   // shift-click on a key writes an accented note and alt-click a slide.
+  /** Armed by the ACCENT / SLIDE keys beside HOLD; ORed with click modifiers. */
+  const armedMods: KeyMods = { accent: false, slide: false };
   const recMods = new Map<string, KeyMods>();
   function recordSynthOn(note: string, mods?: KeyMods): void {
     if (mods?.accent || mods?.slide) recMods.set(note, mods); else recMods.delete(note);
@@ -561,8 +568,19 @@ export function buildSynth(): SynthUI {
       midiBtn.classList.add("active"); midiBtn.textContent = `MIDI ${access.inputs.size}`;
     } catch { midiBtn.textContent = "MIDI blocked"; }
   });
+  // Accent and slide had no visible affordance at all — shift-click and
+  // alt-click were the only way in, and you had to hover a tooltip to learn
+  // they existed. These arm the same KeyMods path; the modifiers still work
+  // as the fast path for anyone who knows them.
+  const accentArm = btn("Accent", "wa-toggle wa-btn-sm");
+  const slideArm = btn("Slide", "wa-toggle wa-btn-sm");
+  help(accentArm, "Arm accent — played notes hit harder and brighter. Shift-click a key does the same for one note.");
+  help(slideArm, "Arm slide — played notes glide in from the previous pitch. Alt-click a key does the same for one note.");
+  accentArm.addEventListener("click", () => { armedMods.accent = !armedMods.accent; accentArm.classList.toggle("active", armedMods.accent); });
+  slideArm.addEventListener("click", () => { armedMods.slide = !armedMods.slide; slideArm.classList.toggle("active", armedMods.slide); });
+
   const keysHeader = el("div", "wa-export");
-  keysHeader.append(el("span", "wa-lbl", "KEYS — click, or Z-row / Q-row on the keyboard (− / = shift octave)"), keysRecBtn, holdBtn, midiBtn, octaveLabel);
+  keysHeader.append(el("span", "wa-lbl", "KEYS — click, or Z-row / Q-row on the keyboard (− / = shift octave)"), keysRecBtn, holdBtn, accentArm, slideArm, midiBtn, octaveLabel);
   // Roll, keys and the keys header live on the KEYS page — layout.ts houses
   // them; appending them here too would just steal them back at boot.
   // Scope + chord player live in the side column beside the XY field (G/H) —

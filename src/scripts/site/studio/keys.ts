@@ -30,9 +30,9 @@ export function releaseLatched(): void {
 export function buildKeys(host: HTMLElement, noteOn: NoteFn, noteOff: NoteFn): void {
   for (let oct = 3; oct <= 4; oct++) {
     for (const w of WHITE) {
-      const key = el("button", "wa-key") as HTMLButtonElement; key.type = "button"; key.dataset.note = `${w}${oct}`; bindKey(key, `${w}${oct}`, noteOn, noteOff);
+      const key = el("button", "wa-key") as HTMLButtonElement; key.type = "button"; key.dataset.note = `${w}${oct}`; key.setAttribute("aria-label", `${w}${oct}`); bindKey(key, `${w}${oct}`, noteOn, noteOff);
       if (HAS_BLACK[w]) {
-        const bk = el("button", "wa-key wa-key-black") as HTMLButtonElement; bk.type = "button"; bk.dataset.note = `${w}#${oct}`; bindKey(bk, `${w}#${oct}`, noteOn, noteOff); key.append(bk);
+        const bk = el("button", "wa-key wa-key-black") as HTMLButtonElement; bk.type = "button"; bk.dataset.note = `${w}#${oct}`; bk.setAttribute("aria-label", `${w} sharp ${oct}`); bindKey(bk, `${w}#${oct}`, noteOn, noteOff); key.append(bk);
       }
       host.append(key);
     }

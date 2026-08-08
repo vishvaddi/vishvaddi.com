@@ -9,6 +9,7 @@ import { ROLL_NOTES, clip, transport, activeSynth, activeSynthNotes, SYNTH_LANES
 import type { VNote, SynthLane } from "./state";
 import { ctx, gridRepainters } from "./ctx";
 import { showVelocityPopup } from "./velpopup";
+import { buildPatternBar } from "./patternbar";
 import { midiToNote, noteToMidi } from "./vsynth";
 
 export interface RollDeps {
@@ -50,16 +51,7 @@ export function buildRoll(deps: RollDeps): Roll {
     });
     laneButtons.set(lane, button); laneGroup.append(button);
   });
-  const lengthSelect = document.createElement("select");
-  lengthSelect.setAttribute("aria-label", "Pattern length");
-  [4, 8, 12, 16, 24, 32].forEach((value) => lengthSelect.append(new Option(`${value} steps`, String(value))));
-  lengthSelect.value = String(patternLengths[clip.sel]);
-  lengthSelect.addEventListener("change", () => { patternLengths[clip.sel] = Number(lengthSelect.value); deps.saveAll(); paintRoll(); });
-  const divisionSelect = document.createElement("select");
-  divisionSelect.setAttribute("aria-label", "Steps per beat");
-  [[3, "1/8 triplet"], [4, "1/16"], [6, "1/16 triplet"], [8, "1/32"], [12, "1/32 triplet"]].forEach(([value, label]) => divisionSelect.append(new Option(String(label), String(value))));
-  divisionSelect.value = String(patternDivisions[clip.sel]);
-  divisionSelect.addEventListener("change", () => { patternDivisions[clip.sel] = Number(divisionSelect.value); deps.saveAll(); });
+  const patternBar = buildPatternBar({ compact: true, onChange: () => paintRoll() });
   // Roll range (CV-80 RANGE + octave keys): the canvas shows three octaves;
   // these shift which three, so notes outside C3–B5 are reachable.
   let rollOct = Math.max(-3, Math.min(3, Number(localStorage.getItem("vv_studio_rolloct") || 0)));
@@ -82,7 +74,7 @@ export function buildRoll(deps: RollDeps): Roll {
   help(slideBtn, "Glide into this note from the previous note in the lane.");
   accentBtn.addEventListener("click", () => { if (selected) { selected.accent = !selected.accent; deps.saveAll(); paintRoll(); } });
   slideBtn.addEventListener("click", () => { if (selected) { selected.slide = !selected.slide; deps.saveAll(); paintRoll(); } });
-  toolbar.append(laneGroup, el("span", "wa-roll-spacer"), lengthSelect, divisionSelect, octDown, rangeLabel, octUp, accentBtn, slideBtn);
+  toolbar.append(laneGroup, el("span", "wa-roll-spacer"), patternBar.root, octDown, rangeLabel, octUp, accentBtn, slideBtn);
   const scrollWrap = el("div", "wa-roll2-scroll");
   const canvas = document.createElement("canvas");
   canvas.className = "wa-roll2-canvas";
@@ -170,8 +162,7 @@ export function buildRoll(deps: RollDeps): Roll {
     });
     paintVel();
     laneButtons.forEach((item, id) => item.classList.toggle("active", id === activeSynth.lane));
-    lengthSelect.value = String(patternLengths[clip.sel]);
-    divisionSelect.value = String(patternDivisions[clip.sel]);
+    patternBar.sync();
     accentBtn.classList.toggle("active", !!selected?.accent); slideBtn.classList.toggle("active", !!selected?.slide);
     accentBtn.disabled = !selected; slideBtn.disabled = !selected;
     rangeLabel.textContent = `${rollNotes[rollNotes.length - 1]}–${rollNotes[0]}`;

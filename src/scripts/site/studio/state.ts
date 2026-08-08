@@ -76,6 +76,8 @@ export type SynthLane = "bass" | "lead" | "harmony";
 export const SYNTH_LANES: SynthLane[] = ["bass", "lead", "harmony"];
 export const SYNTH_LANE_LABELS: Record<SynthLane, string> = { bass: "Bass", lead: "Lead", harmony: "Harmony" };
 export interface HistoryState {
+  bpm?: number;
+  title?: string;
   pats: boolean[][][];
   vels: number[][][];
   synthNotes: VNote[][];

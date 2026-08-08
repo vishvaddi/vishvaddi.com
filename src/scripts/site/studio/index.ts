@@ -34,7 +34,7 @@ import { buildKeys, highlightKey } from "./keys";
 import { buildProjectExport } from "./render";
 import { buildScratchpad } from "./scratch";
 import { buildLaneInspector } from "./laneui";
-import { buildSession } from "./session";
+import { buildSession, factorySong } from "./session";
 import { buildMixer } from "./mixerui";
 import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
 import { setCellOpacity, showVelPopup, showVelocityPopup } from "./velpopup";
@@ -60,7 +60,15 @@ export async function initStudio(): Promise<void> {
     pendingProjectStore("get").catch(() => null),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), 800)),
   ]);
-  if (pending) applyProject(pending); else loadAll();
+  // Boot content, in precedence order: a project handed over from an import,
+  // then a saved session, then — only on a genuinely blank slate — a demo, so
+  // a first-time visitor meets an instrument with something in it rather than
+  // an empty grid. The demo is an ordinary project: editable, clearable and
+  // overwritten by the first autosave.
+  const hasSaved = !!(localStorage.getItem("vv_studio_v2") || localStorage.getItem("vv_studio_pattern"));
+  if (pending) applyProject(pending);
+  else if (hasSaved) loadAll();
+  else applyProject(factorySong("MIDNIGHT ACID"));
   sampleData.forEach((data, r) => { if (data) void hydrateSample(r); });
 
   // ── Tooltips ── delegated hover/focus rendering of [data-help] — see tooltip.ts
@@ -285,7 +293,20 @@ export async function initStudio(): Promise<void> {
     selectScene(clip.sel);
     arrangeLanePaints.forEach((fn) => fn());
     paintMpcPads(); paintEventLane(); applyFxState(); renderPatchEditor();
+    // Chrome that reads project state directly rather than through a painter.
+    // Undo already went through here; loading a whole project now does too,
+    // which is why these were previously only correct after a page reload.
+    bpmInput.value = String(transport.bpm);
+    lcdBpm.textContent = `${transport.bpm} BPM`;
+    projectName.value = songMeta.title;
+    swingIn.value = String(transport.swing);
+    songBtn.textContent = transport.songMode ? "Arrange" : "Session";
+    songBtn.classList.toggle("active", transport.songMode);
+    sampleData.forEach((data, r) => { sampleBuffers[r] = null; if (data) void hydrateSample(r); });
   }
+  // Exposed so library loads can apply a project in place instead of
+  // restarting the page.
+  ctx.refreshVisibleState = refreshVisibleState;
   undoBtn.addEventListener("click", () => {
     const previous = undoStack.pop(); if (!previous) return;
     redoStack.push(historyState()); restoreHistory(previous); refreshVisibleState();
@@ -322,13 +343,25 @@ export async function initStudio(): Promise<void> {
   buildPlayback({ cells, rollPlayheadBar, launchStatus, lcdState, playBtn, stopBtn, getCountIn: () => countIn, isSynthRec: synth.isSynthRec });
 
   // ── Keyboard ── (keymap.ts — Phase 0 split)
-  bindKeyboard({ getActiveMode: layout.getActiveMode, padButtons, triggerPerformancePad, synth, playBtn, stopBtn, undoBtn, redoBtn });
+  bindKeyboard({ getActiveMode: layout.getActiveMode, padButtons, triggerPerformancePad, synth, playBtn, stopBtn, undoBtn, redoBtn, exportBtn, modeKeyBtns: layout.modeKeyBtns });
 
   // Initial paint reflects loaded project state (scene selection, session grid).
   selectScene(clip.sel);
-  // First-time visitors get the guided tour automatically; the flag was
-  // already written on close/finish, it just had nothing reading it back.
-  if (!localStorage.getItem("vv_studio_tutorial_seen")) showTutorialStep(0);
+  // First-time visitors used to get the 13-step tour thrown at them behind a
+  // shade that blocked every control. Now they get a demo loaded and one
+  // dismissible hint; the tour is still there behind the ? Tutorial key.
+  if (!localStorage.getItem("vv_studio_tutorial_seen")) {
+    const hint = el("div", "wa-firstrun-hint");
+    const hintClose = btn("✕", "wa-btn-sm");
+    hint.append(
+      el("span", "wa-firstrun-text", "A demo is loaded — press ▶ to hear it, then edit anything. ? Tutorial for the tour."),
+      hintClose,
+    );
+    const dismiss = (): void => { hint.remove(); localStorage.setItem("vv_studio_tutorial_seen", "1"); };
+    hintClose.addEventListener("click", dismiss);
+    playBtn.addEventListener("click", dismiss, { once: true });
+    win.append(hint);
+  }
 }
 
 // Key builders live in keys.ts (Phase 0 split).

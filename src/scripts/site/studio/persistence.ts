@@ -21,6 +21,8 @@ export function saveAll(): void {
 }
 export function historyState(): HistoryState {
   return {
+    bpm: transport.bpm,
+    title: song.title,
     pats: allPats.map((pattern) => pattern.map((row) => [...row])),
     vels: allVels.map((pattern) => pattern.map((row) => [...row])),
     synthNotes: synthNotes.map((notes) => notes.map((note) => ({ ...note }))),
@@ -45,6 +47,8 @@ export function historyState(): HistoryState {
   };
 }
 export function restoreHistory(state: HistoryState): void {
+  if (typeof state.bpm === "number") transport.bpm = state.bpm;
+  if (typeof state.title === "string") song.title = state.title;
   state.pats.forEach((pattern, pi) => pattern.forEach((row, ri) => row.forEach((value, step) => { allPats[pi][ri][step] = value; })));
   state.vels.forEach((pattern, pi) => pattern.forEach((row, ri) => row.forEach((value, step) => { allVels[pi][ri][step] = value; })));
   state.synthNotes.forEach((notes, i) => { synthNotes[i] = notes.map((note) => ({ ...note })); });

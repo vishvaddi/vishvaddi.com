@@ -2679,3 +2679,51 @@
   color: var(--wa-phos-dim); font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
 }
 .immersive-page .wa-composer > .wa-song-library { flex: 0 0 auto; }
+
+/* First-run hint — deliberately NOT modal. The tour used to open over a shade
+   that blocked every control; this sits out of the way and dismisses itself
+   the moment you press play. */
+.wa-firstrun-hint {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: 16px; z-index: 60;
+  display: flex; align-items: center; gap: 10px;
+  max-width: min(560px, 92vw); padding: 9px 10px 9px 14px;
+  color: var(--wa-text); background: var(--wa-surface-3);
+  border: 1px solid #0b0d0f; border-radius: 5px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(216, 228, 234, .08);
+}
+.wa-firstrun-text { font-size: 12px; letter-spacing: .02em; }
+.wa-firstrun-hint .wa-btn-sm { min-width: 26px; height: 26px; padding: 0 8px; }
+@media (max-width: 700px) { .wa-firstrun-hint { bottom: 10px; font-size: 11px; } }
+.wa-patternbar { display: inline-flex; align-items: center; gap: 5px; }
+.immersive-page .wa-patternbar select { min-height: 26px; padding: 3px 6px; font-size: 11px; }
+.immersive-page .wa-patternbar.compact .wa-lbl { font-size: 8.5px; letter-spacing: .2em; }
+/* The synth side column is `position: sticky; top: 108px` from an older pass.
+   Inside the aperture armature it has nothing to stick to, and in a 390px-tall
+   landscape viewport the offset pushed it under the keys strip — the FIELD
+   mode buttons ended up covered and unclickable. The armature already keeps it
+   in view by giving it full aperture height. */
+.immersive-page .wa-synth-side { position: static; top: auto; }
+/* Sticky positioning is a leftover from when the page scrolled. Inside the
+   aperture the column already keeps everything in view, and the offsets
+   actively overlap panels in a short viewport — this is what put the keys
+   header on top of the FIELD buttons at 844x390. Wells keep their own sticky
+   toolbars; only the page-level ones are neutralised. */
+.immersive-page .wa-page-synth .wa-keys,
+.immersive-page .wa-page-pads .wa-inspector,
+.immersive-page .wa-synth-side { position: static; top: auto; bottom: auto; }
+.immersive-page .wa-page-synth .wa-keys { box-shadow: none; }
+/* The keys header gained ACCENT/SLIDE and started wrapping to three lines in
+   a short viewport, squeezing the editor above it to zero height. Scroll it
+   instead of wrapping, and give the editor a floor it cannot collapse below. */
+.immersive-page .wa-page-synth > .wa-export {
+  flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+.immersive-page .wa-synth-main { min-height: 120px; }
+@media (max-height: 560px) {
+  .immersive-page .wa-page-synth .wa-keys,
+  .immersive-page .wa-page-synth .wa-key { height: 64px; }
+  .immersive-page .wa-page-synth .wa-key-black { height: 40px; }
+  .immersive-page .wa-synth-main { min-height: 96px; }
+}

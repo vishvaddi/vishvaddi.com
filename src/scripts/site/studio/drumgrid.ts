@@ -7,6 +7,7 @@ import { saveAll } from "./persistence";
 import { el, btn, stepRuler } from "./helpers";
 import { ctx, gridRepainters, isGridLine } from "./ctx";
 import { setCellOpacity, showVelPopup } from "./velpopup";
+import { buildPatternBar } from "./patternbar";
 
 export interface DrumGrid {
   beat: HTMLElement;
@@ -42,7 +43,10 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
     saveAll(); const orig = copyBtn.textContent; copyBtn.textContent = "Copied ✓";
     setTimeout(() => { copyBtn.textContent = orig; }, 1200);
   });
-  patRow.append(el("span", "wa-sep"), copyBtn);
+  // Pattern length + rate belong here too — resizing a drum pattern used to
+  // mean leaving DRUMS for the piano-roll toolbar.
+  const patternBar = buildPatternBar({ compact: true });
+  patRow.append(el("span", "wa-sep"), patternBar.root, el("span", "wa-sep"), copyBtn);
   beat.append(patRow);
 
   const grid = el("div", "wa-grid");
@@ -65,6 +69,7 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
     for (let c = 0; c < STEPS; c++) {
       const cell = el("button", "wa-cell" + (isGridLine(c) ? " wa-beat" : "")) as HTMLButtonElement;
       cell.type = "button";
+      cell.setAttribute("aria-label", `${name} step ${c + 1}`);
       if (allPats[clip.sel][r][c]) { cell.classList.add("on"); setCellOpacity(cell, allVels[clip.sel][r][c]); }
       cell.addEventListener("click", () => {
         ctx.checkpoint();

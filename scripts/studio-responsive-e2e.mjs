@@ -83,10 +83,14 @@ for (const [name, width, height] of viewports) {
     check(`${name}: band scan responds to keyboard`, before !== after, `${before} → ${after}`)
 
     await page.locator('.wa-modekey', { hasText: 'CLIPS' }).click()
+    // the first-run demo seeds an arrangement, so these assert a DELTA rather
+    // than assuming the chain starts empty
+    const blocksBefore = await page.locator('.wa-chain-block').count()
     await page.locator('.wa-composer-head button', { hasText: 'Add selected' }).click()
-    check(`${name}: arrangement block added`, await page.locator('.wa-chain-block').count() === 1)
+    check(`${name}: arrangement block added`, await page.locator('.wa-chain-block').count() === blocksBefore + 1)
+    const rampsBefore = await page.locator('.wa-ramp-row').count()
     await page.locator('.wa-automation-editor button', { hasText: 'Ramp' }).click()
-    check(`${name}: automation ramp added`, await page.locator('.wa-ramp-row').count() === 1)
+    check(`${name}: automation ramp added`, await page.locator('.wa-ramp-row').count() === rampsBefore + 1)
 
     if (name === 'phone' || name === 'landscape') {
       const targets = await page.locator('.wa-modekey').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height))

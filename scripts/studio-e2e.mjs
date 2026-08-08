@@ -30,8 +30,24 @@ page.on('console', (m) => {
 page.on('pageerror', (e) => consoleErrors.push(String(e)))
 
 try {
-  // ── boot ──
+  // ── cold boot: a first-time visitor must meet a playable instrument, not a
+  // modal tour over an empty grid ──
   await page.goto(`${BASE}/studio/`, { waitUntil: 'domcontentloaded' })
+  await page.evaluate(() => localStorage.clear())
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.wa-transport', { timeout: 15000 })
+  await page.waitForTimeout(500)
+  const cold = await page.evaluate(() => ({
+    seeded: document.querySelectorAll('.wa-cell.on').length,
+    tourOpen: !document.querySelector('.wa-tutorial')?.hidden,
+    hint: !!document.querySelector('.wa-firstrun-hint'),
+  }))
+  check('first run: demo content is loaded', cold.seeded > 0, `${cold.seeded} steps`)
+  check('first run: tour does not block the UI', !cold.tourOpen)
+  check('first run: non-modal hint is shown', cold.hint)
+  await page.locator('.wa-modekey', { hasText: 'SYNTH' }).click({ timeout: 4000 })
+  check('first run: controls are usable immediately', true)
+
   await page.evaluate(() => {
     localStorage.removeItem('vv_studio_v2')
     localStorage.setItem('vv_studio_tutorial_seen', '1')  // fresh boot auto-opens the tour otherwise
@@ -45,8 +61,9 @@ try {
   // ── toggle a drum step ──
   await page.click('.wa-modekey:has-text("DRUMS")')
   const cell = page.locator('.wa-grid .wa-row .wa-cell').nth(0)
+  const wasOn = await cell.evaluate((n) => n.classList.contains('on'))
   await cell.click()
-  check('grid: step toggles on', await cell.evaluate((n) => n.classList.contains('on')))
+  check('grid: step toggles', await cell.evaluate((n) => n.classList.contains('on')) !== wasOn, wasOn ? 'on→off' : 'off→on')
 
   // ── play two beats: playhead advances on the LCD ──
   await page.click('.wa-transport button:has-text("▶")')
@@ -60,17 +77,17 @@ try {
   // ── undo reverts the step ──
   await page.click('.wa-transport button:has-text("Undo")')
   await page.waitForTimeout(150)
-  check('undo: step reverts', await cell.evaluate((n) => !n.classList.contains('on')))
+  check('undo: step reverts', await cell.evaluate((n) => n.classList.contains('on')) === wasOn)
   await page.click('.wa-transport button:has-text("Redo")')
   await page.waitForTimeout(150)
-  check('redo: step returns', await cell.evaluate((n) => n.classList.contains('on')))
+  check('redo: step returns', await cell.evaluate((n) => n.classList.contains('on')) !== wasOn)
 
   // ── autosave round-trip ──
   await page.waitForTimeout(900) // autosave debounce
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.wa-transport', { timeout: 15000 })
   const cellAfter = page.locator('.wa-grid .wa-row .wa-cell').nth(0)
-  check('autosave: step survives reload', await cellAfter.evaluate((n) => n.classList.contains('on')))
+  check('autosave: step survives reload', await cellAfter.evaluate((n) => n.classList.contains('on')) !== wasOn)
 
   // ── export WAV is non-trivial (export is a transport key opening a modal) ──
   await page.click('.wa-transport button:has-text("EXPORT")')
@@ -83,6 +100,44 @@ try {
   const { statSync } = await import('node:fs')
   const size = path ? statSync(path).size : 0
   check('export: WAV download > 10KB', size > 10_000, `${size} bytes`)
+  await page.click('.wa-export-dialog-head button:has-text("Close")')
+  await page.waitForTimeout(200)
+
+  // ── workflow: pattern length is settable where the pattern is edited ──
+  await page.locator('.wa-modekey', { hasText: 'DRUMS' }).click()
+  await page.waitForTimeout(200)
+  check('workflow: pattern length lives on DRUMS', await page.locator('.wa-page-drums select[aria-label="Pattern length"]').count() === 1)
+  await page.selectOption('.wa-page-drums select[aria-label="Pattern length"]', '8')
+  await page.locator('.wa-modekey', { hasText: 'SYNTH' }).click()
+  await page.waitForTimeout(250)
+  check('workflow: the roll agrees with it', await page.inputValue('.wa-page-synth select[aria-label="Pattern length"]') === '8')
+
+  // ── workflow: the arrangement is undoable ──
+  await page.locator('.wa-modekey', { hasText: 'CLIPS' }).click()
+  await page.waitForTimeout(250)
+  const chainBefore = await page.locator('.wa-chain-block').count()
+  await page.locator('.wa-composer-head button', { hasText: 'Add selected' }).click()
+  await page.waitForTimeout(200)
+  const chainAdded = await page.locator('.wa-chain-block').count()
+  await page.locator('.wa-transport button', { hasText: 'Undo' }).click({ timeout: 5000 })
+  await page.waitForTimeout(300)
+  check('workflow: arrangement edits undo', chainAdded === chainBefore + 1 && await page.locator('.wa-chain-block').count() === chainBefore)
+
+  // ── workflow: loading a song applies in place, no page restart ──
+  page.on('dialog', (d) => d.accept())
+  await page.evaluate(() => { window.__noReload = true })
+  await page.selectOption('.wa-song-library select', 'factory:NEON HORIZON')
+  await page.locator('.wa-song-library button', { hasText: 'Load' }).first().click()
+  await page.waitForTimeout(700)
+  const inPlace = await page.evaluate(() => ({ survived: window.__noReload === true, bpm: document.querySelector('.wa-bpm')?.value }))
+  check('workflow: song loads without reloading the page', inPlace.survived, `bpm now ${inPlace.bpm}`)
+
+  // ── reach: controls have accessible names ──
+  const named = await page.evaluate(() => ({
+    cell: document.querySelector('.wa-cell')?.getAttribute('aria-label'),
+    key: document.querySelector('.wa-key')?.getAttribute('aria-label'),
+  }))
+  check('reach: drum cells and keys are named', !!named.cell && !!named.key, `${named.cell} / ${named.key}`)
 
   // ── console clean ──
   check('console: no errors', consoleErrors.length === 0, consoleErrors.slice(0, 2).join(' | '))
