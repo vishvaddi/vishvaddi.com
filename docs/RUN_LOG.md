@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-08-09 — Programme desktop workspace
+
+- Replaced the centred Programme breakout calculation with an explicit wide-workspace layout mode while preserving readable-width site chrome and prose.
+- Anchored the searchable tools navigation 24 px from the left viewport edge and expanded the editor to fill the remaining desktop width; at 1,440 px it now spans 1,168 px instead of 1,024 px.
+- Kept the compact mobile picker and full-width Android landscape editor unchanged.
+- Strengthened the responsive regression to assert the rail's viewport position and complete use of the available workspace; verified Programme, all site-tool routes, type checks and the production build.
+
 ## 2026-08-09 — Studio Lysergic workflow overhaul
 
 - Replaced the restrained flat-DAW finish with a graphite, acid, violet and pink performance identity: reactive pads and sequencer states, spectral Signal Garden, audio-reactive signal organism and animated clip activity.

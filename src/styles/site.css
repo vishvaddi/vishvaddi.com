@@ -68,6 +68,7 @@
 @media (min-width: 1100px) {
   .site-picker { display: none; }
   .site-rail { display: flex; flex-direction: column; position: fixed; z-index: 4; top: 5.5rem; left: max(1rem, calc((100vw - 38rem) / 2 - 14rem)); width: 12.5rem; max-height: calc(100dvh - 7rem); font-size: 0.86rem; }
+  .workspace-page .site-rail { left: 1.5rem; }
   .site-nav-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem; }
   .site-rail .rail-title { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); }
   .site-rail .site-nav-all { color: var(--rail-accent); font-size: 0.75rem; padding: 0.2rem; }

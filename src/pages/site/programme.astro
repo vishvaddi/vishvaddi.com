@@ -7,6 +7,7 @@ import "../../styles/site.css";
   title="Programme Builder"
   description="Free construction programme generator — CPM scheduling, critical path, shopfitting templates, beautiful Gantt charts. Runs entirely in your browser."
   siteNav
+  workspace
 >
   <div class="blueprint tool programme">
     <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Programme</p>
@@ -37,18 +38,21 @@ import "../../styles/site.css";
       --prog-crit: #ff7a6b;
       --prog-today: #58c97a;
     }
-    /* the tool needs more width than the 38rem prose column */
+    /* Phones use a viewport-wide editor beneath the compact tool picker. */
     .programme :global(#programme-root) {
       position: relative;
       left: 50%;
       width: min(90rem, calc(100vw - 2rem));
       transform: translateX(-50%);
     }
-    @media (min-width: 1200px) {
+    /* Desktop is a true two-column workspace: navigation at the viewport edge,
+       then the programme consuming every remaining pixel. */
+    @media (min-width: 1100px) {
+      .programme { margin-left: 14rem; }
+      .programme > p:not(.eyebrow):not(.note-foot) { max-width: 58rem; }
       .programme :global(#programme-root) {
-        --prog-rail-left: max(1rem, calc((100vw - 38rem) / 2 - 14rem));
-        left: calc(var(--prog-rail-left) + 13rem - (50vw - 19rem) - 1.25rem);
-        width: min(90rem, calc(100vw - var(--prog-rail-left) - 14rem));
+        left: auto;
+        width: 100%;
         transform: none;
       }
     }

@@ -1,6 +1,6 @@
 # Project State
 
-_Last updated: 2026-08-09 — Studio's Lysergic workflow and visual overhaul is complete._
+_Last updated: 2026-08-09 — Programme Builder now uses a true desktop sidebar workspace._
 
 ## Current Position
 
@@ -8,7 +8,7 @@ _Last updated: 2026-08-09 — Studio's Lysergic workflow and visual overhaul is 
 - Studio supports 4–32-step straight/triplet patterns; drums and sliced/recorded samples; Bass, Lead and Harmony synth lanes; accent/slide; Web MIDI; patch, kit and song libraries; scene chains; automation; effects; Morph/Terrain performance; project persistence; WAV/MP3 and stem export.
 - Studio opens with a playable `MIDNIGHT ACID` demo and one non-modal hint. New blank/demo replacement, imported projects, songs and patches apply in place with confirmation; arrangement, tempo, title and mixer state participate in persistence/history rather than forcing a reload.
 - Studio source and browser suites cover first-run state, core edit/undo/autosave/playback/export, mixer synchronisation/persistence, in-place project replacement, the five modes, three synth lanes, Signal Garden keyboard control, arrangement automation, viewport fit, mobile control dimensions and tutorial stacking.
-- `/site/programme/` keeps its prose introduction in the editorial column but breaks the interactive editor out to near-full viewport width, including Android landscape. On desktop it clears the fixed tools rail while retaining a 1,024 px editor at 1,440 px; focused browser coverage checks rail clearance, width, overflow and chart-first mode.
+- `/site/programme/` uses a true desktop workspace: the searchable tools rail is anchored 24 px from the viewport edge and the editor fills all remaining width. At 1,440 px the editor spans 1,168 px from x=248 to x=1,416; Android landscape retains an 812 px editor in an 844 px viewport. Focused browser coverage checks rail position, full workspace use, overflow, fullscreen, tutorial restoration and chart-first mode.
 - On phones and short Android landscape, DRUMS preserves full-sized sequencing cells in a horizontal instrument surface, PADS presents a separated 4×4 performance deck, MIX uses readable channel strips and CLIPS exposes the visible scene range.
 - The site runs on Astro 7 with zero known npm vulnerabilities and a global type check with zero errors. Independently built game snapshots under `public/games/` are excluded from the Astro source scan.
 - `/games/deep-swarm/` now exposes deterministic diagnostics and explicit loss causes, with automated boundary coverage through 6,000 m.

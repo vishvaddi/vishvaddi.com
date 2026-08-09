@@ -69,14 +69,17 @@ try {
       rootRight: root?.right ?? 0,
       rootWidth: root?.width ?? 0,
       railRight: rail?.right ?? 0,
+      railLeft: rail?.left ?? 0,
       railVisible: rail ? getComputedStyle(document.querySelector('.site-rail')).display !== 'none' : false,
       viewportWidth: innerWidth,
       documentWidth: document.documentElement.scrollWidth,
     }
   })
   check('desktop: site rail is visible', desktopGeometry.railVisible)
+  check('desktop: site rail is anchored to the viewport edge', desktopGeometry.railLeft <= 24, `${desktopGeometry.railLeft}px`)
   check('desktop: editor clears the site rail', desktopGeometry.rootLeft >= desktopGeometry.railRight + 12, `${desktopGeometry.rootLeft}/${desktopGeometry.railRight}`)
-  check('desktop: editor uses remaining workspace', desktopGeometry.rootWidth >= 900, `${desktopGeometry.rootWidth}px`)
+  const availableWorkspace = desktopGeometry.viewportWidth - desktopGeometry.rootLeft - 24
+  check('desktop: editor uses the remaining workspace', desktopGeometry.rootWidth >= availableWorkspace, `${desktopGeometry.rootWidth}/${availableWorkspace}`)
   check('desktop: editor stays inside viewport', desktopGeometry.rootRight <= desktopGeometry.viewportWidth - 12, `${desktopGeometry.rootRight}/${desktopGeometry.viewportWidth}`)
   check('desktop: no document horizontal overflow', desktopGeometry.documentWidth <= desktopGeometry.viewportWidth + 1, `${desktopGeometry.documentWidth}/${desktopGeometry.viewportWidth}`)
 } catch (error) {

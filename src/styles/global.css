@@ -77,6 +77,18 @@ body {
   font-size: clamp(1rem, 0.95rem + 0.3vw, 1.0625rem);
 }
 
+/* Data-heavy tools can opt into a desktop workspace without stretching the
+   site's prose, header or footer into unreadably long lines. */
+@media (min-width: 1100px) {
+  body.workspace-page { max-width: none; }
+  body.workspace-page > header,
+  body.workspace-page > footer,
+  body.workspace-page > main > .site-quote {
+    max-width: 38rem;
+    margin-inline: auto;
+  }
+}
+
 h1, h2, h3, h4 {
   font-family: var(--font-sans);
   font-weight: 600;

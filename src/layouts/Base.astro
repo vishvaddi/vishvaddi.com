@@ -10,6 +10,7 @@ interface Props {
   siteNav?: boolean;
   noindex?: boolean;
   immersive?: boolean;
+  workspace?: boolean;
 }
 
 const {
@@ -20,6 +21,7 @@ const {
   siteNav = false,
   noindex = false,
   immersive = false,
+  workspace = false,
 } = Astro.props;
 
 const here = Astro.url.pathname.replace(/\/$/, "");
@@ -92,7 +94,7 @@ const updatedFmt = updatedDate
     <meta name="twitter:image" content={ogImageUrl} />
     <title>{fullTitle}</title>
   </head>
-  <body class={immersive ? "immersive-page" : undefined}>
+  <body class:list={[immersive && "immersive-page", workspace && "workspace-page"]}>
     {!immersive && <header>
       <nav class="topnav" aria-label="Primary">
         <a class="brand" href="/"><strong>Vish Vaddi</strong></a>
