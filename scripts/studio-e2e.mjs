@@ -41,10 +41,12 @@ try {
     seeded: document.querySelectorAll('.wa-cell.on').length,
     tourOpen: !document.querySelector('.wa-tutorial')?.hidden,
     hint: !!document.querySelector('.wa-firstrun-hint'),
+    title: document.querySelector('.wa-project-name')?.value,
   }))
   check('first run: demo content is loaded', cold.seeded > 0, `${cold.seeded} steps`)
   check('first run: tour does not block the UI', !cold.tourOpen)
   check('first run: non-modal hint is shown', cold.hint)
+  check('first run: demo has its real title', cold.title === 'MIDNIGHT ACID', String(cold.title))
   await page.locator('.wa-modekey', { hasText: 'SYNTH' }).click({ timeout: 4000 })
   check('first run: controls are usable immediately', true)
 
@@ -138,6 +140,35 @@ try {
     key: document.querySelector('.wa-key')?.getAttribute('aria-label'),
   }))
   check('reach: drum cells and keys are named', !!named.cell && !!named.key, `${named.cell} / ${named.key}`)
+
+  // ── mixer: one persisted master state drives both controls ──
+  await page.locator('.wa-modekey', { hasText: 'MIX' }).click()
+  await page.locator('.wa-ch-master .wa-fader').evaluate((node) => {
+    node.value = '0.37'; node.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await page.locator('.wa-mute').first().click()
+  const masterSync = await page.evaluate(() => ({
+    knob: document.querySelector('.wa-title .wa-knob[aria-label="Master"]')?.getAttribute('aria-valuenow'),
+    saved: JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').mix?.masterLevel,
+    muted: JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').mix?.mute?.[0],
+  }))
+  check('mixer: controls stay synchronised and persist', masterSync.knob === '0.37' && masterSync.saved === 0.37 && masterSync.muted === true, JSON.stringify(masterSync))
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.wa-transport', { timeout: 15000 })
+  await page.locator('.wa-modekey', { hasText: 'MIX' }).click()
+  check('mixer: master level survives reload', await page.inputValue('.wa-ch-master .wa-fader') === '0.37')
+  check('mixer: mute state survives reload', await page.locator('.wa-mute').first().getAttribute('aria-pressed') === 'true')
+
+  // ── project transitions: blank is explicit, in-place and undoable ──
+  await page.locator('.wa-export-key').click()
+  await page.locator('.wa-export-dialog button', { hasText: 'New blank' }).click()
+  await page.waitForTimeout(350)
+  const blank = await page.evaluate(() => ({ title: document.querySelector('.wa-project-name')?.value, steps: document.querySelectorAll('.wa-cell.on').length }))
+  check('project: explicit blank project applies in place', blank.title === 'Untitled' && blank.steps === 0, JSON.stringify(blank))
+  await page.locator('.wa-export-dialog-head button', { hasText: 'Close' }).click()
+  await page.locator('.wa-transport button', { hasText: 'Undo' }).click()
+  await page.waitForTimeout(300)
+  check('project: replacement can be undone', await page.locator('.wa-cell.on').count() > 0)
 
   // ── console clean ──
   check('console: no errors', consoleErrors.length === 0, consoleErrors.slice(0, 2).join(' | '))

@@ -4,7 +4,7 @@
 
 import {
   DRUMS, dp, fx, rackState, mpc, sampleParams, sampleBuffers, sampleData, transport,
-  padLayers, padLayerBuffers, padLayerMode, laneSends, laneVoices,
+  padLayers, padLayerBuffers, padLayerMode, laneSends, laneVoices, mixState,
 } from "./state";
 import type { SamplerP } from "./state";
 import { dataUrlToBytes } from "./helpers";
@@ -53,7 +53,7 @@ function makeImpulse(a: BaseAudioContext, seconds: number): AudioBuffer {
 }
 
 export function buildMasterChain(a: BaseAudioContext, dest: AudioNode): MasterChain {
-  const bus = a.createGain(); bus.gain.value = 0.8;
+  const bus = a.createGain(); bus.gain.value = mixState.power ? mixState.masterLevel : 0;
   const drivePre = a.createGain(), drivePost = a.createGain();
   const driveShaper = a.createWaveShaper(); driveShaper.oversample = "4x";
   const eqLow = a.createBiquadFilter(); eqLow.type = "lowshelf"; eqLow.frequency.value = 180;
@@ -135,7 +135,7 @@ export function ac(): AudioContext {
 /** Eight drum-lane faders plus their echo/space sends, wired identically live
  *  and offline. `gainOf` lets the offline render copy the live fader values. */
 export function buildTracks(
-  a: BaseAudioContext, chain: MasterChain, gainOf: (i: number) => number,
+  a: BaseAudioContext, chain: MasterChain, gainOf: (i: number) => number, synthLevel = mixState.synthLevel,
 ): { tracks: GainNode[]; echoSends: GainNode[]; spaceSends: GainNode[]; pans: StereoPannerNode[]; synth: GainNode } {
   const tracks: GainNode[] = [], echoSends: GainNode[] = [], spaceSends: GainNode[] = [], pans: StereoPannerNode[] = [];
   for (let i = 0; i < 8; i++) {
@@ -148,7 +148,7 @@ export function buildTracks(
     const s = a.createGain(); s.gain.value = laneSends[i]?.space ?? 0; g.connect(s); s.connect(chain.spaceHp); spaceSends.push(s);
   }
   // VV-1 voices carry their own per-note filters — the synth bus is just a fader.
-  const synth = a.createGain(); synth.gain.value = 0.7; synth.connect(chain.bus);
+  const synth = a.createGain(); synth.gain.value = synthLevel; synth.connect(chain.bus);
   return { tracks, echoSends, spaceSends, pans, synth };
 }
 let liveEchoSends: GainNode[] = [], liveSpaceSends: GainNode[] = [], livePans: StereoPannerNode[] = [];
@@ -159,7 +159,7 @@ export let synthMeter: AnalyserNode | null = null;
 export function ensureNodes(): void {
   const a = ac();
   if (trackGain.length) return;
-  const built = buildTracks(a, liveChain!, () => 0.8);
+  const built = buildTracks(a, liveChain!, (index) => mixState.channelLevels[index] ?? 0.8, mixState.synthLevel);
   trackGain.push(...built.tracks);
   liveEchoSends = built.echoSends; liveSpaceSends = built.spaceSends; livePans = built.pans;
   synthGain = built.synth;

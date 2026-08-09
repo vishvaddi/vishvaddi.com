@@ -1,5 +1,15 @@
 # Run Log
 
+## 2026-08-09 — Studio Lysergic workflow overhaul
+
+- Replaced the restrained flat-DAW finish with a graphite, acid, violet and pink performance identity: reactive pads and sequencer states, spectral Signal Garden, audio-reactive signal organism and animated clip activity.
+- Rebuilt phone and short-landscape mode composition around usable instrument dimensions: horizontally scrolling drum steps, separated 4×4 pads, readable mixer strips and a visible CLIPS scene range.
+- Made first use immediately playable with the `MIDNIGHT ACID` demo and a non-blocking hint; retained the full tutorial as an explicit action and corrected its stacking and small-screen fit.
+- Added in-place blank/demo/project/song replacement, preserved navigation context and made project replacement undoable instead of reloading the application.
+- Persisted mixer levels, master level, power, mute and solo with the project; synchronised the header master control and mixer control through one state model.
+- Added visible and accessible accent/slide controls, named piano keys and drum cells, project shortcuts, delayed tooltips and improved CLIPS position feedback.
+- Expanded Studio browser regression coverage for first-run content, mixer persistence, undoable project replacement, mobile control dimensions, scene visibility and tutorial stacking across desktop, laptop, Android portrait and Android landscape.
+
 ## 2026-07-26 — Deep Swarm colour and Electric Field hotfix
 
 - Prevented dynamic effects with missing colour metadata from crashing the renderer while converting a hex colour to alpha.

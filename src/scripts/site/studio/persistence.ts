@@ -7,11 +7,27 @@ import {
   allPats, allVels, synthNotes, padEvents, songChain, arrangement, songLoop, sampleParams, sampleData, sampleBuffers,
   padLayers, padLayerBuffers, padLayerMode,
   dp, mpc, rackState, fx, vsynthPatch, synthLaneNotes, synthPatches, patternLengths, patternDivisions, SYNTH_LANES,
-  DRUMS, laneLengths, laneRates, laneVoices, laneSends, LANE_RATES,
+  DRUMS, laneLengths, laneRates, laneVoices, laneSends, LANE_RATES, mixState, mute, solo,
 } from "./state";
 import type { ArrangeBlock, HistoryState, PadEvent, PadLayer, PadLayerMode, SamplerP, DrumP, RackState, TrackId, VNote, SynthLane } from "./state";
 import type { VPatch } from "./vsynth";
 import { applyFxState, hydrateSample, hydratePadLayer } from "./engine";
+
+const clamp01 = (value: unknown, fallback: number): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : fallback;
+};
+
+function applyMixState(saved: Partial<typeof mixState>): void {
+  if (Array.isArray(saved.channelLevels)) saved.channelLevels.forEach((value, index) => {
+    if (index < mixState.channelLevels.length) mixState.channelLevels[index] = clamp01(value, mixState.channelLevels[index]);
+  });
+  mixState.synthLevel = clamp01(saved.synthLevel, mixState.synthLevel);
+  mixState.masterLevel = clamp01(saved.masterLevel, mixState.masterLevel);
+  if (typeof saved.power === "boolean") mixState.power = saved.power;
+  if (Array.isArray(saved.mute)) saved.mute.forEach((value, index) => { if (index < mute.length) mute[index] = !!value; });
+  if (Array.isArray(saved.solo)) saved.solo.forEach((value, index) => { if (index < solo.length) solo[index] = !!value; });
+}
 
 export function saveAll(): void {
   try {
@@ -44,6 +60,7 @@ export function historyState(): HistoryState {
     fx: { ...fx },
     rackState: { ...rackState, macros: [...rackState.macros], devices: { ...rackState.devices } },
     vsynth: JSON.parse(JSON.stringify(vsynthPatch)) as VPatch,
+    mix: JSON.parse(JSON.stringify(mixState)),
   };
 }
 export function restoreHistory(state: HistoryState): void {
@@ -74,6 +91,7 @@ export function restoreHistory(state: HistoryState): void {
     else if (typeof value === "object" && value !== null) Object.assign(vsynthPatch[key] as object, value);
     else (vsynthPatch[key] as unknown) = value;
   });
+  if (state.mix) applyMixState(state.mix);
   applyFxState(); saveAll();
 }
 export function projectState(includeSamples = true): object {
@@ -85,7 +103,7 @@ export function projectState(includeSamples = true): object {
     return index;
   });
   return {
-    version: 13, // v13: 16 pattern slots and a track title
+    version: 14, // v14: persisted mixer levels, power, mute and solo
     title: song.title,
     pats: allPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
     vels: allVels,
@@ -102,6 +120,7 @@ export function projectState(includeSamples = true): object {
     laneRates,
     laneVoices,
     laneSends,
+    mix: mixState,
     vsynth: synthPatches.bass,
     songChain, // kept read-only for one version so older saves aren't stranded
     arrangement,
@@ -226,6 +245,7 @@ export function applyProject(saved: Record<string, unknown>): void {
           laneSends[r].pan = Math.max(-1, Math.min(1, Number(v.pan) || 0));
         }
       });
+      if (saved.mix && typeof saved.mix === "object") applyMixState(saved.mix as Partial<typeof mixState>);
       if (saved.songChain) (saved.songChain as number[]).forEach((v, i) => {
         if (i < SONG_SLOTS) songChain[i] = Math.max(0, Math.min(SCENES - 1, Number(v) || 0));
       });

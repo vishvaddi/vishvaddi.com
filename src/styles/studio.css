@@ -267,10 +267,10 @@
 
 /* ── Tutorial overlay ── */
 .wa-tutorial[hidden] { display: none; }
-.wa-tutorial { position: fixed; inset: 0; z-index: 10000; }
-.wa-tutorial-shade { position: absolute; inset: 0; background: rgba(4, 4, 8, 0.68); }
+.wa-tutorial { position: static; z-index: auto; pointer-events: none; }
+.wa-tutorial-shade { position: fixed; inset: 0; z-index: 10000; pointer-events: auto; background: rgba(4, 4, 8, 0.68); }
 .wa-tutorial-card {
-  position: fixed; right: 18px; bottom: 18px; z-index: 10003;
+  position: fixed; right: 18px; bottom: 18px; z-index: 10003; pointer-events: auto;
   width: min(390px, calc(100vw - 24px)); padding: 18px;
   color: var(--wa-text); font-family: var(--wa-font);
   background: var(--wa-surface-2);
@@ -281,6 +281,9 @@
 .wa-tutorial-step { color: var(--wa-accent); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; }
 .wa-tutorial-title { margin: 7px 0; color: var(--wa-amber); font-size: 18px; }
 .wa-tutorial-text { margin: 0 0 16px; color: var(--wa-muted); font-size: 12px; line-height: 1.55; }
+.wa-tutorial-card { background: #1a1e26; border-color: rgba(104,245,207,.42); }
+.wa-tutorial-title { color: #68f5cf; text-shadow: 0 0 12px rgba(104,245,207,.28); }
+.wa-tutorial-text, .wa-tutorial-card .wa-help, .wa-tutorial-card .wa-help-desc { color: #d8dee4; }
 .wa-tutorial-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 .wa-tutorial-tour-view[hidden], .wa-tutorial-browse-view[hidden] { display: none; }
 /* Browse Help needs real room for the shortcuts list + search + topics,
@@ -2694,7 +2697,10 @@
 }
 .wa-firstrun-text { font-size: 12px; letter-spacing: .02em; }
 .wa-firstrun-hint .wa-btn-sm { min-width: 26px; height: 26px; padding: 0 8px; }
-@media (max-width: 700px) { .wa-firstrun-hint { bottom: 10px; font-size: 11px; } }
+@media (max-width: 700px), (max-height: 540px) and (max-width: 900px) {
+  .wa-firstrun-hint { bottom: 62px; font-size: 11px; }
+  .wa-tutorial-card { bottom: 62px; max-height: calc(100dvh - 78px); overflow-y: auto; }
+}
 .wa-patternbar { display: inline-flex; align-items: center; gap: 5px; }
 .immersive-page .wa-patternbar select { min-height: 26px; padding: 3px 6px; font-size: 11px; }
 .immersive-page .wa-patternbar.compact .wa-lbl { font-size: 8.5px; letter-spacing: .2em; }
@@ -2726,4 +2732,135 @@
   .immersive-page .wa-page-synth .wa-key { height: 64px; }
   .immersive-page .wa-page-synth .wa-key-black { height: 40px; }
   .immersive-page .wa-synth-main { min-height: 96px; }
+}
+
+/* ═══ Lysergic v2 — one canonical identity layer ═══════════════════════════
+   Graphite remains the chassis; colour and motion belong to playable state,
+   signal screens and the playhead. This block intentionally owns the final
+   visual word while the older skins are retired mode-by-mode. */
+.immersive-page .wa-win {
+  --wa-acid: #68f5cf;
+  --wa-violet: #a97eff;
+  --wa-pink: #ff7bd8;
+  --wa-night: #080812;
+  background:
+    radial-gradient(circle at 76% 12%, rgba(169,126,255,.08), transparent 28%),
+    radial-gradient(circle at 22% 90%, rgba(104,245,207,.055), transparent 32%),
+    var(--wa-canvas);
+}
+.immersive-page .wa-lcd,
+.immersive-page .wa-xy-field,
+.immersive-page .wa-bandscan-canvas,
+.immersive-page .wa-vectorscope,
+.immersive-page .wa-scope,
+.immersive-page .wa-roll2 {
+  background-color: var(--wa-night);
+  box-shadow: inset 0 2px 12px rgba(0,0,0,.9), 0 0 18px rgba(104,245,207,.045);
+}
+.immersive-page .wa-modekey.active,
+.immersive-page .wa-subtab.active,
+.immersive-page .wa-toggle.active {
+  color: var(--wa-acid);
+  text-shadow: 0 0 10px rgba(104,245,207,.55);
+}
+.immersive-page .wa-modekey.active .wa-modekey-led {
+  background: var(--wa-acid);
+  box-shadow: 0 0 10px var(--wa-acid), 0 0 22px rgba(104,245,207,.35);
+}
+.immersive-page .wa-cell.on {
+  background: linear-gradient(145deg, rgba(104,245,207,.88), rgba(169,126,255,.68));
+  border-color: rgba(202,255,240,.8);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), 0 0 10px rgba(104,245,207,.2);
+}
+.immersive-page .wa-cell.play {
+  filter: brightness(1.55) saturate(1.3);
+  box-shadow: 0 0 0 2px var(--wa-pink), 0 0 18px rgba(255,123,216,.78);
+}
+.immersive-page .wa-mpc-pad {
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 78% 20%, rgba(169,126,255,.13), transparent 28%),
+    linear-gradient(145deg, #2b3038, #20232a);
+  transition: transform .1s ease, border-color .12s ease, box-shadow .12s ease;
+}
+.immersive-page .wa-mpc-pad::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0;
+  background: radial-gradient(circle at 45% 55%, rgba(104,245,207,.58), rgba(169,126,255,.25) 42%, transparent 72%);
+  transition: opacity .12s ease;
+}
+.immersive-page .wa-mpc-pad.down,
+.immersive-page .wa-mpc-pad:active {
+  transform: translateY(2px) scale(.985); border-color: var(--wa-acid);
+  box-shadow: 0 0 18px rgba(104,245,207,.38), inset 0 0 24px rgba(255,123,216,.15);
+}
+.immersive-page .wa-mpc-pad.down::before,
+.immersive-page .wa-mpc-pad:active::before { opacity: 1; }
+.immersive-page .wa-page-song .wa-clip.has::after {
+  content: ""; position: absolute; left: 10%; right: 10%; bottom: 12%; height: 28%;
+  opacity: calc(.22 + var(--wa-activity, .2) * .65);
+  background: repeating-linear-gradient(90deg, var(--wa-acid) 0 2px, transparent 2px 5px);
+  clip-path: polygon(0 76%,8% 25%,16% 64%,24% 12%,32% 54%,40% 32%,48% 84%,56% 18%,64% 62%,72% 38%,80% 72%,88% 20%,96% 58%,100% 42%,100% 100%,0 100%);
+  filter: drop-shadow(0 0 4px rgba(104,245,207,.45));
+}
+.immersive-page .wa-page-song .wa-clip.playing { animation: wa-signal-pulse .7s ease-in-out infinite alternate; }
+.wa-session-status { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.wa-scene-position { color: var(--wa-acid); font: 600 9px/1.2 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; }
+@keyframes wa-signal-pulse { to { filter: brightness(1.28); box-shadow: 0 0 16px rgba(104,245,207,.38); } }
+
+/* Mobile is a composition, not a scaled desktop workstation. Each mode owns
+   its scroll surface and preserves usable instrument dimensions. */
+@media (max-width: 700px), (max-height: 540px) and (max-width: 900px) {
+  .immersive-page .wa-pagehost { overflow: hidden; }
+  .immersive-page .wa-page-drums,
+  .immersive-page .wa-page-pads,
+  .immersive-page .wa-page-mix,
+  .immersive-page .wa-page-song { overflow-y: auto; overscroll-behavior: contain; }
+
+  .immersive-page .wa-page-drums > .wa-lane-aside,
+  .immersive-page .wa-page-pads > .wa-inspector { display: none; }
+  .immersive-page .wa-page-drums.show-inspector > .wa-lane-aside,
+  .immersive-page .wa-page-pads.show-inspector > .wa-inspector {
+    display: block; position: fixed; left: 8px; right: 8px; bottom: 60px; z-index: 75;
+    width: auto; max-height: calc(100dvh - 170px); overflow-y: auto;
+    box-shadow: 0 18px 48px rgba(0,0,0,.82), 0 0 0 1px rgba(104,245,207,.28);
+  }
+  .immersive-page .wa-page-drums > .wa-drums-main { flex: 0 0 auto; min-width: 0; }
+  .immersive-page .wa-page-drums > .wa-drums-main > .wa-panel {
+    display: block; min-height: 470px; overflow: auto; overscroll-behavior-inline: contain;
+  }
+  .immersive-page .wa-page-drums .wa-pat-row,
+  .immersive-page .wa-page-drums .wa-patternbar { position: sticky; left: 0; z-index: 3; width: max-content; }
+  .immersive-page .wa-page-drums .wa-step-ruler,
+  .immersive-page .wa-page-drums .wa-grid { min-width: 780px; }
+  .immersive-page .wa-page-drums .wa-grid { height: 360px; }
+  .immersive-page .wa-page-drums .wa-row { min-height: 40px; }
+
+  .immersive-page .wa-page-pads > .wa-pads-main { flex: 0 0 auto; display: block; }
+  .immersive-page .wa-page-pads > .wa-pads-main > .wa-panel { display: block; height: auto; min-height: 0; overflow: visible; }
+  .immersive-page .wa-page-pads .wa-mpc-deck { display: flex; flex-direction: column; height: auto; }
+  .immersive-page .wa-page-pads .wa-mpc-pad-area { order: 0; min-height: 354px; }
+  .immersive-page .wa-page-pads .wa-mpc-pads {
+    display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); grid-template-rows: repeat(4,80px);
+    gap: 6px; height: auto; min-height: 338px;
+  }
+  .immersive-page .wa-page-pads .wa-mpc-pad { height: 80px; min-height: 80px; }
+  .immersive-page .wa-page-pads .wa-mpc-side { order: 1 !important; width: 100%; height: auto; }
+  .immersive-page .wa-page-pads .wa-mpc-toolbar { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+
+  .immersive-page .wa-page-mix { display: block; }
+  .immersive-page .wa-page-mix > .wa-mix-channels { display: block; width: 100%; height: 390px; overflow-x: auto; }
+  .immersive-page .wa-page-mix .wa-mixer { min-width: max-content; height: 360px; justify-content: flex-start; }
+  .immersive-page .wa-page-mix .wa-ch { flex: 0 0 76px; width: 76px; min-width: 76px; height: 350px; }
+  .immersive-page .wa-page-mix > .wa-mix-scope { width: 100%; height: 350px; margin-top: 10px; }
+  .immersive-page .wa-page-mix > .wa-mix-flex { width: 100%; min-height: 360px; margin-top: 10px; }
+
+  .immersive-page .wa-session { scroll-snap-type: x proximity; padding-bottom: 8px; }
+  .immersive-page .wa-session-row > * { scroll-snap-align: start; }
+  .immersive-page .wa-session-status { position: sticky; left: 0; z-index: 5; }
+  .immersive-page .wa-scene-position { display: inline; }
+}
+@media (min-width: 701px) and (min-height: 541px) { .wa-scene-position { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .immersive-page .wa-page-song .wa-clip.playing { animation: none; }
+  .immersive-page .wa-mpc-pad { transition: none; }
 }

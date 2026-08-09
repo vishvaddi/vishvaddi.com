@@ -68,19 +68,34 @@ for (const [name, width, height] of viewports) {
         check(`${name}: MIX panels are compact`, mixLayout.gaps.every((gap) => gap <= 20), `${mixLayout.gaps.join('/')}px trailing space`)
         check(`${name}: MIX channels stay on one row`, mixLayout.channelRows === 1, `${mixLayout.channelRows} rows`)
       }
+      if ((name === 'phone' || name === 'landscape') && mode === 'DRUMS') {
+        const cell = await page.locator('.wa-grid .wa-cell').first().evaluate((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height }))
+        check(`${name}: DRUMS cells remain usable`, cell.width >= 36 && cell.height >= 36, `${Math.round(cell.width)}×${Math.round(cell.height)}px`)
+      }
+      if ((name === 'phone' || name === 'landscape') && mode === 'PADS') {
+        const pads = await page.locator('.wa-mpc-pad').evaluateAll((nodes) => nodes.map((node) => {
+          const r = node.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height }
+        }))
+        const overlaps = pads.some((a, i) => pads.some((b, j) => i < j && a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1))
+        check(`${name}: PADS remain separated`, !overlaps && pads.every((pad) => pad.width >= 60 && pad.height >= 72), `${Math.round(Math.min(...pads.map((pad) => pad.width)))}×${Math.round(Math.min(...pads.map((pad) => pad.height)))}px min`)
+      }
+      if ((name === 'phone' || name === 'landscape') && mode === 'MIX') {
+        const widths = await page.locator('.wa-mixer .wa-ch').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().width))
+        check(`${name}: MIX channels remain readable`, widths.every((width) => width >= 72), `${Math.round(Math.min(...widths))}px min`)
+      }
     }
 
     await page.locator('.wa-modekey', { hasText: 'SYNTH' }).click()
     check(`${name}: three synth lanes`, await page.locator('.wa-roll-lane').count() === 3)
     await page.locator('.wa-roll-lane', { hasText: 'Lead' }).click()
     check(`${name}: lead lane activates`, await page.locator('.wa-roll-lane', { hasText: 'Lead' }).evaluate((node) => node.classList.contains('active')))
-    await page.locator('.wa-field-modes button', { hasText: 'Scan' }).click()
+    await page.locator('.wa-field-modes button', { hasText: 'Drift' }).click()
     const before = await page.locator('.wa-xy-readout').textContent()
     await page.keyboard.down('KeyD')
     await page.waitForTimeout(300)
     await page.keyboard.up('KeyD')
     const after = await page.locator('.wa-xy-readout').textContent()
-    check(`${name}: band scan responds to keyboard`, before !== after, `${before} → ${after}`)
+    check(`${name}: signal garden responds to keyboard`, before !== after, `${before} → ${after}`)
 
     await page.locator('.wa-modekey', { hasText: 'CLIPS' }).click()
     // the first-run demo seeds an arrangement, so these assert a DELTA rather
@@ -95,6 +110,15 @@ for (const [name, width, height] of viewports) {
     if (name === 'phone' || name === 'landscape') {
       const targets = await page.locator('.wa-modekey').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height))
       check(`${name}: mode targets are touch-sized`, targets.every((size) => size >= 44), targets.join(','))
+      check(`${name}: CLIPS exposes scene range`, /Scenes \d+–\d+ of 16/.test((await page.locator('.wa-scene-position').textContent()) ?? ''))
+      await page.locator('.wa-transport button', { hasText: '? Tutorial' }).click()
+      const tutorialTop = await page.evaluate(() => {
+        const card = document.querySelector('.wa-tutorial-card'); if (!card) return false
+        const r = card.getBoundingClientRect(); const top = document.elementFromPoint(r.left + 8, r.top + 8)
+        return r.top >= 0 && r.bottom <= innerHeight && !!top && card.contains(top)
+      })
+      check(`${name}: tutorial card stays above its target`, tutorialTop)
+      await page.locator('.wa-tutorial-card button', { hasText: 'Close' }).click()
     }
     await page.screenshot({ path: `C:/tmp/studio-${name}.png`, fullPage: false })
     check(`${name}: console clean`, errors.length === 0, errors.slice(0, 2).join(' | '))

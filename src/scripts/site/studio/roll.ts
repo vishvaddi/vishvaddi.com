@@ -68,8 +68,8 @@ export function buildRoll(deps: RollDeps): Roll {
   };
   octDown.addEventListener("click", () => setRollOct(rollOct - 1));
   octUp.addEventListener("click", () => setRollOct(rollOct + 1));
-  const accentBtn = btn("Accent", "wa-btn-sm wa-note-expression") as HTMLButtonElement;
-  const slideBtn = btn("Slide", "wa-btn-sm wa-note-expression") as HTMLButtonElement;
+  const accentBtn = btn("Note Accent", "wa-btn-sm wa-note-expression") as HTMLButtonElement;
+  const slideBtn = btn("Note Slide", "wa-btn-sm wa-note-expression") as HTMLButtonElement;
   help(accentBtn, "Toggle an accented note. Accents play louder and brighter.");
   help(slideBtn, "Glide into this note from the previous note in the lane.");
   accentBtn.addEventListener("click", () => { if (selected) { selected.accent = !selected.accent; deps.saveAll(); paintRoll(); } });

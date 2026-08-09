@@ -1,14 +1,15 @@
 # Project State
 
-_Last updated: 2026-07-26 — Deep Swarm's combat and rendering hotfix is live._
+_Last updated: 2026-08-09 — Studio's Lysergic workflow and visual overhaul is complete._
 
 ## Current Position
 
-- `/studio/` is now an immersive, viewport-filling browser workstation with a modern flat DAW shell: vertical desktop workspace rail, unified transport, track-coloured clip matrix and persistent mobile navigation. Its primary modes are drums, pads, synth, clips/arrangement and mix.
+- `/studio/` is an immersive, viewport-filling browser workstation with a graphite-and-neon Lysergic identity, audio-reactive signal displays and mode-specific mobile compositions rather than a scaled desktop layout. Its primary modes are drums, pads, synth, clips/arrangement and mix.
 - Studio supports 4–32-step straight/triplet patterns; drums and sliced/recorded samples; Bass, Lead and Harmony synth lanes; accent/slide; Web MIDI; patch, kit and song libraries; scene chains; automation; effects; Morph/Terrain performance; project persistence; WAV/MP3 and stem export.
-- Studio source and responsive browser suites cover core edit/undo/autosave/playback/export plus the five modes, three synth lanes, Terrain keyboard control, arrangement automation, viewport fit and touch target sizing.
+- Studio opens with a playable `MIDNIGHT ACID` demo and one non-modal hint. New blank/demo replacement, imported projects, songs and patches apply in place with confirmation; arrangement, tempo, title and mixer state participate in persistence/history rather than forcing a reload.
+- Studio source and browser suites cover first-run state, core edit/undo/autosave/playback/export, mixer synchronisation/persistence, in-place project replacement, the five modes, three synth lanes, Signal Garden keyboard control, arrangement automation, viewport fit, mobile control dimensions and tutorial stacking.
 - `/site/programme/` keeps its prose introduction in the editorial column but breaks the interactive editor out to near-full viewport width, including Android landscape. On desktop it clears the fixed tools rail while retaining a 1,024 px editor at 1,440 px; focused browser coverage checks rail clearance, width, overflow and chart-first mode.
-- Studio PADS expands its performance grid to the available desktop height. MIX keeps all ten channels on one row and stacks compact export/device panels beside them; the responsive suite measures these layout contracts.
+- On phones and short Android landscape, DRUMS preserves full-sized sequencing cells in a horizontal instrument surface, PADS presents a separated 4×4 performance deck, MIX uses readable channel strips and CLIPS exposes the visible scene range.
 - The site runs on Astro 7 with zero known npm vulnerabilities and a global type check with zero errors. Independently built game snapshots under `public/games/` are excluded from the Astro source scan.
 - `/games/deep-swarm/` now exposes deterministic diagnostics and explicit loss causes, with automated boundary coverage through 6,000 m.
 - Deep Swarm has six degradable submersible systems with an event-only interactive bathysphere damage blueprint and hands-on repairs, spatial shaped cargo, readable Module Bay feedback, destructible rubble, event-specific interaction grammars, additional biome pockets and five utility weapons. Render faults reset leaked canvas clipping and offer an in-dive resume instead of leaving a black frozen viewport; deployable weapons now initialise their run state defensively.

@@ -97,6 +97,15 @@ export interface HistoryState {
   fx: FxState;
   rackState: RackState;
   vsynth: VPatch;
+  mix?: MixState;
+}
+export interface MixState {
+  channelLevels: number[];
+  synthLevel: number;
+  masterLevel: number;
+  power: boolean;
+  mute: boolean[];
+  solo: boolean[];
 }
 export interface FxState {
   low: number;
@@ -312,4 +321,12 @@ export const vsynthPatch = new Proxy({} as VPatch, {
 // ─── Mixer ───────────────────────────────────────────────────────────────────
 export const mute = new Array(8).fill(false);
 export const solo = new Array(8).fill(false);
+export const mixState: MixState = {
+  channelLevels: Array(8).fill(0.8),
+  synthLevel: 0.7,
+  masterLevel: 0.8,
+  power: true,
+  mute,
+  solo,
+};
 export function audible(r: number): boolean { const s = solo.some(Boolean); return !mute[r] && (!s || solo[r]); }

@@ -23,8 +23,8 @@ export interface BandScan { root: HTMLElement; setActive: (on: boolean) => void;
 export function buildBandScan(deps: { onReadout: (text: string) => void }): BandScan {
   const root = el("div", "wa-bandscan");
   const canvas = document.createElement("canvas"); canvas.className = "wa-bandscan-canvas";
-  const rescanBtn = btn("RESCAN", "wa-btn-sm");
-  help(rescanBtn, "Re-seed the band — a fresh spread of transmitters.");
+  const rescanBtn = btn("RESEED", "wa-btn-sm");
+  help(rescanBtn, "Grow a fresh constellation of playable signals.");
   const tools = el("div", "wa-bandscan-tools"); tools.append(rescanBtn);
   root.append(canvas, tools);
   root.tabIndex = 0;
@@ -131,12 +131,14 @@ export function buildBandScan(deps: { onReadout: (text: string) => void }): Band
 
   function draw(): void {
     if (!W) return;
-    g.fillStyle = "#0e1113"; g.fillRect(0, 0, W, H);
+    const backdrop = g.createRadialGradient(W * tune.x, H * tune.y, 0, W * .5, H * .5, Math.max(W, H) * .72);
+    backdrop.addColorStop(0, "#18213a"); backdrop.addColorStop(.42, "#100d22"); backdrop.addColorStop(1, "#07070d");
+    g.fillStyle = backdrop; g.fillRect(0, 0, W, H);
     const padB = 26 * DPR;                    // waterfall strip along the foot
     const plotH = H - padB;
 
     // graticule — frequency ticks across, bandwidth divisions down
-    g.strokeStyle = "rgba(95,168,138,0.1)"; g.lineWidth = 1;
+    g.strokeStyle = "rgba(104,245,207,0.09)"; g.lineWidth = 1;
     for (let i = 0; i <= 12; i++) {
       const x = (i / 12) * W;
       g.beginPath(); g.moveTo(x, 0); g.lineTo(x, plotH); g.stroke();
@@ -151,40 +153,50 @@ export function buildBandScan(deps: { onReadout: (text: string) => void }): Band
       g.fillText(String(Math.round(BAND_LO + (i / 4) * (BAND_HI - BAND_LO))), Math.min(W - 26 * DPR, x + 2 * DPR), plotH - 4 * DPR);
     }
 
-    // transmitters: a blip with a lock halo, brightening as you close in
+    // A signal garden: every carrier is a different spectral bloom. The
+    // geometry is generated from its note and lock strength, not decorative
+    // animation detached from the instrument.
     stations.forEach((s) => {
       const x = s.x * W, y = s.y * plotH, lit = s.lock;
       if (lit > 0.01) {
         const halo = g.createRadialGradient(x, y, 0, x, y, 34 * DPR * (0.6 + lit));
-        halo.addColorStop(0, `rgba(95,168,138,${0.05 + lit * 0.4})`);
-        halo.addColorStop(1, "rgba(95,168,138,0)");
+        const hue = 155 + (s.midi % 12) * 14;
+        halo.addColorStop(0, `hsla(${hue},90%,65%,${0.08 + lit * 0.5})`);
+        halo.addColorStop(1, `hsla(${hue},90%,55%,0)`);
         g.fillStyle = halo;
         g.beginPath(); g.arc(x, y, 34 * DPR * (0.6 + lit), 0, Math.PI * 2); g.fill();
       }
-      // carrier spike
-      g.strokeStyle = lit > 0.2 ? "#5fa88a" : "rgba(95,168,138,0.35)";
-      g.lineWidth = (1 + lit * 2) * DPR;
-      g.beginPath(); g.moveTo(x, y + 7 * DPR); g.lineTo(x, y - (8 + lit * 22) * DPR); g.stroke();
-      g.fillStyle = lit > 0.2 ? "#c87941" : "rgba(143,139,129,0.55)";
+      const petals = 4 + (s.midi % 5), radius = (5 + lit * 18) * DPR;
+      g.strokeStyle = lit > 0.2 ? `hsla(${170 + (s.midi % 10) * 16},95%,68%,.95)` : "rgba(119,117,160,.45)";
+      g.lineWidth = (1 + lit * 1.8) * DPR; g.beginPath();
+      for (let i = 0; i <= petals * 18; i++) {
+        const a = (i / (petals * 18)) * Math.PI * 2;
+        const r = radius * (.55 + .45 * Math.sin(a * petals));
+        const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+        if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+      }
+      g.closePath(); g.stroke();
+      g.fillStyle = lit > 0.2 ? "#ff7bd8" : "rgba(143,139,168,0.55)";
       g.font = `${8 * DPR}px ui-monospace, monospace`;
       g.fillText(s.call, x + 4 * DPR, y - (10 + lit * 22) * DPR);
     });
 
     // reticle
     const rx = tune.x * W, ry = tune.y * plotH;
-    g.strokeStyle = "rgba(200,121,65,0.85)"; g.lineWidth = 1 * DPR;
+    g.strokeStyle = "rgba(112,245,210,0.55)"; g.lineWidth = 1 * DPR;
     g.beginPath();
     g.moveTo(rx, 0); g.lineTo(rx, plotH);
     g.moveTo(0, ry); g.lineTo(W, ry);
     g.stroke();
-    g.strokeStyle = "#c87941"; g.lineWidth = 1.4 * DPR;
+    g.strokeStyle = "#ff7bd8"; g.lineWidth = 1.4 * DPR;
     g.beginPath(); g.arc(rx, ry, 9 * DPR, 0, Math.PI * 2); g.stroke();
+    g.beginPath(); g.arc(rx, ry, 15 * DPR, 0, Math.PI * 2); g.stroke();
 
     // waterfall of recent signal strength
     g.fillStyle = "rgba(0,0,0,0.35)"; g.fillRect(0, plotH, W, padB);
     const bw = W / 160;
     history.forEach((s, i) => {
-      g.fillStyle = s > 0.6 ? "#5fa88a" : s > 0.25 ? "rgba(95,168,138,0.6)" : "rgba(95,168,138,0.18)";
+      g.fillStyle = s > 0.6 ? "#ff7bd8" : s > 0.25 ? "rgba(104,245,207,0.72)" : "rgba(128,102,214,0.25)";
       const h = Math.max(1, s * (padB - 6 * DPR));
       g.fillRect(i * bw, plotH + padB - 3 * DPR - h, Math.max(1, bw - 1), h);
     });

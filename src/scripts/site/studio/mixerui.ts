@@ -2,8 +2,8 @@
 // mute/solo → fader beside a ladder meter (the pair takes the remaining
 // height, which is both the tactile payoff and what stops MIX reading as a
 // settings page) → dB readout. Device parameters still live in the rack.
-import { DRUMS, mute, solo, laneSends } from "./state";
-import { ac, ensureNodes, trackGain, setTrackPan, trackMeters, synthMeter, masterAnalyser } from "./engine";
+import { DRUMS, mute, solo, laneSends, mixState } from "./state";
+import { ensureNodes, trackGain, setTrackPan, trackMeters, synthMeter, masterAnalyser } from "./engine";
 import * as engine from "./engine";
 import { saveAll } from "./persistence";
 import { el, btn, help } from "./helpers";
@@ -37,9 +37,11 @@ function mixChannel(
   if (idx >= 0) {
     const ms = el("div", "wa-ms");
     const m = btn("M", "wa-mute"); m.classList.remove("wa-btn");
-    m.addEventListener("click", () => { mute[idx] = !mute[idx]; m.classList.toggle("active", mute[idx]); });
+    m.classList.toggle("active", mute[idx]); m.setAttribute("aria-pressed", String(mute[idx]));
+    m.addEventListener("click", () => { mute[idx] = !mute[idx]; m.classList.toggle("active", mute[idx]); m.setAttribute("aria-pressed", String(mute[idx])); saveAll(); });
     const s = btn("S", "wa-solo"); s.classList.remove("wa-btn");
-    s.addEventListener("click", () => { solo[idx] = !solo[idx]; s.classList.toggle("active", solo[idx]); });
+    s.classList.toggle("active", solo[idx]); s.setAttribute("aria-pressed", String(solo[idx]));
+    s.addEventListener("click", () => { solo[idx] = !solo[idx]; s.classList.toggle("active", solo[idx]); s.setAttribute("aria-pressed", String(solo[idx])); saveAll(); });
     ms.append(m, s); ch.append(ms);
   }
 
@@ -64,16 +66,18 @@ function mixChannel(
   return ch;
 }
 
-export function buildMixer(): HTMLElement {
+export interface MixerView { root: HTMLElement; setMasterLevel: (value: number) => void; syncAudio: () => void }
+
+export function buildMixer(onMasterChange: (value: number) => void): MixerView {
   const mixer = el("div", "wa-panel wa-console");
   const mixGrid = el("div", "wa-mixer");
   const strips: Strip[] = [];
   DRUMS.forEach((name, i) => mixGrid.append(mixChannel(
-    name, 0.8, (v) => { ensureNodes(); trackGain[i].gain.value = v; }, i,
+    name, mixState.channelLevels[i], (v) => { mixState.channelLevels[i] = v; ensureNodes(); trackGain[i].gain.value = v; saveAll(); }, i,
     () => trackMeters[i] ?? null, strips,
   )));
-  mixGrid.append(mixChannel("Synth", 0.7, (v) => { ensureNodes(); engine.synthGain!.gain.value = v; }, -1, () => synthMeter, strips));
-  const master = mixChannel("Master", 0.8, (v) => { ac(); engine.master!.gain.value = v; }, -1, () => masterAnalyser, strips);
+  mixGrid.append(mixChannel("Synth", mixState.synthLevel, (v) => { mixState.synthLevel = v; ensureNodes(); engine.synthGain!.gain.value = v; saveAll(); }, -1, () => synthMeter, strips));
+  const master = mixChannel("Master", mixState.masterLevel, (v) => { onMasterChange(v); }, -1, () => masterAnalyser, strips);
   master.classList.add("wa-ch-master");
   mixGrid.append(master);
   help(mixGrid, "Channel levels, pan and metering. Device parameters live in the rack below.");
@@ -100,5 +104,26 @@ export function buildMixer(): HTMLElement {
     });
   }
   paintMeters();
-  return mixer;
+  const levelInputs = Array.from(mixGrid.querySelectorAll<HTMLInputElement>(".wa-fader"));
+  const masterInput = levelInputs[levelInputs.length - 1];
+  const syncAudio = (): void => {
+    ensureNodes();
+    mixState.channelLevels.forEach((value, index) => {
+      if (trackGain[index]) trackGain[index].gain.value = value;
+      if (levelInputs[index]) levelInputs[index].value = String(value);
+    });
+    if (engine.synthGain) engine.synthGain.gain.value = mixState.synthLevel;
+    if (levelInputs[DRUMS.length]) levelInputs[DRUMS.length].value = String(mixState.synthLevel);
+    if (engine.master) engine.master.gain.value = mixState.power ? mixState.masterLevel : 0;
+    masterInput.value = String(mixState.masterLevel);
+    mixGrid.querySelectorAll<HTMLButtonElement>(".wa-mute").forEach((button, index) => {
+      button.classList.toggle("active", mute[index]);
+      button.setAttribute("aria-pressed", String(mute[index]));
+    });
+    mixGrid.querySelectorAll<HTMLButtonElement>(".wa-solo").forEach((button, index) => {
+      button.classList.toggle("active", solo[index]);
+      button.setAttribute("aria-pressed", String(solo[index]));
+    });
+  };
+  return { root: mixer, setMasterLevel: (value) => { masterInput.value = String(value); }, syncAudio };
 }

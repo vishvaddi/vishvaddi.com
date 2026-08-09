@@ -18,9 +18,9 @@ const xToCut = (x: number): number => Math.round(CUT_LO * Math.pow(CUT_HI / CUT_
 
 export function buildXYField(deps: { onLight: () => void; onCommit: () => void; onSilence: () => void }): XYField {
   const root = el("div", "wa-xy-wrap");
-  const title = el("div", "wa-fx-title", "FIELD");
+  const title = el("div", "wa-fx-title", "SIGNAL GARDEN");
   const modeRow = el("div", "wa-field-modes");
-  const morphBtn = btn("Morph", "wa-btn-sm active"), terrainBtn = btn("Scan", "wa-btn-sm");
+  const morphBtn = btn("Morph", "wa-btn-sm active"), terrainBtn = btn("Drift", "wa-btn-sm");
   modeRow.append(morphBtn, terrainBtn);
   const field = el("div", "wa-xy-field");
   const dot = el("div", "wa-xy-dot");
@@ -37,7 +37,7 @@ export function buildXYField(deps: { onLight: () => void; onCommit: () => void; 
   const setFieldMode = (mode: "morph" | "terrain"): void => {
     const isField = mode === "terrain"; field.hidden = isField; bloom.root.hidden = !isField;
     morphBtn.classList.toggle("active", !isField); terrainBtn.classList.toggle("active", isField);
-    readout.textContent = isField ? "tune with WASD or drag" : `CUT ${xToCut(px)}Hz · POS ${py.toFixed(2)}`;
+    readout.textContent = isField ? "walk with WASD or drag" : `CUT ${xToCut(px)}Hz · POS ${py.toFixed(2)}`;
     bloom.setActive(isField);
     if (isField) bloom.root.focus();
   };

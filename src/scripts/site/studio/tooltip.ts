@@ -31,7 +31,7 @@ export function initTooltips(): void {
   }
   document.addEventListener("pointerover", (event) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
-    if (target && target !== tooltipTarget) showTooltip(target, 750);
+    if (target && target !== tooltipTarget) showTooltip(target, 900);
   });
   document.addEventListener("pointerout", (event) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
@@ -39,9 +39,13 @@ export function initTooltips(): void {
   });
   document.addEventListener("focusin", (event) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
-    if (target) showTooltipNow(target);
+    if (target) showTooltip(target, 550);
   });
   document.addEventListener("focusout", (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
+    if (target) hideTooltip(target);
+  });
+  document.addEventListener("click", (event) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
     if (target) hideTooltip(target);
   });

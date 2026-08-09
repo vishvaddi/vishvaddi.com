@@ -4,14 +4,15 @@
 import {
   STEPS, PAD_BANK_SIZE, TRACKS, clip, transport,
   allPats, allVels, synthLaneNotes, synthPatches, SYNTH_LANES, patternLengths, patternDivisions, laneLength, laneRate, padEvents, blockAt, songEndBar,
-  rackState, audible,
+  rackState, audible, mixState,
 } from "./state";
 import type { TrackId } from "./state";
 import { ensureNodes, trackGain, playDrum, playPad, metroClick, buildMasterChain, buildTracks } from "./engine";
 import * as engine from "./engine";
 import { playNote } from "./vsynth";
-import { projectState, pendingProjectStore } from "./persistence";
+import { projectState, applyProject, saveAll } from "./persistence";
 import { el, btn, help, download, encodeWav, encodeMp3 } from "./helpers";
+import { ctx } from "./ctx";
 
 export interface ProjectExport {
   panel: HTMLElement;
@@ -20,7 +21,7 @@ export interface ProjectExport {
   renderBuffer: (mode: "pattern" | "song", onlyTrack?: TrackId | null) => Promise<AudioBuffer>;
 }
 
-export function buildProjectExport(): ProjectExport {
+export function buildProjectExport(projects: { blank: () => Record<string, unknown>; demo: () => Record<string, unknown> }): ProjectExport {
   const exp = el("div", "wa-panel");
   const expRow = el("div", "wa-export");
   const renderSel = document.createElement("select");
@@ -35,10 +36,13 @@ export function buildProjectExport(): ProjectExport {
   expRow.append(el("span", "wa-lbl", "Render"), renderSel, wavBtn, mp3Btn, stemsBtn, expStatus);
   const projectRow = el("div", "wa-export");
   const saveProjectBtn = btn("Save project"), loadProjectBtn = btn("Open project");
+  const newProjectBtn = btn("New blank", "wa-btn-sm"), demoProjectBtn = btn("Reload demo", "wa-btn-sm");
   help(saveProjectBtn, "Download an editable project containing patterns, settings and embedded samples.");
   help(loadProjectBtn, "Open a previously saved editable Studio project.");
   const projectInput = document.createElement("input"); projectInput.type = "file"; projectInput.accept = ".json,application/json"; projectInput.hidden = true;
-  projectRow.append(saveProjectBtn, loadProjectBtn, projectInput);
+  help(newProjectBtn, "Replace the current project with a clean blank studio.");
+  help(demoProjectBtn, "Reload the editable MIDNIGHT ACID starter project.");
+  projectRow.append(newProjectBtn, demoProjectBtn, saveProjectBtn, loadProjectBtn, projectInput);
   exp.append(
     el("p", "wa-help", "Audio export includes drums and sequenced synth. Project files preserve editable patterns, song order, sounds and tempo."),
     expRow,
@@ -67,9 +71,9 @@ export function buildProjectExport(): ProjectExport {
     // One builder for live and offline — drive, tape echo and space cannot
     // drift between what you hear and what you export.
     const chain = buildMasterChain(off, off.destination);
-    const om = chain.bus; om.gain.value = engine.master!.gain.value;
+    const om = chain.bus; om.gain.value = mixState.masterLevel;
     const reverbWet: GainNode = chain.spaceWet;
-    const built = buildTracks(off, chain, (i) => trackGain[i].gain.value);
+    const built = buildTracks(off, chain, (i) => trackGain[i].gain.value, mixState.synthLevel);
     const ot = built.tracks;
     const osg = built.synth; osg.gain.value = engine.synthGain!.gain.value;
     for (let bar = 0; bar < bars; bar++) {
@@ -153,6 +157,13 @@ export function buildProjectExport(): ProjectExport {
   saveProjectBtn.addEventListener("click", () => {
     download(`vishamp-project-${transport.bpm}bpm.json`, new Blob([JSON.stringify(projectState())], { type: "application/json" }));
   });
+  const replaceProject = (state: Record<string, unknown>, label: string): void => {
+    if (!window.confirm(`${label}? It replaces everything currently in the studio.`)) return;
+    ctx.checkpoint(); applyProject(JSON.parse(JSON.stringify(state)) as Record<string, unknown>);
+    ctx.refreshVisibleState(); saveAll(); expStatus.textContent = `${label} loaded`;
+  };
+  newProjectBtn.addEventListener("click", () => replaceProject(projects.blank(), "Start a blank project"));
+  demoProjectBtn.addEventListener("click", () => replaceProject(projects.demo(), "Reload MIDNIGHT ACID"));
   loadProjectBtn.addEventListener("click", () => projectInput.click());
   projectInput.addEventListener("change", async () => {
     const file = projectInput.files?.[0]; if (!file) return;
@@ -163,8 +174,7 @@ export function buildProjectExport(): ProjectExport {
       const raw = await file.text();
       const parsed = JSON.parse(raw) as Record<string, unknown>;
       if (!parsed?.pats || !Array.isArray(parsed.pats)) throw new Error("Invalid project");
-      await pendingProjectStore("put", parsed);
-      location.reload();
+      ctx.checkpoint(); applyProject(parsed); ctx.refreshVisibleState(); saveAll(); expStatus.textContent = "Project opened ✓";
     } catch { expStatus.textContent = "Project file is invalid."; }
   });
 

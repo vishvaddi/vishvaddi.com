@@ -8,7 +8,7 @@ import {
   STEPS, SCENES, SCENE_LABELS, DRUMS, PAD_BANK_SIZE, ROLL_NOTES,
   TRACKS, TRACK_LABELS, clip, transport, stepDur, audible, song as songMeta,
   allPats, allVels, synthNotes, padEvents, arrangement,
-  sampleParams, sampleBuffers, sampleData, dp, DP_DEF, DP_SPECS, mpc, rackState, fx, vsynthPatch, mute, solo,
+  sampleParams, sampleBuffers, sampleData, dp, DP_DEF, DP_SPECS, mpc, rackState, fx, vsynthPatch, mute, solo, mixState,
 } from "./state";
 import type { ArrangeBlock, HistoryState, MpcState, PadEvent, SamplerP, TrackId, VNote } from "./state";
 import {
@@ -34,7 +34,7 @@ import { buildKeys, highlightKey } from "./keys";
 import { buildProjectExport } from "./render";
 import { buildScratchpad } from "./scratch";
 import { buildLaneInspector } from "./laneui";
-import { buildSession, factorySong } from "./session";
+import { buildSession, factorySong, blankProject } from "./session";
 import { buildMixer } from "./mixerui";
 import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
 import { setCellOpacity, showVelPopup, showVelocityPopup } from "./velpopup";
@@ -83,21 +83,27 @@ export async function initStudio(): Promise<void> {
   projectName.setAttribute("aria-label", "Track title"); projectName.maxLength = 48;
   projectName.addEventListener("input", () => { songMeta.title = projectName.value.slice(0, 48) || "Untitled"; saveAll(); });
   // CV-80 header hardware: POWER (master mute with phosphor LED) + MASTER knob
-  const powerBtn = el("button", "wa-power on") as HTMLButtonElement;
+  const powerBtn = el("button", "wa-power") as HTMLButtonElement;
   powerBtn.type = "button";
   powerBtn.append(el("span", "wa-power-led"), document.createTextNode("POWER"));
   help(powerBtn, "Master output on/off — the polite panic button.");
-  let masterLevel = 0.8;
+  powerBtn.classList.toggle("on", mixState.power);
+  powerBtn.setAttribute("aria-pressed", String(mixState.power));
+  let syncMixerMaster = (_value: number): void => {};
   powerBtn.addEventListener("click", () => {
     ensureNodes();
-    const on = !powerBtn.classList.contains("on");
-    powerBtn.classList.toggle("on", on);
-    engine.master!.gain.value = on ? masterLevel : 0;
+    mixState.power = !mixState.power;
+    powerBtn.classList.toggle("on", mixState.power);
+    powerBtn.setAttribute("aria-pressed", String(mixState.power));
+    engine.master!.gain.value = mixState.power ? mixState.masterLevel : 0;
+    saveAll();
   });
-  const masterKnob = knob("Master", 0, 1, masterLevel, 0.01, (v) => {
-    masterLevel = v;
+  const masterKnob = knob("Master", 0, 1, mixState.masterLevel, 0.01, (v) => {
+    mixState.masterLevel = v;
     ensureNodes();
-    if (powerBtn.classList.contains("on")) engine.master!.gain.value = v;
+    if (mixState.power) engine.master!.gain.value = v;
+    syncMixerMaster(v);
+    saveAll();
   });
   help(masterKnob.root, "Master output level — the same gain the mixer's MASTER fader controls.");
   const fsBtn = btn("⛶ FULL SCREEN", "wa-btn-sm wa-fs-btn");
@@ -202,7 +208,10 @@ export async function initStudio(): Promise<void> {
 
   // ── Project / export ── (render.ts — Phase 0 split; built before pads so
   // the resample feature can take renderBuffer directly)
-  const { panel: exp, renderSel, renderBuffer } = buildProjectExport();
+  const { panel: exp, renderSel, renderBuffer } = buildProjectExport({
+    blank: blankProject,
+    demo: () => factorySong("MIDNIGHT ACID"),
+  });
   ctx.renderSel = renderSel;
   // Export panel re-housed into a modal (same <dialog> idiom as askText).
   const exportDialog = document.createElement("dialog");
@@ -229,7 +238,14 @@ export async function initStudio(): Promise<void> {
   ctx.paintSession = paintSession;
 
   // ── Mixer ── (mixerui.ts — Phase 0 split)
-  const mixer = buildMixer();
+  const mixer = buildMixer((value) => {
+    mixState.masterLevel = value;
+    masterKnob.set(value);
+    ensureNodes();
+    if (mixState.power) engine.master!.gain.value = value;
+    saveAll();
+  });
+  syncMixerMaster = mixer.setMasterLevel;
 
   // ── Modular device rack ── (fxrack.ts — Phase 0 split)
   const devicePanel = buildDeviceRack({ paintEventLane });
@@ -247,7 +263,7 @@ export async function initStudio(): Promise<void> {
   const layout = buildLayout({
     beat, mpcPanel, padSeqPanel, padGrid, pianoRoll, synthKeys,
     keysHeader: synth.keysHeader, synthPanel, xyPanel: synth.xyPanel, scope: synth.scope, chordPanel: synth.chordPanel,
-    sessionGrid, launchStatus, song, mixer, devicePanel,
+    sessionGrid, launchStatus, song, mixer: mixer.root, devicePanel,
     chop, scratchPanel, inspector, laneInspector,
     onSynthVisible: () => synth.waveRedraws().forEach((fn) => fn()),
     onModeChange: (label) => { lcdMode.textContent = label; },
@@ -302,6 +318,10 @@ export async function initStudio(): Promise<void> {
     swingIn.value = String(transport.swing);
     songBtn.textContent = transport.songMode ? "Arrange" : "Session";
     songBtn.classList.toggle("active", transport.songMode);
+    masterKnob.set(mixState.masterLevel);
+    powerBtn.classList.toggle("on", mixState.power);
+    powerBtn.setAttribute("aria-pressed", String(mixState.power));
+    mixer.syncAudio();
     sampleData.forEach((data, r) => { sampleBuffers[r] = null; if (data) void hydrateSample(r); });
   }
   // Exposed so library loads can apply a project in place instead of

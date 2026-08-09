@@ -1,11 +1,11 @@
 // Session view + per-track arrangement lanes — extracted verbatim from
 // index.ts (Phase 0 split). Cross-section wiring goes through ctx.
 import {
-  TRACKS, TRACK_LABELS, SCENE_LABELS, clip, transport, song as songState,
+  TRACKS, TRACK_LABELS, SCENE_LABELS, SCENES, STEPS, clip, transport, song as songState,
   allPats, synthLaneNotes, SYNTH_LANES, padEvents, arrangement,
 } from "./state";
 import type { TrackId, ArrangeBlock, AutomationRamp } from "./state";
-import { saveAll, projectState, applyProject, pendingProjectStore } from "./persistence";
+import { saveAll, projectState, applyProject } from "./persistence";
 import { el, btn, help, download, askText } from "./helpers";
 import { ctx, SCENE_COLORS } from "./ctx";
 
@@ -18,14 +18,24 @@ export interface SessionView {
   sessionGrid: HTMLElement;
 }
 
+const FACTORY_BASE = JSON.stringify(projectState(false));
+
+export function blankProject(): Record<string, unknown> {
+  const state = JSON.parse(FACTORY_BASE) as Record<string, unknown>;
+  state.title = "Untitled";
+  return state;
+}
+
 /** A complete demo project. Also seeds an empty first run — see index.ts. */
 export function factorySong(name: string): Record<string, unknown> {
-  const state = JSON.parse(JSON.stringify(projectState(false))) as Record<string, unknown> & {
+  const state = JSON.parse(FACTORY_BASE) as Record<string, unknown> & {
     pats: number[][][]; vels: number[][][]; synthLaneNotes: Record<string, Array<Array<Record<string, unknown>>>>;
-    arrangement: Record<string, ArrangeBlock[]>; bpm: number;
+    arrangement: Record<string, ArrangeBlock[]>; bpm: number; title: string; padEvents: Array<Array<Record<string, unknown>>>;
   };
-  state.pats = Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => Array(16).fill(0)));
-  state.vels = Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => Array(16).fill(96)));
+  state.title = name;
+  state.pats = Array.from({ length: SCENES }, () => Array.from({ length: 8 }, () => Array(STEPS).fill(0)));
+  state.vels = Array.from({ length: SCENES }, () => Array.from({ length: 8 }, () => Array(STEPS).fill(96)));
+  state.padEvents = Array.from({ length: SCENES }, () => []);
   const put = (scene: number, row: number, steps: number[]) => steps.forEach((step) => { state.pats[scene][row][step] = 1; });
   [0, 1, 2, 3].forEach((scene) => {
     put(scene, 0, name === "MIDNIGHT ACID" ? [0, 4, 8, 12] : [0, 6, 8, 14]);
@@ -33,7 +43,7 @@ export function factorySong(name: string): Record<string, unknown> {
     if (scene % 2) put(scene, 3, [7, 15]);
   });
   const note = (noteName: string, step: number, len = 1, accent = false, slide = false) => ({ note: noteName, step, len, vel: accent ? 116 : 94, accent, slide });
-  state.synthLaneNotes = { bass: Array.from({ length: 8 }, () => []), lead: Array.from({ length: 8 }, () => []), harmony: Array.from({ length: 8 }, () => []) };
+  state.synthLaneNotes = { bass: Array.from({ length: SCENES }, () => []), lead: Array.from({ length: SCENES }, () => []), harmony: Array.from({ length: SCENES }, () => []) };
   state.synthLaneNotes.bass[0] = [note("C3", 0, 2, true), note("C3", 3), note("D#3", 6, 1, false, true), note("G3", 10), note("A#2", 14)];
   state.synthLaneNotes.bass[1] = [note("F2", 0, 2, true), note("F2", 4), note("G#2", 8, 1, false, true), note("C3", 12)];
   state.synthLaneNotes.lead[2] = [note("C4", 0), note("D#4", 2), note("G4", 4, 2, true), note("A#4", 8), note("G4", 12, 2)];
@@ -47,6 +57,8 @@ export function factorySong(name: string): Record<string, unknown> {
 export function buildSession(): SessionView {
   const song = el("div", "wa-panel");
   const launchStatus = el("span", "wa-status", "Clips launch on the next bar");
+  const scenePosition = el("span", "wa-scene-position", "Scenes 1–16 of 16");
+  const statusRow = el("div", "wa-session-status"); statusRow.append(launchStatus, scenePosition);
   const sessionGrid = el("div", "wa-session");
   const sessionCells: HTMLButtonElement[][] = [];   // [scene][track]
   const sceneLaunchBtns: HTMLButtonElement[] = [];
@@ -55,10 +67,16 @@ export function buildSession(): SessionView {
     if (track === "pads") return padEvents[scene].length > 0;
     return SYNTH_LANES.some((lane) => synthLaneNotes[lane][scene].length > 0);
   }
+  function clipActivity(track: TrackId, scene: number): number {
+    if (track === "drums") return allPats[scene].reduce((total, row) => total + row.filter(Boolean).length, 0);
+    if (track === "pads") return padEvents[scene].length;
+    return SYNTH_LANES.reduce((total, lane) => total + synthLaneNotes[lane][scene].length, 0);
+  }
   function paintSession(): void {
     sessionCells.forEach((row, scene) => row.forEach((cell, ti) => {
       const track = TRACKS[ti];
       cell.classList.toggle("has", clipHasContent(track, scene));
+      cell.style.setProperty("--wa-activity", String(Math.min(1, clipActivity(track, scene) / 16)));
       cell.classList.toggle("playing", ctx.isPlaying() && clip.play[track] === scene);
       cell.classList.toggle("armed", !ctx.isPlaying() && clip.play[track] === scene);
       cell.classList.toggle("queued", clip.queued[track] === scene);
@@ -66,6 +84,14 @@ export function buildSession(): SessionView {
     }));
     sceneLaunchBtns.forEach((b, scene) => b.classList.toggle("active", clip.sel === scene));
   }
+  const paintScenePosition = (): void => {
+    if (sessionGrid.clientWidth <= 0 || sessionGrid.scrollWidth <= sessionGrid.clientWidth + 2) { scenePosition.textContent = "Scenes 1–16 of 16"; return; }
+    const start = Math.max(1, Math.min(SCENES, Math.floor(sessionGrid.scrollLeft / 52) + 1));
+    const visible = Math.max(1, Math.floor((sessionGrid.clientWidth - 76) / 52));
+    scenePosition.textContent = `Scenes ${start}–${Math.min(SCENES, start + visible - 1)} of ${SCENES}`;
+  };
+  sessionGrid.addEventListener("scroll", paintScenePosition, { passive: true });
+  new ResizeObserver(paintScenePosition).observe(sessionGrid);
   function launchClip(track: TrackId, scene: number | null): void {
     if (ctx.isPlaying()) {
       // Clicking an already-queued clip cancels the queue.
@@ -211,7 +237,17 @@ export function buildSession(): SessionView {
   const slug = (): string => songState.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "song";
   exportSongBtn.addEventListener("click", () => download(`vishamp-${slug()}.json`, new Blob([JSON.stringify({ format: "vishamp-song", version: 1, title: songState.title, song: projectState(false) }, null, 2)], { type: "application/json" })));
   importSongBtn.addEventListener("click", () => songInput.click());
-  songInput.addEventListener("change", async () => { const file = songInput.files?.[0]; if (!file) return; try { const parsed = JSON.parse(await file.text()) as { song?: Record<string, unknown> }; if (parsed.song?.pats) { await pendingProjectStore("put", parsed.song); location.reload(); } } catch { launchStatus.textContent = "Song file is invalid"; } songInput.value = ""; });
+  songInput.addEventListener("change", async () => {
+    const file = songInput.files?.[0]; if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text()) as { song?: Record<string, unknown> };
+      if (!parsed.song?.pats) throw new Error("Invalid song");
+      if (window.confirm(`Import "${file.name}"? It replaces everything currently in the studio.`)) {
+        ctx.checkpoint(); applyProject(parsed.song); ctx.refreshVisibleState(); saveAll(); launchStatus.textContent = `Imported ${file.name}`;
+      }
+    } catch { launchStatus.textContent = "Song file is invalid"; }
+    songInput.value = "";
+  });
   refreshSongs();
   songLibrary.append(el("span", "wa-lbl", "SONGS"), songSel, loadSongBtn, saveSongBtn, deleteSongBtn, exportSongBtn, importSongBtn, songInput);
 
@@ -219,7 +255,8 @@ export function buildSession(): SessionView {
   composer.append(composerHead, chain, automation, songLibrary); paintChain(); paintAutomation();
   const arrangeLanePaints: Array<() => void> = [paintChain];
   help(sessionGrid, "Each column is a track, each row a scene — launch single clips or whole scenes; changes land on the next bar so transitions stay in time.");
-  song.append(launchStatus, sessionGrid, composer);
+  song.append(statusRow, sessionGrid, composer);
+  requestAnimationFrame(paintScenePosition);
 
   return { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid };
 }

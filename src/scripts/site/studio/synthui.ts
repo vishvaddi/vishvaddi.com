@@ -572,12 +572,13 @@ export function buildSynth(): SynthUI {
   // alt-click were the only way in, and you had to hover a tooltip to learn
   // they existed. These arm the same KeyMods path; the modifiers still work
   // as the fast path for anyone who knows them.
-  const accentArm = btn("Accent", "wa-toggle wa-btn-sm");
-  const slideArm = btn("Slide", "wa-toggle wa-btn-sm");
+  const accentArm = btn("Arm Accent", "wa-toggle wa-btn-sm");
+  const slideArm = btn("Arm Slide", "wa-toggle wa-btn-sm");
   help(accentArm, "Arm accent — played notes hit harder and brighter. Shift-click a key does the same for one note.");
   help(slideArm, "Arm slide — played notes glide in from the previous pitch. Alt-click a key does the same for one note.");
-  accentArm.addEventListener("click", () => { armedMods.accent = !armedMods.accent; accentArm.classList.toggle("active", armedMods.accent); });
-  slideArm.addEventListener("click", () => { armedMods.slide = !armedMods.slide; slideArm.classList.toggle("active", armedMods.slide); });
+  accentArm.setAttribute("aria-pressed", "false"); slideArm.setAttribute("aria-pressed", "false");
+  accentArm.addEventListener("click", () => { armedMods.accent = !armedMods.accent; accentArm.classList.toggle("active", armedMods.accent); accentArm.setAttribute("aria-pressed", String(armedMods.accent)); });
+  slideArm.addEventListener("click", () => { armedMods.slide = !armedMods.slide; slideArm.classList.toggle("active", armedMods.slide); slideArm.setAttribute("aria-pressed", String(armedMods.slide)); });
 
   const keysHeader = el("div", "wa-export");
   keysHeader.append(el("span", "wa-lbl", "KEYS — click, or Z-row / Q-row on the keyboard (− / = shift octave)"), keysRecBtn, holdBtn, accentArm, slideArm, midiBtn, octaveLabel);
