@@ -20,15 +20,27 @@ try {
     const page = await context.newPage()
     const errors = []
     page.on('pageerror', error => errors.push(String(error)))
+    let pickerReference = null
     for (const route of routes) {
       await page.goto(BASE + route, { waitUntil: 'domcontentloaded' })
       const geometry = await page.evaluate(() => ({
         overflow: document.documentElement.scrollWidth - innerWidth,
         pickerHeight: document.querySelector('.site-picker')?.getBoundingClientRect().height ?? 0,
+        pickerLeft: document.querySelector('.site-picker')?.getBoundingClientRect().left ?? 0,
+        pickerWidth: document.querySelector('.site-picker')?.getBoundingClientRect().width ?? 0,
+        railLeft: document.querySelector('.site-rail')?.getBoundingClientRect().left ?? 0,
+        railRight: document.querySelector('.site-rail')?.getBoundingClientRect().right ?? 0,
+        toolLeft: document.querySelector('main > .blueprint')?.getBoundingClientRect().left ?? 0,
         h1Y: document.querySelector('h1')?.getBoundingClientRect().y ?? -1,
       }))
       check(`${label}: ${route} has no horizontal overflow`, geometry.overflow <= 1, String(geometry.overflow))
-      if (mobile) check(`${label}: ${route} tool picker stays compact`, geometry.pickerHeight <= 50, String(Math.round(geometry.pickerHeight)))
+      if (mobile) {
+        pickerReference ??= `${geometry.pickerLeft}/${geometry.pickerWidth}/${geometry.pickerHeight}`
+        check(`${label}: ${route} uses the same compact picker`, `${geometry.pickerLeft}/${geometry.pickerWidth}/${geometry.pickerHeight}` === pickerReference, pickerReference)
+      } else {
+        check(`${label}: ${route} anchors the rail left`, geometry.railLeft <= 24, String(geometry.railLeft))
+        check(`${label}: ${route} clears the rail`, geometry.toolLeft >= geometry.railRight + 24, `${geometry.toolLeft}/${geometry.railRight}`)
+      }
     }
     check(`${label}: route console is clean`, errors.length === 0, errors.slice(0, 2).join(' | '))
     await context.close()
@@ -43,6 +55,7 @@ try {
   check('navigation: search finds Site Records', await page.locator('.site-picker [data-site-tool-link]:visible').allTextContents().then(items => items.includes('Site Records')))
 
   await page.goto(`${BASE}/site/`, { waitUntil: 'domcontentloaded' })
+  check('hub: Quick start is removed', await page.getByText('Quick start', { exact: true }).count() === 0)
   await page.locator('#site-hub-search').fill('gantt')
   check('hub: task search finds Programme', await page.locator('[data-tool-item]:visible .t').allTextContents().then(items => items.includes('Programme Builder')))
 
@@ -55,6 +68,16 @@ try {
   await page.locator('[aria-label="Open fullscreen workspace"]').click()
   check('Lattice: fullscreen workspace activates', await page.evaluate(() => !!document.fullscreenElement || !!document.querySelector('.lat-app-mode')))
   await page.keyboard.press('Escape')
+
+  const firstCell = page.locator('.lat-cell').first()
+  await firstCell.click()
+  await page.keyboard.press('Control+Enter')
+  await page.keyboard.type('Child')
+  await page.keyboard.press('Control+Enter')
+  await page.keyboard.type('Grandchild')
+  check('Lattice: Ctrl+Enter nests to arbitrary depth', await page.locator('.lat-crumbs button').count() >= 3)
+  await page.keyboard.press('Alt+Enter')
+  check('Lattice: Alt+Enter adds an editable sibling', await page.locator('.lat-edit').count() === 1)
 
   await page.goto(`${BASE}/site/cut-list/`, { waitUntil: 'domcontentloaded' })
   check('Cut List 1D: default project optimises', await page.locator('.bars .bar').count() > 0)

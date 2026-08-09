@@ -4,7 +4,7 @@
 // import anything except the model here.
 import {
   type LatticeSheet, type LatticeGrid, type LatticeCell,
-  locate, gridAtPath, setText, insertSubgrid, removeSubgrid,
+  locate, pathTo, gridAtPath, setText, insertSubgrid, removeSubgrid,
   insertRow, deleteRow, insertCol, deleteCol, moveCell, rollupLabel,
   fromIndentedText, toIndentedText, fromTSV, toTSV, templateSheets, newSheet, latticeId,
   sortGrid, transposeGrid, flattenGrid, subtreeMatches, replaceAll, recalculate,
@@ -209,6 +209,46 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
     rectSel = null
     scheduleSave()
     drawEditor()
+  }
+
+  function zoomInto(cell: LatticeCell): void {
+    if (!sheet || !cell.grid) return
+    zoomPath = (pathTo(sheet.root, cell.id) ?? [cell]).map(item => item.id)
+    selectedId = cell.grid.rows[0]?.[0]?.id ?? null
+    lineSel = null
+    rectSel = null
+    drawEditor()
+  }
+
+  function editAfterDraw(cell: LatticeCell): void {
+    const cellDiv = el.querySelector<HTMLElement>(`.lat-cell[data-id="${cell.id}"]`)
+    if (cellDiv) startEdit(cell, cellDiv)
+  }
+
+  function addChild(parent: LatticeCell): void {
+    if (!sheet) return
+    snapshot()
+    if (!parent.grid) insertSubgrid(sheet.root, parent.id)
+    else insertRow(parent.grid, parent.grid.rows.length)
+    const childGrid = locate(sheet.root, parent.id)?.cell.grid
+    const child = childGrid?.rows[childGrid.rows.length - 1]?.[0]
+    if (!child) { undoStack.pop(); return }
+    zoomPath = (pathTo(sheet.root, parent.id) ?? [parent]).map(item => item.id)
+    selectedId = child.id
+    afterMutate()
+    editAfterDraw(child)
+  }
+
+  function addSibling(cell: LatticeCell): void {
+    if (!sheet) return
+    const loc = locate(sheet.root, cell.id)
+    if (!loc) return
+    snapshot()
+    insertRow(loc.grid, loc.row + 1)
+    const sibling = loc.grid.rows[loc.row + 1][loc.col]
+    selectedId = sibling.id
+    afterMutate()
+    editAfterDraw(sibling)
   }
 
   // ---- sheet list -------------------------------------------------------------
@@ -550,20 +590,23 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
     grow()
     ta.addEventListener('input', grow)
 
-    const commit = () => {
+    const commit = (after?: () => void) => {
       if (!editing) return
       editing = false
-      if (sheet && ta.value !== cell.text) {
+      const changed = !!sheet && ta.value !== cell.text
+      if (changed && sheet) {
         snapshot()
         setText(sheet.root, cell.id, ta.value)
-        afterMutate()
-      } else {
-        drawEditor()
       }
+      if (after) after()
+      else if (changed) afterMutate()
+      else drawEditor()
     }
-    ta.addEventListener('blur', commit)
+    ta.addEventListener('blur', () => commit())
     ta.addEventListener('keydown', (e) => {
       e.stopPropagation()
+      if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); commit(() => addChild(cell)); return }
+      if (e.key === 'Enter' && e.altKey) { e.preventDefault(); commit(() => addSibling(cell)); return }
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ta.blur() }
       if (e.key === 'Escape') { e.preventDefault(); editing = false; drawEditor() }
     })
@@ -895,8 +938,8 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
       }
       mkBtn(sel.cell.grid ? '▦ open' : '▦ nest', () => {
         if (!sheet) return
-        if (sel.cell.grid) { zoomPath = [...zoomPath, sid]; selectedId = null; drawEditor() }
-        else { snapshot(); insertSubgrid(sheet.root, sid); zoomPath = [...zoomPath, sid]; selectedId = null; afterMutate() }
+        if (sel.cell.grid) zoomInto(sel.cell)
+        else { snapshot(); insertSubgrid(sheet.root, sid); afterMutate(); zoomInto(locate(sheet.root, sid)!.cell) }
       })
       if (sel.cell.grid) {
         mkBtn(sel.cell.rollup ? `agg: ${sel.cell.rollup}` : 'agg: off', () => {
@@ -927,6 +970,8 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
           afterMutate()
         }, 'Toggle done')
       }
+      mkBtn('＋child', () => addChild(sel.cell), 'Add nested child (Ctrl+Enter)')
+      mkBtn('＋sibling', () => addSibling(sel.cell), 'Add sibling row (Alt+Enter)')
       mkBtn('＋row', () => { snapshot(); insertRow(sel.grid, sel.row + 1); afterMutate() }, 'Add row below')
       mkBtn('＋col', () => { snapshot(); insertCol(sel.grid, sel.col + 1); afterMutate() }, 'Add column right')
       mkBtn('−row', () => { snapshot(); deleteRow(sel.grid, sel.row); selectedId = null; afterMutate() }, 'Delete row')
@@ -1006,8 +1051,8 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
       // The keyboard cursor model is noise on a phone — the host's help panel
       // carries the full reference.
       hint.textContent = window.matchMedia('(max-width: 760px)').matches
-        ? 'Tap a cell to select, tap again to edit. ▦ nests a grid inside a cell · press and hold to select a block · pinch to zoom in and out.'
-        : 'Arrows walk cells AND the gaps between them — type on a gap to insert a row/col. Insert dives into a cell (creating a grid), PageUp climbs out. Shift+arrows select a block · Ctrl+arrows move a cell · =12*85 evaluates · [[Sheet]] links'
+        ? 'Tap a cell, then ＋child to nest or ＋sibling to extend this level. Tap again to edit · press and hold to select a block · pinch to zoom.'
+        : 'Ctrl+Enter adds a nested child · Alt+Enter adds a sibling · repeat Ctrl+Enter for any depth. Arrows walk cells and gaps · Insert dives in · PageUp climbs out.'
       act.appendChild(hint)
     }
 
@@ -1308,7 +1353,6 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
         if (zoomPath.length) { zoomPath = zoomPath.slice(0, -1); selectedId = null; drawEditor() }
         return
       }
-
       // rect selection + arrows: plain arrow collapses to the moving corner
       if (rectSel && e.key.startsWith('Arrow') && !e.shiftKey && !e.ctrlKey) {
         e.preventDefault()
@@ -1333,6 +1377,9 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
       const cur = selectedId ? locate(grid, selectedId) : null
       if (!cur) return
       const curOwner = ownerOf(grid, cur.grid)
+
+      if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); addChild(cur.cell); return }
+      if (e.altKey && e.key === 'Enter') { e.preventDefault(); addSibling(cur.cell); return }
 
       if (e.ctrlKey && e.key.startsWith('Arrow')) {
         // Ctrl+arrows move the cell itself (TreeSheets)
@@ -1391,7 +1438,7 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
             scheduleSave()
           }
           const sub = cur.cell.grid ?? locate(sheet.root, cur.cell.id)?.cell.grid
-          zoomPath = [...zoomPath, cur.cell.id]
+          zoomPath = (pathTo(sheet.root, cur.cell.id) ?? [cur.cell]).map(item => item.id)
           selectedId = sub?.rows[0]?.[0]?.id ?? null
           lineSel = null
           drawEditor()

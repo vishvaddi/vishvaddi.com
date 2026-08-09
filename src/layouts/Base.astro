@@ -52,6 +52,7 @@ const isActive = (href: string) => {
 };
 const moreActive = navMore.some(([href]) => isActive(href));
 const showRail = siteNav && here !== "/site";
+const workspacePage = workspace || showRail;
 
 const fullTitle = title === "Vish Vaddi" ? title : `${title} · Vish Vaddi`;
 const canonical = new URL(Astro.url.pathname, Astro.site);
@@ -94,7 +95,7 @@ const updatedFmt = updatedDate
     <meta name="twitter:image" content={ogImageUrl} />
     <title>{fullTitle}</title>
   </head>
-  <body class:list={[immersive && "immersive-page", workspace && "workspace-page"]}>
+  <body class:list={[immersive && "immersive-page", workspacePage && "workspace-page"]}>
     {!immersive && <header>
       <nav class="topnav" aria-label="Primary">
         <a class="brand" href="/"><strong>Vish Vaddi</strong></a>

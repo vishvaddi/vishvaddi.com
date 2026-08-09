@@ -87,6 +87,7 @@ body {
     max-width: 38rem;
     margin-inline: auto;
   }
+  body.workspace-page > main > .blueprint { margin-left: 14rem; }
 }
 
 h1, h2, h3, h4 {

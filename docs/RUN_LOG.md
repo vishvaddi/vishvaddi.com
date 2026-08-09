@@ -1,5 +1,13 @@
 # Run Log
 
+## 2026-08-09 — Unified tool navigation and deep Lattice nesting
+
+- Made the edge-anchored desktop workspace automatic for every actual site tool rather than a Programme-only opt-in; all 19 tested routes place the rail at x=24 and content at x=248.
+- Kept one identical 342×46 px compact tool picker across all tested phone routes and removed the duplicated Quick start group from the tool hub.
+- Changed new Lattice subgrids from 2×2 to TreeSheets-style 1×1 cells and fixed zoom paths for cells nested below the current display root.
+- Added `Ctrl+Enter` child creation, repeated arbitrary-depth nesting, `Alt+Enter` sibling creation, matching touch controls and updated help text.
+- Expanded browser coverage for shared desktop/mobile navigation geometry, removal of Quick start, three-level keyboard nesting and sibling editing; verified type checks, the production build, all site tools and Programme responsiveness.
+
 ## 2026-08-09 — Programme desktop workspace
 
 - Replaced the centred Programme breakout calculation with an explicit wide-workspace layout mode while preserving readable-width site chrome and prose.

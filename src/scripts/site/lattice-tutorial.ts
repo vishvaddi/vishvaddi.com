@@ -38,7 +38,7 @@ interface Step {
 interface HelpTopic { section: string; title: string; text: string; keys?: string }
 
 const HELP_TOPICS: HelpTopic[] = [
-  { section: 'Basics', title: 'Grids inside grids', keys: 'nest nesting subgrid hierarchy wbs breakdown zoom', text: 'Every cell can hold another whole grid. A job becomes trades, a trade becomes items. The ▦ chip on a cell means it contains a grid — click it to zoom in, and use the breadcrumbs at the top to climb back out.' },
+  { section: 'Basics', title: 'Grids inside grids', keys: 'nest nesting subgrid hierarchy wbs breakdown zoom child sibling', text: 'Every cell can hold another whole grid, to any depth. Press Ctrl+Enter to add and enter a child, then repeat it on that child to keep nesting. Alt+Enter adds a sibling at the current level. The ▦ chip and breadcrumbs zoom through the same hierarchy.' },
   { section: 'Basics', title: 'Selecting and editing', text: 'Click a cell to select it, click again to edit. Escape cancels an edit, Enter commits it, Shift+Enter adds a line break inside the cell.' },
   { section: 'Basics', title: 'Rows, columns and gaps', text: 'Arrow keys walk the cells AND the gaps between them. Land on a gap and start typing to insert a row or column there. On a gap, Backspace or Delete removes the row/column beside it.' },
   { section: 'Estimating', title: 'Roll-ups', keys: 'rollup rollups sum total subtotal aggregate estimate cost aud', text: 'Select a cell that contains a grid and press agg to cycle sum, AUD cost, count and %-done. For sum or cost, choose the exact source column (for example Total) so quantities and rates are never double-counted.' },
@@ -63,6 +63,8 @@ const SHORTCUTS: [string, string][] = [
   ['Arrows', 'Walk cells and the gaps between them'],
   ['Type on a gap', 'Insert a row or column there'],
   ['Enter', 'Edit the selected cell'],
+  ['Ctrl+Enter', 'Add and enter a nested child'],
+  ['Alt+Enter', 'Add a sibling at this level'],
   ['Insert / PageDown', 'Dive into a cell (creates a grid)'],
   ['PageUp', 'Climb out to the parent grid'],
   ['Tab / Shift+Tab', 'Next / previous cell'],

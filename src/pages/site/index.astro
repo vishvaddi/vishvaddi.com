@@ -2,8 +2,6 @@
 import Base from "../../layouts/Base.astro";
 import "../../styles/site.css";
 import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../../data/site-tools";
-
-const quickTools = SITE_TOOLS.filter((tool) => tool.quick);
 ---
 
 <Base
@@ -23,21 +21,6 @@ const quickTools = SITE_TOOLS.filter((tool) => tool.quick);
     <label class="hub-search-label" for="site-hub-search">Find the right tool</label>
     <input id="site-hub-search" class="hub-search" type="search" placeholder="Try ‘convert’, ‘programme’, ‘variation’…" autocomplete="off" />
     <p id="site-search-empty" class="note-foot" hidden>No matching tools.</p>
-
-    <section class="site-tool-section" data-tool-group>
-      <h2 class="site-group-title">Quick start</h2>
-      <ul class="tool-grid tool-grid-quick">
-        {quickTools.map((tool) => (
-          <li data-tool-item data-search={`${tool.title} ${tool.aliases}`}>
-            <a class="tool-card" href={tool.href} data-tool={tool.href}>
-              <span class="tool-ico" aria-hidden="true">{tool.icon}</span>
-              <span class="t">{tool.title}</span>
-              <span class="d">{tool.description}</span>
-            </a>
-          </li>
-        ))}
-      </ul>
-    </section>
 
     <section id="site-recent" class="site-recent" hidden>
       <h2 class="site-group-title">Recently used</h2>

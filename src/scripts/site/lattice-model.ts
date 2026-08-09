@@ -229,7 +229,7 @@ export function recalculate(grid: LatticeGrid): void {
   }
 }
 
-export function insertSubgrid(root: LatticeGrid, id: string, cols = 2, rows = 2): void {
+export function insertSubgrid(root: LatticeGrid, id: string, cols = 1, rows = 1): void {
   const loc = locate(root, id)
   if (loc && !loc.cell.grid) loc.cell.grid = newGrid(cols, rows)
 }

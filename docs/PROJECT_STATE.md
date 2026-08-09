@@ -1,6 +1,6 @@
 # Project State
 
-_Last updated: 2026-08-09 — Programme Builder now uses a true desktop sidebar workspace._
+_Last updated: 2026-08-09 — Site tools now share one responsive navigation shell; Lattice supports shortcut-first deep nesting._
 
 ## Current Position
 
@@ -9,6 +9,8 @@ _Last updated: 2026-08-09 — Programme Builder now uses a true desktop sidebar 
 - Studio opens with a playable `MIDNIGHT ACID` demo and one non-modal hint. New blank/demo replacement, imported projects, songs and patches apply in place with confirmation; arrangement, tempo, title and mixer state participate in persistence/history rather than forcing a reload.
 - Studio source and browser suites cover first-run state, core edit/undo/autosave/playback/export, mixer synchronisation/persistence, in-place project replacement, the five modes, three synth lanes, Signal Garden keyboard control, arrangement automation, viewport fit, mobile control dimensions and tutorial stacking.
 - `/site/programme/` uses a true desktop workspace: the searchable tools rail is anchored 24 px from the viewport edge and the editor fills all remaining width. At 1,440 px the editor spans 1,168 px from x=248 to x=1,416; Android landscape retains an 812 px editor in an 844 px viewport. Focused browser coverage checks rail position, full workspace use, overflow, fullscreen, tutorial restoration and chart-first mode.
+- Every `/site/*` tool page now uses that same desktop workspace shell automatically: a 200 px searchable rail at x=24 and content beginning at x=248. At 390 px every tool uses the same 342×46 px compact picker at x=24. The hub no longer duplicates priority tools in a Quick start section.
+- Lattice retains its recursive saved-data format while making unlimited-depth nesting keyboard-first. Nested grids now start at 1×1; `Ctrl+Enter` adds and enters a child, repeated presses keep nesting, and `Alt+Enter` adds an editable sibling. Matching touch buttons and searchable help expose the same workflow.
 - On phones and short Android landscape, DRUMS preserves full-sized sequencing cells in a horizontal instrument surface, PADS presents a separated 4×4 performance deck, MIX uses readable channel strips and CLIPS exposes the visible scene range.
 - The site runs on Astro 7 with zero known npm vulnerabilities and a global type check with zero errors. Independently built game snapshots under `public/games/` are excluded from the Astro source scan.
 - `/games/deep-swarm/` now exposes deterministic diagnostics and explicit loss causes, with automated boundary coverage through 6,000 m.
