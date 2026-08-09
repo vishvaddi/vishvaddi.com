@@ -7,7 +7,7 @@ import {
   locate, gridAtPath, setText, insertSubgrid, removeSubgrid,
   insertRow, deleteRow, insertCol, deleteCol, moveCell, rollupLabel,
   fromIndentedText, toIndentedText, fromTSV, toTSV, templateSheets, newSheet, latticeId,
-  sortGrid, transposeGrid, flattenGrid, subtreeMatches, replaceAll,
+  sortGrid, transposeGrid, flattenGrid, subtreeMatches, replaceAll, recalculate,
 } from './lattice-model'
 
 export interface LatticeAdapter {
@@ -21,6 +21,13 @@ export interface LatticeAdapter {
 
 const COLLAPSE_DEPTH = 2
 const UNDO_CAP = 50
+
+function displayNumber(cell: LatticeCell): string {
+  const value = cell.num ?? 0
+  if (cell.style?.format === 'currency') return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(value)
+  if (cell.style?.format === 'percent') return `${+(value * 100).toFixed(2)}%`
+  return String(value)
+}
 
 // selected grid line: the grid it belongs to (via owner cell id or root),
 // axis, and boundary index (row line i sits between rows i-1 and i).
@@ -121,6 +128,23 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
   let mapMode = false
   let searchQ = ''
   let filterOn = false
+  const workspace = el.closest<HTMLElement>('.lattice') ?? el
+
+  const appMode = () => document.fullscreenElement === workspace || workspace.classList.contains('lat-app-mode')
+  async function toggleAppMode(): Promise<void> {
+    if (document.fullscreenElement === workspace) await document.exitFullscreen()
+    else if (workspace.classList.contains('lat-app-mode')) workspace.classList.remove('lat-app-mode')
+    else {
+      try { await workspace.requestFullscreen() }
+      catch { workspace.classList.add('lat-app-mode') }
+    }
+    document.body.classList.toggle('lat-app-open', appMode())
+    drawEditor()
+  }
+  document.addEventListener('fullscreenchange', () => {
+    document.body.classList.toggle('lat-app-open', appMode())
+    if (sheet) drawEditor()
+  })
 
   const resolveGrid = (owner: string | null, root: LatticeGrid): LatticeGrid | null =>
     owner === null ? root : (locate(root, owner)?.cell.grid ?? null)
@@ -268,6 +292,7 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
 
   function openSheet(s: LatticeSheet) {
     sheet = s
+    recalculate(sheet.root)
     zoomPath = []
     selectedId = null
     lineSel = null
@@ -358,7 +383,7 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
       const t = document.createElement('span')
       t.className = 'lat-text'
       if (cell.text.startsWith('=') && typeof cell.num === 'number') {
-        t.textContent = String(cell.num)
+        t.textContent = displayNumber(cell)
         const f = document.createElement('span')
         f.className = 'lat-formula'
         f.textContent = 'ƒ'
@@ -656,6 +681,11 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
     exportB.className = 'lat-tb'
     exportB.setAttribute('aria-label', 'Export')
     exportB.textContent = '⧉'
+    const fullB = document.createElement('button')
+    fullB.className = 'lat-tb'
+    fullB.setAttribute('aria-label', appMode() ? 'Exit fullscreen workspace' : 'Open fullscreen workspace')
+    fullB.textContent = appMode() ? '⤢ exit' : '⛶ full'
+    fullB.addEventListener('click', () => void toggleAppMode())
     const mapB = document.createElement('button')
     mapB.className = 'lat-tb'
     mapB.setAttribute('aria-label', 'Toggle mind-map view')
@@ -684,7 +714,7 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
     filterB.textContent = filterOn ? '▼ on' : '▼'
     filterB.title = 'Show only rows with a match'
     filterB.addEventListener('click', () => { filterOn = !filterOn; drawEditor() })
-    bar.append(back, title, spacer, search, filterB, mapB, undoB, redoB, exportB)
+    bar.append(back, title, spacer, search, filterB, mapB, undoB, redoB, exportB, fullB)
     el.appendChild(bar)
 
     back.addEventListener('click', async () => {
@@ -872,11 +902,22 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
         mkBtn(sel.cell.rollup ? `agg: ${sel.cell.rollup}` : 'agg: off', () => {
           if (!sheet) return
           snapshot()
-          const order: (LatticeCell['rollup'] | undefined)[] = [undefined, 'sum', 'count', 'done-pct']
+          const order: (LatticeCell['rollup'] | undefined)[] = [undefined, 'sum', 'cost', 'count', 'done-pct']
           const next = order[(order.indexOf(sel.cell.rollup) + 1) % order.length]
           if (next) sel.cell.rollup = next; else delete sel.cell.rollup
           afterMutate()
         })
+        if (sel.cell.rollup === 'sum' || sel.cell.rollup === 'cost') {
+          const label = sel.cell.rollupCol === undefined ? 'sum: all columns' : `sum: column ${String.fromCharCode(65 + sel.cell.rollupCol)}`
+          mkBtn(label, () => {
+            snapshot()
+            const current = sel.cell.rollupCol
+            if (current === undefined) sel.cell.rollupCol = 0
+            else if (current + 1 >= sel.cell.grid!.cols) delete sel.cell.rollupCol
+            else sel.cell.rollupCol = current + 1
+            afterMutate()
+          }, 'Choose the roll-up column')
+        }
       } else {
         mkBtn(sel.cell.done ? '☑' : '☐', () => {
           if (!sheet) return
@@ -916,6 +957,16 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
         afterMutate()
       }, 'Cycle cell colour')
       if (typeof sel.cell.style?.fill === 'number') fillBtn.style.background = FILLS[sel.cell.style.fill % FILLS.length]
+      mkBtn(sel.cell.style?.format ? `format: ${sel.cell.style.format}` : 'format: auto', () => {
+        snapshot()
+        const formats: (NonNullable<LatticeCell['style']>['format'] | undefined)[] = [undefined, 'number', 'currency', 'percent']
+        const next = formats[(formats.indexOf(sel.cell.style?.format) + 1) % formats.length]
+        const style = { ...sel.cell.style }
+        if (next) style.format = next
+        else delete style.format
+        sel.cell.style = style
+        afterMutate()
+      }, 'Cycle number format')
       mkBtn(sel.cell.tag ? `#${sel.cell.tag}` : '#tag', () => {
         const existingTag = act.querySelector('#lat-tag-edit')
         if (existingTag) { existingTag.remove(); return }
@@ -1242,6 +1293,12 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
       }
       if (e.key === 'Escape') {
         if (rectSel || selectedId) { e.preventDefault(); rectSel = null; selectedId = null; drawEditor() }
+        else if (workspace.classList.contains('lat-app-mode')) {
+          e.preventDefault()
+          workspace.classList.remove('lat-app-mode')
+          document.body.classList.remove('lat-app-open')
+          drawEditor()
+        }
         return
       }
       if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); return }

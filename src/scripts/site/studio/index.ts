@@ -76,6 +76,10 @@ export async function initStudio(): Promise<void> {
 
   const win = el("div", "wa-win");
   const titleBar = el("div", "wa-title");
+  const homeLink = el("a", "wa-title-text", "VISHVADDI / STUDIO") as HTMLAnchorElement;
+  homeLink.href = "/";
+  homeLink.setAttribute("aria-label", "Exit Studio and return home");
+  help(homeLink, "Return to vishvaddi.com.");
   const projectName = document.createElement("input");
   // The track title now lives in the project itself (v13), so it travels with
   // saved songs and exported files instead of sitting in a stray local key.
@@ -126,7 +130,7 @@ export async function initStudio(): Promise<void> {
     applyDensity();
   });
   help(densityBtn, "Switch between a space-efficient workstation and larger, more relaxed controls. This preference is remembered.");
-  titleBar.append(el("span", "wa-title-text", "VISHVADDI / STUDIO"), projectName, el("span", "wa-title-dots"), densityBtn, fsBtn, powerBtn, masterKnob.root);
+  titleBar.append(homeLink, projectName, el("span", "wa-title-dots"), densityBtn, fsBtn, powerBtn, masterKnob.root);
   const lcd = el("div", "wa-lcd");
   const lcdBpm = el("span", "wa-lcd-seg", `${transport.bpm} BPM`);
   const lcdState = el("span", "wa-lcd-seg", "■ STOP");

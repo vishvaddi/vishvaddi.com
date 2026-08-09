@@ -8,7 +8,7 @@
 import { loadAll, remove } from './lattice'
 
 const SEEN_KEY = 'vv_lattice_tutorial_seen'
-const WBS_TEMPLATE = 'Trade breakdown (WBS)'
+const WBS_TEMPLATE = 'Trade estimate (WBS)'
 
 function el(tag: string, cls?: string, text?: string): HTMLElement {
   const n = document.createElement(tag)
@@ -41,8 +41,10 @@ const HELP_TOPICS: HelpTopic[] = [
   { section: 'Basics', title: 'Grids inside grids', keys: 'nest nesting subgrid hierarchy wbs breakdown zoom', text: 'Every cell can hold another whole grid. A job becomes trades, a trade becomes items. The ▦ chip on a cell means it contains a grid — click it to zoom in, and use the breadcrumbs at the top to climb back out.' },
   { section: 'Basics', title: 'Selecting and editing', text: 'Click a cell to select it, click again to edit. Escape cancels an edit, Enter commits it, Shift+Enter adds a line break inside the cell.' },
   { section: 'Basics', title: 'Rows, columns and gaps', text: 'Arrow keys walk the cells AND the gaps between them. Land on a gap and start typing to insert a row or column there. On a gap, Backspace or Delete removes the row/column beside it.' },
-  { section: 'Estimating', title: 'Roll-ups', keys: 'rollup rollups sum total subtotal aggregate estimate', text: 'Select a cell that contains a grid and press the agg button to cycle sum (Σ), count (#) and %-done. The total appears in the cell corner and updates as the numbers below it change. Sums add every numeric cell in the subtree, so keep amounts in one column to avoid double-counting.' },
-  { section: 'Estimating', title: 'Maths in a cell', keys: 'formula calculate equals arithmetic percentage', text: 'Start a cell with = to evaluate it: =40*95 shows 3800 with a small ƒ marker. Percentages work too (=1200*10%). There are no cell references by design — the nesting is the structure.' },
+  { section: 'Estimating', title: 'Roll-ups', keys: 'rollup rollups sum total subtotal aggregate estimate cost aud', text: 'Select a cell that contains a grid and press agg to cycle sum, AUD cost, count and %-done. For sum or cost, choose the exact source column (for example Total) so quantities and rates are never double-counted.' },
+  { section: 'Estimating', title: 'Maths in a cell', keys: 'formula calculate equals arithmetic percentage a1 sum avg reference', text: 'Start with = for safe arithmetic. Use A1 references inside the current grid: =B2*D2 calculates quantity × rate, while =SUM(E2:E20) and =AVG(D2:D20) work across a range. Formulas recalculate when referenced cells change.' },
+  { section: 'Estimating', title: 'Number formats', keys: 'currency aud dollar percentage display', text: 'Select a numeric cell and use format to cycle automatic, number, AUD currency and percentage display. Formatting changes presentation only; the stored number and calculations stay precise.' },
+  { section: 'Estimating', title: 'Estimator templates', keys: 'scope comparison procurement register trade wbs quote levelling', text: 'Trade estimate includes live quantity × rate totals and cost roll-ups. Scope comparison levels inclusions and adjusted quotes. Procurement register tracks package ownership, required dates, lead time and risk.' },
   { section: 'Estimating', title: 'Paste from a spreadsheet', keys: 'excel csv tsv import spreadsheet clipboard', text: 'Copy a range out of Excel and paste it onto a selected cell — the tab-separated block becomes a nested grid keeping its shape. An indented list pastes the same way, one level of nesting per indent.' },
   { section: 'Notes', title: 'Markdown in cells', keys: 'bold italic code strikethrough formatting', text: 'Cells render **bold**, *italic*, `code`, ~~strikethrough~~ and [text](https://example.com) links inline. Only http and https links are clickable.' },
   { section: 'Notes', title: 'Checkboxes', keys: 'task todo tick done percent complete', text: 'Start a cell with "- [ ] " or "[ ] " to get a tickable checkbox. Ticking it also marks the cell done, so a %-done roll-up on the parent stays honest.' },
@@ -51,6 +53,7 @@ const HELP_TOPICS: HelpTopic[] = [
   { section: 'Getting around', title: 'Search and filter', text: 'The find box highlights matching cells anywhere in the sheet. The ▼ button filters the view down to top-level rows that contain a match.' },
   { section: 'Getting around', title: 'Mind-map view', text: 'The 🗺 map button redraws the same data as a node-link tree — useful for seeing the shape of a breakdown. It is read-only; click a node to select that cell, then switch back to the grid to edit it.' },
   { section: 'Getting around', title: 'Zooming', text: 'Zoom into a nested grid with the ▦ chip, Insert, or Ctrl+scroll. PageUp or the breadcrumbs climb back out. On a touch screen, pinch out to zoom into the cell under your fingers and pinch in to climb out.' },
+  { section: 'Getting around', title: 'Fullscreen workspace', keys: 'full screen mobile desktop focus app', text: 'Press ⛶ full to give the sheet the whole desktop or phone viewport. The toolbar remains sticky while you move through a large estimate; press the button again or Escape to leave.' },
   { section: 'Data', title: 'Export and import', keys: 'json download backup save outline tsv csv', text: 'The ⧉ button copies the current grid as an indented outline or as TSV for a spreadsheet, and downloads the whole sheet as JSON. Import JSON brings a sheet back in as a copy.' },
   { section: 'Data', title: 'Where your data lives', text: 'Everything stays in this browser only — nothing is uploaded and there is no account. Clearing site data clears your sheets, so download the JSON for anything you want to keep.' },
   { section: 'Data', title: 'Grid operations', text: 'The ⧉ menu also sorts rows by the selected cell’s column, transposes the grid, flattens a hierarchy into an outline, and does find-and-replace across the whole sheet when a search is active.' },
@@ -150,12 +153,12 @@ export function createLatticeTutorial(root: HTMLElement, helpBtn: HTMLElement): 
     {
       state: 'list', find: () => q('.lat-tpl-wrap'),
       title: 'Start from a template',
-      text: 'Six starting points. Trade breakdown (WBS) is the estimating one — trades down the left, items nested inside each. Tender programme tracks stages with a %-complete roll-up.',
+      text: 'Start with a live trade estimate, scope comparison or procurement register, or use a general planning template. Each is ordinary Lattice data you can reshape.',
     },
     {
       state: 'list', find: () => q('.lat-card'),
       title: 'Your sheets live here',
-      text: 'Every sheet you make is listed here with its size and when you last touched it. Next we will open a Trade breakdown so there is something real to look at.',
+      text: 'Every sheet you make is listed here with its size and when you last touched it. Next we will open a Trade estimate so there is something real to inspect.',
     },
     {
       state: 'editor', find: nestedCell,
@@ -165,7 +168,7 @@ export function createLatticeTutorial(root: HTMLElement, helpBtn: HTMLElement): 
     {
       state: 'editor', find: () => ownerCellOf('.lat-rollup'),
       title: 'Roll-ups do the adding',
-      text: 'The Σ in the corner totals every number nested beneath this cell, and updates as you type. Select a cell that holds a grid and press agg to cycle sum, count and %-done. This is what makes it an estimating tool rather than an outliner.',
+      text: 'The AUD value in the corner totals only the Total column beneath this cell and updates as quantity or rate changes. Select a nested cell to change its aggregation type or source column.',
     },
     {
       state: 'editor', find: innerLeaf,
@@ -315,14 +318,9 @@ export function createLatticeTutorial(root: HTMLElement, helpBtn: HTMLElement): 
   shade.addEventListener('click', () => void close())
   browseBtn.addEventListener('click', openHelp)
   tourBtn.addEventListener('click', () => void showStep(0))
-  helpBtn.addEventListener('click', () => {
-    if (localStorage.getItem(SEEN_KEY)) openHelp()
-    else void showStep(0)
-  })
+  helpBtn.addEventListener('click', openHelp)
   document.addEventListener('keydown', (e) => {
     if (!overlay.hidden && e.key === 'Escape') { e.preventDefault(); void close() }
   })
 
-  // First-timers get the tour once, unprompted.
-  if (!localStorage.getItem(SEEN_KEY)) void showStep(0)
 }

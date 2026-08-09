@@ -16,16 +16,20 @@ import "../../styles/site.css";
       <a href="/site/sheet" class="active">Sheet · 2D</a>
     </div>
     <p>
-      Nest rectangular parts onto sheets (ply, MDF, melamine, glass) to waste the
-      least material. Shelf/guillotine layout with optional grain-free rotation —
-      easy to cut. All in millimetres, all in your browser.
+      Nest rectangular parts onto multiple sheet sizes and materials. Grain,
+      edge banding, stock limits, trim, kerf and cost stay attached to the cut
+      plan. Four packing orders are compared locally; nothing is uploaded.
     </p>
 
     <form id="form" autocomplete="off" novalidate>
+      <div class="field"><label for="project">Project / cut list name</label><input type="text" id="project" maxlength="80" value="Joinery cut list" /></div>
+      <h2 style="font-size:1rem;margin-top:1.5rem;">Available sheet stock</h2>
+      <div id="stock-rows"></div>
+      <div class="btn-row no-print"><button type="button" class="btn btn-ghost btn-sm" id="add-stock">+ Add stock size</button></div>
       <div class="calc-fields">
-        <div class="field"><label for="sw">Sheet width (mm)</label><input type="number" id="sw" min="1" step="1" inputmode="numeric" /></div>
-        <div class="field"><label for="sh">Sheet height (mm)</label><input type="number" id="sh" min="1" step="1" inputmode="numeric" /></div>
         <div class="field"><label for="kerf">Saw kerf (mm)</label><input type="number" id="kerf" min="0" step="0.5" inputmode="decimal" /></div>
+        <div class="field"><label for="trim">Edge trim (mm)</label><input type="number" id="trim" min="0" step="1" inputmode="decimal" /></div>
+        <div class="field"><label for="strategy">Optimisation priority</label><select id="strategy"><option value="balanced">Balanced</option><option value="fewest-sheets">Fewest sheets</option><option value="least-waste">Least waste</option><option value="fast">Fast draft</option></select></div>
         <div class="field" style="justify-content:end;"><label style="display:flex;align-items:center;gap:0.4rem;"><input type="checkbox" id="rot" checked /> Allow rotation</label></div>
       </div>
 
@@ -38,6 +42,9 @@ import "../../styles/site.css";
 
     <div id="actions" class="btn-row no-print" hidden>
       <button type="button" class="btn" id="save-pdf">Save as PDF</button>
+      <button type="button" class="btn btn-ghost" id="save-project">Export project</button>
+      <button type="button" class="btn btn-ghost" id="load-project">Import project</button>
+      <button type="button" class="btn btn-ghost" id="export-csv">Export CSV</button>
       <button type="button" class="btn btn-ghost" id="copy">Copy share link</button>
       <span id="copied" style="align-self:center;font-size:0.85rem;color:var(--muted)" hidden>Link copied ✓</span>
     </div>
@@ -46,15 +53,17 @@ import "../../styles/site.css";
   </div>
 
   <script>
-    import { pack2d, type Part2D } from "../../scripts/site/binpack2d";
+    import { optimise2d, type Part2D, type Stock2D, type Pack2DOptions } from "../../scripts/site/binpack2d";
     import { auFmt } from "../../scripts/site/calc";
 
     const NS = "http://www.w3.org/2000/svg";
     const q = <T extends Element>(s: string, r: ParentNode = document) => r.querySelector(s) as T | null;
     const rowsEl = q<HTMLDivElement>("#rows")!;
-    const swEl = q<HTMLInputElement>("#sw")!;
-    const shEl = q<HTMLInputElement>("#sh")!;
+    const stockRowsEl = q<HTMLDivElement>("#stock-rows")!;
+    const projectEl = q<HTMLInputElement>("#project")!;
     const kerfEl = q<HTMLInputElement>("#kerf")!;
+    const trimEl = q<HTMLInputElement>("#trim")!;
+    const strategyEl = q<HTMLSelectElement>("#strategy")!;
     const rotEl = q<HTMLInputElement>("#rot")!;
     const out = q<HTMLDivElement>("#out")!;
     const actions = q<HTMLDivElement>("#actions")!;
@@ -62,23 +71,56 @@ import "../../styles/site.css";
     const num = (v: string) => { const n = parseFloat(v); return Number.isFinite(n) && n >= 0 ? n : 0; };
     const int = (v: string) => { const n = Math.floor(parseFloat(v)); return Number.isFinite(n) && n > 0 ? n : 0; };
 
-    function addRow(name = "", w = "", h = "", qty = "1") {
+    function addStock(name = "Sheet", w = "2400", h = "1200", qty = "0", material = "", cost = "") {
+      const row = document.createElement("div");
+      row.className = "row-grid sheet-stock-row";
+      row.innerHTML =
+        '<div class="field"><label>Stock name</label><input type="text" class="s-name" maxlength="40"></div>' +
+        '<div class="field"><label>Width</label><input type="number" class="s-w" min="1" inputmode="numeric"></div>' +
+        '<div class="field"><label>Height</label><input type="number" class="s-h" min="1" inputmode="numeric"></div>' +
+        '<div class="field"><label>Qty <small>(0 = unlimited)</small></label><input type="number" class="s-q" min="0" inputmode="numeric"></div>' +
+        '<div class="field"><label>Material</label><input type="text" class="s-mat" placeholder="18 mm white MDF"></div>' +
+        '<div class="field"><label>Cost / sheet</label><input type="number" class="s-cost" min="0" step="0.01" inputmode="decimal"></div>' +
+        '<button type="button" class="btn btn-ghost btn-sm s-del no-print" aria-label="Remove stock size">✕</button>';
+      q<HTMLInputElement>(".s-name", row)!.value = name; q<HTMLInputElement>(".s-w", row)!.value = w;
+      q<HTMLInputElement>(".s-h", row)!.value = h; q<HTMLInputElement>(".s-q", row)!.value = qty;
+      q<HTMLInputElement>(".s-mat", row)!.value = material; q<HTMLInputElement>(".s-cost", row)!.value = cost;
+      q<HTMLButtonElement>(".s-del", row)!.addEventListener("click", () => { row.remove(); compute(); });
+      row.addEventListener("input", compute); stockRowsEl.appendChild(row);
+    }
+
+    function addRow(name = "", w = "", h = "", qty = "1", material = "", grain = false, edge = "") {
       const row = document.createElement("div");
       row.className = "row-grid";
-      row.style.gridTemplateColumns = "1.4fr 1fr 1fr 0.7fr auto";
+      row.classList.add("sheet-part-row");
       row.innerHTML =
         '<div class="field"><label>Label</label><input type="text" class="r-name" maxlength="40" placeholder="Part"></div>' +
         '<div class="field"><label>Width</label><input type="number" class="r-w" min="0" step="1" inputmode="numeric"></div>' +
         '<div class="field"><label>Height</label><input type="number" class="r-h" min="0" step="1" inputmode="numeric"></div>' +
         '<div class="field"><label>Qty</label><input type="number" class="r-q" min="1" step="1" inputmode="numeric"></div>' +
+        '<div class="field"><label>Material</label><input type="text" class="r-mat" placeholder="match stock"></div>' +
+        '<div class="field"><label>Edge banding</label><input type="text" class="r-edge" maxlength="12" placeholder="T,R,B,L"></div>' +
+        '<div class="field sheet-check"><label><input type="checkbox" class="r-grain"> Grain locked</label></div>' +
         '<button type="button" class="btn btn-ghost btn-sm r-del no-print" aria-label="Remove part">✕</button>';
       q<HTMLInputElement>(".r-name", row)!.value = name;
       q<HTMLInputElement>(".r-w", row)!.value = w;
       q<HTMLInputElement>(".r-h", row)!.value = h;
       q<HTMLInputElement>(".r-q", row)!.value = qty;
+      q<HTMLInputElement>(".r-mat", row)!.value = material;
+      q<HTMLInputElement>(".r-edge", row)!.value = edge;
+      q<HTMLInputElement>(".r-grain", row)!.checked = grain;
       q<HTMLButtonElement>(".r-del", row)!.addEventListener("click", () => { row.remove(); compute(); });
       row.addEventListener("input", compute);
       rowsEl.appendChild(row);
+    }
+
+    function readStocks(): Stock2D[] {
+      return [...stockRowsEl.querySelectorAll<HTMLElement>(".sheet-stock-row")].map((row) => ({
+        name: q<HTMLInputElement>(".s-name", row)!.value.trim() || "Sheet",
+        w: num(q<HTMLInputElement>(".s-w", row)!.value), h: num(q<HTMLInputElement>(".s-h", row)!.value),
+        qty: Math.floor(num(q<HTMLInputElement>(".s-q", row)!.value)),
+        material: q<HTMLInputElement>(".s-mat", row)!.value.trim(), cost: num(q<HTMLInputElement>(".s-cost", row)!.value),
+      })).filter((stock) => stock.w > 0 && stock.h > 0);
     }
 
     function readParts(): Part2D[] {
@@ -88,20 +130,29 @@ import "../../styles/site.css";
         const w = num(q<HTMLInputElement>(".r-w", row)!.value);
         const h = num(q<HTMLInputElement>(".r-h", row)!.value);
         const qty = int(q<HTMLInputElement>(".r-q", row)!.value);
-        if (w > 0 && h > 0 && qty > 0) parts.push({ name, w, h, qty });
+        if (w > 0 && h > 0 && qty > 0) parts.push({ name, w, h, qty,
+          material: q<HTMLInputElement>(".r-mat", row)!.value.trim(),
+          grain: q<HTMLInputElement>(".r-grain", row)!.checked,
+          edge: q<HTMLInputElement>(".r-edge", row)!.value.trim(),
+        });
       });
       return parts;
     }
 
-    function syncURL(parts: Part2D[]) {
-      const p = new URLSearchParams();
-      p.set("w", String(num(swEl.value)));
-      p.set("h", String(num(shEl.value)));
-      if (num(kerfEl.value)) p.set("k", String(num(kerfEl.value)));
-      if (!rotEl.checked) p.set("r", "0");
-      const enc = parts.map((pc) => `${encodeURIComponent(pc.name)}:${pc.w}:${pc.h}:${pc.qty}`).join(",");
-      if (enc) p.set("p", enc);
-      history.replaceState(null, "", `?${p.toString()}`);
+    const projectState = () => ({
+      version: 2, name: projectEl.value.trim() || "Cut list", stocks: readStocks(), parts: readParts(),
+      options: { kerf: num(kerfEl.value), trim: num(trimEl.value), allowRotate: rotEl.checked, strategy: strategyEl.value as Pack2DOptions["strategy"] },
+    });
+
+    function syncProject() {
+      try { localStorage.setItem("vv_cutlist_2d_v2", JSON.stringify(projectState())); } catch { /* storage is optional */ }
+    }
+
+    function shareURL(): string {
+      const bytes = new TextEncoder().encode(JSON.stringify(projectState()));
+      let binary = ""; bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+      const encoded = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      return `${location.origin}${location.pathname}?d=${encoded}`;
     }
 
     function stat(n: string, l: string) {
@@ -123,7 +174,7 @@ import "../../styles/site.css";
         r.setAttribute("width", String(p.w)); r.setAttribute("height", String(p.h));
         r.setAttribute("class", "part");
         const tt = document.createElementNS(NS, "title");
-        tt.textContent = `${p.name} ${auFmt(p.w)}×${auFmt(p.h)}${p.rot ? " (rotated)" : ""}`;
+        tt.textContent = `${p.name} ${auFmt(p.w)}×${auFmt(p.h)}${p.rot ? " (rotated)" : ""}${p.material ? ` · ${p.material}` : ""}${p.edge ? ` · edge ${p.edge}` : ""}`;
         r.append(tt);
         svg.append(r);
         if (p.w > sw * 0.05 && p.h > sh * 0.05) {
@@ -139,15 +190,15 @@ import "../../styles/site.css";
     }
 
     function compute() {
-      const sw = num(swEl.value), sh = num(shEl.value), kerf = num(kerfEl.value);
+      const stocks = readStocks();
       const parts = readParts();
-      syncURL(parts);
+      syncProject();
       out.textContent = "";
-      if (sw <= 0 || sh <= 0 || parts.length === 0) { actions.hidden = true; return; }
+      if (!stocks.length || parts.length === 0) { actions.hidden = true; return; }
 
-      const res = pack2d(parts, sw, sh, kerf, rotEl.checked);
+      const res = optimise2d(parts, stocks, projectState().options);
       const sheetsN = res.sheets.length;
-      const totalArea = sheetsN * sw * sh;
+      const totalArea = res.usedArea + res.wasteArea;
       const eff = totalArea ? (res.usedArea / totalArea) * 100 : 0;
       const placed = res.sheets.reduce((s, sh2) => s + sh2.parts.length, 0);
 
@@ -157,7 +208,10 @@ import "../../styles/site.css";
         stat(String(sheetsN), sheetsN === 1 ? "sheet" : "sheets"),
         stat(eff.toFixed(1) + "%", "efficiency"),
         stat(String(placed), "parts placed"),
-        stat(auFmt(res.usedArea / 1e6) + " m²", "part area"),
+        stat(auFmt(res.wasteArea / 1e6) + " m²", "usable waste"),
+        stat(auFmt(res.cutLength / 1000) + " m", "estimated cut length"),
+        stat(String(res.cuts), "estimated cuts"),
+        stat(res.cost ? res.cost.toLocaleString("en-AU", { style: "currency", currency: "AUD" }) : "—", "stock cost"),
       );
       out.append(grid);
 
@@ -174,39 +228,63 @@ import "../../styles/site.css";
       res.sheets.forEach((sheet, i) => {
         const lbl = document.createElement("div");
         lbl.className = "bar-label";
-        lbl.textContent = `Sheet ${i + 1} of ${sheetsN} · ${auFmt(sw)}×${auFmt(sh)} · ${sheet.parts.length} parts`;
-        wrap.append(lbl, svgSheet(sheet.parts, sw, sh));
+        lbl.textContent = `Sheet ${i + 1} of ${sheetsN} · ${sheet.stock.name} · ${auFmt(sheet.stock.w)}×${auFmt(sheet.stock.h)} · ${sheet.stock.material || "any material"} · ${sheet.parts.length} parts`;
+        wrap.append(lbl, svgSheet(sheet.parts, sheet.stock.w, sheet.stock.h));
       });
       out.append(wrap);
       actions.hidden = false;
     }
 
     q<HTMLButtonElement>("#add-row")!.addEventListener("click", () => { addRow(); compute(); });
+    q<HTMLButtonElement>("#add-stock")!.addEventListener("click", () => { addStock("Alternate sheet", "", "", "0", "", ""); compute(); });
     q<HTMLButtonElement>("#save-pdf")!.addEventListener("click", () => window.print());
+    const download = (name: string, content: string, type: string) => {
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([content], { type })); a.download = name; a.click(); URL.revokeObjectURL(a.href);
+    };
+    q<HTMLButtonElement>("#save-project")!.addEventListener("click", () => download(`${projectEl.value.trim() || "cut-list"}.cutlist.json`, JSON.stringify(projectState(), null, 2), "application/json"));
+    q<HTMLButtonElement>("#export-csv")!.addEventListener("click", () => {
+      const esc = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+      const rows = [["Part", "Width mm", "Height mm", "Qty", "Material", "Grain locked", "Edge banding"],
+        ...readParts().map((part) => [part.name, part.w, part.h, part.qty, part.material, part.grain ? "yes" : "no", part.edge])];
+      download(`${projectEl.value.trim() || "cut-list"}.csv`, rows.map((row) => row.map(esc).join(",")).join("\r\n"), "text/csv");
+    });
+    q<HTMLButtonElement>("#load-project")!.addEventListener("click", () => {
+      const input = document.createElement("input"); input.type = "file"; input.accept = ".json,application/json";
+      input.addEventListener("change", async () => { const file = input.files?.[0]; if (!file) return; try { applyState(JSON.parse(await file.text())); } catch { alert("That is not a valid Cut List project."); } });
+      input.click();
+    });
     q<HTMLButtonElement>("#copy")!.addEventListener("click", async () => {
-      try { await navigator.clipboard.writeText(location.href); const c = q<HTMLElement>("#copied")!; c.hidden = false; setTimeout(() => (c.hidden = true), 1800); } catch { /* */ }
+      try { await navigator.clipboard.writeText(shareURL()); const c = q<HTMLElement>("#copied")!; c.hidden = false; setTimeout(() => (c.hidden = true), 1800); } catch { /* */ }
     });
 
-    function init() {
-      const u = new URLSearchParams(location.search);
-      swEl.value = u.get("w") ? String(num(u.get("w")!)) : "2400";
-      shEl.value = u.get("h") ? String(num(u.get("h")!)) : "1200";
-      kerfEl.value = u.get("k") ? String(num(u.get("k")!)) : "3";
-      if (u.get("r") === "0") rotEl.checked = false;
-      const p = u.get("p");
-      if (p) {
-        p.split(",").forEach((seg) => {
-          const [name, w, h, qty] = seg.split(":");
-          addRow(decodeURIComponent(name || "").slice(0, 40), String(num(w || "")), String(num(h || "")), String(int(qty || "1") || 1));
-        });
-      } else {
-        addRow("Door", "597", "720", "4");
-        addRow("Shelf", "564", "300", "8");
-        addRow("Side", "300", "720", "6");
-      }
-      [swEl, shEl, kerfEl].forEach((el) => el.addEventListener("input", compute));
-      rotEl.addEventListener("change", compute);
+    function applyState(state: any) {
+      if (!state || !Array.isArray(state.stocks) || !Array.isArray(state.parts)) throw new Error("bad project");
+      stockRowsEl.textContent = ""; rowsEl.textContent = "";
+      projectEl.value = String(state.name || "Cut list").slice(0, 80);
+      state.stocks.forEach((stock: Stock2D) => addStock(stock.name, String(stock.w), String(stock.h), String(stock.qty ?? 0), stock.material ?? "", stock.cost ? String(stock.cost) : ""));
+      state.parts.forEach((part: Part2D) => addRow(part.name, String(part.w), String(part.h), String(part.qty), part.material ?? "", !!part.grain, part.edge ?? ""));
+      kerfEl.value = String(num(state.options?.kerf ?? "3")); trimEl.value = String(num(state.options?.trim ?? "0"));
+      rotEl.checked = state.options?.allowRotate !== false;
+      if (["balanced", "fewest-sheets", "least-waste", "fast"].includes(state.options?.strategy)) strategyEl.value = state.options.strategy;
       compute();
+    }
+
+    function init() {
+      let state: any = null;
+      const encoded = new URLSearchParams(location.search).get("d");
+      if (encoded) try {
+        const binary = atob(encoded.replace(/-/g, "+").replace(/_/g, "/"));
+        state = JSON.parse(new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0))));
+      } catch { /* fall through to local/default */ }
+      if (!state) try { state = JSON.parse(localStorage.getItem("vv_cutlist_2d_v2") || "null"); } catch { /* */ }
+      if (state) applyState(state);
+      else applyState({ name: "Joinery cut list", stocks: [{ name: "2400 × 1200", w: 2400, h: 1200, qty: 0, material: "18 mm white MDF", cost: 0 }], parts: [
+        { name: "Door", w: 597, h: 720, qty: 4, material: "18 mm white MDF", grain: true, edge: "T,R,B,L" },
+        { name: "Shelf", w: 564, h: 300, qty: 8, material: "18 mm white MDF", edge: "F" },
+        { name: "Side", w: 300, h: 720, qty: 6, material: "18 mm white MDF", grain: true, edge: "F" },
+      ], options: { kerf: 3, trim: 10, allowRotate: true, strategy: "balanced" } });
+      [projectEl, kerfEl, trimEl].forEach((el) => el.addEventListener("input", compute));
+      [rotEl, strategyEl].forEach((el) => el.addEventListener("change", compute));
     }
     init();
   </script>

@@ -1,120 +1,213 @@
-import { download } from "./calc";
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url'
+import { download } from './calc'
 
-// Client-side PDF editor (pdf-lib). Loaded files are read into memory and never
-// uploaded. pdf-lib is imported lazily on first use to keep the page light.
-interface Src { name: string }
-interface PageRef { src: number; page: number; rot: number }
+interface Src { name: string; bytes: Uint8Array; pdf: any; render?: any }
+interface PageRef { id: string; src: number; page: number; rot: number; selected: boolean }
+
+const uid = () => `pg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
 export function initPdf() {
-  const fileIn = document.getElementById("pdf-file") as HTMLInputElement | null;
-  const listEl = document.getElementById("pdf-pages");
-  const exportBtn = document.getElementById("pdf-export") as HTMLButtonElement | null;
-  const footerIn = document.getElementById("pdf-footer") as HTMLInputElement | null;
-  const stampIn = document.getElementById("pdf-stamp") as HTMLInputElement | null;
-  const numChk = document.getElementById("pdf-num") as HTMLInputElement | null;
-  const statusEl = document.getElementById("pdf-status");
-  if (!fileIn || !listEl || !exportBtn) return;
+  const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null
+  const fileIn = byId<HTMLInputElement>('pdf-file')
+  const listEl = byId<HTMLDivElement>('pdf-pages')
+  const exportBtn = byId<HTMLButtonElement>('pdf-export')
+  const statusEl = byId<HTMLElement>('pdf-status')
+  if (!fileIn || !listEl || !exportBtn) return
 
-  const srcs: Src[] = [];
-  const loaded: Record<number, any> = {}; // PDFDocument per source
-  let pages: PageRef[] = [];
-  let PL: any = null;
-  const lib = async () => (PL ||= await import("pdf-lib"));
-  const setStatus = (t: string) => { if (statusEl) statusEl.textContent = t; };
-
-  function render() {
-    listEl!.textContent = "";
-    pages.forEach((p, i) => {
-      const row = document.createElement("div");
-      row.className = "pdf-row";
-      const label = document.createElement("span");
-      label.className = "pdf-label";
-      label.textContent = `${i + 1}. ${srcs[p.src].name} — p${p.page + 1}${p.rot ? ` · ${p.rot}°` : ""}`;
-      const ctrls = document.createElement("span");
-      ctrls.className = "pdf-ctrls no-print";
-      const mk = (txt: string, aria: string, fn: () => void) => {
-        const b = document.createElement("button");
-        b.className = "btn btn-ghost btn-sm";
-        b.textContent = txt;
-        b.setAttribute("aria-label", aria);
-        b.addEventListener("click", fn);
-        return b;
-      };
-      ctrls.append(
-        mk("↑", "Move up", () => { if (i > 0) { [pages[i - 1], pages[i]] = [pages[i], pages[i - 1]]; render(); } }),
-        mk("↓", "Move down", () => { if (i < pages.length - 1) { [pages[i + 1], pages[i]] = [pages[i], pages[i + 1]]; render(); } }),
-        mk("⟳", "Rotate 90°", () => { p.rot = (p.rot + 90) % 360; render(); }),
-        mk("✕", "Delete page", () => { pages.splice(i, 1); render(); }),
-      );
-      row.append(label, ctrls);
-      listEl!.append(row);
-    });
-    exportBtn!.disabled = pages.length === 0;
+  const srcs: Src[] = []
+  let pages: PageRef[] = []
+  let PL: any = null
+  let PDFJS: any = null
+  const lib = async () => (PL ||= await import('pdf-lib'))
+  const renderer = async () => {
+    if (!PDFJS) {
+      PDFJS = await import('pdfjs-dist')
+      PDFJS.GlobalWorkerOptions.workerSrc = pdfWorker
+    }
+    return PDFJS
+  }
+  const setStatus = (text: string) => { if (statusEl) statusEl.textContent = text }
+  const selected = () => pages.filter((page) => page.selected)
+  const operative = () => selected().length ? selected() : pages
+  const updateButtons = () => {
+    const any = pages.length > 0, some = selected().length > 0
+    exportBtn.disabled = !any
+    for (const id of ['pdf-extract', 'pdf-split', 'pdf-images']) {
+      const button = byId<HTMLButtonElement>(id); if (button) button.disabled = !some
+    }
   }
 
-  fileIn.addEventListener("change", async () => {
-    const files = Array.from(fileIn.files || []);
-    if (!files.length) return;
-    setStatus("Reading…");
-    const L = await lib();
-    for (const f of files) {
-      const bytes = await f.arrayBuffer();
-      const idx = srcs.length;
-      try {
-        loaded[idx] = await L.PDFDocument.load(bytes, { ignoreEncryption: true });
-        srcs.push({ name: f.name });
-        const n = loaded[idx].getPageCount();
-        for (let p = 0; p < n; p++) pages.push({ src: idx, page: p, rot: 0 });
-      } catch {
-        setStatus(`Couldn't read ${f.name} (encrypted or not a PDF).`);
-      }
-    }
-    fileIn.value = "";
-    setStatus(`${pages.length} page(s) loaded.`);
-    render();
-  });
+  async function renderSource(src: number) {
+    if (srcs[src].render) return srcs[src].render
+    const R = await renderer()
+    srcs[src].render = await R.getDocument({ data: srcs[src].bytes.slice() }).promise
+    return srcs[src].render
+  }
 
-  exportBtn.addEventListener("click", async () => {
-    if (!pages.length) return;
-    setStatus("Building PDF…");
-    exportBtn.disabled = true;
+  async function renderPage(ref: PageRef, scale: number): Promise<HTMLCanvasElement> {
+    const doc = await renderSource(ref.src)
+    const page = await doc.getPage(ref.page + 1)
+    const viewport = page.getViewport({ scale, rotation: (page.rotate + ref.rot) % 360 })
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(viewport.width)); canvas.height = Math.max(1, Math.round(viewport.height))
+    await page.render({ canvasContext: canvas.getContext('2d')!, viewport }).promise
+    return canvas
+  }
+
+  async function paintThumb(ref: PageRef, target: HTMLCanvasElement) {
     try {
-      const L = await lib();
-      const out = await L.PDFDocument.create();
-      const font = await out.embedFont(L.StandardFonts.Helvetica);
-      for (const ref of pages) {
-        const [copied] = await out.copyPages(loaded[ref.src], [ref.page]);
-        if (ref.rot) copied.setRotation(L.degrees(((copied.getRotation().angle || 0) + ref.rot) % 360));
-        out.addPage(copied);
-      }
-      const footer = footerIn?.value.trim() || "";
-      const stamp = stampIn?.value.trim() || "";
-      const num = !!numChk?.checked;
-      const total = out.getPageCount();
-      out.getPages().forEach((pg: any, i: number) => {
-        const { width, height } = pg.getSize();
-        if (footer) pg.drawText(footer, { x: 36, y: 22, size: 9, font, color: L.rgb(0.3, 0.3, 0.3) });
-        if (num) {
-          const t = `${i + 1} / ${total}`;
-          pg.drawText(t, { x: width - 36 - font.widthOfTextAtSize(t, 9), y: 22, size: 9, font, color: L.rgb(0.3, 0.3, 0.3) });
-        }
-        if (stamp) {
-          pg.drawText(stamp, {
-            x: width / 2 - font.widthOfTextAtSize(stamp, 48) / 2,
-            y: height / 2,
-            size: 48, font, color: L.rgb(0.85, 0.1, 0.1), opacity: 0.16, rotate: L.degrees(30),
-          });
-        }
-      });
-      const data = await out.save();
-      download(`edited-${new Date().toISOString().slice(0, 10)}.pdf`, URL.createObjectURL(new Blob([data], { type: "application/pdf" })));
-      setStatus(`Exported ${total} page(s).`);
-    } catch (e) {
-      setStatus("Export failed: " + (e as Error).message);
-    } finally {
-      exportBtn.disabled = pages.length === 0;
-    }
-  });
+      const canvas = await renderPage(ref, 0.28)
+      target.width = canvas.width; target.height = canvas.height
+      target.getContext('2d')!.drawImage(canvas, 0, 0)
+    } catch { target.setAttribute('aria-label', 'Preview unavailable') }
+  }
 
-  render();
+  function render() {
+    listEl!.textContent = ''
+    pages.forEach((ref, index) => {
+      const card = document.createElement('article')
+      card.className = `pdf-page-card${ref.selected ? ' selected' : ''}`
+      card.draggable = true; card.dataset.id = ref.id
+      card.addEventListener('dragstart', (event) => event.dataTransfer?.setData('text/plain', ref.id))
+      card.addEventListener('dragover', (event) => event.preventDefault())
+      card.addEventListener('drop', (event) => {
+        event.preventDefault(); const fromId = event.dataTransfer?.getData('text/plain')
+        const from = pages.findIndex((page) => page.id === fromId), to = pages.findIndex((page) => page.id === ref.id)
+        if (from >= 0 && to >= 0 && from !== to) { const [moved] = pages.splice(from, 1); pages.splice(to, 0, moved); render() }
+      })
+      const check = document.createElement('input')
+      check.type = 'checkbox'; check.checked = ref.selected; check.setAttribute('aria-label', `Select page ${index + 1}`)
+      check.addEventListener('change', () => { ref.selected = check.checked; render() })
+      const canvas = document.createElement('canvas'); canvas.className = 'pdf-thumb'; canvas.setAttribute('aria-label', `Preview page ${index + 1}`)
+      void paintThumb(ref, canvas)
+      const label = document.createElement('span'); label.className = 'pdf-label'
+      label.textContent = `${index + 1}. ${srcs[ref.src].name} · p${ref.page + 1}${ref.rot ? ` · ${ref.rot}°` : ''}`
+      const controls = document.createElement('span'); controls.className = 'pdf-ctrls no-print'
+      const button = (text: string, aria: string, action: () => void) => {
+        const b = document.createElement('button'); b.className = 'btn btn-ghost btn-sm'; b.textContent = text; b.setAttribute('aria-label', aria); b.addEventListener('click', action); return b
+      }
+      controls.append(
+        button('↑', 'Move page up', () => { if (index > 0) { [pages[index - 1], pages[index]] = [pages[index], pages[index - 1]]; render() } }),
+        button('↓', 'Move page down', () => { if (index < pages.length - 1) { [pages[index + 1], pages[index]] = [pages[index], pages[index + 1]]; render() } }),
+        button('↷', 'Rotate page right', () => { ref.rot = (ref.rot + 90) % 360; render() }),
+        button('×', 'Delete page', () => { pages.splice(index, 1); render() }),
+      )
+      card.append(check, canvas, label, controls); listEl!.append(card)
+    })
+    updateButtons(); setStatus(pages.length ? `${pages.length} pages · ${selected().length} selected` : 'Add PDFs or images to begin.')
+  }
+
+  async function addPdf(name: string, bytes: Uint8Array) {
+    const L = await lib(); const pdf = await L.PDFDocument.load(bytes)
+    const src = srcs.push({ name, bytes, pdf }) - 1
+    for (let page = 0; page < pdf.getPageCount(); page++) pages.push({ id: uid(), src, page, rot: 0, selected: false })
+  }
+
+  async function addImage(file: File) {
+    const L = await lib(); const pdf = await L.PDFDocument.create(); const bytes = new Uint8Array(await file.arrayBuffer())
+    const image = file.type === 'image/png' ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes)
+    const maxW = 595.28, maxH = 841.89, ratio = Math.min(maxW / image.width, maxH / image.height, 1)
+    const width = image.width * ratio, height = image.height * ratio
+    const page = pdf.addPage([width, height]); page.drawImage(image, { x: 0, y: 0, width, height })
+    await addPdf(file.name, await pdf.save())
+  }
+
+  fileIn.addEventListener('change', async () => {
+    const files = Array.from(fileIn.files ?? []); if (!files.length) return
+    setStatus('Reading files…')
+    for (const file of files) {
+      try {
+        if (file.type.startsWith('image/')) await addImage(file)
+        else await addPdf(file.name, new Uint8Array(await file.arrayBuffer()))
+      } catch { setStatus(`Could not open ${file.name}. It may be encrypted or damaged.`) }
+    }
+    fileIn.value = ''; render()
+  })
+
+  function parseRange(value: string): Set<number> {
+    const found = new Set<number>()
+    for (const token of value.split(',').map((part) => part.trim()).filter(Boolean)) {
+      const match = /^(\d+)?\s*-\s*(\d+)?$/.exec(token)
+      if (match) {
+        const from = Math.max(1, Number(match[1] || 1)), to = Math.min(pages.length, Number(match[2] || pages.length))
+        for (let page = Math.min(from, to); page <= Math.max(from, to); page++) found.add(page - 1)
+      } else if (/^\d+$/.test(token)) found.add(Number(token) - 1)
+    }
+    return found
+  }
+
+  byId<HTMLButtonElement>('pdf-all')?.addEventListener('click', () => { pages.forEach((page) => { page.selected = true }); render() })
+  byId<HTMLButtonElement>('pdf-none')?.addEventListener('click', () => { pages.forEach((page) => { page.selected = false }); render() })
+  byId<HTMLButtonElement>('pdf-apply-range')?.addEventListener('click', () => { const range = parseRange(byId<HTMLInputElement>('pdf-range')?.value ?? ''); pages.forEach((page, index) => { page.selected = range.has(index) }); render() })
+  const mutateSelected = (action: (page: PageRef) => void) => { operative().forEach(action); render() }
+  byId<HTMLButtonElement>('pdf-rot-left')?.addEventListener('click', () => mutateSelected((page) => { page.rot = (page.rot + 270) % 360 }))
+  byId<HTMLButtonElement>('pdf-rot-right')?.addEventListener('click', () => mutateSelected((page) => { page.rot = (page.rot + 90) % 360 }))
+  byId<HTMLButtonElement>('pdf-delete')?.addEventListener('click', () => { const ids = new Set(operative().map((page) => page.id)); pages = pages.filter((page) => !ids.has(page.id)); render() })
+  byId<HTMLButtonElement>('pdf-duplicate')?.addEventListener('click', () => { const ids = new Set(operative().map((page) => page.id)); pages = pages.flatMap((page) => ids.has(page.id) ? [page, { ...page, id: uid(), selected: false }] : [page]); render() })
+  byId<HTMLButtonElement>('pdf-reverse')?.addEventListener('click', () => { pages.reverse(); render() })
+  byId<HTMLButtonElement>('pdf-blank')?.addEventListener('click', async () => { const L = await lib(); const pdf = await L.PDFDocument.create(); pdf.addPage([595.28, 841.89]); await addPdf('Blank A4', await pdf.save()); render() })
+
+  async function build(refs: PageRef[]): Promise<Uint8Array> {
+    const L = await lib(); const out = await L.PDFDocument.create(); const font = await out.embedFont(L.StandardFonts.Helvetica)
+    const raster = !!byId<HTMLInputElement>('pdf-raster')?.checked
+    const quality = Number(byId<HTMLSelectElement>('pdf-quality')?.value ?? 0.86)
+    for (const ref of refs) {
+      if (raster) {
+        const canvas = await renderPage(ref, 1.5); const jpg = await out.embedJpg(canvas.toDataURL('image/jpeg', quality))
+        const page = out.addPage([canvas.width / 1.5, canvas.height / 1.5]); page.drawImage(jpg, { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() })
+      } else {
+        const [copied] = await out.copyPages(srcs[ref.src].pdf, [ref.page])
+        if (ref.rot) copied.setRotation(L.degrees(((copied.getRotation().angle || 0) + ref.rot) % 360))
+        out.addPage(copied)
+      }
+    }
+    if (byId<HTMLInputElement>('pdf-clean-meta')?.checked) {
+      out.setTitle(''); out.setAuthor(''); out.setSubject(''); out.setKeywords([]); out.setProducer(''); out.setCreator('')
+    }
+    const title = byId<HTMLInputElement>('pdf-title')?.value.trim(); const author = byId<HTMLInputElement>('pdf-author')?.value.trim()
+    if (title) out.setTitle(title); if (author) out.setAuthor(author)
+    const footer = byId<HTMLInputElement>('pdf-footer')?.value.trim() ?? ''
+    const stamp = byId<HTMLInputElement>('pdf-stamp')?.value.trim() ?? ''
+    const sign = byId<HTMLInputElement>('pdf-sign')?.value.trim() ?? ''
+    const number = !!byId<HTMLInputElement>('pdf-num')?.checked
+    const cropPt = Math.max(0, Number(byId<HTMLInputElement>('pdf-crop')?.value ?? 0)) * 72 / 25.4
+    const marked = new Set(selected().map((page) => page.id)); const markAll = marked.size === 0
+    out.getPages().forEach((page: any, index: number) => {
+      const ref = refs[index]; if (!markAll && !marked.has(ref.id)) return
+      const { width, height } = page.getSize()
+      if (cropPt > 0 && width > cropPt * 2 && height > cropPt * 2) page.setCropBox(cropPt, cropPt, width - cropPt * 2, height - cropPt * 2)
+      if (footer) page.drawText(footer, { x: 30, y: 18, size: 8, font, color: L.rgb(0.28, 0.28, 0.28) })
+      if (number) { const text = `${index + 1} / ${refs.length}`; page.drawText(text, { x: width - 30 - font.widthOfTextAtSize(text, 8), y: 18, size: 8, font, color: L.rgb(0.28, 0.28, 0.28) }) }
+      if (sign) page.drawText(sign, { x: Math.max(30, width - 30 - font.widthOfTextAtSize(sign, 10)), y: 34, size: 10, font, color: L.rgb(0.08, 0.18, 0.4) })
+      if (stamp) page.drawText(stamp, { x: width / 2 - font.widthOfTextAtSize(stamp, 48) / 2, y: height / 2, size: 48, font, color: L.rgb(0.85, 0.1, 0.1), opacity: 0.16, rotate: L.degrees(30) })
+    })
+    return out.save({ useObjectStreams: true })
+  }
+
+  async function savePdf(refs: PageRef[], prefix: string) {
+    if (!refs.length) return; setStatus('Building PDF…')
+    try { const data = await build(refs); download(`${prefix}-${new Date().toISOString().slice(0, 10)}.pdf`, URL.createObjectURL(new Blob([data.buffer as ArrayBuffer], { type: 'application/pdf' }))); setStatus(`Exported ${refs.length} page(s).`) }
+    catch (error) { setStatus(`Export failed: ${(error as Error).message}`) }
+    finally { updateButtons() }
+  }
+
+  exportBtn.addEventListener('click', () => void savePdf(pages, 'edited'))
+  byId<HTMLButtonElement>('pdf-extract')?.addEventListener('click', () => void savePdf(selected(), 'extracted'))
+  byId<HTMLButtonElement>('pdf-split')?.addEventListener('click', async () => {
+    const refs = selected(); if (!refs.length) return; setStatus('Splitting pages…')
+    const { default: JSZip } = await import('jszip'); const zip = new JSZip()
+    for (let index = 0; index < refs.length; index++) zip.file(`page-${String(index + 1).padStart(3, '0')}.pdf`, await build([refs[index]]))
+    const blob = await zip.generateAsync({ type: 'blob' }); download('split-pages.zip', URL.createObjectURL(blob)); setStatus(`Split ${refs.length} page(s).`)
+  })
+  byId<HTMLButtonElement>('pdf-images')?.addEventListener('click', async () => {
+    const refs = selected(); if (!refs.length) return; setStatus('Rendering PNGs…')
+    const { default: JSZip } = await import('jszip'); const zip = new JSZip()
+    for (let index = 0; index < refs.length; index++) {
+      const canvas = await renderPage(refs[index], 2); const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('PNG failed')), 'image/png'))
+      zip.file(`page-${String(index + 1).padStart(3, '0')}.png`, blob)
+    }
+    download('pdf-pages-png.zip', URL.createObjectURL(await zip.generateAsync({ type: 'blob' }))); setStatus(`Rendered ${refs.length} PNG(s).`)
+  })
+
+  render()
 }

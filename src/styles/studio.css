@@ -482,7 +482,21 @@
   background: #050a0c; border: 1px solid #1e262a; border-radius: 4px;
   box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.8), 0 0 10px rgba(95, 168, 138, 0.12);
 }
-.wa-scope[hidden], .wa-vectorscope[hidden] { display: none; }
+.wa-scope[hidden], .wa-vectorscope[hidden], .wa-spectral[hidden] { display: none; }
+.wa-spectral { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.wa-spectral-controls {
+  display: flex; align-items: center; gap: 5px; min-width: 0;
+  padding: 4px 0; overflow-x: auto; scrollbar-width: thin;
+}
+.wa-spectral-mode {
+  flex: 0 0 auto; min-height: 26px; padding: 3px 6px;
+  color: var(--wa-muted); background: #11151b; border: 1px solid var(--wa-border-2);
+  border-radius: 3px; font: 600 8px/1 ui-monospace, monospace; letter-spacing: .08em; cursor: pointer;
+}
+.wa-spectral-mode.active { color: var(--wa-acid, var(--wa-phos)); border-color: currentColor; box-shadow: 0 0 9px rgba(104,245,207,.18); }
+.wa-spectral-controls select { flex: 0 0 auto; min-height: 26px; padding: 2px 4px; font-size: 9px; }
+.wa-spectral-controls input[type="range"] { flex: 0 0 48px; width: 48px; }
+.wa-spectral-lbl { flex: 0 0 auto; color: var(--wa-muted); font: 600 7px/1 ui-monospace, monospace; letter-spacing: .08em; }
 .wa-wave-mini {
   display: block; width: 100%; height: 40px; margin-bottom: 8px;
   border: 1px solid var(--wa-border-2); border-radius: 4px;
@@ -1804,13 +1818,6 @@
 .immersive-page #studio { width: 100%; min-width: 0; }
 .immersive-page .wa-win { height: 100dvh; border-radius: 0; border-top: 0; border-bottom: 0; display: flex; flex-direction: column; overflow: hidden; }
 .immersive-page .wa-pagehost { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
-.wa-site-exit {
-  position: fixed; top: 7px; right: 13px; z-index: 120;
-  color: var(--muted); font: 600 9px/1.2 ui-monospace, monospace; letter-spacing: .13em;
-  text-decoration: none; opacity: .72;
-}
-.wa-site-exit:hover, .wa-site-exit:focus-visible { color: #34e2ff; opacity: 1; }
-
 .wa-roll-toolbar, .wa-kit-library, .wa-song-library, .wa-composer-head, .wa-automation-editor {
   display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
 }
@@ -1866,7 +1873,6 @@
 @media (max-width: 700px) {
   .immersive-page .wa-win { padding: 4px 4px 64px; border-left: 0; border-right: 0; }
   .immersive-page .wa-win::before, .immersive-page .wa-win::after { display: none; }
-  .wa-site-exit { top: 6px; right: 7px; }
   .wa-modebar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 90; height: 58px;
     padding: 5px max(5px, env(safe-area-inset-right)) max(5px, env(safe-area-inset-bottom)) max(5px, env(safe-area-inset-left));
@@ -1890,7 +1896,6 @@
   .wa-fs-btn { width: 42px; min-width: 42px; font-size: 0; }
   .wa-fs-btn::after { content: "⛶"; font-size: 15px; }
   .wa-power { width: 42px; min-width: 42px; font-size: 0; justify-content: center; }
-  .wa-site-exit { display: none; }
 }
 
 @media (pointer: coarse) {
@@ -1968,11 +1973,14 @@
 }
 
 .immersive-page .wa-title-text {
+  display: inline-flex;
+  align-items: center;
   color: #fff;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: .14em;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .immersive-page .wa-title-text::before {
@@ -2313,8 +2321,8 @@
   }
 
   .immersive-page .wa-title { flex: 0 0 42px; height: 42px; padding: 0 7px; }
-  .immersive-page .wa-title-text { display: inline-flex; align-items: center; width: 21px; overflow: hidden; font-size: 0; }
-  .immersive-page .wa-title-text::before { width: 10px; height: 10px; margin-right: 12px; flex: 0 0 auto; }
+  .immersive-page .wa-title-text { width: 38px; min-width: 38px; min-height: 38px; justify-content: center; overflow: hidden; font-size: 0; }
+  .immersive-page .wa-title-text::before { width: 10px; height: 10px; margin-right: 0; flex: 0 0 auto; }
   .immersive-page .wa-project-name { flex: 1 1 auto; width: 80px; min-width: 0; }
   .immersive-page .wa-density-btn { display: none; }
 
@@ -2431,7 +2439,8 @@
 /* MASTER OUT well: trace on top, orb below — a tall empty scope is a void,
    and the orb already exists. */
 .immersive-page .wa-master-scope { flex: 0 0 clamp(80px, 14dvh, 150px); height: auto; min-height: 0; margin: 0; }
-.immersive-page .wa-mix-scope .wa-vectorscope { flex: 1; min-height: 0; height: auto; margin: 0; }
+.immersive-page .wa-mix-scope .wa-spectral { flex: 1; min-height: 0; }
+.immersive-page .wa-mix-scope .wa-vectorscope { flex: 1; min-height: 100px; height: auto; margin: 0; }
 
 /* Channel strips fill the plate; fader + ladder take the leftover height. */
 .immersive-page .wa-page-mix .wa-mixer {

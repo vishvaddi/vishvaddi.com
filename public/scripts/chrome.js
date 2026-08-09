@@ -58,6 +58,20 @@
     });
   }
 
+  document.querySelectorAll("[data-site-tool-search]").forEach(function (input) {
+    input.addEventListener("input", function () {
+      var scope = input.closest(".site-rail, .site-picker-panel");
+      if (!scope) return;
+      var query = input.value.trim().toLowerCase();
+      scope.querySelectorAll("[data-site-tool-link]").forEach(function (link) {
+        link.hidden = query !== "" && !(link.dataset.search || link.textContent || "").toLowerCase().includes(query);
+      });
+      scope.querySelectorAll("[data-site-tool-group]").forEach(function (group) {
+        group.hidden = !group.querySelector("[data-site-tool-link]:not([hidden])");
+      });
+    });
+  });
+
   // Offline support: register the build-generated service worker (workbox
   // precache of the whole site — see scripts/generate-sw.mjs). Registered
   // here rather than injected markup so the strict CSP stays inline-free.

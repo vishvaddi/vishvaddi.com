@@ -6,13 +6,14 @@ export interface LatticeCell {
   id: string
   text: string
   num?: number                                  // numeric value for roll-ups (parsed from text on edit)
-  rollup?: 'sum' | 'count' | 'done-pct'         // aggregate of descendants, shown in cell corner
+  rollup?: 'sum' | 'cost' | 'count' | 'done-pct' // aggregate of descendants, shown in cell corner
+  rollupCol?: number                             // zero-based column; avoids summing qty + rate + total
   done?: boolean
   grid?: LatticeGrid
   bind?: { source: 'streaks' | 'ladder' | 'calendar' | 'quests'; key?: string }
   habit?: string
   tag?: string
-  style?: { b?: boolean; i?: boolean; fill?: number }   // fill = palette index
+  style?: { b?: boolean; i?: boolean; fill?: number; format?: 'number' | 'currency' | 'percent' }
 }
 
 export interface LatticeGrid {
@@ -97,15 +98,7 @@ export function setText(root: LatticeGrid, id: string, text: string): void {
   const loc = locate(root, id)
   if (!loc) return
   loc.cell.text = text
-  if (text.startsWith('=')) {
-    const v = evalExpr(text.slice(1))
-    if (v !== null) loc.cell.num = v
-    else delete loc.cell.num
-    return
-  }
-  const n = parseFloat(text.replace(/[^0-9.\-]/g, ''))
-  if (!Number.isNaN(n) && /\d/.test(text)) loc.cell.num = n
-  else delete loc.cell.num
+  recalculate(root)
 }
 
 /** First cell (DFS) whose text contains the query, case-insensitive. */
@@ -125,9 +118,10 @@ export function findByText(root: LatticeGrid, query: string): CellLoc | null {
   return null
 }
 
-// ---- =expression cells (Excel's one indispensable feature, minus the trap) ---
+// ---- =expression cells -------------------------------------------------------
 // Safe recursive-descent arithmetic: numbers, + - * / ( ) and % (of 1).
-// No names, no cell refs, no eval — cross-cell maths is what roll-ups are for.
+// A1 references and SUM/AVG ranges are resolved inside the containing grid;
+// formulas never execute JavaScript.
 
 export function evalExpr(src: string): number | null {
   let i = 0
@@ -174,6 +168,65 @@ export function evalExpr(src: string): number | null {
   }
   const v = expr()
   return i === s.length && v !== null && Number.isFinite(v) ? +v.toFixed(6) : null
+}
+
+function colIndex(label: string): number {
+  let n = 0
+  for (const ch of label.toUpperCase()) n = n * 26 + ch.charCodeAt(0) - 64
+  return n - 1
+}
+
+function plainNumber(text: string): number | null {
+  const cleaned = text.replace(/[$,\s]/g, '')
+  if (!/^-?\d*\.?\d+%?$/.test(cleaned)) return null
+  const percent = cleaned.endsWith('%')
+  const n = parseFloat(cleaned)
+  return Number.isFinite(n) ? (percent ? n / 100 : n) : null
+}
+
+function formulaValue(grid: LatticeGrid, cell: LatticeCell, visiting: Set<string>): number | null {
+  if (!cell.text.startsWith('=')) return plainNumber(cell.text)
+  if (visiting.has(cell.id)) return null
+  visiting.add(cell.id)
+  const valueAt = (col: string, row: string): number | null => {
+    const target = grid.rows[Number(row) - 1]?.[colIndex(col)]
+    return target ? formulaValue(grid, target, visiting) : null
+  }
+  let src = cell.text.slice(1)
+  src = src.replace(/(SUM|AVG)\(\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)\)/gi,
+    (_all, fn: string, c1: string, r1: string, c2: string, r2: string) => {
+      const values: number[] = []
+      const left = colIndex(c1), right = colIndex(c2)
+      const top = Number(r1) - 1, bottom = Number(r2) - 1
+      for (let r = Math.min(top, bottom); r <= Math.max(top, bottom); r++) {
+        for (let c = Math.min(left, right); c <= Math.max(left, right); c++) {
+          const target = grid.rows[r]?.[c]
+          const value = target ? formulaValue(grid, target, visiting) : null
+          if (value !== null) values.push(value)
+        }
+      }
+      const sum = values.reduce((a, b) => a + b, 0)
+      return String(fn.toUpperCase() === 'AVG' && values.length ? sum / values.length : sum)
+    })
+  let invalid = false
+  src = src.replace(/\$?([A-Z]+)\$?(\d+)/gi, (_all, col: string, row: string) => {
+    const value = valueAt(col, row)
+    if (value === null) invalid = true
+    return String(value ?? 0)
+  })
+  visiting.delete(cell.id)
+  return invalid ? null : evalExpr(src)
+}
+
+export function recalculate(grid: LatticeGrid): void {
+  for (const row of grid.rows) for (const cell of row) if (cell.grid) recalculate(cell.grid)
+  for (const row of grid.rows) {
+    for (const cell of row) {
+      const value = formulaValue(grid, cell, new Set())
+      if (value === null) delete cell.num
+      else cell.num = value
+    }
+  }
 }
 
 export function insertSubgrid(root: LatticeGrid, id: string, cols = 2, rows = 2): void {
@@ -223,15 +276,16 @@ export function moveCell(grid: LatticeGrid, id: string, dr: number, dc: number):
 
 export interface RollupResult { sum: number; count: number; done: number; total: number }
 
-export function aggregate(grid: LatticeGrid): RollupResult {
+export function aggregate(grid: LatticeGrid, column?: number): RollupResult {
   const acc: RollupResult = { sum: 0, count: 0, done: 0, total: 0 }
   for (const row of grid.rows) {
-    for (const cell of row) {
+    for (let index = 0; index < row.length; index++) {
+      const cell = row[index]
       if (cell.grid) {
-        const sub = aggregate(cell.grid)
+        const sub = aggregate(cell.grid, column)
         acc.sum += sub.sum; acc.count += sub.count; acc.done += sub.done; acc.total += sub.total
       } else {
-        if (typeof cell.num === 'number') { acc.sum += cell.num; acc.count++ }
+        if ((column === undefined || index === column) && typeof cell.num === 'number') { acc.sum += cell.num; acc.count++ }
         if (cell.text.trim()) { acc.total++; if (cell.done) acc.done++ }
       }
     }
@@ -241,8 +295,9 @@ export function aggregate(grid: LatticeGrid): RollupResult {
 
 export function rollupLabel(cell: LatticeCell): string | null {
   if (!cell.rollup || !cell.grid) return null
-  const a = aggregate(cell.grid)
+  const a = aggregate(cell.grid, cell.rollupCol)
   if (cell.rollup === 'sum') return `Σ ${+a.sum.toFixed(2)}`
+  if (cell.rollup === 'cost') return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 2 }).format(a.sum)
   if (cell.rollup === 'count') return `# ${a.count}`
   return a.total ? `${Math.round((a.done / a.total) * 100)}%` : '0%'
 }
@@ -419,18 +474,59 @@ export function templateSheets(): { name: string; blurb: string; make: () => Lat
       }),
     },
     {
-      name: 'Trade breakdown (WBS)',
-      blurb: 'Trades → items, qty × rate rolls up',
+      name: 'Trade estimate (WBS)',
+      blurb: 'Trades → items; live qty × rate cost roll-ups',
       make: () => {
+        const itemRow = (item: string, qty: string, unit: string, rate: string, row: number): LatticeCell[] => {
+          const cells = rowOf(item, qty, unit, rate, `=B${row}*D${row}`)
+          cells[3].style = { format: 'currency' }
+          cells[4].style = { format: 'currency' }
+          return cells
+        }
         const trade = (name: string): LatticeCell => {
           const c = newCell(name)
-          c.rollup = 'sum'
-          c.grid = { cols: 3, rows: [rowOf('Item', 'Qty × rate', 'Total'), rowOf('', '', '')] }
+          c.rollup = 'cost'
+          c.rollupCol = 4
+          const header = rowOf('Item / scope', 'Qty', 'Unit', 'Rate', 'Total')
+          header.forEach(cell => { cell.style = { b: true, fill: 0 } })
+          c.grid = { cols: 5, rows: [header, itemRow('', '', '', '', 2), itemRow('', '', '', '', 3)] }
           return c
         }
-        return newSheet('Trade breakdown', {
-          cols: 1,
-          rows: ['Demolition', 'Joinery', 'Electrical', 'Painting', 'Flooring'].map(t => [trade(t)]),
+        const project = newCell('Project estimate')
+        project.rollup = 'cost'
+        project.rollupCol = 4
+        project.grid = { cols: 1, rows: ['Preliminaries', 'Demolition', 'Joinery', 'Electrical', 'Painting', 'Flooring'].map(t => [trade(t)]) }
+        return newSheet('Trade estimate', { cols: 1, rows: [[project]] })
+      },
+    },
+    {
+      name: 'Scope comparison',
+      blurb: 'Compare inclusions, exclusions and adjusted quotes',
+      make: () => {
+        const header = rowOf('Scope item', 'Tender allowance', 'Subcontractor A', 'Subcontractor B', 'Notes')
+        header.forEach(cell => { cell.style = { b: true, fill: 0 } })
+        const rows = [
+          header,
+          rowOf('Supply', '', '', '', ''),
+          rowOf('Installation', '', '', '', ''),
+          rowOf('Delivery / access', '', '', '', ''),
+          rowOf('Design / shop drawings', '', '', '', ''),
+          rowOf('Exclusions / qualifications', '', '', '', ''),
+          rowOf('Adjusted total', '', '', '', ''),
+        ]
+        for (const row of rows.slice(1)) for (const cell of row.slice(1, 4)) cell.style = { format: 'currency' }
+        return newSheet('Scope comparison', { cols: 5, rows })
+      },
+    },
+    {
+      name: 'Procurement register',
+      blurb: 'Package ownership, dates, status and risk',
+      make: () => {
+        const header = rowOf('Package', 'Owner', 'Required on site', 'Lead time', 'Order by', 'Status / risk')
+        header.forEach(cell => { cell.style = { b: true, fill: 0 } })
+        return newSheet('Procurement register', {
+          cols: 6,
+          rows: [header, rowOf('Joinery', '', '', '', '', ''), rowOf('Stone', '', '', '', '', ''), rowOf('Feature lighting', '', '', '', '', '')],
         })
       },
     },

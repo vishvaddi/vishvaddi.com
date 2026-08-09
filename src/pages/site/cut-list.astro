@@ -22,15 +22,23 @@ import "../../styles/site.css";
     </p>
 
     <form id="form" autocomplete="off" novalidate>
-      <div class="row-grid" style="grid-template-columns:2fr 1fr 1fr;">
+      <div class="calc-fields">
+        <div class="field"><label for="project">Project / cut list name</label><input type="text" id="project" maxlength="80" value="Linear cut list" /></div>
+        <div class="field"><label for="material">Material / section</label><input type="text" id="material" maxlength="80" placeholder="42 × 19 DAR pine" /></div>
+      </div>
+      <div class="calc-fields">
         <div class="field">
           <label for="stocks">Stock lengths</label>
           <input type="text" id="stocks" inputmode="decimal" placeholder="5400, 4800" />
         </div>
+        <div class="field"><label for="stock-qty">Available qty <small>(0 = unlimited)</small></label><input type="text" id="stock-qty" inputmode="numeric" placeholder="0, 0" /></div>
+        <div class="field"><label for="stock-cost">Cost each (AUD)</label><input type="text" id="stock-cost" inputmode="decimal" placeholder="45, 39" /></div>
         <div class="field">
           <label for="kerf">Saw kerf</label>
           <input type="number" id="kerf" min="0" step="0.5" inputmode="decimal" />
         </div>
+        <div class="field"><label for="trim">End trim (each end)</label><input type="number" id="trim" min="0" step="0.5" inputmode="decimal" /></div>
+        <div class="field"><label for="min-offcut">Reusable offcut from</label><input type="number" id="min-offcut" min="0" step="1" inputmode="decimal" /></div>
         <div class="field">
           <label for="unit">Units</label>
           <select id="unit"><option value="mm">mm</option><option value="in">in</option></select>
@@ -49,6 +57,9 @@ import "../../styles/site.css";
 
     <div id="actions" class="btn-row no-print" hidden>
       <button type="button" class="btn" id="save-pdf">Save as PDF</button>
+      <button type="button" class="btn btn-ghost" id="export-project">Export project</button>
+      <button type="button" class="btn btn-ghost" id="import-project">Import project</button>
+      <button type="button" class="btn btn-ghost" id="export-csv">Export CSV</button>
       <button type="button" class="btn btn-ghost" id="email">Email to myself</button>
       <button type="button" class="btn btn-ghost" id="copy">Copy share link</button>
       <span id="copied" style="align-self:center;font-size:0.85rem;color:var(--muted)" hidden>Link copied ✓</span>
@@ -58,14 +69,20 @@ import "../../styles/site.css";
   </div>
 
   <script>
-    import { pack, type CutPiece, type Bin } from "../../scripts/site/binpack";
+    import { packAdvanced, type CutPiece, type AdvancedBin, type LinearStock } from "../../scripts/site/binpack";
 
     const q = <T extends Element>(s: string, r: ParentNode = document) =>
       r.querySelector(s) as T | null;
 
     const rowsEl = q<HTMLDivElement>("#rows")!;
+    const projectEl = q<HTMLInputElement>("#project")!;
+    const materialEl = q<HTMLInputElement>("#material")!;
     const stocksEl = q<HTMLInputElement>("#stocks")!;
+    const stockQtyEl = q<HTMLInputElement>("#stock-qty")!;
+    const stockCostEl = q<HTMLInputElement>("#stock-cost")!;
     const kerfEl = q<HTMLInputElement>("#kerf")!;
+    const trimEl = q<HTMLInputElement>("#trim")!;
+    const minOffcutEl = q<HTMLInputElement>("#min-offcut")!;
     const unitEl = q<HTMLSelectElement>("#unit")!;
     const out = q<HTMLDivElement>("#out")!;
     const actions = q<HTMLDivElement>("#actions")!;
@@ -85,6 +102,13 @@ import "../../styles/site.css";
       return v.split(/[,\s]+/).map(num).filter((n) => n > 0);
     }
 
+    function readStocks(): LinearStock[] {
+      const lengths = parseStocks(stocksEl.value);
+      const quantities = stockQtyEl.value.split(/[,\s]+/).map(num);
+      const costs = stockCostEl.value.split(/[,\s]+/).map(num);
+      return lengths.map((length, index) => ({ name: `${fmt(length)}${u()}`, length, qty: Math.floor(quantities[index] ?? 0), cost: costs[index] ?? 0 }));
+    }
+
     function addRow(name = "", length = "", qty = "1") {
       const row = document.createElement("div");
       row.className = "row-grid";
@@ -102,8 +126,9 @@ import "../../styles/site.css";
     }
 
     function readState() {
-      const stocks = parseStocks(stocksEl.value);
+      const stocks = readStocks();
       const kerf = num(kerfEl.value);
+      const trim = num(trimEl.value);
       const pieces: CutPiece[] = [];
       rowsEl.querySelectorAll(".row-grid").forEach((row) => {
         const name = q<HTMLInputElement>(".r-name", row)!.value.trim() || "Piece";
@@ -111,17 +136,17 @@ import "../../styles/site.css";
         const qty = intNum(q<HTMLInputElement>(".r-qty", row)!.value);
         if (length > 0 && qty > 0) pieces.push({ name, length, qty });
       });
-      return { stocks, kerf, pieces };
+      return { stocks, kerf, trim, pieces };
     }
 
-    function syncURL(stocks: number[], kerf: number, pieces: CutPiece[]) {
-      const p = new URLSearchParams();
-      if (stocks.length) p.set("s", stocks.join("_"));
-      if (kerf) p.set("k", String(kerf));
-      if (unitEl.value !== "mm") p.set("u", unitEl.value);
-      const enc = pieces.map((pc) => `${encodeURIComponent(pc.name)}:${pc.length}:${pc.qty}`).join(",");
-      if (enc) p.set("p", enc);
-      history.replaceState(null, "", p.toString() ? `?${p.toString()}` : location.pathname);
+    const projectState = () => { const state = readState(); return { version: 2, name: projectEl.value.trim() || "Cut list", material: materialEl.value.trim(), unit: unitEl.value, minOffcut: num(minOffcutEl.value), ...state }; };
+    function syncProject() {
+      try { localStorage.setItem("vv_cutlist_1d_v2", JSON.stringify(projectState())); } catch { /* optional */ }
+    }
+    function shareURL(): string {
+      const bytes = new TextEncoder().encode(JSON.stringify(projectState())); let binary = "";
+      bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+      return `${location.origin}${location.pathname}?d=${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
     }
 
     function stat(n: string, l: string) {
@@ -133,13 +158,13 @@ import "../../styles/site.css";
       return d;
     }
 
-    function barEl(bin: Bin) {
+    function barEl(bin: AdvancedBin) {
       const bar = document.createElement("div");
       bar.className = "bar";
       bin.pieces.forEach((p) => {
         const seg = document.createElement("div");
         seg.className = "seg";
-        seg.style.width = (p.length / bin.stock) * 100 + "%";
+        seg.style.width = (p.length / bin.stock.length) * 100 + "%";
         seg.textContent = fmt(p.length);
         seg.title = `${p.name} — ${fmt(p.length)}${u()}`;
         bar.append(seg);
@@ -147,7 +172,7 @@ import "../../styles/site.css";
       if (bin.remaining > 0.001) {
         const seg = document.createElement("div");
         seg.className = "seg offcut";
-        seg.style.width = (bin.remaining / bin.stock) * 100 + "%";
+        seg.style.width = (bin.remaining / bin.stock.length) * 100 + "%";
         seg.textContent = fmt(bin.remaining);
         seg.title = `offcut — ${fmt(bin.remaining)}${u()}`;
         bar.append(seg);
@@ -155,11 +180,11 @@ import "../../styles/site.css";
       return bar;
     }
 
-    function groupBins(bins: Bin[]) {
-      const map = new Map<string, { bin: Bin; count: number }>();
+    function groupBins(bins: AdvancedBin[]) {
+      const map = new Map<string, { bin: AdvancedBin; count: number }>();
       const order: string[] = [];
       for (const bin of bins) {
-        const sig = `${bin.stock}|${bin.pieces.map((p) => Math.round(p.length * 100)).join(",")}`;
+        const sig = `${bin.stock.length}|${bin.pieces.map((p) => Math.round(p.length * 100)).join(",")}`;
         const g = map.get(sig);
         if (g) g.count++;
         else { map.set(sig, { bin, count: 1 }); order.push(sig); }
@@ -168,14 +193,15 @@ import "../../styles/site.css";
     }
 
     function compute() {
-      const { stocks, kerf, pieces } = readState();
-      syncURL(stocks, kerf, pieces);
+      const { stocks, kerf, trim, pieces } = readState();
+      syncProject();
       out.textContent = "";
       if (!stocks.length || pieces.length === 0) { actions.hidden = true; return; }
 
-      const { bins, oversize } = pack(pieces, stocks, kerf);
+      const result = packAdvanced(pieces, stocks, kerf, trim);
+      const { bins, oversize } = result;
       const bars = bins.length;
-      const totalStock = bins.reduce((s, b) => s + b.stock, 0);
+      const totalStock = bins.reduce((s, b) => s + b.stock.length, 0);
       const used = bins.reduce((s, b) => s + b.used, 0);
       const offcut = bins.reduce((s, b) => s + b.remaining, 0);
       const cuts = bins.reduce((s, b) => s + b.pieces.length, 0);
@@ -188,6 +214,8 @@ import "../../styles/site.css";
         stat(eff.toFixed(1) + "%", "efficiency"),
         stat(fmt(offcut) + " " + u(), "offcut total"),
         stat(String(cuts), "cuts"),
+        stat(fmt(result.kerfLoss + result.trimLoss) + " " + u(), "kerf + trim loss"),
+        stat(result.cost ? result.cost.toLocaleString("en-AU", { style: "currency", currency: "AUD" }) : "—", "stock cost"),
       );
       out.append(grid);
 
@@ -210,12 +238,13 @@ import "../../styles/site.css";
 
       const wrap = document.createElement("div");
       wrap.className = "bars";
+      const reusable = num(minOffcutEl.value);
       for (const { bin, count } of groupBins(bins)) {
         const lbl = document.createElement("div");
         lbl.className = "bar-label";
         const pre = count > 1 ? `×${count} · ` : "";
         lbl.textContent =
-          `${pre}${fmt(bin.stock)}${u()} · ${bin.pieces.length} cut${bin.pieces.length > 1 ? "s" : ""} · offcut ${fmt(bin.remaining)}${u()}`;
+          `${pre}${fmt(bin.stock.length)}${u()} · ${bin.pieces.length} cut${bin.pieces.length > 1 ? "s" : ""} · ${bin.remaining >= reusable && reusable > 0 ? "RETAIN" : "offcut"} ${fmt(bin.remaining)}${u()} · sequence ${bin.pieces.map((piece) => piece.name).join(" → ")}`;
         wrap.append(lbl, barEl(bin));
       }
       out.append(wrap);
@@ -223,21 +252,21 @@ import "../../styles/site.css";
     }
 
     function summary(): string {
-      const { stocks, kerf, pieces } = readState();
-      const { bins, oversize } = pack(pieces, stocks, kerf);
-      const totalStock = bins.reduce((s, b) => s + b.stock, 0);
+      const { stocks, kerf, trim, pieces } = readState();
+      const { bins, oversize } = packAdvanced(pieces, stocks, kerf, trim);
+      const totalStock = bins.reduce((s, b) => s + b.stock.length, 0);
       const used = bins.reduce((s, b) => s + b.used, 0);
       const offcut = bins.reduce((s, b) => s + b.remaining, 0);
       const eff = totalStock ? (used / totalStock) * 100 : 0;
       const lines = [
         "Cut list — vishvaddi.com/site/cut-list",
-        `Stock: ${stocks.map((s) => fmt(s)).join(", ")} ${u()}  |  Kerf: ${kerf}${u()}`,
+        `Stock: ${stocks.map((s) => `${fmt(s.length)}${u()} × ${s.qty || "unlimited"}`).join(", ")}  |  Kerf: ${kerf}${u()} | End trim: ${trim}${u()}`,
         `Result: ${bins.length} bar(s), ${eff.toFixed(1)}% efficiency, ${fmt(offcut)}${u()} offcut`,
         "",
       ];
       groupBins(bins).forEach(({ bin, count }) => {
         const pre = count > 1 ? `${count}× ` : "";
-        lines.push(`${pre}[${fmt(bin.stock)}${u()}] ${bin.pieces.map((p) => fmt(p.length)).join(" + ")}  (offcut ${fmt(bin.remaining)}${u()})`);
+        lines.push(`${pre}[${fmt(bin.stock.length)}${u()}] ${bin.pieces.map((p) => `${p.name} ${fmt(p.length)}`).join(" + ")}  (offcut ${fmt(bin.remaining)}${u()})`);
       });
       if (oversize.length)
         lines.push("", "Won't fit: " + oversize.map((o) => `${o.name} ${fmt(o.length)}${u()}`).join(", "));
@@ -247,36 +276,42 @@ import "../../styles/site.css";
 
     q<HTMLButtonElement>("#add-row")!.addEventListener("click", () => { addRow(); compute(); });
     q<HTMLButtonElement>("#save-pdf")!.addEventListener("click", () => window.print());
+    const download = (name: string, content: string, type: string) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([content], { type })); a.download = name; a.click(); URL.revokeObjectURL(a.href); };
+    q<HTMLButtonElement>("#export-project")!.addEventListener("click", () => download(`${projectEl.value.trim() || "cut-list"}.cutlist.json`, JSON.stringify(projectState(), null, 2), "application/json"));
+    q<HTMLButtonElement>("#export-csv")!.addEventListener("click", () => {
+      const esc = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+      download(`${projectEl.value.trim() || "cut-list"}.csv`, [["Piece", "Length", "Qty", "Unit"], ...readState().pieces.map((piece) => [piece.name, piece.length, piece.qty, u()])].map((row) => row.map(esc).join(",")).join("\r\n"), "text/csv");
+    });
+    q<HTMLButtonElement>("#import-project")!.addEventListener("click", () => { const input = document.createElement("input"); input.type = "file"; input.accept = ".json,application/json"; input.addEventListener("change", async () => { const file = input.files?.[0]; if (!file) return; try { applyState(JSON.parse(await file.text())); } catch { alert("That is not a valid Cut List project."); } }); input.click(); });
     q<HTMLButtonElement>("#email")!.addEventListener("click", () => {
       location.href = `mailto:?subject=${encodeURIComponent("Cut list")}&body=${encodeURIComponent(summary())}`;
     });
     q<HTMLButtonElement>("#copy")!.addEventListener("click", async () => {
       try {
-        await navigator.clipboard.writeText(location.href);
+        await navigator.clipboard.writeText(shareURL());
         const c = q<HTMLElement>("#copied")!;
         c.hidden = false;
         setTimeout(() => (c.hidden = true), 1800);
       } catch { /* the address bar already holds the share link */ }
     });
 
-    function init() {
-      const url = new URLSearchParams(location.search);
-      stocksEl.value = url.has("s") ? url.get("s")!.split("_").map((x) => fmt(num(x))).join(", ") : "5400";
-      kerfEl.value = url.has("k") ? String(num(url.get("k")!)) : "3";
-      if (url.get("u") === "in") unitEl.value = "in";
-      const p = url.get("p");
-      if (p) {
-        p.split(",").forEach((seg) => {
-          const [name, len, qty] = seg.split(":");
-          addRow(decodeURIComponent(name || "").slice(0, 40), String(num(len || "")), String(intNum(qty || "1") || 1));
-        });
-      } else {
-        addRow("Stile", "2400", "4");
-        addRow("Rail", "760", "6");
-      }
-      [stocksEl, kerfEl].forEach((el) => el.addEventListener("input", compute));
-      unitEl.addEventListener("change", compute);
+    function applyState(state: any) {
+      if (!state || !Array.isArray(state.stocks) || !Array.isArray(state.pieces)) throw new Error("bad project");
+      projectEl.value = String(state.name || "Linear cut list").slice(0, 80); materialEl.value = String(state.material || "").slice(0, 80);
+      stocksEl.value = state.stocks.map((stock: LinearStock) => stock.length).join(", "); stockQtyEl.value = state.stocks.map((stock: LinearStock) => stock.qty ?? 0).join(", "); stockCostEl.value = state.stocks.map((stock: LinearStock) => stock.cost ?? 0).join(", ");
+      kerfEl.value = String(num(state.kerf ?? "3")); trimEl.value = String(num(state.trim ?? "0")); minOffcutEl.value = String(num(state.minOffcut ?? "300"));
+      unitEl.value = state.unit === "in" ? "in" : "mm"; rowsEl.textContent = "";
+      state.pieces.forEach((piece: CutPiece) => addRow(piece.name, String(piece.length), String(piece.qty)));
       compute();
+    }
+
+    function init() {
+      let state: any = null; const encoded = new URLSearchParams(location.search).get("d");
+      if (encoded) try { const binary = atob(encoded.replace(/-/g, "+").replace(/_/g, "/")); state = JSON.parse(new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)))); } catch { /* */ }
+      if (!state) try { state = JSON.parse(localStorage.getItem("vv_cutlist_1d_v2") || "null"); } catch { /* */ }
+      applyState(state ?? { name: "Linear cut list", material: "42 × 19 DAR pine", unit: "mm", stocks: [{ name: "5400 mm", length: 5400, qty: 0, cost: 0 }], kerf: 3, trim: 5, minOffcut: 300, pieces: [{ name: "Stile", length: 2400, qty: 4 }, { name: "Rail", length: 760, qty: 6 }] });
+      [projectEl, materialEl, stocksEl, stockQtyEl, stockCostEl, kerfEl, trimEl, minOffcutEl].forEach((el) => el.addEventListener("input", compute));
+      unitEl.addEventListener("change", compute);
       console.log(
         "%c◳ Cut List Optimizer%c · built by hand, runs in your browser, no trackers · vishvaddi.com",
         "font-weight:bold", "color:#888",

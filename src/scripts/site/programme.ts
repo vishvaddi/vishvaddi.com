@@ -7,6 +7,7 @@ import {
   loadProgrammes, persistProgramme, removeProgramme,
   pid, depsToText, textToDeps,
 } from './programme-model'
+import { createProgrammeTutorial } from './programme-tutorial'
 
 const ZOOMS = [10, 20, 34]              // month / week / day feel
 const ROW_H = 30
@@ -50,18 +51,33 @@ export function initProgramme(el: HTMLElement): void {
   let showFloat = false
   let lookAhead = 0                     // 0 = all, else weeks
   let fitMode = false
-  let fitDayW = 10
   let mobileView: 'chart' | 'table' = 'chart'
+  let demoMode = false
+  let beforeDemo: Programme | null = null
+  let observedWidth = 0
+
+  const appMode = () => !!document.fullscreenElement || el.classList.contains('prog-app-mode')
 
   // fullscreen exit + breakpoint changes need a repaint (button labels, layout)
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement) (screen.orientation as any).unlock?.()
-    if (prog) drawEditor()
+    if (prog) requestAnimationFrame(drawEditor)
   })
   window.matchMedia('(max-width: 900px)').addEventListener('change', () => { if (prog) drawEditor() })
+  new ResizeObserver(entries => {
+    const width = Math.round(entries[0]?.contentRect.width ?? 0)
+    if (!prog || !width || Math.abs(width - observedWidth) < 3) return
+    observedWidth = width
+    requestAnimationFrame(drawEditor)
+  }).observe(el)
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && el.classList.contains('prog-app-mode')) {
+      el.classList.remove('prog-app-mode'); document.body.classList.remove('prog-app-open'); if (prog) drawEditor()
+    }
+  })
 
   function scheduleSave() {
-    if (!prog) return
+    if (!prog || demoMode) return
     prog.updated = Date.now()
     clearTimeout(saveTimer)
     saveTimer = window.setTimeout(() => { if (prog) persistProgramme(prog) }, 400)
@@ -266,18 +282,23 @@ export function initProgramme(el: HTMLElement): void {
     spacer.className = 'prog-spacer'
     const fsBtn = document.createElement('button')
     fsBtn.className = 'prog-tb'
-    fsBtn.textContent = document.fullscreenElement ? '⛶ exit' : '⛶'
+    fsBtn.textContent = appMode() ? '⛶ exit' : '⛶ full'
     fsBtn.title = 'Fullscreen (locks landscape on Android)'
     fsBtn.setAttribute('aria-label', 'Toggle fullscreen')
     fsBtn.addEventListener('click', async () => {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen().catch(() => {})
+      if (appMode()) {
+        if (document.fullscreenElement) await document.exitFullscreen().catch(() => {})
+        el.classList.remove('prog-app-mode'); document.body.classList.remove('prog-app-open')
+        drawEditor()
       } else {
+        fitMode = true
         try {
           await el.requestFullscreen()
           // landscape lock only exists inside fullscreen (Chrome Android); iOS has neither — stay silent
           await (screen.orientation as any).lock?.('landscape').catch(() => {})
-        } catch { toast('Fullscreen not available in this browser') }
+        } catch {
+          el.classList.add('prog-app-mode'); document.body.classList.add('prog-app-open'); drawEditor()
+        }
       }
     })
     const fitBtn = document.createElement('button')
@@ -285,9 +306,6 @@ export function initProgramme(el: HTMLElement): void {
     fitBtn.textContent = fitMode ? 'fit ✓' : 'fit'
     fitBtn.title = 'Fit the whole programme to the screen'
     fitBtn.addEventListener('click', () => {
-      const gw = el.querySelector<HTMLElement>('.prog-gantt-wrap')
-      const days = Number(el.querySelector('.prog-gantt')?.getAttribute('data-days') ?? 0)
-      if (gw && days) fitDayW = Math.max(3, Math.min(34, Math.floor((gw.clientWidth - 4) / days)))
       fitMode = !fitMode
       drawEditor()
     })
@@ -394,7 +412,12 @@ export function initProgramme(el: HTMLElement): void {
       scheduleSave()
       drawEditor()
     })
-    bar.append(back, title, start, spacer, fsBtn, fitBtn, zoomOut, zoomIn, menuBtn, addBtn)
+    const helpBtn = document.createElement('button')
+    helpBtn.className = 'prog-tb'
+    helpBtn.textContent = '? Help'
+    helpBtn.setAttribute('data-programme-help', '')
+    helpBtn.setAttribute('aria-label', 'Programme Builder tutorial and help')
+    bar.append(back, title, start, spacer, fsBtn, fitBtn, zoomOut, zoomIn, menuBtn, helpBtn, addBtn)
     el.appendChild(bar)
 
     // narrow screens: chart-first with a Chart/Table switcher + one-time rotate hint
@@ -629,7 +652,6 @@ export function initProgramme(el: HTMLElement): void {
   }
 
   function renderTimeline(p: Programme, sched: Map<string, ScheduledTask>, trades: string[], visTasks: Task[]): HTMLElement {
-    const DAY_W = fitMode ? fitDayW : ZOOMS[zoom]
     // chart carries its own task names when the table is hidden (narrow chart-first view)
     const barLabels = window.matchMedia('(max-width: 900px)').matches && mobileView === 'chart'
     const wrap = document.createElement('div')
@@ -658,6 +680,11 @@ export function initProgramme(el: HTMLElement): void {
     for (let i = 0; i < 3; i++) {
       const d = new Date(days[days.length - 1]); d.setDate(d.getDate() + 1); days.push(d)
     }
+    const narrow = window.matchMedia('(max-width: 900px)').matches
+    const rootWidth = el.getBoundingClientRect().width || innerWidth
+    const tableWidth = narrow ? 0 : Math.max(280, rootWidth * (appMode() ? .3 : .46))
+    const timelineWidth = Math.max(240, rootWidth - tableWidth - (appMode() ? 32 : 12))
+    const DAY_W = fitMode ? Math.max(3, Math.min(34, timelineWidth / days.length)) : ZOOMS[zoom]
     const calIdx = new Map(days.map((d, i) => [fmtDate(d), i]))
     const rowOf = new Map(visTasks.map((t, i) => [t.id, i]))
 
@@ -1026,5 +1053,26 @@ export function initProgramme(el: HTMLElement): void {
     return wrap
   }
 
+  createProgrammeTutorial(el, {
+    openDemo: () => {
+      if (demoMode) return
+      if (prog) persistProgramme(prog)
+      beforeDemo = prog
+      const available = templates()
+      const source = available.find(template => /retail/i.test(template.name)) ?? available[0]
+      prog = source.make(fmtDate(new Date()))
+      prog.title = 'TUTORIAL — Retail fitout'
+      demoMode = true
+      fitMode = true
+      drawEditor()
+    },
+    closeDemo: () => {
+      if (!demoMode) return
+      demoMode = false
+      prog = beforeDemo
+      beforeDemo = null
+      if (prog) drawEditor(); else drawList()
+    },
+  })
   drawList()
 }

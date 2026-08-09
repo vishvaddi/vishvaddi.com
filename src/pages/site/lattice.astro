@@ -1,23 +1,20 @@
 ---
 import Base from "../../layouts/Base.astro";
 import "../../styles/site.css";
-// Unlisted by design: not in siteTools, filtered from the sitemap, noindex.
-// Reachable only by direct URL.
 ---
 
 <Base
   title="Lattice"
   description="Nested-grid planner — grids inside grids with roll-ups, formulas and links. Local-only."
   siteNav
-  noindex
 >
   <div class="blueprint tool lattice">
     <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Lattice</p>
     <h1>Lattice</h1>
     <p>
       A hierarchical sheet: every cell can hold another grid. Break a job into
-      trades, a trade into items, and let quantities roll up. <code>=12*85</code>
-      evaluates, <code>[[Sheet]]</code> links between sheets, and pasting a
+      trades, a trade into items, and let costs roll up. <code>=B2*D2</code>
+      calculates quantity × rate, <code>[[Sheet]]</code> links between sheets, and pasting a
       spreadsheet range or an indented list keeps its shape. Everything stays in
       this browser.
     </p>
@@ -118,11 +115,31 @@ import "../../styles/site.css";
        area with a pseudo-element so the text baseline does not shift. */
     .lattice :global(.lat-toolbar) { flex-wrap: wrap; }
 
+    .lattice.lat-app-mode,
+    .lattice:fullscreen {
+      position: fixed; inset: 0; z-index: 8000; width: 100%; max-width: none;
+      height: 100dvh; margin: 0; padding: 0.75rem;
+      overflow: auto; background: var(--bg); color: var(--fg);
+    }
+    .lattice.lat-app-mode > :not(#lattice-root):not(.lat-help-row),
+    .lattice:fullscreen > :not(#lattice-root):not(.lat-help-row) { display: none; }
+    .lattice.lat-app-mode #lattice-root,
+    .lattice:fullscreen #lattice-root { min-height: calc(100dvh - 1.5rem); }
+    .lattice.lat-app-mode :global(.lat-toolbar),
+    .lattice:fullscreen :global(.lat-toolbar) {
+      position: sticky; top: -0.75rem; z-index: 20; margin: -0.75rem -0.75rem 0.5rem;
+      padding: 0.65rem 0.75rem; background: color-mix(in srgb, var(--bg) 94%, transparent);
+      border-bottom: 1px solid var(--rule); backdrop-filter: blur(12px);
+    }
+    :global(body.lat-app-open) { overflow: hidden; }
+
     @media (max-width: 760px) {
       .lattice :global(.lat-spacer) { display: none; }
       .lattice :global(.lat-title) { flex: 1 1 8rem; max-width: none; }
       .lattice :global(.lat-search) { width: auto; flex: 1 1 6rem; min-width: 5rem; }
       .lattice :global(.lat-wrap) { margin-inline: calc(-1 * var(--gutter, 0px)); padding-inline: var(--gutter, 0px); }
+      .lattice.lat-app-mode, .lattice:fullscreen { padding: 0.4rem; }
+      .lattice.lat-app-mode :global(.lat-toolbar), .lattice:fullscreen :global(.lat-toolbar) { top: -0.4rem; margin: -0.4rem -0.4rem 0.4rem; padding: 0.5rem 0.4rem; }
     }
 
     @media (pointer: coarse) {

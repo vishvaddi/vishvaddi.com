@@ -4,37 +4,68 @@ import "../../styles/site.css";
 ---
 
 <Base
-  title="PDF Editor"
-  description="Merge, reorder, rotate and delete PDF pages, add page numbers, a footer or a stamp — entirely in your browser. Nothing is uploaded."
+  title="PDF Toolkit"
+  description="A local-first PDF toolkit: merge, split, organise, rotate, extract, sign, watermark, number, compress and convert pages in your browser."
   siteNav
 >
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site Tools</a> / PDF editor</p>
-    <h1>PDF Editor</h1>
-    <p>Combine PDFs, reorder/rotate/delete pages, and add page numbers, a footer or a stamp. Everything happens in your browser.</p>
+    <h1>PDF Toolkit</h1>
+    <p>Merge, split, extract, reorder, rotate, duplicate, sign, watermark, number, crop, raster-compress and convert PDF pages. Files stay on this device.</p>
 
     <label class="dropzone no-print" for="pdf-file">
-      <strong>Choose PDF files</strong> — or drop them here. Add as many as you like.
-      <input type="file" id="pdf-file" accept="application/pdf" multiple hidden />
+      <strong>Choose PDFs or images</strong> — or drop them here. Add as many as you like.
+      <input type="file" id="pdf-file" accept="application/pdf,image/png,image/jpeg" multiple hidden />
     </label>
 
-    <div class="calc-fields no-print" style="margin-top:1rem;">
+    <div class="pdf-toolbox no-print" style="margin-top:1rem;">
+      <div class="btn-row pdf-select-tools">
+        <button type="button" class="btn btn-ghost btn-sm" id="pdf-all">Select all</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="pdf-none">Clear selection</button>
+        <label class="pdf-range-label">Pages <input type="text" id="pdf-range" placeholder="1-3, 7, 10-" aria-label="Page range" /></label>
+        <button type="button" class="btn btn-ghost btn-sm" id="pdf-apply-range">Select range</button>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-ghost btn-sm" id="pdf-rot-left">↶ Rotate left</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="pdf-rot-right">↷ Rotate right</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="pdf-duplicate">Duplicate</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="pdf-delete">Delete</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="pdf-reverse">Reverse all</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="pdf-blank">+ Blank A4</button>
+      </div>
+    </div>
+
+    <details class="pdf-options no-print">
+      <summary>Issue marks, signature and document settings</summary>
+      <div class="calc-fields">
       <div class="field"><label for="pdf-footer">Footer text (optional)</label><input type="text" id="pdf-footer" maxlength="80" placeholder="e.g. Job 2604 — for review" /></div>
       <div class="field"><label for="pdf-stamp">Stamp / watermark (optional)</label><input type="text" id="pdf-stamp" maxlength="30" placeholder="e.g. DRAFT" /></div>
+      <div class="field"><label for="pdf-sign">Signature / approval text</label><input type="text" id="pdf-sign" maxlength="60" placeholder="Signed: Vish Vaddi · 9 Aug 2026" /></div>
+      <div class="field"><label for="pdf-title">Document title</label><input type="text" id="pdf-title" maxlength="100" /></div>
+      <div class="field"><label for="pdf-author">Author</label><input type="text" id="pdf-author" maxlength="80" /></div>
+      <div class="field"><label for="pdf-crop">Crop margin (mm)</label><input type="number" id="pdf-crop" min="0" max="50" step="1" value="0" /></div>
       <div class="field" style="justify-content:end;">
         <label style="display:flex;align-items:center;gap:0.4rem;"><input type="checkbox" id="pdf-num" /> Add page numbers</label>
       </div>
-    </div>
+      <div class="field" style="justify-content:end;"><label style="display:flex;align-items:center;gap:0.4rem;"><input type="checkbox" id="pdf-clean-meta" /> Remove existing metadata</label></div>
+      <div class="field" style="justify-content:end;"><label style="display:flex;align-items:center;gap:0.4rem;"><input type="checkbox" id="pdf-raster" /> Raster-compress output</label></div>
+      <div class="field"><label for="pdf-quality">Raster quality</label><select id="pdf-quality"><option value="0.86">High</option><option value="0.72">Balanced</option><option value="0.55">Small file</option></select></div>
+      </div>
+      <p class="calc-blurb">Marks and crop apply to selected pages, or every page when none are selected. Raster compression reduces scan-heavy files but removes searchable text and links.</p>
+    </details>
 
     <h2 style="font-size:1rem;margin-top:1.5rem;">Pages</h2>
     <div id="pdf-pages"></div>
 
     <div class="btn-row no-print">
       <button type="button" class="btn" id="pdf-export" disabled>Export PDF</button>
+      <button type="button" class="btn btn-ghost" id="pdf-extract" disabled>Extract selected PDF</button>
+      <button type="button" class="btn btn-ghost" id="pdf-split" disabled>Split selected to ZIP</button>
+      <button type="button" class="btn btn-ghost" id="pdf-images" disabled>Selected pages to PNG ZIP</button>
       <span id="pdf-status" style="align-self:center;font-size:0.85rem;color:var(--muted)"></span>
     </div>
 
-    <p class="disclosure">Your files are read in the browser and never uploaded. Encrypted/password-protected PDFs can't be opened.</p>
+    <p class="disclosure">Your files are read in the browser and never uploaded. Password removal, encryption and OCR are not faked here: they require specialist engines not currently bundled. Encrypted PDFs must be unlocked before opening.</p>
     <p class="note-foot"><a href="/site">← all tools</a></p>
   </div>
 

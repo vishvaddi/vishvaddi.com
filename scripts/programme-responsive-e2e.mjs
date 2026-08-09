@@ -34,6 +34,31 @@ try {
   check('landscape: chart-first mode is active', geometry.chartVisible && geometry.tableHidden)
   check('landscape: console clean', errors.length === 0, errors.slice(0, 2).join(' | '))
 
+  await page.locator('[aria-label="Toggle fullscreen"]').click()
+  await page.waitForTimeout(250)
+  const fullscreen = await page.evaluate(() => {
+    const root = document.querySelector('#programme-root')?.getBoundingClientRect()
+    const chart = document.querySelector('.prog-gantt')?.getBoundingClientRect()
+    return {
+      active: !!document.fullscreenElement,
+      rootWidth: root?.width ?? 0,
+      chartWidth: chart?.width ?? 0,
+      viewportWidth: innerWidth,
+    }
+  })
+  check('landscape: fullscreen activates', fullscreen.active)
+  check('landscape: fit recalculates after fullscreen', fullscreen.chartWidth >= fullscreen.rootWidth * 0.88, `${Math.round(fullscreen.chartWidth)}/${Math.round(fullscreen.rootWidth)}`)
+  await page.locator('[aria-label="Toggle fullscreen"]').click()
+
+  const originalTitle = await page.inputValue('.prog-title')
+  await page.locator('[data-programme-help]').click()
+  check('tutorial: searchable help opens', await page.locator('.prog-tut-browse:not([hidden])').count() === 1)
+  await page.locator('.prog-tut-btn', { hasText: 'Guided tour' }).click()
+  check('tutorial: disposable demo opens', (await page.inputValue('.prog-title')).startsWith('TUTORIAL'))
+  check('tutorial: comprehensive walkthrough is exposed', (await page.textContent('.prog-tut-step')) === '1 / 12')
+  await page.locator('.prog-tut-btn', { hasText: 'Close' }).click()
+  check('tutorial: closing restores the live programme', await page.inputValue('.prog-title') === originalTitle)
+
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.reload({ waitUntil: 'domcontentloaded' })
   const desktopGeometry = await page.evaluate(() => {

@@ -1,5 +1,6 @@
 ---
 import "../styles/global.css";
+import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../data/site-tools";
 
 interface Props {
   title?: string;
@@ -21,28 +22,9 @@ const {
   immersive = false,
 } = Astro.props;
 
-const siteTools: [string, string][] = [
-  ["/site", "All tools"],
-  ["/site/calc", "Calculator"],
-  ["/site/cut-list", "Cut List"],
-  ["/site/materials", "Materials"],
-  ["/site/geometry", "Geometry"],
-  ["/site/span", "Span Lookup"],
-  ["/site/convert", "Converter"],
-  ["/site/programme", "Programme"],
-  ["/site/rate", "Rate Builder"],
-  ["/site/charge-rate", "Charge-Out Rate"],
-  ["/site/prices", "Price Tracker"],
-  ["/site/quickref", "Quick Reference"],
-  ["/site/gauges", "Phone Tools"],
-  ["/site/sketch", "Sketchpad"],
-  ["/site/voice", "Voice Notes"],
-  ["/site/pdf", "PDF Editor"],
-  ["/site/records", "Site Records"],
-  ["/site/resources", "Resources"],
-  ["/radio", "Radio"],
-];
 const here = Astro.url.pathname.replace(/\/$/, "");
+const activeToolHref = here === "/site/sheet" ? "/site/cut-list" : here;
+const currentTool = SITE_TOOLS.find((tool) => tool.href === activeToolHref);
 
 const navPrimary: [string, string][] = [
   ["/site", "Tools"],
@@ -147,16 +129,59 @@ const updatedFmt = updatedDate
       {showRail && (
         <>
           <nav class="site-rail" aria-label="Site tools">
-            <span class="rail-title">Site Tools</span>
-            {siteTools.map(([href, label]) => (
-              <a href={href} class={here === href.replace(/\/$/, "") ? "active" : ""}>{label}</a>
-            ))}
+            <div class="site-nav-head">
+              <span class="rail-title">Site tools</span>
+              <a href="/site" class="site-nav-all">All</a>
+            </div>
+            <label class="site-tool-search-label">
+              <span class="sr-only">Find a tool</span>
+              <input class="site-tool-search" type="search" placeholder="Find a tool…" autocomplete="off" data-site-tool-search />
+            </label>
+            <div class="site-nav-groups">
+              {SITE_TOOL_CATEGORIES.map((category) => (
+                <section class="site-nav-group" data-site-tool-group>
+                  <span class="site-nav-category">{category}</span>
+                  {SITE_TOOLS.filter((tool) => tool.category === category).map((tool) => (
+                    <a
+                      href={tool.href}
+                      class={activeToolHref === tool.href ? "active" : ""}
+                      aria-current={activeToolHref === tool.href ? "page" : undefined}
+                      data-site-tool-link
+                      data-search={`${tool.title} ${tool.aliases}`}
+                    >{tool.shortTitle}</a>
+                  ))}
+                </section>
+              ))}
+            </div>
           </nav>
-          <nav class="site-chips" aria-label="Site tools">
-            {siteTools.map(([href, label]) => (
-              <a href={href} class={here === href.replace(/\/$/, "") ? "active" : ""}>{label}</a>
-            ))}
-          </nav>
+          <details class="site-picker">
+            <summary><span>Tools</span><strong>{currentTool?.shortTitle ?? "Choose a tool"}</strong></summary>
+            <nav class="site-picker-panel" aria-label="Site tools">
+              <div class="site-picker-top">
+                <a href="/site">All tools</a>
+                <label class="site-tool-search-label">
+                  <span class="sr-only">Find a tool</span>
+                  <input class="site-tool-search" type="search" placeholder="Find a tool…" autocomplete="off" data-site-tool-search />
+                </label>
+              </div>
+              {SITE_TOOL_CATEGORIES.map((category) => (
+                <section class="site-nav-group" data-site-tool-group>
+                  <span class="site-nav-category">{category}</span>
+                  <div class="site-picker-links">
+                    {SITE_TOOLS.filter((tool) => tool.category === category).map((tool) => (
+                      <a
+                        href={tool.href}
+                        class={activeToolHref === tool.href ? "active" : ""}
+                        aria-current={activeToolHref === tool.href ? "page" : undefined}
+                        data-site-tool-link
+                        data-search={`${tool.title} ${tool.aliases}`}
+                      >{tool.shortTitle}</a>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </nav>
+          </details>
         </>
       )}
       <slot />

@@ -11,7 +11,7 @@
   } catch (e) {
     recents = [];
   }
-  if (!Array.isArray(recents) || !recents.length) return;
+  if (!Array.isArray(recents)) recents = [];
 
   var added = 0;
   recents.forEach(function (href) {
@@ -25,4 +25,23 @@
   });
 
   if (added) sec.hidden = false;
+
+  var search = document.getElementById("site-hub-search");
+  var empty = document.getElementById("site-search-empty");
+  if (search) {
+    search.addEventListener("input", function () {
+      var query = search.value.trim().toLowerCase();
+      var visible = 0;
+      document.querySelectorAll("[data-tool-item]").forEach(function (item) {
+        var match = !query || (item.dataset.search || item.textContent || "").toLowerCase().includes(query);
+        item.hidden = !match;
+        if (match) visible++;
+      });
+      document.querySelectorAll("[data-tool-group]").forEach(function (group) {
+        group.hidden = !group.querySelector("[data-tool-item]:not([hidden])");
+      });
+      if (empty) empty.hidden = visible !== 0;
+      if (sec) sec.hidden = true;
+    });
+  }
 })();
