@@ -1707,7 +1707,7 @@ function mulberry32(a) {
 }
 function seedFromString(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return h >>> 0; }
 function RND() { return dailyRng ? dailyRng() : Math.random(); }
-const DEEP_SWARM_BUILD = '2026.08.10-cockpit-ore-perf';
+const DEEP_SWARM_BUILD = '2026.08.10-cockpit-ore-perf2';
 const RUN_TRACE_LIMIT = 30;
 let runTrace = [];
 let lastRuntimeError = null;
