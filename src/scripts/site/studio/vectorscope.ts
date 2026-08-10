@@ -1,7 +1,5 @@
 import { masterAnalyser, masterSplit } from "./engine";
-import { el, btn, help } from "./helpers";
-
-type SpectralMode = "kaleido" | "tunnel" | "bloom";
+import { el, help } from "./helpers";
 
 export interface Vectorscope {
   root: HTMLElement;
@@ -9,280 +7,169 @@ export interface Vectorscope {
   setActive: (on: boolean) => void;
 }
 
-const MODES: Array<{ id: SpectralMode; label: string }> = [
-  { id: "kaleido", label: "KALEIDO" },
-  { id: "tunnel", label: "TUNNEL" },
-  { id: "bloom", label: "PHASE BLOOM" },
-];
+interface Spore {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  hue: number;
+}
 
 export function buildVectorscope(): Vectorscope {
-  const root = el("div", "wa-spectral");
+  const root = el("div", "wa-spectral"); root.dataset.visualizer = "signal-reef";
   const canvas = document.createElement("canvas");
   canvas.className = "wa-vectorscope";
   canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-label", "Psychedelic audio spectrometer driven by the master frequency spectrum and stereo phase");
+  canvas.setAttribute("aria-label", "Signal Reef living master-bus visualiser showing bass mass, midrange branches, high-frequency spores and stereo phase threads");
   const controls = el("div", "wa-spectral-controls");
-  let mode = (localStorage.getItem("vv_studio_spectral_mode") as SpectralMode) || "kaleido";
-  if (!MODES.some((item) => item.id === mode)) mode = "kaleido";
-  let symmetry = Number(localStorage.getItem("vv_studio_spectral_symmetry")) || 8;
-  let intensity = Number(localStorage.getItem("vv_studio_spectral_intensity")) || 0.78;
-  let trail = Number(localStorage.getItem("vv_studio_spectral_trail")) || 0.82;
-  const modeButtons: HTMLButtonElement[] = [];
-  MODES.forEach((item) => {
-    const button = btn(item.label, "wa-spectral-mode") as HTMLButtonElement;
-    button.classList.remove("wa-btn");
-    button.setAttribute("aria-pressed", String(item.id === mode));
-    button.addEventListener("click", () => {
-      mode = item.id;
-      localStorage.setItem("vv_studio_spectral_mode", mode);
-      modeButtons.forEach((candidate, index) => {
-        const selected = MODES[index].id === mode;
-        candidate.classList.toggle("active", selected);
-        candidate.setAttribute("aria-pressed", String(selected));
-      });
-    });
-    button.classList.toggle("active", item.id === mode);
-    modeButtons.push(button);
-    controls.append(button);
-  });
-  const symmetrySelect = document.createElement("select");
-  symmetrySelect.setAttribute("aria-label", "Spectrometer symmetry");
-  [6, 8, 12].forEach((value) => symmetrySelect.append(new Option(`${value}×`, String(value))));
-  symmetrySelect.value = String(symmetry);
-  symmetrySelect.addEventListener("change", () => {
-    symmetry = Number(symmetrySelect.value);
-    localStorage.setItem("vv_studio_spectral_symmetry", String(symmetry));
-  });
-  const makeRange = (label: string, value: number, onInput: (next: number) => void) => {
+  let intensity = Number(localStorage.getItem("vv_studio_reef_drive")) || 0.76;
+  let trail = Number(localStorage.getItem("vv_studio_reef_afterimage")) || 0.8;
+  const makeRange = (label: string, value: number, onInput: (next: number) => void): HTMLInputElement => {
     const input = document.createElement("input");
     input.type = "range"; input.min = "0.2"; input.max = "1"; input.step = "0.02"; input.value = String(value);
     input.setAttribute("aria-label", label);
     input.addEventListener("input", () => onInput(Number(input.value)));
     return input;
   };
-  const intensityInput = makeRange("Spectrometer intensity", intensity, (value) => {
-    intensity = value; localStorage.setItem("vv_studio_spectral_intensity", String(value));
-  });
-  const trailInput = makeRange("Spectrometer trail persistence", trail, (value) => {
-    trail = value; localStorage.setItem("vv_studio_spectral_trail", String(value));
-  });
-  controls.append(symmetrySelect, el("span", "wa-spectral-lbl", "GAIN"), intensityInput, el("span", "wa-spectral-lbl", "TRAIL"), trailInput);
-  help(controls, "A real master-bus display: colour follows bass, mids and highs; the centre plots true left/right phase.");
+  const driveInput = makeRange("Signal Reef drive", intensity, (value) => { intensity = value; localStorage.setItem("vv_studio_reef_drive", String(value)); });
+  const trailInput = makeRange("Signal Reef afterimage", trail, (value) => { trail = value; localStorage.setItem("vv_studio_reef_afterimage", String(value)); });
+  controls.append(el("span", "wa-spectral-id", "SIGNAL REEF"), el("span", "wa-spectral-lbl", "DRIVE"), driveInput, el("span", "wa-spectral-lbl", "AFTERIMAGE"), trailInput);
+  help(controls, "A living master-bus map: bass builds the body, mids grow branches, highs shed spores and the twin threads show stereo phase.");
   root.append(canvas, controls);
 
   const g = canvas.getContext("2d")!;
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const frequency = new Uint8Array(1024), left = new Uint8Array(2048), right = new Uint8Array(2048);
+  const spores: Spore[] = [];
   let width = 0, height = 0, dpr = 1, active = false, raf = 0, last = 0;
-  let drive = 0, transient = 0, correlation = 0, hue = 165;
-  const left = new Uint8Array(1024), right = new Uint8Array(1024), mono = new Uint8Array(2048), frequency = new Uint8Array(1024);
+  let drive = 0, transient = 0, correlation = 0, stereoWidth = 0, hue = 158, spawnClock = 0;
 
   const resize = (): void => {
-    const rect = canvas.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
+    const rect = canvas.getBoundingClientRect(); if (!rect.width || !rect.height) return;
     dpr = Math.min(2, devicePixelRatio || 1);
     width = canvas.width = Math.max(1, Math.floor(rect.width * dpr));
     height = canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    g.fillStyle = "#06060d"; g.fillRect(0, 0, width, height);
+    g.fillStyle = "#04040c"; g.fillRect(0, 0, width, height);
   };
   new ResizeObserver(resize).observe(canvas);
 
   const energy = (from: number, to: number): number => {
-    let sum = 0;
-    const end = Math.min(to, frequency.length);
+    let sum = 0; const end = Math.min(to, frequency.length);
     for (let i = from; i < end; i++) sum += frequency[i];
     return end > from ? sum / (end - from) / 255 : 0;
   };
 
-  const polar = (cx: number, cy: number, radius: number, angle: number): [number, number] => [
-    cx + Math.cos(angle) * radius,
-    cy + Math.sin(angle) * radius,
-  ];
+  const readStereo = (): void => {
+    const split = masterSplit; if (!split) { correlation *= .9; stereoWidth *= .9; return; }
+    const count = Math.min(left.length, right.length, split.left.fftSize, split.right.fftSize);
+    split.left.getByteTimeDomainData(left.subarray(0, count)); split.right.getByteTimeDomainData(right.subarray(0, count));
+    let lr = 0, ll = 0, rr = 0, difference = 0;
+    for (let i = 0; i < count; i++) {
+      const l = (left[i] - 128) / 128, r = (right[i] - 128) / 128;
+      lr += l * r; ll += l * l; rr += r * r; difference += Math.abs(l - r);
+    }
+    const denominator = Math.sqrt(ll * rr);
+    correlation += ((denominator > 1e-6 ? lr / denominator : 0) - correlation) * .13;
+    stereoWidth += ((count ? difference / count : 0) - stereoWidth) * .16;
+  };
 
-  function drawKaleido(cx: number, cy: number, radius: number, low: number, mid: number, high: number, time: number): void {
-    const span = Math.PI * 2 / symmetry;
-    g.globalCompositeOperation = "lighter";
-    for (let arm = 0; arm < symmetry; arm++) {
-      const base = arm * span + time * (0.025 + high * 0.05);
-      for (let layer = 0; layer < 3; layer++) {
-        const band = layer === 0 ? low : layer === 1 ? mid : high;
-        g.beginPath();
-        for (let point = 0; point <= 44; point++) {
-          const fraction = point / 44;
-          const bin = Math.min(frequency.length - 1, Math.floor(Math.pow(fraction, 1.7) * (frequency.length - 1)));
-          const amp = frequency[bin] / 255;
-          const angle = base + (fraction - .5) * span * .82;
-          const wave = Math.sin(fraction * Math.PI * (3 + layer) + time * (1 + layer * .17)) * radius * .035 * band;
-          const r = radius * (.2 + fraction * .66) + amp * radius * (.11 + intensity * .17) + wave;
-          const [x, y] = polar(cx, cy, r, angle);
-          if (point === 0) g.moveTo(x, y); else g.lineTo(x, y);
-        }
-        const light = 48 + band * 24;
-        g.strokeStyle = `hsla(${(hue + layer * 72 + arm * 4) % 360},100%,${light}%,${.18 + band * .55})`;
-        g.fillStyle = `hsla(${(hue + layer * 72 + arm * 7) % 360},100%,58%,${.012 + band * .045})`;
-        g.lineWidth = (.7 + band * 2.5) * dpr;
-        g.shadowColor = `hsla(${(hue + layer * 72) % 360},100%,65%,.8)`;
-        g.shadowBlur = (3 + band * 14) * dpr;
-        g.closePath(); g.fill(); g.stroke();
+  const reefAmplitude = (fraction: number, time: number, idle: boolean): number => {
+    const bin = Math.min(frequency.length - 1, Math.floor(Math.pow(fraction, 1.75) * 500));
+    const measured = frequency[bin] / 255;
+    return Math.max(measured, idle ? .13 + Math.sin(time * .7 + fraction * 11) * .045 : 0);
+  };
+
+  const drawBody = (time: number, low: number, mid: number, high: number, idle: boolean): void => {
+    const leftEdge = width * .055, span = width * .89, centre = height * .52;
+    const body = g.createLinearGradient(leftEdge, 0, leftEdge + span, 0);
+    body.addColorStop(0, `hsla(${(hue + 28) % 360},100%,58%,.2)`); body.addColorStop(.48, `hsla(${(hue + 118) % 360},100%,62%,.28)`); body.addColorStop(1, `hsla(${(hue + 224) % 360},100%,62%,.12)`);
+    g.globalCompositeOperation = "lighter"; g.fillStyle = body; g.beginPath();
+    for (let pass = 0; pass < 2; pass++) {
+      for (let point = 0; point <= 120; point++) {
+        const index = pass ? 120 - point : point, fraction = index / 120, amplitude = reefAmplitude(fraction, time, idle);
+        const pulse = Math.sin(fraction * 13 + time * (.55 + high)) * height * .012;
+        const thickness = height * (.025 + amplitude * (.09 + intensity * .08) + low * .018);
+        const y = centre + pulse + (pass ? thickness : -thickness);
+        const x = leftEdge + fraction * span;
+        if (!pass && point === 0) g.moveTo(x, y); else g.lineTo(x, y);
       }
+    }
+    g.closePath(); g.shadowColor = `hsla(${(hue + 95) % 360},100%,60%,.75)`; g.shadowBlur = (5 + drive * 15) * dpr; g.fill(); g.shadowBlur = 0;
+
+    for (let branch = 0; branch < 26; branch++) {
+      const fraction = (branch + .65) / 27, amplitude = reefAmplitude(fraction, time, idle);
+      const x = leftEdge + fraction * span, direction = branch % 2 ? 1 : -1;
+      const phaseSample = Math.min(left.length - 1, Math.floor(fraction * 1024));
+      const phase = ((left[phaseSample] || 128) - (right[phaseSample] || 128)) / 128;
+      const startY = centre + Math.sin(fraction * 13 + time * .55) * height * .012;
+      const length = height * (.055 + amplitude * (.18 + intensity * .12) + mid * .035);
+      const endX = x + phase * width * .045 + Math.sin(branch * 2.17 + time * .23) * width * .012;
+      const endY = startY + direction * length;
+      g.beginPath(); g.moveTo(x, startY);
+      g.bezierCurveTo(x + direction * width * .018, startY + direction * length * .25, endX - direction * width * .014, endY - direction * length * .25, endX, endY);
+      g.strokeStyle = `hsla(${(hue + branch * 17 + amplitude * 80) % 360},100%,${58 + high * 18}%,${.2 + amplitude * .62})`;
+      g.lineWidth = (.55 + amplitude * 2.4) * dpr; g.shadowColor = g.strokeStyle; g.shadowBlur = (2 + amplitude * 8) * dpr; g.stroke(); g.shadowBlur = 0;
+      g.fillStyle = `hsla(${(hue + 120 + branch * 11) % 360},100%,72%,${.24 + high * .5})`;
+      g.beginPath(); g.arc(endX, endY, (.8 + high * 2.8 + amplitude * 1.5) * dpr, 0, Math.PI * 2); g.fill();
+    }
+  };
+
+  const drawPhaseThreads = (time: number): void => {
+    const centre = height * .52, leftEdge = width * .055, span = width * .89;
+    [left, right].forEach((channel, channelIndex) => {
+      g.beginPath();
+      for (let point = 0; point <= 160; point++) {
+        const fraction = point / 160, sample = channel[Math.min(channel.length - 1, Math.floor(fraction * 1024))];
+        const signal = ((sample || 128) - 128) / 128;
+        const y = centre + signal * height * (.08 + intensity * .055) + Math.sin(fraction * 9 + time * .4 + channelIndex * Math.PI) * height * .006;
+        const x = leftEdge + fraction * span;
+        if (!point) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      const gradient = g.createLinearGradient(leftEdge, 0, leftEdge + span, 0);
+      gradient.addColorStop(0, channelIndex ? "#ff65c8" : "#65ffd5"); gradient.addColorStop(.52, "#f6ff88"); gradient.addColorStop(1, channelIndex ? "#7b8dff" : "#dc62ff");
+      g.strokeStyle = gradient; g.globalAlpha = .5 + drive * .42; g.lineWidth = (channelIndex ? 1.1 : 1.6) * dpr; g.shadowColor = channelIndex ? "#ff65c8" : "#65ffd5"; g.shadowBlur = 5 * dpr; g.stroke();
+    });
+    g.globalAlpha = 1; g.shadowBlur = 0;
+  };
+
+  const updateSpores = (time: number, high: number): void => {
+    if (!reduceMotion && transient > .018 && time - spawnClock > .045) {
+      spawnClock = time; const count = Math.min(8, 2 + Math.floor(transient * 30));
+      for (let i = 0; i < count; i++) {
+        const phase = time * 5.17 + i * 2.399, x = width * (.18 + ((Math.sin(phase * 1.7) + 1) * .38));
+        spores.push({ x, y: height * .52, vx: Math.cos(phase) * width * .0009, vy: Math.sin(phase) * height * .0027, life: 1, hue: (hue + i * 31) % 360 });
+      }
+      if (spores.length > 90) spores.splice(0, spores.length - 90);
+    }
+    g.globalCompositeOperation = "lighter";
+    for (let i = spores.length - 1; i >= 0; i--) {
+      const spore = spores[i]; spore.x += spore.vx; spore.y += spore.vy; spore.vy *= .995; spore.life -= .012 + high * .006;
+      if (spore.life <= 0) { spores.splice(i, 1); continue; }
+      g.fillStyle = `hsla(${spore.hue},100%,70%,${spore.life * .72})`; g.shadowColor = g.fillStyle; g.shadowBlur = 7 * dpr;
+      g.beginPath(); g.arc(spore.x, spore.y, (1 + (1 - spore.life) * 2) * dpr, 0, Math.PI * 2); g.fill();
     }
     g.shadowBlur = 0;
-  }
+  };
 
-  function drawAura(cx: number, cy: number, radius: number, low: number, mid: number, high: number, time: number): void {
-    g.globalCompositeOperation = "lighter";
-    const aura = g.createRadialGradient(cx, cy, 0, cx, cy, radius);
-    aura.addColorStop(0, `hsla(${(hue + 80) % 360},100%,62%,${.09 + low * .1})`);
-    aura.addColorStop(.38, `hsla(${hue},100%,52%,${.035 + mid * .06})`);
-    aura.addColorStop(1, "rgba(0,0,0,0)");
-    g.fillStyle = aura; g.beginPath(); g.arc(cx, cy, radius, 0, Math.PI * 2); g.fill();
-    for (let ring = 0; ring < 5; ring++) {
-      g.beginPath();
-      const points = 120;
-      for (let point = 0; point <= points; point++) {
-        const angle = point / points * Math.PI * 2;
-        const ripple = Math.sin(angle * (symmetry / 2 + ring) + time * (.7 + ring * .13)) * radius * (.012 + high * .035);
-        const r = radius * (.16 + ring * .165) + ripple;
-        const [x, y] = polar(cx, cy, r, angle + time * .015 * (ring % 2 ? 1 : -1));
-        if (!point) g.moveTo(x, y); else g.lineTo(x, y);
-      }
-      g.closePath();
-      g.strokeStyle = `hsla(${(hue + ring * 43) % 360},100%,65%,${.055 + (4 - ring) * .022 + mid * .12})`;
-      g.lineWidth = (.45 + low * 1.2) * dpr; g.stroke();
-    }
-    for (let bead = 0; bead < symmetry * 2; bead++) {
-      const angle = bead / (symmetry * 2) * Math.PI * 2 + time * (.08 + high * .1);
-      const orbit = radius * (.52 + .17 * Math.sin(bead * 2.399 + time * .3));
-      const [x, y] = polar(cx, cy, orbit, angle);
-      g.fillStyle = `hsla(${(hue + bead * 19) % 360},100%,70%,${.22 + mid * .35})`;
-      g.beginPath(); g.arc(x, y, (1.1 + low * 3.5) * dpr, 0, Math.PI * 2); g.fill();
-    }
-  }
-
-  function drawTunnel(cx: number, cy: number, radius: number, low: number, mid: number, high: number, time: number): void {
-    g.globalCompositeOperation = "lighter";
-    for (let ring = 0; ring < 12; ring++) {
-      const depth = ((ring / 12 + time * .045) % 1);
-      const baseRadius = radius * (.08 + depth * .9);
-      const points = 96;
-      g.beginPath();
-      for (let point = 0; point <= points; point++) {
-        const fraction = point / points;
-        const bin = Math.floor(fraction * Math.min(384, frequency.length - 1));
-        const amp = frequency[bin] / 255;
-        const angle = fraction * Math.PI * 2 + time * .08 * (ring % 2 ? 1 : -1);
-        const warp = (amp * intensity + Math.sin(angle * symmetry / 2 + time) * .05 * mid) * radius * .1;
-        const [x, y] = polar(cx, cy, baseRadius + warp, angle);
-        if (!point) g.moveTo(x, y); else g.lineTo(x, y);
-      }
-      g.closePath();
-      g.strokeStyle = `hsla(${(hue + ring * 19 + high * 80) % 360},100%,${48 + low * 24}%,${.08 + (1 - depth) * .35})`;
-      g.lineWidth = (.6 + (1 - depth) * 1.8) * dpr;
-      g.stroke();
-    }
-  }
-
-  function drawBloom(cx: number, cy: number, radius: number, low: number, mid: number, high: number, time: number): void {
-    g.globalCompositeOperation = "lighter";
-    for (let petal = 0; petal < symmetry; petal++) {
-      const angle = petal / symmetry * Math.PI * 2 + time * .02;
-      const [tipX, tipY] = polar(cx, cy, radius * (.34 + low * .38), angle);
-      const tangent = angle + Math.PI / 2;
-      const spread = radius * (.12 + mid * .19);
-      const [c1x, c1y] = polar(cx, cy, spread, tangent);
-      const [c2x, c2y] = polar(tipX, tipY, spread * (.7 + high), tangent + Math.PI);
-      g.beginPath();
-      g.moveTo(cx, cy);
-      g.bezierCurveTo(c1x, c1y, c2x, c2y, tipX, tipY);
-      g.bezierCurveTo(2 * tipX - c2x, 2 * tipY - c2y, 2 * cx - c1x, 2 * cy - c1y, cx, cy);
-      g.fillStyle = `hsla(${(hue + petal * 360 / symmetry) % 360},100%,60%,${.035 + drive * .18})`;
-      g.strokeStyle = `hsla(${(hue + 55 + petal * 21) % 360},100%,68%,${.2 + high * .55})`;
-      g.lineWidth = (1 + mid * 2) * dpr;
-      g.fill(); g.stroke();
-    }
-  }
-
-  function drawPhase(cx: number, cy: number, radius: number): void {
-    const split = masterSplit;
-    if (!split) return;
-    const count = Math.min(split.left.fftSize, split.right.fftSize);
-    split.left.getByteTimeDomainData(left.subarray(0, count));
-    split.right.getByteTimeDomainData(right.subarray(0, count));
-    let lr = 0, ll = 0, rr = 0;
-    g.globalCompositeOperation = "lighter";
-    g.beginPath();
-    for (let i = 0; i < count; i += 2) {
-      const l = (left[i] - 128) / 128, r = (right[i] - 128) / 128;
-      lr += l * r; ll += l * l; rr += r * r;
-      const x = cx + (l - r) * radius * .46;
-      const y = cy - (l + r) * radius * .46;
-      if (!i) g.moveTo(x, y); else g.lineTo(x, y);
-    }
-    if (ll + rr < .0005) {
-      g.beginPath();
-      for (let i = 0; i <= 240; i++) {
-        const t = i / 240 * Math.PI * 2;
-        const x = cx + Math.sin(t * 3 + hue * .01) * radius * .18;
-        const y = cy + Math.sin(t * 4) * radius * .18;
-        if (!i) g.moveTo(x, y); else g.lineTo(x, y);
-      }
-    }
-    const denom = Math.sqrt(ll * rr);
-    const nextCorrelation = denom > 1e-6 ? lr / denom : 0;
-    correlation += (nextCorrelation - correlation) * .12;
-    const gradient = g.createLinearGradient(cx - radius / 2, cy, cx + radius / 2, cy);
-    gradient.addColorStop(0, "#a97eff"); gradient.addColorStop(.5, "#68f5cf"); gradient.addColorStop(1, "#ff55d5");
-    g.strokeStyle = gradient; g.lineWidth = (1 + drive * 2.5) * dpr;
-    g.shadowColor = "rgba(104,245,207,.85)"; g.shadowBlur = 8 * dpr; g.stroke(); g.shadowBlur = 0;
-  }
-
-  function frame(now: number): void {
+  const frame = (now: number): void => {
     raf = requestAnimationFrame(frame);
     if (!active || document.hidden || now - last < (reduceMotion ? 80 : 16)) return;
-    last = now;
-    if (!width) resize();
-    if (!width) return;
+    last = now; if (!width) resize(); if (!width) return;
     const analyser = masterAnalyser;
-    if (analyser) {
-      analyser.getByteFrequencyData(frequency.subarray(0, analyser.frequencyBinCount));
-      analyser.getByteTimeDomainData(mono.subarray(0, analyser.fftSize));
-    } else frequency.fill(0);
-    const low = energy(1, 18), mid = energy(18, 110), high = energy(110, 420);
-    const nextDrive = low * .5 + mid * .32 + high * .18;
-    transient = Math.max(0, nextDrive - drive * 1.16, transient * .88);
-    drive += (nextDrive - drive) * .2;
-    hue = (hue + .08 + high * .35) % 360;
-    g.globalCompositeOperation = "source-over";
-    g.fillStyle = `rgba(4,4,12,${Math.max(.055, .28 - trail * .24)})`;
-    g.fillRect(0, 0, width, height);
-    const cx = width / 2, cy = height / 2, radius = Math.min(width, height) * .43;
-    const time = reduceMotion ? 0 : now / 1000;
-    const idle = drive < .012;
-    const visualLow = Math.max(low, idle ? .24 + Math.sin(time * .7) * .05 : 0);
-    const visualMid = Math.max(mid, idle ? .18 + Math.sin(time * .53 + 2) * .04 : 0);
-    const visualHigh = Math.max(high, idle ? .13 + Math.sin(time * .91 + 4) * .03 : 0);
-    drawAura(cx, cy, radius, visualLow, visualMid, visualHigh, time);
-    if (mode === "kaleido") drawKaleido(cx, cy, radius, visualLow, visualMid, visualHigh, time);
-    else if (mode === "tunnel") drawTunnel(cx, cy, radius, visualLow, visualMid, visualHigh, time);
-    else drawBloom(cx, cy, radius, visualLow, visualMid, visualHigh, time);
-    if (transient > .025) {
-      g.globalCompositeOperation = "lighter";
-      g.strokeStyle = `hsla(${(hue + 160) % 360},100%,72%,${Math.min(.8, transient * 7)})`;
-      g.lineWidth = (1 + transient * 18) * dpr;
-      g.beginPath(); g.arc(cx, cy, radius * (.25 + transient * 1.8), 0, Math.PI * 2); g.stroke();
-    }
-    drawPhase(cx, cy, radius);
-    g.globalCompositeOperation = "source-over";
-    g.fillStyle = "rgba(211,255,246,.72)";
-    g.font = `${8 * dpr}px ui-monospace, monospace`;
-    g.fillText(`${mode.toUpperCase()}  B ${Math.round(low * 99)}  M ${Math.round(mid * 99)}  H ${Math.round(high * 99)}  Φ ${correlation.toFixed(2)}`, 9 * dpr, height - 10 * dpr);
-  }
-
-  return {
-    root,
-    canvas,
-    setActive: (on: boolean) => {
-      active = on;
-      if (on) { resize(); if (!raf) raf = requestAnimationFrame(frame); }
-    },
+    if (analyser) analyser.getByteFrequencyData(frequency.subarray(0, analyser.frequencyBinCount)); else frequency.fill(0);
+    readStereo();
+    const low = energy(1, 18), mid = energy(18, 110), high = energy(110, 420), nextDrive = low * .5 + mid * .32 + high * .18;
+    transient = Math.max(0, nextDrive - drive * 1.14, transient * .87); drive += (nextDrive - drive) * .19; hue = (hue + .055 + high * .28) % 360;
+    g.globalCompositeOperation = "source-over"; g.fillStyle = `rgba(3,3,11,${Math.max(.05, .3 - trail * .25)})`; g.fillRect(0, 0, width, height);
+    const time = reduceMotion ? 0 : now / 1000, idle = drive < .012;
+    const atmosphere = g.createLinearGradient(0, 0, width, height);
+    atmosphere.addColorStop(0, `hsla(${(hue + 25) % 360},100%,45%,${.018 + low * .055})`); atmosphere.addColorStop(.5, `hsla(${(hue + 130) % 360},100%,48%,${.018 + mid * .045})`); atmosphere.addColorStop(1, `hsla(${(hue + 245) % 360},100%,52%,${.012 + high * .055})`);
+    g.fillStyle = atmosphere; g.fillRect(0, 0, width, height);
+    drawBody(time, low, mid, high, idle); drawPhaseThreads(time); updateSpores(time, high);
+    g.globalCompositeOperation = "source-over"; g.fillStyle = "rgba(218,255,243,.76)"; g.font = `${8 * dpr}px ui-monospace, monospace`;
+    g.fillText(`SIGNAL REEF  B ${Math.round(low * 99)}  M ${Math.round(mid * 99)}  H ${Math.round(high * 99)}  WIDTH ${Math.round(stereoWidth * 99)}  PHASE ${correlation.toFixed(2)}`, 9 * dpr, height - 10 * dpr);
   };
+
+  return { root, canvas, setActive: (on: boolean) => { active = on; if (on) { resize(); if (!raf) raf = requestAnimationFrame(frame); } } };
 }
