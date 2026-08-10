@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-08-10 — Direct-drive DJ deck rebuild
+
+- Replaced the generic controller face with a physically grounded, branding-free SL-1200-inspired layout: brushed aluminium plinths, oversized grooved vinyl platters, strobe-dot rims, tonearms, stylus lamps, quartz indicators, 33/45 markers, start/stop keys and vertical pitch faders.
+- Connected the visual states to the instrument rather than looping decoration: records spin only during playback, tonearms follow track progress, loaded tracks light the target/quartz lamps, hot cues and transport states illuminate, and dual 12-segment VU ladders read the actual Web Audio deck signals.
+- Removed the visible embed warning and its help topic, while retaining the local-file privacy label and complete DJ control tutorial.
+- Added reduced-motion fallbacks and browser assertions for loaded/playing/stopped light states, responsive platter size, vertical pitch geometry and live audio meter response.
+
 ## 2026-08-10 — Local-first DJ Studio
 
 - Added DJ as Studio's sixth mode with two local-file Web Audio decks, decoded waveforms and BPM analysis, jog/needle seeking, main and eight hot cues, automatic/manual loops, slip, ±16% tempo, pitch preservation and deck sync.

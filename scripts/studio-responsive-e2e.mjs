@@ -87,12 +87,16 @@ for (const [name, width, height] of viewports) {
         const djLayout = await page.evaluate(() => {
           const decks = [...document.querySelectorAll('.wa-dj-deck')].map((node) => node.getBoundingClientRect())
           const crossfader = document.querySelector('.wa-dj-crossfader input')?.getBoundingClientRect()
+          const platter = document.querySelector('.wa-dj-platter')?.getBoundingClientRect()
+          const pitch = document.querySelector('.wa-dj-pitch-fader input')?.getBoundingClientRect()
           const host = document.querySelector('.wa-dj-decks')?.getBoundingClientRect()
           const library = document.querySelector('.wa-dj-library')?.getBoundingClientRect()
-          return { widths: decks.map((deck) => Math.round(deck.width)), tops: decks.map((deck) => Math.round(deck.top)), crossfader: crossfader?.width ?? 0, hostBottom: host?.bottom ?? 0, libraryTop: library?.top ?? 0 }
+          return { widths: decks.map((deck) => Math.round(deck.width)), tops: decks.map((deck) => Math.round(deck.top)), crossfader: crossfader?.width ?? 0, platter: platter?.width ?? 0, pitchWidth: pitch?.width ?? 0, pitchHeight: pitch?.height ?? 0, hostBottom: host?.bottom ?? 0, libraryTop: library?.top ?? 0 }
         })
         check(`${name}: DJ exposes two usable decks`, djLayout.widths.length === 2 && djLayout.widths.every((width) => width >= (name === 'desktop' || name === 'laptop' ? 260 : 320)), djLayout.widths.join('/'))
         check(`${name}: DJ crossfader is usable`, djLayout.crossfader >= 90, `${Math.round(djLayout.crossfader)}px`)
+        check(`${name}: DJ platter is turntable-sized`, djLayout.platter >= 220, `${Math.round(djLayout.platter)}px`)
+        check(`${name}: DJ pitch control is vertical`, djLayout.pitchHeight > djLayout.pitchWidth * 2, `${Math.round(djLayout.pitchWidth)}×${Math.round(djLayout.pitchHeight)}px`)
         if (name === 'phone' || name === 'landscape') {
           check(`${name}: DJ decks stack instead of squash`, djLayout.tops[1] > djLayout.tops[0] + 400, djLayout.tops.join('/'))
           check(`${name}: DJ library follows the decks`, djLayout.libraryTop >= djLayout.hostBottom - 1, `${Math.round(djLayout.hostBottom)}/${Math.round(djLayout.libraryTop)}`)

@@ -13,6 +13,7 @@ interface DeckNodes {
   hp: BiquadFilterNode;
   lp: BiquadFilterNode;
   fader: GainNode;
+  meter: AnalyserNode;
   cross: GainNode;
 }
 
@@ -166,12 +167,13 @@ export function buildDj(): { root: HTMLElement } {
     if (deck.nodes) return deck.nodes;
     const context = ac(), source = context.createMediaElementSource(deck.audio);
     const input = context.createGain(), low = context.createBiquadFilter(), mid = context.createBiquadFilter(), high = context.createBiquadFilter();
-    const hp = context.createBiquadFilter(), lp = context.createBiquadFilter(), fader = context.createGain(), cross = context.createGain();
+    const hp = context.createBiquadFilter(), lp = context.createBiquadFilter(), fader = context.createGain(), meter = context.createAnalyser(), cross = context.createGain();
     low.type = "lowshelf"; low.frequency.value = 250; mid.type = "peaking"; mid.frequency.value = 1200; mid.Q.value = 0.8;
     high.type = "highshelf"; high.frequency.value = 5000; hp.type = "highpass"; hp.frequency.value = 20; lp.type = "lowpass"; lp.frequency.value = 20000;
     fader.gain.value = 0.9;
-    source.connect(input).connect(low).connect(mid).connect(high).connect(hp).connect(lp).connect(fader).connect(cross).connect(ensureBus());
-    deck.nodes = { source, input, low, mid, high, hp, lp, fader, cross };
+    meter.fftSize = 256; meter.smoothingTimeConstant = 0.68;
+    source.connect(input).connect(low).connect(mid).connect(high).connect(hp).connect(lp).connect(fader).connect(meter).connect(cross).connect(ensureBus());
+    deck.nodes = { source, input, low, mid, high, hp, lp, fader, meter, cross };
     updateCrossfade();
     return deck.nodes;
   };
@@ -207,11 +209,20 @@ export function buildDj(): { root: HTMLElement } {
     display.append(time, bpmReadout, pitchReadout);
     const canvas = document.createElement("canvas"); canvas.className = "wa-dj-waveform"; canvas.setAttribute("aria-label", `Deck ${id} waveform; click to seek`);
     const transport = el("div", "wa-dj-transport");
-    const play = btn("▶ PLAY", "wa-dj-play"), cueButton = btn("CUE"), setCue = btn("SET CUE", "wa-btn-sm"), sync = btn("SYNC", "wa-btn-sm"), tempo = btn("MASTER TEMPO", "wa-btn-sm active");
+    const cueButton = btn("CUE"), setCue = btn("SET CUE", "wa-btn-sm"), sync = btn("SYNC", "wa-btn-sm"), tempo = btn("MASTER TEMPO", "wa-btn-sm active");
     tempo.setAttribute("aria-pressed", "true");
-    transport.append(cueButton, play, setCue, sync, tempo);
-    const jog = el("div", "wa-dj-jog"); jog.tabIndex = 0; jog.setAttribute("role", "slider"); jog.setAttribute("aria-label", `Deck ${id} jog wheel`);
-    jog.append(el("span", "wa-dj-jog-ring"), el("span", "wa-dj-jog-label", id));
+    transport.append(cueButton, setCue, sync, tempo);
+    const turntable = el("div", "wa-dj-turntable");
+    const jog = el("div", "wa-dj-jog wa-dj-platter"); jog.tabIndex = 0; jog.setAttribute("role", "slider"); jog.setAttribute("aria-label", `Deck ${id} direct-drive platter`);
+    const vinyl = el("span", "wa-dj-vinyl"), recordLabel = el("span", "wa-dj-record-label", id), spindle = el("span", "wa-dj-spindle");
+    vinyl.append(recordLabel, spindle); jog.append(el("span", "wa-dj-strobe-dots"), vinyl);
+    const tonearm = el("div", "wa-dj-tonearm");
+    tonearm.setAttribute("aria-hidden", "true"); tonearm.append(el("span", "wa-dj-arm-pivot"), el("span", "wa-dj-arm-tube"), el("span", "wa-dj-headshell"));
+    const startStop = btn("START · STOP", "wa-dj-start wa-dj-play");
+    const speed = el("div", "wa-dj-speed"); speed.append(el("span", "active", "33"), el("span", "", "45"));
+    const targetLight = el("span", "wa-dj-target-light"); targetLight.setAttribute("aria-hidden", "true");
+    const pitchFader = labelledRange("PITCH ±16", -16, 16, 0, 0.05, (value) => setPitch(deck, value)); pitchFader.classList.add("wa-dj-pitch-fader");
+    turntable.append(jog, tonearm, startStop, speed, targetLight, pitchFader, el("span", "wa-dj-quartz", "QUARTZ · DIRECT DRIVE"));
     const performancePanel = el("div", "wa-dj-performance");
     const loopBar = el("div", "wa-dj-loopbar");
     const loopIn = btn("IN", "wa-btn-sm"), loopOut = btn("OUT", "wa-btn-sm"), loop = btn("LOOP", "wa-btn-sm"), slip = btn("SLIP", "wa-btn-sm");
@@ -229,10 +240,9 @@ export function buildDj(): { root: HTMLElement } {
       labelledRange("LOW", -26, 6, 0, 0.5, (value) => { ensureDeckNodes(deck).low.gain.value = value; }),
       labelledRange("FILTER", -1, 1, 0, 0.01, (value) => { const nodes = ensureDeckNodes(deck); nodes.hp.frequency.value = value > 0 ? 20 * Math.pow(250, value) : 20; nodes.lp.frequency.value = value < 0 ? 20000 * Math.pow(60, value) : 20000; }),
       labelledRange("LEVEL", 0, 1.2, 0.9, 0.01, (value) => { ensureDeckNodes(deck).fader.gain.value = value; }),
-      labelledRange("TEMPO", -16, 16, 0, 0.05, (value) => setPitch(deck, value)),
     );
-    deckRoot.append(head, display, canvas, transport, jog, performancePanel, controls);
-    const deck: Deck = { id, audio: new Audio(), root: deckRoot, fileInput: input, title, time, bpmReadout, pitchReadout, canvas, play, cueButton, sync, tempo, loop, slip, hotCueButtons, nodes: null, file: null, objectUrl: null, buffer: null, bpm: 0, pitch: 0, cue: 0, hotCues: Array(8).fill(null), loopIn: null, loopOut: null, loopBeats: 4, loopOn: false, slipOn: false, slipStartedAt: null };
+    deckRoot.append(head, display, canvas, turntable, transport, performancePanel, controls);
+    const deck: Deck = { id, audio: new Audio(), root: deckRoot, fileInput: input, title, time, bpmReadout, pitchReadout, canvas, play: startStop, cueButton, sync, tempo, loop, slip, hotCueButtons, nodes: null, file: null, objectUrl: null, buffer: null, bpm: 0, pitch: 0, cue: 0, hotCues: Array(8).fill(null), loopIn: null, loopOut: null, loopBeats: 4, loopOn: false, slipOn: false, slipStartedAt: null };
     deck.audio.preload = "metadata";
 
     const togglePlay = async (): Promise<void> => {
@@ -240,9 +250,9 @@ export function buildDj(): { root: HTMLElement } {
       ensureDeckNodes(deck);
       if (deck.audio.paused) await deck.audio.play(); else deck.audio.pause();
     };
-    play.addEventListener("click", togglePlay);
-    deck.audio.addEventListener("play", () => { play.textContent = "❚❚ PAUSE"; play.classList.add("active"); });
-    deck.audio.addEventListener("pause", () => { play.textContent = "▶ PLAY"; play.classList.remove("active"); });
+    startStop.addEventListener("click", togglePlay);
+    deck.audio.addEventListener("play", () => { startStop.textContent = "STOP"; startStop.classList.add("active"); deckRoot.classList.add("playing"); });
+    deck.audio.addEventListener("pause", () => { startStop.textContent = "START · STOP"; startStop.classList.remove("active"); deckRoot.classList.remove("playing"); });
     cueButton.addEventListener("click", () => { deck.audio.pause(); deck.audio.currentTime = deck.cue; });
     setCue.addEventListener("click", () => { deck.cue = deck.audio.currentTime; cueButton.textContent = `CUE ${formatTime(deck.cue)}`; saveDeck(deck); });
     sync.addEventListener("click", () => {
@@ -285,7 +295,7 @@ export function buildDj(): { root: HTMLElement } {
 
   async function loadFile(deck: Deck, file: File): Promise<void> {
     deck.audio.pause(); if (deck.objectUrl) URL.revokeObjectURL(deck.objectUrl);
-    deck.file = file; deck.objectUrl = URL.createObjectURL(file); deck.audio.src = deck.objectUrl; deck.title.textContent = file.name;
+    deck.file = file; deck.objectUrl = URL.createObjectURL(file); deck.audio.src = deck.objectUrl; deck.title.textContent = file.name; deck.root.classList.add("loaded");
     deck.title.title = file.name; ensureDeckNodes(deck);
     try {
       const buffer = await ac().decodeAudioData(await file.arrayBuffer()); deck.buffer = buffer; deck.bpm = estimateBpm(buffer);
@@ -312,6 +322,12 @@ export function buildDj(): { root: HTMLElement } {
   }
 
   const mixerTitle = el("div", "wa-fx-title", "PERFORMANCE MIXER");
+  const meters = el("div", "wa-dj-meters");
+  const meterCells: HTMLElement[][] = decks.map((deck) => {
+    const strip = el("div", "wa-dj-meter"); strip.setAttribute("aria-label", `Deck ${deck.id} level meter`);
+    const cells = Array.from({ length: 12 }, (_, index) => el("span", index > 9 ? "peak" : index > 7 ? "warn" : ""));
+    const cellHost = el("div", "wa-dj-meter-cells"); cellHost.append(...cells); strip.append(el("b", "", deck.id), cellHost); meters.append(strip); return cells;
+  });
   const crossfader = labelledRange("CROSSFADER", 0, 1, 0.5, 0.005, (value) => { crossfade = value; updateCrossfade(); });
   crossfader.classList.add("wa-dj-crossfader");
   const record = btn("● REC", "wa-dj-record"), recordStatus = el("span", "wa-dj-record-status", "READY");
@@ -325,10 +341,7 @@ export function buildDj(): { root: HTMLElement } {
     recorder.addEventListener("stop", () => { download(`vishamp-dj-mix-${Date.now()}.webm`, new Blob(recordingChunks, { type: mime })); record.classList.remove("active"); record.textContent = "● REC"; recordStatus.textContent = "SAVED"; });
     recorder.start(250); record.classList.add("active"); record.textContent = "■ STOP"; recordStatus.textContent = "RECORDING LOCAL MIX";
   });
-  const policy = el("div", "wa-dj-policy");
-  policy.append(el("strong", "", "EMBEDS AREN’T MIXABLE"), document.createTextNode(" YouTube and SoundCloud public players cannot enter EQ, cue or recording. A licensed provider SDK is required."));
-  help(policy, "This boundary prevents a fake or terms-breaking streaming mixer. Local files never leave this browser.");
-  mixer.append(mixerTitle, crossfader, record, recordStatus, policy);
+  mixer.append(mixerTitle, meters, crossfader, record, recordStatus);
   deckHost.append(decks[0].root, mixer, decks[1].root);
 
   const library = el("section", "wa-dj-library wa-panel");
@@ -352,7 +365,19 @@ export function buildDj(): { root: HTMLElement } {
   });
 
   const animate = (): void => {
-    if (root.offsetParent) decks.forEach((deck) => { deck.time.textContent = formatTime(deck.audio.currentTime); drawDeckWaveform(deck); });
+    if (root.offsetParent) decks.forEach((deck, deckIndex) => {
+      deck.time.textContent = formatTime(deck.audio.currentTime); drawDeckWaveform(deck);
+      const progress = Number.isFinite(deck.audio.duration) && deck.audio.duration > 0 ? deck.audio.currentTime / deck.audio.duration : 0;
+      deck.root.style.setProperty("--wa-tonearm-angle", `${-19 + progress * 9}deg`);
+      const analyser = deck.nodes?.meter;
+      let level = 0;
+      if (analyser && !deck.audio.paused) {
+        const samples = new Uint8Array(analyser.fftSize); analyser.getByteTimeDomainData(samples);
+        level = Math.sqrt(samples.reduce((sum, sample) => sum + Math.pow((sample - 128) / 128, 2), 0) / samples.length);
+      }
+      const lit = Math.round(clamp(level * 34, 0, 12));
+      meterCells[deckIndex].forEach((cell, index) => cell.classList.toggle("lit", index < lit));
+    });
     requestAnimationFrame(animate);
   };
   requestAnimationFrame(animate);

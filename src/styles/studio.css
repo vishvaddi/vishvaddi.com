@@ -522,8 +522,6 @@
 .wa-dj-record { min-height: 34px; }
 .wa-dj-record.active { color: #f2b6b0; border-color: #df675f; box-shadow: 0 0 12px rgba(223,103,95,.3); }
 .wa-dj-record-status { color: var(--wa-muted); font: 700 8px/1.3 var(--wa-mono); text-align: center; }
-.wa-dj-policy { margin-top: auto; padding: 7px; border: 1px solid var(--wa-border); color: var(--wa-muted); font: 8px/1.45 var(--wa-mono); }
-.wa-dj-policy strong { color: var(--wa-text); }
 .wa-dj-library { flex: 0 0 auto; max-height: 116px; padding: 7px 9px; display: grid; grid-template-columns: auto auto 1fr; gap: 7px 10px; align-items: center; overflow: auto; }
 .wa-dj-private { justify-self: end; color: var(--wa-phos); font: 700 8px/1 var(--wa-mono); letter-spacing: .08em; }
 .wa-dj-library-rows { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 3px; }
@@ -2947,4 +2945,124 @@
 @media (prefers-reduced-motion: reduce) {
   .immersive-page .wa-page-song .wa-clip.playing { animation: none; }
   .immersive-page .wa-mpc-pad { transition: none; }
+}
+
+/* ── DJ Studio: direct-drive turntable face ──────────────────────────────── */
+.wa-dj-deck {
+  --wa-tonearm-angle: -19deg;
+  position: relative;
+  grid-template-columns: minmax(270px,1.08fr) minmax(210px,.92fr);
+  grid-template-rows: auto auto 92px minmax(300px,1fr) auto;
+  padding: 10px;
+  color: #161819;
+  border: 1px solid #696d6d;
+  border-radius: 2px;
+  background:
+    linear-gradient(90deg, transparent 0 48%, rgba(255,255,255,.13) 50%, transparent 52%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, rgba(0,0,0,.025) 1px 2px),
+    linear-gradient(112deg, #858a8a, #c3c5c2 38%, #9a9e9d 72%, #727777);
+  box-shadow: inset 0 1px rgba(255,255,255,.32), inset 0 -2px 4px rgba(0,0,0,.25), 0 8px 20px rgba(0,0,0,.38);
+}
+.wa-dj-deck::after {
+  content: ""; position: absolute; inset: auto 10px 4px; height: 4px; pointer-events: none;
+  background: linear-gradient(90deg,#242728 0 12%,transparent 12% 88%,#242728 88%);
+  filter: drop-shadow(0 3px 2px #0009);
+}
+.wa-dj-deck-head { grid-row: 1; }
+.wa-dj-deck .wa-dj-deck-badge { border-color: #54595a; color: #171a1a; background: rgba(255,255,255,.15); }
+.wa-dj-deck .wa-dj-track-title { color: #111314; text-shadow: 0 1px rgba(255,255,255,.35); }
+.wa-dj-deck .wa-btn { border-color: #333738; color: #b8b9b5; background: linear-gradient(#35393a,#181b1c); box-shadow: inset 0 1px rgba(255,255,255,.12), 0 2px 2px #0005; }
+.wa-dj-deck .wa-btn:hover { color: #fff; border-color: #17191a; }
+.wa-dj-deck .wa-btn.active { color: #fff1d7; border-color: #8c4b2d; background: linear-gradient(#3b2c25,#171a1b); box-shadow: inset 0 1px rgba(255,255,255,.1), 0 0 11px rgba(239,104,55,.5); }
+.wa-dj-deck .wa-dj-display { grid-row: 2; border-color: #252c2c; box-shadow: inset 0 0 18px #000, 0 1px rgba(255,255,255,.24); }
+.wa-dj-deck .wa-dj-waveform { grid-row: 3; border-color: #252c2c; box-shadow: inset 0 0 22px #000, 0 1px rgba(255,255,255,.22); }
+.wa-dj-turntable {
+  grid-column: 1; grid-row: 4; min-width: 0; min-height: 294px; position: relative; overflow: hidden;
+  border: 1px solid rgba(45,49,50,.35); background: rgba(35,39,39,.06); box-shadow: inset 0 0 20px rgba(0,0,0,.08);
+}
+.wa-dj-platter {
+  position: absolute; left: 8px; top: 20px; width: min(calc(100% - 47px), 270px); height: auto; aspect-ratio: 1;
+  border: 0; border-radius: 50%; background: #202324; box-shadow: 0 0 0 2px #0b0c0d, 0 0 0 7px #555a5b, 0 0 0 9px #1a1c1d, 0 8px 17px #0008;
+  cursor: grab; touch-action: none;
+}
+.wa-dj-platter:active { cursor: grabbing; }
+.wa-dj-strobe-dots {
+  position: absolute; inset: -7px; border-radius: 50%;
+  background: repeating-conic-gradient(from 1deg, #b6b9b5 0 2deg, #363a3b 2deg 7.5deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 85%, #000 85.5% 91%, transparent 91.5%);
+  mask: radial-gradient(circle, transparent 0 85%, #000 85.5% 91%, transparent 91.5%);
+}
+.wa-dj-vinyl {
+  position: absolute; inset: 13px; display: grid; place-items: center; border-radius: 50%;
+  background:
+    repeating-radial-gradient(circle, transparent 0 2px, rgba(215,224,218,.12) 2.5px 3px, transparent 3.5px 6px),
+    conic-gradient(from 20deg,#111 0 8%,#272929 11%,#0b0c0c 17%,#222 23%,#090a0a 35%,#292b2b 41%,#0c0d0d 56%,#252727 63%,#090a0a 78%,#222 84%,#111);
+  box-shadow: inset 0 0 20px #000, 0 1px 1px rgba(255,255,255,.12);
+}
+.wa-dj-record-label {
+  width: 31%; aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; color: #1c2020;
+  background: radial-gradient(circle at 35% 30%,#d9c389,#ad8d45); font: 900 18px/1 var(--wa-mono); box-shadow: 0 0 0 2px #171919;
+}
+.wa-dj-deck-b .wa-dj-record-label { background: radial-gradient(circle at 35% 30%,#c5a1b4,#86566d); }
+.wa-dj-spindle { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: #d5d8d5; box-shadow: 0 1px 3px #000; }
+.wa-dj-deck.playing .wa-dj-vinyl, .wa-dj-deck.playing .wa-dj-strobe-dots { animation: wa-dj-spin 1.8s linear infinite; }
+@keyframes wa-dj-spin { to { transform: rotate(360deg); } }
+.wa-dj-tonearm { position: absolute; right: 8px; top: 20px; width: 58px; height: 230px; pointer-events: none; }
+.wa-dj-arm-pivot {
+  position: absolute; right: 1px; top: 1px; width: 45px; height: 45px; border: 7px solid #4b4f50; border-radius: 50%;
+  background: radial-gradient(circle,#d7d9d4 0 8%,#3c4041 10% 42%,#949897 44% 50%,#252829 52%); box-shadow: 0 3px 5px #0007;
+}
+.wa-dj-arm-tube {
+  position: absolute; right: 21px; top: 30px; width: 6px; height: 176px; border: 2px solid #767b7b; border-radius: 9px;
+  background: linear-gradient(90deg,#525657,#e0e1dd 48%,#6c7172); box-shadow: 2px 2px 3px #0006;
+  transform-origin: 50% 2px; transform: rotate(var(--wa-tonearm-angle)); transition: transform .35s ease;
+}
+.wa-dj-arm-tube::after { content:""; position:absolute; left:-14px; bottom:-2px; width:18px; height:4px; border-radius:4px; background:#d7d9d5; transform:rotate(-30deg); }
+.wa-dj-headshell { position: absolute; right: 31px; bottom: 15px; width: 28px; height: 9px; border-radius: 2px; background: linear-gradient(#3c4041,#111); transform: rotate(26deg); box-shadow: 0 2px 3px #0008; }
+.wa-dj-start { position: absolute; left: 9px; bottom: 10px; width: 74px; min-height: 38px; border-radius: 2px !important; font-size: 8px !important; }
+.wa-dj-start::before { content:""; display:inline-block; width:6px; height:6px; margin-right:5px; border-radius:50%; background:#6e211c; box-shadow:0 0 4px #d53e32; }
+.wa-dj-start.active::before { background:#ef4f41; box-shadow:0 0 10px #ff5d49; }
+.wa-dj-speed { position: absolute; left: 91px; bottom: 13px; display:flex; gap:3px; font:800 8px/1 var(--wa-mono); }
+.wa-dj-speed span { padding:4px 5px; border:1px solid #424647; background:#202324; color:#777; }
+.wa-dj-speed .active { color:#e5d9b7; box-shadow:inset 0 0 5px #000,0 0 5px rgba(241,205,120,.35); }
+.wa-dj-target-light { position:absolute; right:58px; bottom:12px; width:9px; height:28px; border-radius:5px 5px 2px 2px; background:linear-gradient(90deg,#2b2e2e,#bbb,#303334); box-shadow:0 2px 3px #0007; }
+.wa-dj-target-light::before { content:""; position:absolute; left:-3px; top:-5px; width:15px; height:8px; border-radius:50%; background:#fff1c8; box-shadow:0 0 13px 5px rgba(255,221,150,.55); opacity:.3; }
+.wa-dj-deck.loaded .wa-dj-target-light::before { opacity:1; animation:wa-dj-lamp 2.4s ease-in-out infinite; }
+@keyframes wa-dj-lamp { 50% { box-shadow:0 0 18px 7px rgba(255,221,150,.72); } }
+.wa-dj-quartz { position:absolute; left:9px; top:5px; color:#373b3b; font:800 7px/1 var(--wa-mono); letter-spacing:.12em; }
+.wa-dj-quartz::before { content:""; display:inline-block; width:5px; height:5px; margin-right:5px; border-radius:50%; background:#5b201b; }
+.wa-dj-deck.loaded .wa-dj-quartz::before { background:#e44838; box-shadow:0 0 7px #ff5b46; }
+.wa-dj-pitch-fader { position:absolute; right:7px; bottom:10px; width:42px; height:120px; align-items:center; color:#292d2d !important; }
+.wa-dj-pitch-fader .wa-dj-range-label { writing-mode:vertical-rl; position:absolute; right:-1px; top:2px; font-size:6px; }
+.wa-dj-pitch-fader input { width:105px !important; height:24px; margin:50px -31px 0; transform:rotate(-90deg); transform-origin:center; accent-color:#111 !important; filter:none !important; }
+.wa-dj-transport { grid-column: 2; grid-row: 4; align-self:start; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
+.wa-dj-transport .wa-btn { min-height:36px; }
+.wa-dj-performance { grid-column:2; grid-row:4; align-self:start; margin-top:92px; }
+.wa-dj-deck .wa-dj-loop-length { color:#c5c6c2; background:#242728; border-color:#44494a; }
+.wa-dj-controls { grid-column:1 / -1; grid-row:5; grid-template-columns:repeat(6,minmax(0,1fr)); padding-top:6px; border-top:1px solid rgba(30,33,34,.28); }
+.wa-dj-deck .wa-dj-range { color:#222627; text-shadow:0 1px rgba(255,255,255,.35); }
+.wa-dj-deck .wa-dj-range input { accent-color:#e1573c; filter:drop-shadow(0 1px rgba(255,255,255,.25)); }
+.wa-dj-meters { flex:1 1 auto; min-height:140px; display:grid; grid-template-columns:repeat(2,1fr); gap:10px; padding:8px; border:1px solid #080a0b; background:#0d1011; box-shadow:inset 0 0 14px #000; }
+.wa-dj-meter { min-width:0; display:flex; flex-direction:column; gap:5px; align-items:center; color:#777; font:800 9px/1 var(--wa-mono); }
+.wa-dj-meter-cells { width:100%; flex:1; display:flex; flex-direction:column-reverse; gap:2px; }
+.wa-dj-meter-cells span { flex:1; min-height:4px; border-radius:1px; background:#173127; box-shadow:inset 0 0 2px #000; transition:background .04s,box-shadow .04s; }
+.wa-dj-meter-cells span.warn { background:#403817; }
+.wa-dj-meter-cells span.peak { background:#3d1715; }
+.wa-dj-meter-cells span.lit { background:#4ddd8e; box-shadow:0 0 6px rgba(77,221,142,.75); }
+.wa-dj-meter-cells span.warn.lit { background:#e7bc43; box-shadow:0 0 6px rgba(231,188,67,.75); }
+.wa-dj-meter-cells span.peak.lit { background:#ef5448; box-shadow:0 0 7px rgba(239,84,72,.85); }
+.wa-dj-record.active { animation:wa-dj-rec 1s steps(1) infinite; }
+@keyframes wa-dj-rec { 50% { box-shadow:0 0 16px rgba(239,84,72,.75); color:#fff; } }
+
+@media (max-width: 520px) {
+  .wa-dj-deck { grid-template-columns:1fr; grid-template-rows:auto auto 92px 330px auto auto auto; min-height:0; }
+  .wa-dj-turntable { grid-column:1; grid-row:4; min-height:330px; }
+  .wa-dj-platter { width:246px; }
+  .wa-dj-tonearm { right:14px; }
+  .wa-dj-transport { grid-column:1; grid-row:5; }
+  .wa-dj-performance { grid-column:1; grid-row:6; margin-top:0; }
+  .wa-dj-controls { grid-column:1; grid-row:7; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wa-dj-deck.playing .wa-dj-vinyl, .wa-dj-deck.playing .wa-dj-strobe-dots, .wa-dj-deck.loaded .wa-dj-target-light::before, .wa-dj-record.active { animation:none; }
 }
