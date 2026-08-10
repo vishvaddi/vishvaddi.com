@@ -1,5 +1,17 @@
 # Run Log
 
+## 2026-08-10 — Deep Swarm: full-resolution render restored, and the junction becomes three faults
+
+- Reverted the half-resolution post-processing upload. The justification for it — that the shader is low-frequency and resolves no detail the downscale would carry — was wrong about what the texture is: it is the entire scene, not an effect buffer, so halving it softened every sprite, glyph and HUD edge in the game.
+- The cost it had been avoiding was never the pixel count. `texImage2D` reallocates GPU storage on every call; allocating once and uploading through `texSubImage2D` reuses it. Full resolution now runs *faster* than the half-res build did — 60 fps average across all four soak bands, minimum 54 at 4,200 m, against the half-res build's 55 average and 44 minimum. The blur had been paying for a problem it did not fix.
+- Replaced the Power Junction. The Lights Out grid was abstract, cascading and mostly trial-and-error, with a hint key that simply solved it — it had no relationship to the fiction beyond its label. It is now three faults, and which one opens is decided by what actually failed, so the screen tells you something about the boat before you touch it.
+- **ARC WALK** (a dead bay bus): the fault chases you across the terminal grid, one step for every step you take, and everything it leaves behind is dead and impassable. Flooded terminals cost you a beat, which is a free step for the arc — so the route matters more than the distance, and walking the boundary blindly loses. One shunt-to-ground per junction buys two steps back.
+- **FAULT TRACE** (a broken system): an open circuit somewhere in a sixteen-segment run. Each probe reads continuity and tells you which side the break is on; binary search finds it in four, random poking runs out of the five-probe reserve. Then you have to commit and cut.
+- **LOAD BALANCE** (a brownout): three buses and four loads whose draw cycles live — weapons ramping while the lamp and scrubbers sit under it. Keep every bus under its rating for the cycle without cooking one or dropping a critical. This is literally what the fault text already described.
+- Failure costs battery and attention but never hull. Being cornered inside a junction box should not hole the boat, and a wall there would only make the player reload.
+- Added `scripts/deep-swarm-junction.mjs` — 32 checks driving all three to both outcomes, including a solver that proves an ARC WALK board is actually winnable rather than assuming it.
+- The new suite asserts an expected check count rather than an absence of failures, and that guard immediately caught its own miscount. The ARC WALK win test caught a real design property first: the naive boundary walk loses, because water on that route hands the arc enough free steps to catch you. That is the intended skill, so the harness now routes around it.
+
 ## 2026-08-10 — Deep Swarm: the archive assembles and NEREID declines an order
 
 - Gave the forty-five codex fragments something to add up to. Five dossiers now assemble permanently once their fragment set is held: DSV-01's final forty seconds, LANTERN-3's photograph eleven, Meridian's internal report on the vent chain, the nine souls of MV Kestrel, and a review of what NEREID's unattributed code is actually shaped like.

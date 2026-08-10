@@ -105,9 +105,9 @@ try {
     colourState.error || colourState.phase)
 
   const junctionState = await page.evaluate(() => window.__deepSwarm.openJunctionTest())
-  check('junction: scramble is limited to two or three moves',
-    junctionState.phase === 'puzzle' && junctionState.solutionLength >= 2 && junctionState.solutionLength <= 3,
-    `${junctionState.solutionLength} moves`)
+  check('junction: opens one of the three fault screens',
+    junctionState.phase === 'puzzle' && ['arc', 'trace', 'load'].includes(junctionState.junction && junctionState.junction.kind),
+    junctionState.junction && junctionState.junction.kind)
 
   await page.evaluate(() => {
     window.__deepSwarm.startSeeded('music-arc')

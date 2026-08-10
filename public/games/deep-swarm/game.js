@@ -13863,20 +13863,9 @@ function drawContracts(w, h) {
 }
 
 // =====================================================================
-// LOGIC PUZZLE — POWER JUNCTION (Lights Out). Reroute drowned circuitry:
-// toggling a node flips it + its neighbours; bring all 9 online. Always
-// solvable (scrambled from the solved state). Solve → crafting materials.
+// POWER JUNCTION — see the junction engine further down. Three faults,
+// three hands-on fixes, chosen by what actually failed.
 // =====================================================================
-let puzzleGrid = [], puzzleInitial = [], puzzleMoves = 0, puzzleSolved = false, puzzleHint = -1, puzzleLast = -1, puzzlePar = 0;
-function _puzzleToggle(grid, i) {
-    const r = Math.floor(i / 3), c = i % 3;
-    const idxs = [i];
-    if (r > 0) idxs.push(i - 3);
-    if (r < 2) idxs.push(i + 3);
-    if (c > 0) idxs.push(i - 1);
-    if (c < 2) idxs.push(i + 1);
-    for (const j of idxs) grid[j] = !grid[j];
-}
 // HULL BREACH — the second minigame: a timed patch sequence. Realistic sub
 // failure, hands-on fix: hit the shown thruster keys before the water wins.
 let patchState = null;
@@ -13959,90 +13948,470 @@ function drawPatch(w, h) {
     }
 }
 
-function openPuzzle() {
-    puzzleGrid = new Array(9).fill(true);
-    const scramble = [...Array(9).keys()].sort(() => Math.random() - 0.5).slice(0, 2 + Math.floor(Math.random() * 2));
-    for (const i of scramble) _puzzleToggle(puzzleGrid, i);
-    puzzlePar = scramble.length;
-    if (puzzleGrid.every(v => v)) _puzzleToggle(puzzleGrid, 4); // never start solved
-    puzzleInitial = [...puzzleGrid];
-    puzzleMoves = 0; puzzleSolved = false; puzzleHint = -1; puzzleLast = -1;
+// =====================================================================
+// POWER JUNCTION — three faults, three hands-on fixes. The one you get
+// is chosen by what actually failed, so the screen says something about
+// the boat before you touch it:
+//   ARC WALK    — a live bus arcing. Outrun the fault to the output.
+//   FAULT TRACE — an open circuit. Probe the run and isolate the break.
+//   LOAD BALANCE— browning out. Juggle loads across buses through a cycle.
+// Every one is a decision under pressure rather than a lookup, and none
+// reuses the keyed-sequence grammar the maintenance rig already owns.
+// =====================================================================
+let jx = null;
+let junctionReturnPhase = 'playing';
+let junctionLastKind = null;
+let puzzlePar = 0;
+
+function jxDepth() { return (game && game.depth) || 0; }
+function jxPick(reason) {
+    if (reason === 'unseal') return 'arc';
+    if (reason === 'system') return 'trace';
+    if (reason === 'battery') return 'load';
+    const pool = ['arc', 'trace', 'load'].filter(k => k !== junctionLastKind);
+    return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function openPuzzle(force) {
+    const reason = (game && game._puzzleReward) || null;
+    const kind = force || jxPick(reason);
+    junctionLastKind = kind;
+    junctionReturnPhase = 'playing';
+    if (kind === 'arc') jxOpenArc();
+    else if (kind === 'trace') jxOpenTrace();
+    else jxOpenLoad();
     phase = 'puzzle';
 }
-function findPuzzleHint() {
-    let best = null;
-    for (let mask = 1; mask < 512; mask++) {
-        const test = [...puzzleGrid], moves = [];
-        for (let i = 0; i < 9; i++) if (mask & (1 << i)) { _puzzleToggle(test, i); moves.push(i); }
-        if (test.every(Boolean) && (!best || moves.length < best.length)) best = moves;
+
+function junctionWin() {
+    if (!jx || jx.over) return;
+    jx.over = true; jx.won = true;
+    if (game && game._puzzleReward === 'unseal' && game._puzzleWreck) {
+        game._puzzleReward = null;
+        game._puzzleWreck.sealed = false;
+        game._puzzleWreck.sealedBonus = true;
+        game._puzzleWreck = null;
+        addNereidLog(game, 'Bay power restored. The doors remember how to open. Take what they were keeping.');
+        game.streak = 'BAY UNSEALED — bonus cargo'; game.streakTimer = 2.5;
+    } else if (game && game._puzzleReward === 'battery') {
+        game._puzzleReward = null;
+        game.player.battery = Math.min(125, (game.player.battery || 100) + 25);
+        addNereidLog(game, 'Junction rebuilt properly. Power restored. Good hands, Pilot.');
+        game.streak = 'JUNCTION ONLINE — +25 battery'; game.streakTimer = 2.5;
+    } else if (game && game._puzzleReward === 'system' && game._puzzleSystem) {
+        const repaired = game._puzzleSystem;
+        game._puzzleReward = null;
+        game._puzzleSystem = null;
+        restoreSystem(game, repaired);
+    } else {
+        addMaterials({ wiring: 2, corecell: 1, crystal: 1 });
+        saveMeta();
+        if (game) { addNereidLog(game, 'Junction online. Power rerouted — the wreck gives up its salvage.'); game.streak = 'JUNCTION ONLINE — materials'; game.streakTimer = 2.5; }
     }
-    return best ? best[0] : -1;
+    if (typeof sfxLevelUp === 'function') sfxLevelUp();
+    setTimeout(() => { if (phase === 'puzzle') phase = junctionReturnPhase; }, 1200);
 }
-function pressPuzzle(i) {
-    if (puzzleSolved) return;
-    puzzleLast = i; puzzleHint = -1;
-    _puzzleToggle(puzzleGrid, i);
-    puzzleMoves++;
-    if (puzzleGrid.every(v => v)) {
-        puzzleSolved = true;
-        if (game && game._puzzleReward === 'unseal' && game._puzzleWreck) {
-            game._puzzleReward = null;
-            game._puzzleWreck.sealed = false;
-            game._puzzleWreck.sealedBonus = true;
-            game._puzzleWreck = null;
-            addNereidLog(game, 'Bay power restored. The doors remember how to open. Take what they were keeping.');
-            game.streak = 'BAY UNSEALED — bonus cargo'; game.streakTimer = 2.5;
-        } else if (game && game._puzzleReward === 'battery') {
-            game._puzzleReward = null;
-            game.player.battery = Math.min(125, (game.player.battery || 100) + 25);
-            addNereidLog(game, 'Junction rebuilt properly. Power restored. Good hands, Pilot.');
-            game.streak = 'JUNCTION ONLINE — +25 battery'; game.streakTimer = 2.5;
-        } else if (game && game._puzzleReward === 'system' && game._puzzleSystem) {
-            const repaired = game._puzzleSystem;
-            game._puzzleReward = null;
-            game._puzzleSystem = null;
-            restoreSystem(game, repaired);
-        } else {
-            addMaterials({ wiring: 2, corecell: 1, crystal: 1 });
-            saveMeta();
-            if (game) { addNereidLog(game, 'Junction online. Power rerouted — the wreck gives up its salvage.'); game.streak = 'JUNCTION ONLINE — materials'; game.streakTimer = 2.5; }
+
+// Failing costs power and noise but never the hull — being cornered in a
+// junction box should not hole the boat, and a wall here would just make
+// the player reload.
+function junctionLose(msg) {
+    if (!jx || jx.over) return;
+    jx.over = true; jx.won = false; jx.failMsg = msg;
+    if (game) {
+        game.player.battery = Math.max(0, (game.player.battery || 100) - 10);
+        game.attention = Math.min(100, (game.attention || 0) + 15);
+        game._puzzleReward = null; game._puzzleWreck = null; game._puzzleSystem = null;
+        addNereidLog(game, 'Bus dumped to ground. We keep the boat, we lose the circuit. Move on, Pilot.');
+        game.streak = 'JUNCTION LOST'; game.streakTimer = 2.5;
+    }
+    noiseBurst(0.7, 0.1, 220);
+    setTimeout(() => { if (phase === 'puzzle') phase = junctionReturnPhase; }, 1100);
+}
+
+// ---------- ARC WALK ----------
+function jxOpenArc() {
+    const deep = jxDepth() > 2000;
+    const W = deep ? 7 : 6, H = deep ? 5 : 4;
+    const flooded = new Set();
+    const count = 3 + Math.floor(Math.random() * (deep ? 4 : 3));
+    while (flooded.size < count) {
+        const i = Math.floor(Math.random() * W * H);
+        const x = i % W, y = Math.floor(i / W);
+        if (x === 0 && y === H - 1) continue;
+        if (x === W - 1 && y === 0) continue;
+        flooded.add(i);
+    }
+    jx = {
+        kind: 'arc', W, H, px: 0, py: H - 1, ox: W - 1, oy: 0,
+        arcs: deep ? [{ x: 2, y: H - 1 }, { x: 0, y: H - 3 }] : [{ x: 2, y: H - 1 }],
+        dead: new Set(), flooded, shunt: 1, stall: 0, moves: 0, over: false, won: false,
+    };
+    puzzlePar = W + H;
+}
+function jxCellFree(J, x, y) {
+    if (x < 0 || y < 0 || x >= J.W || y >= J.H) return false;
+    if (J.dead.has(y * J.W + x)) return false;
+    return true;
+}
+function jxNextToward(J, from, tx, ty) {
+    const start = from.y * J.W + from.x;
+    const prev = new Map([[start, -1]]);
+    const q = [start];
+    let found = -1;
+    while (q.length) {
+        const cur = q.shift();
+        const cx = cur % J.W, cy = Math.floor(cur / J.W);
+        if (cx === tx && cy === ty) { found = cur; break; }
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = cx + dx, ny = cy + dy;
+            if (!jxCellFree(J, nx, ny)) continue;
+            const ni = ny * J.W + nx;
+            if (prev.has(ni)) continue;
+            if (J.arcs.some(a => a.x === nx && a.y === ny)) continue;
+            prev.set(ni, cur);
+            q.push(ni);
         }
-        if (typeof sfxLevelUp === 'function') sfxLevelUp();
-        setTimeout(() => { if (phase === 'puzzle') phase = 'playing'; }, 1200);
+    }
+    if (found < 0) return null;
+    let cur = found;
+    while (prev.get(cur) !== start && prev.get(cur) !== undefined && prev.get(cur) !== -1) cur = prev.get(cur);
+    if (prev.get(cur) === -1) return null;
+    return { x: cur % J.W, y: Math.floor(cur / J.W) };
+}
+function jxArcAdvance(J) {
+    if (J.stall > 0) { J.stall--; return; }
+    for (const a of J.arcs) {
+        const next = jxNextToward(J, a, J.px, J.py);
+        if (!next) continue;
+        J.dead.add(a.y * J.W + a.x);
+        a.x = next.x; a.y = next.y;
+        if (a.x === J.px && a.y === J.py) { junctionLose('THE ARC FOUND YOU'); return; }
     }
 }
-function drawPuzzle(w, h) {
+function jxArcMove(dx, dy) {
+    const J = jx;
+    if (!J || J.over) return;
+    const nx = J.px + dx, ny = J.py + dy;
+    if (!jxCellFree(J, nx, ny)) return;
+    if (J.arcs.some(a => a.x === nx && a.y === ny)) return;
+    const wasFlooded = J.flooded.has(ny * J.W + nx);
+    J.px = nx; J.py = ny; J.moves++;
+    playTone(420 + J.moves * 12, 0.05, 'square', 0.05);
+    if (J.px === J.ox && J.py === J.oy) { junctionWin(); return; }
+    jxArcAdvance(J);
+    if (J.over) return;
+    if (wasFlooded) jxArcAdvance(J);      // a wet terminal costs you a beat
+    if (J.over) return;
+    const stuck = [[1, 0], [-1, 0], [0, 1], [0, -1]].every(([ax, ay]) => {
+        const cx = J.px + ax, cy = J.py + ay;
+        return !jxCellFree(J, cx, cy) || J.arcs.some(a => a.x === cx && a.y === cy);
+    });
+    if (stuck) junctionLose('NOWHERE LEFT TO ROUTE');
+}
+function jxArcShunt() {
+    const J = jx;
+    if (!J || J.over || J.shunt <= 0) return;
+    J.shunt--; J.stall = 2;
+    playTone(140, 0.22, 'sawtooth', 0.12);
+    if (game) addNereidLog(game, 'Shunt to ground. That buys you two steps, not three.');
+}
+
+// ---------- FAULT TRACE ----------
+function jxOpenTrace() {
+    const n = 16;
+    jx = {
+        kind: 'trace', n,
+        fault: 1 + Math.floor(Math.random() * (n - 1)),
+        probe: Math.floor(n / 2), reading: null, readAt: -1,
+        known: { lo: 0, hi: n - 1 },
+        probes: 0, maxProbes: 5, over: false, won: false,
+    };
+    puzzlePar = Math.ceil(Math.log2(n));
+}
+function jxTraceMove(d) {
+    const J = jx;
+    if (!J || J.over) return;
+    J.probe = Math.max(0, Math.min(J.n - 1, J.probe + d));
+}
+function jxTraceProbe() {
+    const J = jx;
+    if (!J || J.over) return;
+    J.probes++;
+    const continuity = J.probe < J.fault;
+    J.reading = continuity ? 'CONTINUITY' : 'OPEN';
+    J.readAt = J.probe;
+    if (continuity) J.known.lo = Math.max(J.known.lo, J.probe + 1);
+    else J.known.hi = Math.min(J.known.hi, J.probe);
+    playTone(continuity ? 660 : 200, 0.1, 'sine', 0.08);
+    if (J.probes >= J.maxProbes) {
+        if (game) addNereidLog(game, 'That is the last of the reserve for probing. Cut now, Pilot.');
+    }
+}
+function jxTraceCut() {
+    const J = jx;
+    if (!J || J.over) return;
+    if (J.probe === J.fault) junctionWin();
+    else junctionLose('CUT THE WRONG SEGMENT');
+}
+
+// ---------- LOAD BALANCE ----------
+function jxOpenLoad() {
+    const deep = jxDepth() > 2000;
+    jx = {
+        kind: 'load',
+        buses: [
+            { name: 'A', rating: 40, heat: 0 },
+            { name: 'B', rating: 40, heat: 0 },
+            { name: 'C', rating: 25, heat: 0 },
+        ],
+        loads: [
+            { name: 'LAMP', base: 12, amp: 2, ph: 0.0, bus: 1, critical: false },
+            { name: 'WEAPONS', base: 16, amp: 9, ph: 1.7, bus: 1, critical: false },
+            { name: 'SCRUBBER', base: 8, amp: 2, ph: 3.1, bus: 0, critical: true },
+            { name: 'SONAR', base: 7, amp: 4, ph: 4.6, bus: 0, critical: false },
+        ],
+        t: 0, dur: deep ? 22 : 18, last: Date.now(), over: false, won: false,
+    };
+    puzzlePar = 3;
+}
+function jxLoadDraw(l, t) {
+    return Math.max(2, l.base + l.amp * Math.sin(t * 0.9 + l.ph));
+}
+function jxLoadCycle(i) {
+    const J = jx;
+    if (!J || J.over) return;
+    const l = J.loads[i];
+    if (!l) return;
+    let next = (l.bus + 1) % J.buses.length;
+    let guard = 0;
+    while (J.buses[next].cooked && guard++ < J.buses.length) next = (next + 1) % J.buses.length;
+    if (J.buses[next].cooked) return;
+    l.bus = next;
+    playTone(300 + i * 60, 0.06, 'square', 0.06);
+}
+function jxLoadTick(J) {
+    const now = Date.now();
+    const dt = Math.min(0.1, (now - J.last) / 1000);
+    J.last = now;
+    if (J.over) return;
+    J.t += dt;
+    for (const b of J.buses) b.load = 0;
+    for (const l of J.loads) {
+        const b = J.buses[l.bus];
+        if (b && !b.cooked) b.load += jxLoadDraw(l, J.t);
+    }
+    for (const b of J.buses) {
+        if (b.cooked) continue;
+        if (b.load > b.rating) b.heat = Math.min(1, b.heat + dt * 0.55);
+        else b.heat = Math.max(0, b.heat - dt * 0.35);
+        if (b.heat >= 1) {
+            b.cooked = true;
+            noiseBurst(0.5, 0.08, 180);
+            const orphan = J.loads.filter(l => l.bus === J.buses.indexOf(b) && l.critical);
+            if (orphan.length) { junctionLose('LOST A CRITICAL LOAD'); return; }
+            if (J.buses.every(x => x.cooked)) { junctionLose('EVERY BUS COOKED'); return; }
+            for (const l of J.loads) if (J.buses[l.bus] === b) jxLoadCycle(J.loads.indexOf(l));
+        }
+    }
+    if (J.t >= J.dur) junctionWin();
+}
+
+// ---------- input + draw ----------
+function pressJunctionKey(key) {
+    const J = jx;
+    if (!J || J.over) return;
+    const k = String(key).toLowerCase();
+    if (J.kind === 'arc') {
+        if (k === 'w' || k === 'arrowup') jxArcMove(0, -1);
+        else if (k === 's' || k === 'arrowdown') jxArcMove(0, 1);
+        else if (k === 'a' || k === 'arrowleft') jxArcMove(-1, 0);
+        else if (k === 'd' || k === 'arrowright') jxArcMove(1, 0);
+        else if (k === ' ' || k === 'spacebar') jxArcShunt();
+    } else if (J.kind === 'trace') {
+        if (k === 'a' || k === 'arrowleft') jxTraceMove(-1);
+        else if (k === 'd' || k === 'arrowright') jxTraceMove(1);
+        else if (k === ' ' || k === 'spacebar') jxTraceProbe();
+        else if (k === 'enter') jxTraceCut();
+    } else if (J.kind === 'load') {
+        const n = parseInt(k, 10);
+        if (n >= 1 && n <= J.loads.length) jxLoadCycle(n - 1);
+    }
+}
+
+function jxHeader(w, h, title, line1, line2) {
     ctx.fillStyle = 'rgba(0,4,10,0.92)'; ctx.fillRect(0, 0, w, h);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 22px monospace';
-    ctx.fillText('POWER JUNCTION', w / 2, h / 2 - 150);
+    ctx.fillText(title, w / 2, 46);
     ctx.fillStyle = '#9AB0C0'; ctx.font = '12px monospace';
-    ctx.fillText('Bring every node ONLINE. A press flips that node and its + neighbours.', w / 2, h / 2 - 124);
+    ctx.fillText(line1, w / 2, 70);
     ctx.fillStyle = '#7A8A9A'; ctx.font = '11px monospace';
-    ctx.fillText('[1-9] press   ·   [H] hint   ·   [R] reset   ·   [ESC] disengage', w / 2, h / 2 - 106);
-    const cell = 70, gap = 10;
-    const gw = 3 * cell + 2 * gap;
-    const ox = w / 2 - gw / 2, oy = h / 2 - gw / 2 + 10;
-    addTapZone(0, h - 60, w, 60, 'Escape');   // bottom strip = disengage
-    for (let i = 0; i < 9; i++) {
-        const r = Math.floor(i / 3), c = i % 3;
-        const x = ox + c * (cell + gap), y = oy + r * (cell + gap);
-        addTapZone(x, y, cell, cell, String(i + 1));
-        const on = puzzleGrid[i];
-        ctx.fillStyle = on ? '#0e2630' : '#0a0f16';
-        ctx.fillRect(x, y, cell, cell);
-        if (on && typeof drawGlow === 'function') drawGlow(ctx, '#5ADFCF', x + cell / 2, y + cell / 2, 22, 0.6);
-        const affectedByLast = puzzleLast >= 0 && (() => {
-            const lr = Math.floor(puzzleLast / 3), lc = puzzleLast % 3;
-            return Math.abs(lr - r) + Math.abs(lc - c) <= 1;
-        })();
-        ctx.strokeStyle = i === puzzleHint ? '#FFD040' : affectedByLast ? '#B0A0E8' : on ? '#5ADFCF' : '#2a3a4a';
-        ctx.lineWidth = i === puzzleHint ? 4 : affectedByLast ? 3 : 2; ctx.strokeRect(x, y, cell, cell);
-        ctx.fillStyle = on ? '#80F0E0' : '#3a4a5a'; ctx.font = 'bold 13px monospace';
-        ctx.fillText(`${i + 1} ${on ? 'ON' : 'OFF'}`, x + cell / 2, y + cell / 2 + 5);
+    ctx.fillText(line2, w / 2, 88);
+    addTapZone(0, h - 44, w, 44, 'Escape');
+}
+function jxOutcome(w, h) {
+    const J = jx;
+    if (!J.over) return;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = J.won ? '#4AE0A0' : '#FF7060';
+    ctx.font = 'bold 18px monospace';
+    ctx.fillText(J.won ? 'JUNCTION ONLINE' : (J.failMsg || 'JUNCTION LOST'), w / 2, h - 58);
+}
+
+function drawPuzzle(w, h) {
+    const J = jx;
+    if (!J) { phase = 'playing'; return; }
+    if (J.kind === 'arc') drawJxArc(w, h);
+    else if (J.kind === 'trace') drawJxTrace(w, h);
+    else drawJxLoad(w, h);
+    jxOutcome(w, h);
+}
+
+function drawJxArc(w, h) {
+    const J = jx;
+    jxHeader(w, h, 'POWER JUNCTION — LIVE BUS',
+        'Route the feed to the OUTPUT. The arc takes a step for every step you take.',
+        '[WASD] step   ·   [SPACE] shunt to ground   ·   [ESC] disengage');
+    const cell = Math.max(34, Math.min(72, Math.floor(Math.min((w - 60) / J.W, (h - 200) / J.H))));
+    const gap = Math.max(6, Math.floor(cell * 0.16));
+    const gw = J.W * cell + (J.W - 1) * gap, gh = J.H * cell + (J.H - 1) * gap;
+    const ox = w / 2 - gw / 2, oy = 112 + Math.max(0, (h - 210 - gh) / 2);
+    ctx.strokeStyle = '#1c2a36'; ctx.lineWidth = 2;
+    for (let y = 0; y < J.H; y++) {
+        for (let x = 0; x < J.W; x++) {
+            const cx = ox + x * (cell + gap) + cell / 2, cy = oy + y * (cell + gap) + cell / 2;
+            if (x < J.W - 1) { ctx.beginPath(); ctx.moveTo(cx + cell / 2, cy); ctx.lineTo(cx + cell / 2 + gap, cy); ctx.stroke(); }
+            if (y < J.H - 1) { ctx.beginPath(); ctx.moveTo(cx, cy + cell / 2); ctx.lineTo(cx, cy + cell / 2 + gap); ctx.stroke(); }
+        }
     }
-    ctx.fillStyle = puzzleSolved ? '#80E0A0' : '#9AB0C0'; ctx.font = '12px monospace';
-    ctx.fillText(puzzleSolved ? 'ONLINE — salvage released' : `moves: ${puzzleMoves}`, w / 2, oy + gw + 30);
+    for (let y = 0; y < J.H; y++) {
+        for (let x = 0; x < J.W; x++) {
+            const i = y * J.W + x;
+            const px = ox + x * (cell + gap), py = oy + y * (cell + gap);
+            const isOut = x === J.ox && y === J.oy;
+            const isMe = x === J.px && y === J.py;
+            const isArc = J.arcs.some(a => a.x === x && a.y === y);
+            const isDead = J.dead.has(i);
+            const wet = J.flooded.has(i);
+            ctx.fillStyle = isDead ? '#14090c' : isArc ? '#3a1016' : isOut ? '#0d2a1e' : wet ? '#0a1a24' : '#0a0f16';
+            ctx.fillRect(px, py, cell, cell);
+            ctx.strokeStyle = isArc ? '#FF7060' : isDead ? '#2a1216' : isOut ? '#4AE0A0' : isMe ? '#FFD040' : wet ? '#2c5568' : '#22303c';
+            ctx.lineWidth = isMe || isArc ? 3 : 1.5;
+            ctx.strokeRect(px, py, cell, cell);
+            ctx.textAlign = 'center';
+            ctx.font = `bold ${Math.max(9, Math.floor(cell * 0.24))}px monospace`;
+            if (isOut) { ctx.fillStyle = '#4AE0A0'; ctx.fillText('OUT', px + cell / 2, py + cell / 2 + 4); }
+            else if (isArc) { ctx.fillStyle = '#FF9080'; ctx.fillText('ARC', px + cell / 2, py + cell / 2 + 4); }
+            else if (isDead) { ctx.fillStyle = '#5a2a30'; ctx.fillText('×', px + cell / 2, py + cell / 2 + 5); }
+            else if (wet) { ctx.fillStyle = '#4c7e94'; ctx.fillText('≈', px + cell / 2, py + cell / 2 + 5); }
+            if (isMe && typeof drawGlow === 'function') drawGlow(ctx, '#FFD040', px + cell / 2, py + cell / 2, cell * 0.42, 0.7);
+        }
+    }
+    // Touch: the four terminals around you are the only legal taps.
+    const dirs = [[0, -1, 'w'], [0, 1, 's'], [-1, 0, 'a'], [1, 0, 'd']];
+    for (const [dx, dy, key] of dirs) {
+        const nx = J.px + dx, ny = J.py + dy;
+        if (nx < 0 || ny < 0 || nx >= J.W || ny >= J.H) continue;
+        addTapZone(ox + nx * (cell + gap), oy + ny * (cell + gap), cell, cell, key);
+    }
+    ctx.textAlign = 'center'; ctx.font = '12px monospace';
+    ctx.fillStyle = J.shunt > 0 ? '#5ADFCF' : '#46586a';
+    ctx.fillText(`SHUNT ${J.shunt > 0 ? 'READY — [SPACE]' : 'SPENT'}${J.stall > 0 ? `  ·  arc stalled ${J.stall}` : ''}   ·   steps ${J.moves}`, w / 2, oy + gh + 26);
+    if (J.shunt > 0) addTapZone(w / 2 - 90, oy + gh + 12, 180, 26, ' ');
+}
+
+function drawJxTrace(w, h) {
+    const J = jx;
+    jxHeader(w, h, 'JUNCTION 4 — TRACE THE OPEN CIRCUIT',
+        'Probe the run to find which side the break is on, then cut exactly there.',
+        '[A/D] move probe   ·   [SPACE] probe   ·   [ENTER] cut here   ·   [ESC] disengage');
+    const segW = Math.max(16, Math.min(40, Math.floor((w - 80) / J.n)));
+    const runW = segW * J.n;
+    const ox = w / 2 - runW / 2, oy = h / 2 - 30;
+    for (let i = 0; i < J.n; i++) {
+        const x = ox + i * segW;
+        const narrowed = i >= J.known.lo && i <= J.known.hi;
+        ctx.fillStyle = narrowed ? '#12222c' : '#0a0f16';
+        ctx.fillRect(x + 1, oy, segW - 2, 26);
+        ctx.strokeStyle = narrowed ? '#2c5568' : '#1a242e'; ctx.lineWidth = 1;
+        ctx.strokeRect(x + 1, oy, segW - 2, 26);
+        if (J.over && i === J.fault) { ctx.fillStyle = '#FF7060'; ctx.fillRect(x + 1, oy, segW - 2, 26); }
+        addTapZone(x, oy - 10, segW, 46, i < J.probe ? 'a' : 'd');
+        ctx.textAlign = 'center'; ctx.fillStyle = '#3c4c5a'; ctx.font = '9px monospace';
+        ctx.fillText(String(i + 1), x + segW / 2, oy + 40);
+    }
+    const px = ox + J.probe * segW + segW / 2;
+    ctx.strokeStyle = '#FFD040'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px, oy - 16); ctx.lineTo(px, oy - 2); ctx.stroke();
+    ctx.fillStyle = '#FFD040'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('PROBE', px, oy - 22);
+    ctx.font = '13px monospace';
+    if (J.reading) {
+        ctx.fillStyle = J.reading === 'CONTINUITY' ? '#4AE0A0' : '#FF9080';
+        const where = J.reading === 'CONTINUITY' ? 'break is DOWNSTREAM' : 'break is HERE or UPSTREAM';
+        ctx.fillText(`READING @${J.readAt + 1}: ${J.reading} — ${where}`, w / 2, oy + 70);
+    } else {
+        ctx.fillStyle = '#7A8A9A';
+        ctx.fillText('No reading yet. Probe somewhere and let the run tell you.', w / 2, oy + 70);
+    }
+    ctx.fillStyle = J.probes >= J.maxProbes ? '#FF7060' : '#9AB0C0'; ctx.font = '12px monospace';
+    ctx.fillText(`probes ${J.probes}/${J.maxProbes}   ·   narrowed to ${J.known.lo + 1}–${J.known.hi + 1}`, w / 2, oy + 92);
+    ctx.fillStyle = '#5ADFCF';
+    ctx.fillText('[SPACE] PROBE            [ENTER] CUT HERE', w / 2, oy + 118);
+    addTapZone(w / 2 - 170, oy + 104, 150, 26, ' ');
+    addTapZone(w / 2 + 20, oy + 104, 150, 26, 'Enter');
+}
+
+function drawJxLoad(w, h) {
+    const J = jx;
+    jxLoadTick(J);
+    jxHeader(w, h, 'JUNCTION 4 — BUS LOADING',
+        'Keep every bus under its rating until the cycle passes. Criticals must stay fed.',
+        '[1-4] move a load to the next bus   ·   [ESC] disengage');
+    const left = Math.max(24, w / 2 - 250);
+    let y = 118;
+    for (const b of J.buses) {
+        const pct = Math.min(1.35, (b.load || 0) / b.rating);
+        ctx.textAlign = 'left'; ctx.font = 'bold 13px monospace';
+        ctx.fillStyle = b.cooked ? '#5a2a30' : '#9AB0C0';
+        ctx.fillText(`BUS ${b.name}  rated ${b.rating}`, left, y + 12);
+        const barX = left + 170, barW = Math.min(260, w - barX - 90);
+        ctx.fillStyle = '#0a0f16'; ctx.fillRect(barX, y, barW, 16);
+        const over = pct > 1;
+        ctx.fillStyle = b.cooked ? '#3a1016' : over ? '#FF7060' : '#4AE0A0';
+        ctx.fillRect(barX, y, Math.min(barW, barW * pct / 1.35), 16);
+        ctx.strokeStyle = '#22303c'; ctx.lineWidth = 1; ctx.strokeRect(barX, y, barW, 16);
+        const rx = barX + barW / 1.35;
+        ctx.strokeStyle = '#FFD040'; ctx.beginPath(); ctx.moveTo(rx, y - 3); ctx.lineTo(rx, y + 19); ctx.stroke();
+        if (b.heat > 0 && !b.cooked) {
+            ctx.fillStyle = '#FF7060'; ctx.fillRect(barX, y + 18, barW * b.heat, 3);
+        }
+        ctx.textAlign = 'right'; ctx.font = '12px monospace';
+        ctx.fillStyle = b.cooked ? '#FF7060' : over ? '#FF9080' : '#7A8A9A';
+        ctx.fillText(b.cooked ? 'COOKED' : `${Math.round(b.load || 0)}`, barX + barW + 70, y + 13);
+        y += 40;
+    }
+    y += 6;
+    ctx.textAlign = 'left'; ctx.font = '11px monospace'; ctx.fillStyle = '#7A8A9A';
+    ctx.fillText('LOAD          draw   bus', left, y); y += 6;
+    J.loads.forEach((l, i) => {
+        y += 24;
+        const d = jxLoadDraw(l, J.t);
+        ctx.textAlign = 'left'; ctx.font = 'bold 13px monospace';
+        ctx.fillStyle = l.critical ? '#FFD040' : '#9AB0C0';
+        ctx.fillText(`[${i + 1}] ${l.name}${l.critical ? ' *' : ''}`, left, y);
+        ctx.fillStyle = '#5ADFCF'; ctx.font = '12px monospace';
+        ctx.fillText(`${Math.round(d)}`, left + 190, y);
+        ctx.fillStyle = J.buses[l.bus].cooked ? '#FF7060' : '#80F0E0';
+        ctx.fillText(J.buses[l.bus].name, left + 240, y);
+        addTapZone(left - 8, y - 16, 320, 22, String(i + 1));
+    });
+    const frac = Math.max(0, 1 - J.t / J.dur);
+    ctx.fillStyle = '#141c24'; ctx.fillRect(w / 2 - 150, h - 96, 300, 10);
+    ctx.fillStyle = '#5ADFCF'; ctx.fillRect(w / 2 - 150, h - 96, 300 * (1 - frac), 10);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#7A8A9A'; ctx.font = '11px monospace';
+    ctx.fillText(`cycle ${Math.max(0, Math.ceil(J.dur - J.t))}s remaining   ·   * critical`, w / 2, h - 76);
 }
 
 // --- Card Draft Screen ---
@@ -15268,14 +15637,9 @@ window.addEventListener('keydown', e => {
         return;
     }
     if (phase === 'puzzle') {
-        if (e.key === 'Escape') { phase = 'playing'; return; }
-        if (e.key === 'r' || e.key === 'R') {
-            puzzleGrid = [...puzzleInitial]; puzzleMoves = 0; puzzleSolved = false; puzzleHint = -1; puzzleLast = -1;
-            return;
-        }
-        if (e.key === 'h' || e.key === 'H') { puzzleHint = findPuzzleHint(); return; }
-        const pn = parseInt(e.key);
-        if (pn >= 1 && pn <= 9) pressPuzzle(pn - 1);
+        if (e.key === 'Escape') { phase = junctionReturnPhase; return; }
+        if (e.key === ' ') e.preventDefault();
+        pressJunctionKey(e.key);
         return;
     }
     if (phase === 'contracts') {
@@ -15888,11 +16252,39 @@ window.__deepSwarm = {
         fireWeapons(game, 1);
         return this.getState();
     },
-    openJunctionTest() {
+    openJunctionTest(kind) {
         if (!game) this.startSeeded('junction-test');
-        openPuzzle();
-        return { ...this.getState(), solutionLength: puzzlePar };
+        openPuzzle(kind);
+        return { ...this.getState(), solutionLength: puzzlePar, junction: this.junctionMeta() };
     },
+    junctionMeta() {
+        if (!jx) return null;
+        const J = jx;
+        const base = { kind: J.kind, over: J.over, won: J.won, phase };
+        if (J.kind === 'arc') return { ...base, W: J.W, H: J.H, px: J.px, py: J.py, ox: J.ox, oy: J.oy, arcs: J.arcs.map(a => ({ x: a.x, y: a.y })), dead: J.dead.size, flooded: [...J.flooded], shunt: J.shunt, stall: J.stall, moves: J.moves };
+        if (J.kind === 'trace') return { ...base, n: J.n, fault: J.fault, probe: J.probe, reading: J.reading, readAt: J.readAt, known: { lo: J.known.lo, hi: J.known.hi }, probes: J.probes, maxProbes: J.maxProbes };
+        return { ...base, t: J.t, dur: J.dur, buses: J.buses.map(b => ({ name: b.name, rating: b.rating, load: b.load, heat: b.heat, cooked: !!b.cooked })), loads: J.loads.map(l => ({ name: l.name, bus: l.bus, critical: !!l.critical })) };
+    },
+    junctionKey(k) { pressJunctionKey(k); return this.junctionMeta(); },
+    junctionAdvance(sec) {
+        if (!jx) return null;
+        if (jx.kind === 'load') {
+            for (let i = 0; i < Math.ceil(sec * 10); i++) {
+                jx.last = Date.now() - 100;
+                jxLoadTick(jx);
+                if (jx.over) break;
+            }
+        }
+        return this.junctionMeta();
+    },
+    junctionSetFault(i) { if (jx && jx.kind === 'trace') jx.fault = i; return this.junctionMeta(); },
+    junctionSetReward(r) {
+        if (!game) this.startSeeded('junction-reward');
+        game._puzzleReward = r;
+        if (r === 'battery') game.player.battery = 50;
+        return { reward: game._puzzleReward, battery: game.player.battery };
+    },
+    junctionBattery() { return game ? game.player.battery : null; },
     queueNereidTest() {
         if (!game) this.startSeeded('nereid-cadence');
         game.runTime = 1;

@@ -10,6 +10,7 @@
     "build": "astro build && node scripts/optimize-og.mjs && node scripts/generate-sw.mjs",
     "check": "astro check",
     "test:deep-swarm": "node scripts/deep-swarm-e2e.mjs",
+    "test:deep-swarm-junction": "node scripts/deep-swarm-junction.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },
