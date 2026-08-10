@@ -23,10 +23,10 @@ page.on('console', message => {
 })
 
 try {
-  await page.goto(`${BASE}/games/deep-swarm/`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${BASE}/games/deep-swarm/index.html`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => window.__deepSwarm?.build, null, { timeout: 15000 })
   const build = await page.evaluate(() => window.__deepSwarm.build)
-  check('boot: field hotfix build exposed', /field-hotfix/.test(build), build)
+  check('boot: cockpit build exposed', /cockpit-ore-perf/.test(build), build)
 
   await page.evaluate(() => window.__deepSwarm.startSeeded('boundary-soak'))
   await page.keyboard.down('s')
@@ -195,7 +195,7 @@ for (const [name, width, height] of [
     if (message.type() === 'error' && !/sw\.js|favicon|cloudflareinsights|ERR_FAILED/i.test(message.text())) mobileErrors.push(message.text())
   })
   try {
-    await mobilePage.goto(`${BASE}/games/deep-swarm/`, { waitUntil: 'domcontentloaded' })
+    await mobilePage.goto(`${BASE}/games/deep-swarm/index.html`, { waitUntil: 'domcontentloaded' })
     await mobilePage.waitForFunction(() => window.__deepSwarm?.build, null, { timeout: 15000 })
     await mobilePage.evaluate(() => window.__deepSwarm.startSeeded('android-fit'))
     await mobilePage.waitForTimeout(120)

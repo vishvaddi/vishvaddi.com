@@ -29,6 +29,11 @@ try {
   await ore({ seam: 'hairline', need: 3, r: 26 })
   const s1 = await strike()
   check('sound rock survives strike 1', !s1.shattered && s1.cracks === 1, `cracks ${s1.cracks}`)
+  check('first strike engages the rock instead of launching it away', s1.engaged >= 5 && Math.abs(s1.vx) < 20,
+    `${s1.engaged.toFixed(1)}s · vx ${s1.vx.toFixed(1)}`)
+  const pursued = (await page.evaluate(() => window.__deepSwarm.debugAdvanceOre(4)))[0]
+  const pursuitDistance = pursued ? Math.hypot(pursued.x, pursued.y) : Infinity
+  check('engaged moving ore remains catchable', pursuitDistance < 260, `${Math.round(pursuitDistance)}px away`)
   const s2 = await strike()
   check('sound rock survives strike 2', !s2.shattered && s2.cracks === 2, `cracks ${s2.cracks}`)
   const s3 = await strike()

@@ -25,6 +25,18 @@ function drawPlate(x, y, pw, ph, alpha) {
     ctx.beginPath(); ctx.roundRect(x, y, pw, ph, 6); ctx.fill();
 }
 
+const _texturePatterns = {};
+function texturePattern(key, spacing, color) {
+    if (_texturePatterns[key]) return _texturePatterns[key];
+    const tile = document.createElement('canvas');
+    tile.width = 4; tile.height = spacing;
+    const tileCtx = tile.getContext('2d');
+    tileCtx.fillStyle = color;
+    tileCtx.fillRect(0, spacing - 1, tile.width, 1);
+    _texturePatterns[key] = ctx.createPattern(tile, 'repeat');
+    return _texturePatterns[key];
+}
+
 // =====================================================================
 // POST-FX — WebGL fullscreen pass over the 2D scene: soft bloom, chromatic
 // aberration, depth colour-grade, vignette, grain, scanlines, and a
@@ -725,7 +737,7 @@ function updateVolumes(g, dt, p) {
                 // one of these and it does not fly apart — it collapses inward, and
                 // takes the water around it with it.
                 crit: g.depth > 3000 && rnd() < 0.32,
-                laser: 0 });
+                laser: 0, engaged: 0 });
             maybeHint(g, 'orefall', 'ORE FALL on sonar — DASH to crack the seam, or hold [E] to cut it (slower, louder, pays more).');
         }
         if (blooms < 2 && g.depth > 1000 && rnd() < 0.35) {
@@ -739,9 +751,23 @@ function updateVolumes(g, dt, p) {
     if (g.fallers) {
         for (let i = g.fallers.length - 1; i >= 0; i--) {
             const f = g.fallers[i];
+            f.engaged = Math.max(0, (f.engaged || 0) - dt);
+            if (f.engaged > 0) {
+                // A committed rock remains an encounter instead of becoming a
+                // chase caused by the player's own strike knockback.
+                f.vx *= Math.pow(0.22, dt);
+                f.vy = Math.min(f.vy, 34);
+                const leashD = dist(p, f);
+                if (leashD > 360) {
+                    const pull = Math.atan2(p.y - f.y, p.x - f.x);
+                    const strength = Math.min(75, (leashD - 360) * 0.45);
+                    f.vx += Math.cos(pull) * strength * dt;
+                    f.vy += Math.sin(pull) * strength * dt;
+                }
+            }
             f.y += f.vy * dt; f.x += f.vx * dt; f.ang += f.spin * dt;
             f.flash = Math.max(0, (f.flash || 0) - dt);
-            if (f.y > p.y + 900) { g.fallers.splice(i, 1); continue; }
+            if (f.y > p.y + 900 && f.engaged <= 0) { g.fallers.splice(i, 1); continue; }
             const d = dist(p, f);
             // CUTTING — the laser is the patient option: slower, it costs power, and
             // it broadcasts. It pays a third more because standing still down here
@@ -762,6 +788,7 @@ function updateVolumes(g, dt, p) {
                 if (p.dashTimer > 0 && (f._hitT || 0) <= 0) {
                     f._hitT = 0.35;                       // one strike per pass, not one per frame
                     f.cracks++;
+                    f.engaged = 6;
                     f.flash = 0.2;
                     playSample('clank', 0.4, 1.1);
                     g.shake = Math.max(g.shake || 0, 2);
@@ -775,7 +802,7 @@ function updateVolumes(g, dt, p) {
                     playTone(620, 0.16, 'sine', 0.06);
                     for (let gI = 0; gI < 2; gI++) g.gems.push({ x: f.x + (Math.random() - 0.5) * 30, y: f.y + (Math.random() - 0.5) * 30, value: 2, size: 3, life: 12, dropDepth: g.depth });
                     const ka = Math.atan2(f.y - p.y, f.x - p.x);
-                    f.vx += Math.cos(ka) * 40; f.vy += Math.sin(ka) * 22;
+                    f.vx += Math.cos(ka) * 12; f.vy += Math.sin(ka) * 7;
                     g.floatingTexts.push({ x: f.x, y: f.y - 18, text: `CRACKED ${f.cracks}/${f.need}`, color: '#C8D8E0', life: 1, vy: -22 });
                 } else if (p.dashTimer <= 0) {
                     // Nudged aside — it takes a dash to break rock
@@ -826,6 +853,11 @@ function updateVolumes(g, dt, p) {
 
 function drawVolumes(g) {
     const t = g.runTime;
+    let target = null, targetD = Infinity;
+    for (const f of (g.fallers || [])) {
+        const d = dist(g.player, f);
+        if (d < targetD) { target = f; targetD = d; }
+    }
     // Ore falls — tumbling rock, seam glinting in its mineral colour
     if (g.fallers) {
         for (const f of g.fallers) {
@@ -886,6 +918,28 @@ function drawVolumes(g) {
             }
             ctx.globalAlpha = Math.min(1, glint + 0.2);
             drawGlow(ctx, f.col, 0, 0, f.r * 1.5, glint * 0.35);
+            if (f === target && targetD < 520) {
+                // The bracket and verb distinguish harvestable ore from inert
+                // trench rubble before the player commits to a chase.
+                const br = f.r + 10, c = 7;
+                ctx.globalAlpha = 0.95;
+                ctx.strokeStyle = f.col; ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(-br, -br + c); ctx.lineTo(-br, -br); ctx.lineTo(-br + c, -br);
+                ctx.moveTo(br - c, -br); ctx.lineTo(br, -br); ctx.lineTo(br, -br + c);
+                ctx.moveTo(br, br - c); ctx.lineTo(br, br); ctx.lineTo(br - c, br);
+                ctx.moveTo(-br + c, br); ctx.lineTo(-br, br); ctx.lineTo(-br, br - c);
+                ctx.stroke();
+                ctx.rotate(-f.ang);
+                const remaining = Math.max(1, f.need - f.cracks);
+                const hits = `${remaining} HIT${remaining === 1 ? '' : 'S'}`;
+                const action = meta.modulesEquipped.includes('mining_laser') ? `DASH ${hits} · HOLD E CUT` : `DASH · ${hits}`;
+                ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center';
+                const tw = ctx.measureText(action).width;
+                drawPlate(-tw / 2 - 7, br + 7, tw + 14, 17, 0.84);
+                ctx.fillStyle = f.col;
+                ctx.fillText(action, 0, br + 19);
+            }
             ctx.globalAlpha = 1;
             ctx.restore();
         }
@@ -1653,7 +1707,7 @@ function mulberry32(a) {
 }
 function seedFromString(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return h >>> 0; }
 function RND() { return dailyRng ? dailyRng() : Math.random(); }
-const DEEP_SWARM_BUILD = '2026.07.26-field-hotfix';
+const DEEP_SWARM_BUILD = '2026.08.10-cockpit-ore-perf';
 const RUN_TRACE_LIMIT = 30;
 let runTrace = [];
 let lastRuntimeError = null;
@@ -8378,7 +8432,7 @@ function draw() {
     const small = w < 520 || h < 560;
     // Desktop porthole enlarged 12/07 (Vish: "make viewport bigger") — tighter
     // margins; NEREID panel still clears below.
-    const NEREID_GAP = 96;
+    const NEREID_GAP = 82;
     const TOP_GAP    = 40;
     const vpCx = w / 2;
     const vpCy = h / 2;
@@ -10196,10 +10250,8 @@ function draw() {
     ctx.fillRect(0, 0, w, h);
 
     // --- SOFT SCANLINES (barely there — texture, not obstruction) ---
-    ctx.fillStyle = 'rgba(0,0,0,0.025)';
-    for (let sl = 0; sl < h; sl += 4) {
-        ctx.fillRect(0, sl, w, 1);
-    }
+    ctx.fillStyle = texturePattern('water-scanline', 4, 'rgba(0,0,0,0.025)');
+    ctx.fillRect(0, 0, w, h);
 
     // --- GENTLE VIGNETTE (cinematic, not claustrophobic) ---
     const vigGrad2 = ctx.createRadialGradient(w / 2, h / 2, h * 0.4, w / 2, h / 2, h * 0.85);
@@ -10756,8 +10808,116 @@ function drawBodyPlan(e, sz, col, t) {
     }
 }
 
+function drawDesktopCockpitRails(w, h, g, pal, vpCx, vpR) {
+    const gap = vpCx - vpR;
+    if (g._fullBleed || gap < 190) { g._cockpitRails = null; return false; }
+    const margin = 12;
+    const railW = gap - margin * 2;
+    const railY = 36, railH = h - 72;
+    const left = { x: margin, y: railY, w: railW, h: railH };
+    const right = { x: w - margin - railW, y: railY, w: railW, h: railH };
+    g._cockpitRails = { left, right };
+
+    drawPanelBg(left.x, left.y, left.w, left.h, pal);
+    drawPanelBg(right.x, right.y, right.w, right.h, pal);
+    ctx.fillStyle = hexA(pal.accent, 0.7); ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('VESSEL TELEMETRY', left.x + 14, left.y + 18);
+    ctx.textAlign = 'right'; ctx.fillText('MISSION CONTROL', right.x + right.w - 14, right.y + 18);
+
+    const p = g.player;
+    const hpPct = Math.max(0, Math.min(1, p.hp / p.maxHp));
+    const mindPct = Math.max(0, Math.min(1, (100 - (p.corruption || 0)) / 100));
+    const bat = p.battery == null ? 100 : p.battery;
+    const bx = left.x + 14, bw = Math.min(300, left.w - 28);
+    drawPanelBar(bx, left.y + 166, bw, 'HULL', `${Math.max(0, Math.floor(p.hp))}/${p.maxHp}`, hpPct, '#E04050', pal);
+    drawPanelBar(bx, left.y + 202, bw, 'MIND', `${Math.floor(mindPct * 100)}%`, mindPct, '#A060D0', pal);
+    drawPanelBar(bx, left.y + 238, bw, 'POWER', `${Math.floor(bat)}%`, bat / 100, bat > 50 ? '#E8C860' : '#FF8040', pal);
+
+    const dataY = left.y + 292;
+    ctx.textAlign = 'left'; ctx.font = 'bold 22px monospace'; ctx.fillStyle = g.ascending ? '#80FFA0' : pal.accent;
+    ctx.fillText(`${Math.floor(g.depth)}m`, bx, dataY);
+    ctx.font = 'bold 11px monospace'; ctx.fillStyle = pal.textDim;
+    ctx.fillText(g.ascending ? '↑ ASCENDING' : pal.zone, bx, dataY + 18);
+    if (!g.ascending && g.depth > 200) ctx.fillText('[Z] ASCEND', bx, dataY + 36);
+
+    let sy = dataY + 72;
+    const faults = g.systems ? SYSTEM_DEFS.filter(s => g.systems[s.id].condition < 70) : [];
+    ctx.font = 'bold 10px monospace'; ctx.fillStyle = faults.length ? '#FF8060' : hexA(pal.textDim, 0.75);
+    ctx.fillText(faults.length ? 'SYSTEM FAULTS' : 'ALL SYSTEMS NOMINAL', bx, sy);
+    sy += 17;
+    for (const s of faults.slice(0, 4)) {
+        ctx.fillStyle = '#FF9A78'; ctx.fillText(`${s.short}  ${Math.round(g.systems[s.id].condition)}%`, bx, sy); sy += 15;
+    }
+    if (g.silent) { ctx.fillStyle = '#80E0FF'; ctx.fillText('◈ SILENT RUNNING  [Q]', bx, sy + 8); sy += 22; }
+    if ((g.attention || 0) > 20) {
+        const word = g.attention >= 90 ? 'MARKED' : g.attention >= 70 ? 'HUNTED' : g.attention >= 40 ? 'SUSPECTED' : 'NOTICED';
+        ctx.fillStyle = g.attention >= 70 ? '#FF7060' : '#D8B060'; ctx.fillText(word, bx, sy + 8);
+    }
+    if (railW >= 590) {
+        const navX = left.x + left.w - 270;
+        drawPanelDivider(navX, left.y + 34, 250, pal);
+        ctx.textAlign = 'left'; ctx.font = 'bold 11px monospace'; ctx.fillStyle = hexA(pal.accent, 0.7);
+        ctx.fillText('NAVIGATION', navX, left.y + 58);
+        ctx.font = 'bold 12px monospace';
+        const speed = Math.round(Math.hypot(p.vx || 0, p.vy || 0));
+        const navRows = [
+            ['SPEED', `${speed} m/s`], ['CONTACTS', `${g.enemies.length}/${enemyPopCap(g)}`],
+            ['WAVE', String(g.wave || 1)], ['NOISE', `${Math.round((g.noise || 0) * 100)}%`],
+            ['LIGHTS', g.lightOn === false ? 'DARK' : 'ON'], ['CARGO', `${(g.inventory || []).length}/50`],
+        ];
+        let ny = left.y + 88;
+        for (const [label, value] of navRows) {
+            ctx.fillStyle = pal.textDim; ctx.fillText(label, navX, ny);
+            ctx.textAlign = 'right'; ctx.fillStyle = pal.text; ctx.fillText(value, navX + 250, ny);
+            ctx.textAlign = 'left'; ny += 25;
+        }
+
+        const actionX = right.x + 20;
+        drawPanelDivider(actionX, right.y + 34, 250, pal);
+        ctx.fillStyle = hexA(pal.accent, 0.7); ctx.font = 'bold 11px monospace';
+        ctx.fillText('ACTIVE CONTROLS', actionX, right.y + 58);
+        drawAbilityRow(actionX, right.y + 76, 250, 'SPACE', 'DASH', p.dashCooldown <= 0 ? 'READY' : `${p.dashCooldown.toFixed(1)}s`, p.dashCooldown <= 0, '#5ADFCF', pal);
+        drawAbilityRow(actionX, right.y + 104, 250, 'Q', 'SILENT', g.silent ? 'ACTIVE' : 'STANDBY', true, '#80E0FF', pal);
+        drawAbilityRow(actionX, right.y + 132, 250, 'L', 'FLOODLIGHT', g.lightOn === false ? 'DARK' : 'ON', true, '#FFD040', pal);
+        drawAbilityRow(actionX, right.y + 160, 250, 'TAB', 'SALVAGE', `${(g.inventory || []).length}/50`, true, '#DAA520', pal);
+    }
+    return true;
+}
+
+function drawCompactTelemetry(w, h, g, pal) {
+    g._compactTelemetry = true;
+    const p = g.player, x = 16;
+    const lines = [];
+    lines.push({ text: g.ascending ? '↑ ASCENDING' : pal.zone, color: pal.textDim, size: 10 });
+    lines.push({ text: `${Math.floor(g.depth)}m`, color: g.ascending ? '#80FFA0' : pal.accent, size: 18 });
+    if (g.systems) {
+        const faults = SYSTEM_DEFS.filter(s => g.systems[s.id].condition < 70);
+        lines.push({ text: faults.length ? faults.slice(0, 2).map(s => `${s.short} ${Math.round(g.systems[s.id].condition)}%`).join('  ') : 'ALL SYSTEMS NOMINAL', color: faults.length ? '#FF8060' : pal.textDim, size: 9 });
+    }
+    const bat = p.battery == null ? 100 : p.battery;
+    if (bat < 90) lines.push({ text: `PWR ${Math.floor(bat)}%`, color: bat > 50 ? '#FFD040' : '#FF8040', size: 10 });
+    if (!g.ascending && g.depth > 200) lines.push({ text: '[Z] ASCEND', color: pal.textDim, size: 9 });
+    if (g.dread) {
+        const clearance = Math.max(0, Math.round(((g.worldBounds && g.worldBounds.radius) || 1000) - dist(g.player, { x: g.worldBounds.cx || 0, y: g.worldBounds.cy || 0 })));
+        lines.push({ text: g._dreadOpen ? 'KEEL  ----' : `KEEL  ${clearance}m`, color: g._dreadOpen ? '#FF6060' : pal.textDim, size: 9 });
+        lines.push({ text: `PEAK  ${g.dread.maxBar.toFixed(1)} bar`, color: pal.textDim, size: 9 });
+    }
+    const kits = (g.inventory || []).filter(it => it.id === 'repair_kit').length;
+    if (kits) lines.push({ text: `[R] REPAIR KIT ×${kits}`, color: '#80FFA0', size: 9 });
+    let y = h - 8;
+    ctx.textAlign = 'left';
+    for (const line of lines) {
+        ctx.font = `${line.size >= 14 ? 'bold ' : ''}${line.size}px monospace`;
+        ctx.fillStyle = hexA(line.color, 0.9);
+        ctx.fillText(line.text, x, y);
+        y -= line.size + 5;
+    }
+}
+
 function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     const p = g.player;
+    g._compactTelemetry = false;
+    const hasRails = drawDesktopCockpitRails(w, h, g, pal, vpCx, vpR);
 
     // ---- ANNOUNCEMENT BANNER — streak text was set in 25 places but never drawn
     // since the HUD rework. Zone crossings render as big title cards (Subnautica). ----
@@ -10792,17 +10952,12 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     }
 
     // ---- BOTTOM-LEFT corner: DEPTH (with ASCENT indicator if ascending) ----
-    ctx.textAlign = 'left';
-    const dColor = g.ascending ? '#80FFA0' : pal.accent;
-    ctx.fillStyle = hexA(dColor, 0.9); ctx.font = 'bold 18px monospace';
-    ctx.fillText(`${Math.floor(g.depth)}m`, 16, h - 22);
-    ctx.fillStyle = hexA(pal.textDim, 0.85); ctx.font = '11px monospace';
-    ctx.fillText(g.ascending ? '↑ ASCENDING' : pal.zone, 16, h - 8);
+    if (!hasRails) drawCompactTelemetry(w, h, g, pal);
     // KEEL CLEARANCE + PRESSURE. Clearance is what makes the void legible — a number
     // that shrinks as the trench narrows, and reads as no return at all when there
     // is genuinely nothing under the boat. Pressure is here because it only ever
     // goes up; the peak stays on the glass for the rest of the dive.
-    if (g.dread) {
+    if (g.dread && !hasRails && !g._compactTelemetry) {
         const noFloor = !!g._dreadOpen;
         const clearance = Math.max(0, Math.round(((g.worldBounds && g.worldBounds.radius) || 1000) - dist(g.player, { x: g.worldBounds.cx || 0, y: g.worldBounds.cy || 0 })));
         ctx.font = '10px monospace';
@@ -10812,13 +10967,13 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         ctx.fillText(`PEAK  ${g.dread.maxBar.toFixed(1)} bar`, 16, h - 64);
     }
     // Show [Z] ASCEND prompt only when descending and we've gone deep enough
-    if (!g.ascending && g.depth > 200) {
+    if (!hasRails && !g._compactTelemetry && !g.ascending && g.depth > 200) {
         ctx.fillStyle = hexA(pal.textDim, 0.55); ctx.font = '10px monospace';
         ctx.fillText('[Z] ASCEND', 16, h - 38);
     }
     // LEFT-EDGE STATUS STACK — lives under the radar in the porthole's dead
     // margin; the bottom-left corner keeps only depth + ascend.
-    {
+    if (!hasRails) {
         const _mmr = touchUI() && Math.min(w, h) < 520 ? 48 : 52;
         let sy = _mmr * 2 + 64 + 26;   // just below the (now top-left) radar
         ctx.textAlign = 'left';
@@ -10993,7 +11148,7 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         ctx.fillStyle = HULL_COLOR; ctx.fillText(`HULL ${Math.max(0, Math.floor(p.hp))}`, 154, 15);
         ctx.fillStyle = MIND_COLOR; ctx.fillText(`MIND ${Math.floor(sanity)}%`, 154, 29);
         ctx.fillStyle = XP_COLOR;   ctx.fillText(`LV ${p.level}`, 230, 15);
-    } else {
+    } else if (!hasRails) {
         drawArc(-Math.PI / 2,  xpPct, XP_COLOR,   `LV ${p.level}`, `${p.xp}/${xpForLevel(p.level)}`);
         drawArc(Math.PI / 6,   sanity / 100, MIND_COLOR, 'MIND', `${Math.floor(sanity)}%`);
         drawArc(5 * Math.PI / 6, hpPct, HULL_COLOR, 'HULL', `${Math.max(0, Math.floor(p.hp))}/${p.maxHp}`);
@@ -11004,13 +11159,13 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
 
     // BATTERY (small inline indicator below depth, not an arc)
     const bat = p.battery != null ? p.battery : 100;
-    if (bat < 90) {
+    if (!hasRails && !g._compactTelemetry && bat < 90) {
         const batColor = bat > 50 ? '#FFD040' : bat > 20 ? '#FF8040' : '#DA4060';
         ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left';
         ctx.fillStyle = batColor;
         ctx.fillText(`PWR ${Math.floor(bat)}%`, 16, h - 50);
     }
-    if (g.systems) {
+    if (!hasRails && !g._compactTelemetry && g.systems) {
         const faults = SYSTEM_DEFS.filter(s => g.systems[s.id].condition < 70);
         ctx.font = 'bold 9px monospace'; ctx.textAlign = 'left';
         ctx.fillStyle = faults.length ? '#FF8060' : hexA(pal.textDim, 0.75);
@@ -11021,7 +11176,7 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     }
     // REPAIR KITS — show count if any held
     const kits = (g.inventory || []).filter(it => it.id === 'repair_kit').length;
-    if (kits > 0) {
+    if (!hasRails && !g._compactTelemetry && kits > 0) {
         ctx.font = 'bold 10px monospace'; ctx.textAlign = 'left';
         ctx.fillStyle = '#80FFA0';
         ctx.fillText(`[R] REPAIR KIT  ×${kits}`, 16, h - 64);
@@ -11064,15 +11219,17 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
             // Brief — right-aligned, leaves room for dot
             ctx.fillStyle = o.complete ? hexA('#A0E8B0', 0.7) : hexA(pal.text, 0.85);
             ctx.font = '11px monospace';
-            const briefMax = 60;
+            const railW = g._cockpitRails ? g._cockpitRails.right.w : 0;
+            const briefMax = railW ? Math.min(72, Math.max(32, Math.floor((railW - 28) / 7.2))) : 60;
             const brief = o.brief.length > briefMax ? o.brief.slice(0, briefMax - 1) + '…' : o.brief;
             ctx.fillText(brief, w - 22, oy + 7);
             // Mini progress bar — anchored to right edge, 160px wide
-            const barX = w - 16 - 160;
+            const objectiveBarW = railW ? Math.min(260, railW - 30) : 160;
+            const barX = w - 16 - objectiveBarW;
             ctx.fillStyle = 'rgba(0,0,0,0.5)';
-            ctx.fillRect(barX, oy + 11, 160, 2);
+            ctx.fillRect(barX, oy + 11, objectiveBarW, 2);
             ctx.fillStyle = dotCol;
-            ctx.fillRect(barX, oy + 11, 160 * pct, 2);
+            ctx.fillRect(barX, oy + 11, objectiveBarW * pct, 2);
             oy += 18;
         }
     }
@@ -11087,8 +11244,9 @@ function drawCompactMinimap(w, h, g, pal) {
     // BOTTOM-LEFT — clear of the top-right loadout strip. Above the depth/zone display.
     // Top-left on every platform — the bottom-left corner was a traffic jam
     // (radar + silent + attention + belt + depth all stacked there).
-    const mmCx = mmR + 18;
-    const mmCy = mmR + 64;
+    const rail = g._cockpitRails && g._cockpitRails.left;
+    const mmCx = rail ? rail.x + rail.w / 2 : mmR + 18;
+    const mmCy = rail ? rail.y + 82 : mmR + 64;
     const wb = g.worldBounds;
     const trenchR = (wb && wb.radius) || 1000;
     // Scale: trench fits within minimap radius
@@ -11184,9 +11342,9 @@ function drawPanelBg(x, y, w, h, pal) {
     grad.addColorStop(1, '#040810');
     ctx.fillStyle = grad;
     ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = 'rgba(127,168,150,0.02)';
-    for (let yy = y + 4; yy < y + h; yy += 3) ctx.fillRect(x, yy, w, 1);
-    const isLeftPanel = (x === 0);
+    ctx.fillStyle = texturePattern('panel-scanline', 3, 'rgba(127,168,150,0.02)');
+    ctx.fillRect(x, y, w, h);
+    const isLeftPanel = x < canvas.width / 2;
     ctx.strokeStyle = hexA(pal.accent, 0.3); ctx.lineWidth = 2;
     const outerX = isLeftPanel ? 0.5 : x + w - 0.5;
     ctx.beginPath(); ctx.moveTo(outerX, y); ctx.lineTo(outerX, y + h); ctx.stroke();
@@ -15892,6 +16050,27 @@ window.addEventListener('keydown', e => {
 
 // --- FPS tracking ---
 let _fps = 60, _fpsLast = 0, _fpsFrames = 0, _fpsAccum = 0;
+const _perf = { frame: [], update: [], draw: [], post: [], p95: 0, p99: 0, updateP95: 0, drawP95: 0, postP95: 0, longFrames: 0, sample: 0 };
+function _perfPush(bucket, value) {
+    bucket.push(Math.round(value * 100) / 100);
+    if (bucket.length > 240) bucket.shift();
+}
+function _percentile(values, pct) {
+    if (!values.length) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * pct))];
+}
+function _recordPerf(frame, updateMs, drawMs, postMs) {
+    _perfPush(_perf.frame, frame); _perfPush(_perf.update, updateMs);
+    _perfPush(_perf.draw, drawMs); _perfPush(_perf.post, postMs);
+    if (frame > 50) _perf.longFrames++;
+    if (++_perf.sample % 30 !== 0) return;
+    _perf.p95 = _percentile(_perf.frame, 0.95);
+    _perf.p99 = _percentile(_perf.frame, 0.99);
+    _perf.updateP95 = _percentile(_perf.update, 0.95);
+    _perf.drawP95 = _percentile(_perf.draw, 0.95);
+    _perf.postP95 = _percentile(_perf.post, 0.95);
+}
 function _tickFps(ts) {
     if (_fpsLast === 0) { _fpsLast = ts; return; }
     _fpsFrames++;
@@ -15939,14 +16118,16 @@ function drawCRT() {
 }
 
 function drawFps() {
+    const compact = touchUI() && Math.min(canvas.width, canvas.height) < 520;
+    const fx = compact ? canvas.width / 2 - 28 : 6;
     ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left';
     const color = _fps >= 55 ? '#5AE0A0' : _fps >= 30 ? '#FFD040' : '#FF6060';
     ctx.fillStyle = color;
     // Top-left — DIVE BRIEF has moved to bottom-right, so this corner is clear again.
-    ctx.fillText(`${_fps} FPS`, 6, 14);
+    ctx.fillText(`${_fps} FPS`, fx, 14);
     // Entity counts next to it — when frames drop we want to know WHAT is on the
     // field, not guess. e=contacts (cap), p=projectiles, x=effects, o=obstacles.
-    if (game && game.enemies && phase === 'playing') {
+    if (!compact && game && game.enemies && phase === 'playing') {
         ctx.fillStyle = 'rgba(150,170,190,0.75)';
         ctx.fillText(`e${game.enemies.length}/${enemyPopCap(game)} p${game.projectiles.length} x${game.effects.length} o${(game.obstacles || []).length}`, 6, 26);
     }
@@ -15956,15 +16137,20 @@ function drawFps() {
 let lastTime = 0;
 function loop(ts) {
     try {
+        const frameStart = performance.now();
         _tickFps(ts);
         const dt = lastTime ? Math.min((ts - lastTime) / 1000, 0.05) : 0.016;
         lastTime = ts;
         update(dt);
         updateMusic(dt);
+        const updateEnd = performance.now();
         draw();
         if (!POSTFX.on && !(isTouchDevice && Math.min(canvas.width, canvas.height) < 520)) drawCRT(); // phones skip the overdraw
         drawFps();
+        const drawEnd = performance.now();
         postFX(ts);
+        const postEnd = performance.now();
+        _recordPerf(postEnd - frameStart, updateEnd - frameStart, drawEnd - updateEnd, postEnd - drawEnd);
     } catch(err) {
         captureRuntimeError(err, 'animation-loop');
         resetRenderContextAfterFault();
@@ -15988,9 +16174,16 @@ window.__deepSwarm = {
             enemies: game.enemies.length, popCap: enemyPopCap(game),
             projectiles: game.projectiles.length, effects: game.effects.length,
             obstacles: (game.obstacles || []).length, fps: _fps,
+            perf: { p95: _perf.p95, p99: _perf.p99, updateP95: _perf.updateP95,
+                drawP95: _perf.drawP95, postP95: _perf.postP95, longFrames: _perf.longFrames },
             dmgMult: game.player.dmgMult, overcharge: game.player._overchargeT || 0,
             attention: Math.round(game.attention || 0),
             fallers: (game.fallers || []).length,
+            ore: (game.fallers || []).map(f => ({ x: Math.round(f.x - game.player.x), y: Math.round(f.y - game.player.y),
+                vx: Math.round(f.vx), vy: Math.round(f.vy), cracks: f.cracks, need: f.need, engaged: Math.round((f.engaged || 0) * 10) / 10 })),
+            hud: game._cockpitRails ? { rails: true, left: { ...game._cockpitRails.left }, right: { ...game._cockpitRails.right },
+                porthole: { x: game._vpCx, y: game._vpCy, r: game._vpR } } : { rails: false,
+                porthole: { x: game._vpCx, y: game._vpCy, r: game._vpR } },
             dread: game.dread ? {
                 open: game.dread.openT > 0, openDone: game.dread.openDone,
                 silent: game.dread.silenceT > 0, maxBar: Math.round(game.dread.maxBar * 10) / 10,
@@ -16052,11 +16245,11 @@ window.__deepSwarm = {
     },
     // Ore falls spawn on a random timer and need a dash landed on them, which no
     // test can do reliably — so place one and strike it directly.
-    debugOre({ seam = 'hairline', crit = false, need = 2, r = 26 } = {}) {
+    debugOre({ seam = 'hairline', crit = false, need = 2, r = 26, x = 60, y = 0, vx = 0, vy = 0 } = {}) {
         if (!game) this.startSeeded('ore');
         if (!game.fallers) game.fallers = [];
-        const f = { x: game.player.x + 60, y: game.player.y, vy: 0, vx: 0, r, ore: 'scrap', col: '#C0A060',
-            seed: 4, ang: 0, spin: 0, need, cracks: 0, flash: 0, seam, crit, laser: 0 };
+        const f = { x: game.player.x + x, y: game.player.y + y, vy, vx, r, ore: 'scrap', col: '#C0A060',
+            seed: 4, ang: 0, spin: 0, need, cracks: 0, flash: 0, seam, crit, laser: 0, engaged: 0 };
         game.fallers.push(f);
         return { fallers: game.fallers.length, seam, crit, need };
     },
@@ -16069,8 +16262,15 @@ window.__deepSwarm = {
         game.player.x = f.x - 6; game.player.y = f.y;
         updateVolumes(game, 0.016, game.player);
         const still = (game.fallers || []).includes(f);
-        return { struck: true, before, shattered: !still, cracks: f.cracks,
+        return { struck: true, before, shattered: !still, cracks: f.cracks, engaged: f.engaged || 0, vx: f.vx, vy: f.vy,
             enemies: game.enemies.length, hp: game.player.hp, fallers: (game.fallers || []).length };
+    },
+    debugAdvanceOre(seconds = 1) {
+        if (!game) return null;
+        game.player.dashTimer = 0;
+        const steps = Math.max(1, Math.ceil(seconds * 60));
+        for (let i = 0; i < steps; i++) updateVolumes(game, 1 / 60, game.player);
+        return this.getState().game.ore;
     },
     debugFieldBay(key) {
         if (!game) this.startSeeded('bay');

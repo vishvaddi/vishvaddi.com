@@ -47,10 +47,13 @@ try {
     const fps = samples.map(s => s.fps).filter(n => n > 0)
     const en = samples.map(s => s.enemies)
     const avg = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : 0
+    const perf = samples.at(-1).perf
     console.log(
       `  ${String(depth).padStart(4)}m  fps avg ${String(avg(fps)).padStart(3)} min ${String(Math.min(...fps)).padStart(3)}` +
       `  |  contacts avg ${String(avg(en)).padStart(3)} max ${String(Math.max(...en)).padStart(3)} cap ${samples[0].popCap}` +
-      `  |  proj ${avg(samples.map(s => s.projectiles))} fx ${avg(samples.map(s => s.effects))} obs ${avg(samples.map(s => s.obstacles))}`
+      `  |  proj ${avg(samples.map(s => s.projectiles))} fx ${avg(samples.map(s => s.effects))} obs ${avg(samples.map(s => s.obstacles))}` +
+      `  |  frame p95 ${perf.p95.toFixed(1)} p99 ${perf.p99.toFixed(1)}ms` +
+      `  (update ${perf.updateP95.toFixed(1)} draw ${perf.drawP95.toFixed(1)} post ${perf.postP95.toFixed(1)}) long ${perf.longFrames}`
     )
   }
 
