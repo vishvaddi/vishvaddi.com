@@ -4,6 +4,7 @@
 
 - Added DJ as Studio's sixth mode with two local-file Web Audio decks, decoded waveforms and BPM analysis, jog/needle seeking, main and eight hot cues, automatic/manual loops, slip, ±16% tempo, pitch preservation and deck sync.
 - Routed trim, three-band isolator EQ, bipolar filters, channel levels and an equal-power crossfader into the existing Studio master chain; added local-bus recording and session-only browser library controls.
+- Extended only the shared CSP `media-src` directive with `blob:` so browser-created local audio can play in production without relaxing script, connection, frame or upload policy.
 - Kept YouTube, YouTube Music and SoundCloud embeds outside the audio bus and explained the licensed-provider boundary in the UI and searchable help instead of presenting a non-compliant fake mixer.
 - Added DJ keyboard shortcuts, guided-tour coverage and five detailed help topics covering file privacy, deck workflow, tempo/loops, mixing/recording and streaming limits.
 - Built separate desktop and stacked Android compositions, then fixed a landscape deck-squash and mobile library-overlap found by responsive browser testing.
