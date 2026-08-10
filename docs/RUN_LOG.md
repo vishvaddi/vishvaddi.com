@@ -1,5 +1,14 @@
 # Run Log
 
+## 2026-08-10 — DJ audio engine, mixer and psychedelic performance pass
+
+- Replaced coarse `timeupdate` loop seeking with beat-snapped `AudioBufferSourceNode` loops driven by the audio clock, including fractional beat lengths and genuine slip position recovery.
+- Added a DJ-specific signed-playhead AudioWorklet so platter gestures reproduce decoded local audio forwards and backwards; guarded asynchronous play/stop intent against browser races.
+- Rebuilt the wide composition as deck–mixer–deck, moving trim, HI, MID, LOW, filter and channel levels into readable central strips; stacked the rig before tablet and mobile controls can collide.
+- Added eight audible master effects with wet/dry control, a connected pivot–tube–headshell–stylus assembly that lands on the record while playing, shorter hot-cue labels and a touch-accessible clear-cues action.
+- Added psychedelic multicolour waveforms, reactive record-label glow, effect-state rings, illuminated meters, target light, quartz state and reduced-motion fallbacks.
+- Expanded functional coverage for engine-clock loop wraps, forward and reverse scratch audio, connected tonearm structure, effects and mobile cue clearing; expanded responsive coverage to 1,024 px and verified the production build.
+
 ## 2026-08-10 — Direct-drive DJ deck rebuild
 
 - Replaced the generic controller face with a physically grounded, branding-free SL-1200-inspired layout: brushed aluminium plinths, oversized grooved vinyl platters, strobe-dot rims, tonearms, stylus lamps, quartz indicators, 33/45 markers, start/stop keys and vertical pitch faders.

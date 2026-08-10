@@ -4,6 +4,7 @@ const BASE = process.argv[2] ?? 'http://localhost:4321'
 const viewports = [
   ['desktop', 1440, 900],
   ['laptop', 1280, 720],
+  ['tablet', 1024, 768],
   ['phone', 390, 844],
   ['landscape', 844, 390],
 ]
