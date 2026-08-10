@@ -1,5 +1,68 @@
 # Run Log
 
+## 2026-08-10 — Deep Swarm: the archive assembles and NEREID declines an order
+
+- Gave the forty-five codex fragments something to add up to. Five dossiers now assemble permanently once their fragment set is held: DSV-01's final forty seconds, LANTERN-3's photograph eleven, Meridian's internal report on the vent chain, the nine souls of MV Kestrel, and a review of what NEREID's unattributed code is actually shaped like.
+- Reworked how fragments are handed out so one advancing a thread already in progress jumps the layer queue. Threads now complete across the run of collection rather than all in the final handful, and chasing one feels like chasing something.
+- The field PDA lists assembled documents above the raw fragments and shows which threads are still open and how far along they are, since what is missing is as informative as what is held.
+- Gave NEREID an arc with four stages rather than a corruption number. She reports; then she starts asking questions; then she starts asking for things; and at the end, once per save and never again, she declines an order. Giving it a second time is obeyed, with thanks for asking twice.
+- Wrecks are now readable close aboard: register, the attitude she is lying in, and the cause the file attributes — which is rarely what the attitude says.
+- Finished the opening sequence with a placed teaching rock twenty-six seconds in, sound seam and a single strike, so the first ore fall a pilot meets is the one that teaches the verb. The first situation now lands around ninety seconds, after the cold open and the first level-up.
+- Added `scripts/deep-swarm-lore.mjs`. It caught a real defect: the first wreck-legibility hash mapped a uniform seed almost linearly onto five buckets, so attitude and cause moved together and distant wrecks read identically. Replaced with an independently salted hash, and the check now measures distribution across sixty wrecks instead of comparing two.
+
+## 2026-08-10 — Deep Swarm: the event catalogue doubles and starts escalating
+
+- Took the catalogue from twenty-three situations to forty, keeping the original rule that every option costs something and adding one of its own: each new situation reaches into a system that already exists rather than inventing a stat for itself.
+- New ground includes a voice on the hydrophone using NEREID's own cadence and asking for a position fix, a clutch of eggs laid in the intake in a spiral that follows the impeller housing, a Meridian drone auditing the hold, a body still perfectly buoyant in an intact suit, a mooring chain under load where nothing was ever moored, a pressure hatch kept clean from the outside, a wreck with her running lights still lit after thirty-five years, a sounder that has stopped finding a floor, and a sweep that comes back in the boat's own format.
+- Recovering the body silences NEREID for two minutes. Alarms still get through; nothing else does.
+- Carrying the clutch instead of purging it costs speed for the rest of the dive and then hatches at twenty-two hundred metres, which is what she told you would happen.
+- Taking the clean ascent window banks the dive early; refusing it closes that window permanently.
+- Rewrote the picker. Situations can now gate on depth, hunt state and NEREID's condition, unseen ones are offered first, and weighting scales with how far past its gate the dive already is — so a deep, loud, unravelling run escalates instead of reshuffling the same deck.
+- Added `scripts/deep-swarm-events.mjs`, which runs all eighty-two choices and all forty no-choice branches to catch options referencing helpers that do not exist, and checks gating and picker bias.
+- The same script found three older situations carrying only a single line of text; DSV-01's shade, the drowned archive and the LANTERN-3 echo now carry the detail the rest of the catalogue does.
+
+## 2026-08-10 — Deep Swarm: hands-on jobs and maintenance debt
+
+- Added four jobs the existing maintenance minigame could not express, since it already owns keyed sequences: holding a drifting bubble inside a band that keeps narrowing, training an array onto a hidden null with nothing to steer by but return strength, holding two controls at once to purge a flooded lock, and swapping scrubber cartridges against a timer that is the air remaining.
+- None of them offer an exit. Walking away is the failure, and each failure is paid in its own currency — a boat that rides bow-down and crabs until it is sorted, an array misalignment that broadcasts position, an open hull, or a third of the reserve gone.
+- Added maintenance debt: every system left below par accrues on its own clock, and when it comes due it chooses the job and hands it over unasked. A pilot who only ever shoots gets handed a trim at the worst possible moment, and attending to the boat between fights is the only counterplay.
+- Put a single cooldown across every entry point after finding that a close implosion could hand over a job while the previous one was still settling, which reads as the game taking the controls away rather than as pressure.
+- Added `scripts/deep-swarm-rig.mjs` covering each grammar to both outcomes, plus debt firing, resolving and re-arming.
+- Deliberately did not build a reactor scram: it is the same keyed sequence the maintenance minigame already runs, and would have been a second copy of an existing screen.
+
+## 2026-08-10 — Deep Swarm: mining rework and the first in-dive material sinks
+
+- Ore falls no longer surrender to a single dash. Rock now takes one to three strikes depending on size, wears visible fracture lines as it goes, and pays more the longer it holds out — a reason to work one rock instead of grazing three.
+- The seam's shape is now the tell. A single clean vein is sound rock. A vein that forks is already broken through: it comes apart on the first strike, pays half, and lets out whatever had made a home in the fracture.
+- Shattering sound rock throws a shock front that damages and scatters anything standing near it, so lining a boulder up with a pack is a legitimate way to fight.
+- Below three kilometres some rock is holding back more pressure than it can carry. Cracking one collapses it inward instead of outward, dragging the submarine and nearby creatures toward the failure and opening the hull if it happens close.
+- The mining laser now also cuts ore falls — slower, drawing power, broadcasting noise, and paying a third more than a dash. Two honest ways to take the same rock, reusing the existing module rather than inventing a second verb.
+- Added the Field Bay: hull patch, thirty-second weapon overcharge, and a ballast dump that buys back silence, spent from mined material during the dive. Until now every material was banked for the Mooring, which made ore a collection rather than a decision.
+- Added `scripts/deep-swarm-mining.mjs`, which places and strikes each rock type directly, because ore falls spawn on a random timer and need a dash landed on them.
+
+## 2026-08-10 — Deep Swarm: the dread layer
+
+- Added THE OPEN — once a dive, below 1,500 m, the trench walls recede, the sounder stops returning a floor, spawning stops and the music drops out. After twelve seconds of genuinely empty water one shape passes at the limit of the light, far too large, going the other way. The keel readout shows dashes throughout.
+- Added a keel-clearance readout so the void is legible as a number, and a pressure peak that only ever climbs and stays on the glass for the rest of the dive.
+- Added silence windows that cut everything to hull noise for twenty to forty seconds; about one in five is the prelude to a contact from every bearing at once, and the rest are nothing at all.
+- Added the thing that follows: a single presence per dive that never attacks, matches depth, holds at the edge of the lamp, closes when the boat is loud, and is deliberately kept out of the enemy list so it cannot be shot, hit, or removed.
+- Added a sweep that gets answered below 2,000 m in the boat's own pulse format, marked on a bearing at the radar rim because range never resolves.
+- Added instruments that lie past MIND sixty: the radar invents contacts drawn exactly like real ones, and sometimes quietly stops drawing one that exists.
+- Added a hypoxia layer on failing life support or a failing MIND — the view closes to a tube that breathes, with the pilot's own breathing in the mix.
+- Added machinery that predates the expedition and still works: mooring chain under load running out of the dark above and into the dark below, ladders bolted to walls that are no longer there, and pressure hatches whose wheel is on the outside. Roughly one deep wreck in four now has its lights on.
+- Bodies persist longer with depth, so the trench keeps a record of the route taken.
+- Added `scripts/deep-swarm-dread.mjs`, which forces each beat and asserts its consequence, because every one of them fires on a long random timer and would otherwise go unverified for weeks of playtests.
+
+## 2026-08-10 — Deep Swarm: depth-lag root cause, render perf and opening pacing
+
+- Found the cause of the reported lag past 2,000 m: nothing bounded `g.enemies`, while the spawn interval floors at 0.4 s, fires up to four at a time, and ATTENTION shortens it further — so a loud deep run accumulated contacts faster than the pilot could clear them, and projectile-versus-enemy collision was a full O(projectiles × enemies) scan over every one of them.
+- Added a shared spatial hash and routed collision, area-of-effect, arc, chain, overkill, pack-count, aggro and sonar-ring queries through it; the ecology sim had built one of these inline and combat had never used it.
+- Added a depth-scaled standing contact quota with an off-screen cull that never removes bosses, aberrants, carriers, hooked, scanned or visible contacts, so an overloaded field drains back to quota without anything winking out on screen.
+- Cached the darkness mask's drawing context and its four per-frame radial gradients, cached seeded obstacle geometry into per-obstacle sprites behind a context-parameter refactor of `drawObstacle`, and halved the resolution of the per-frame canvas upload feeding the post-processing shader.
+- Measured with a new repeatable soak harness rather than by impression: a forced full field at 4,200 m went from 13 frames per second to a locked 60, with no console errors and no visual difference against the pre-change build.
+- Made AUTO-PING standard fit from the first second instead of a level-three card or level-five grant, and rebuilt the freed upgrade slot into a three-card sonar line: wider aperture, longer-persisting returns, and density discrimination that flags wrecks and salvage on the sweep.
+- Shortened the first four waves to 32 seconds and added an 18-second cold open — empty water, a pre-flight exchange with NEREID, and one large silhouette that passes and does not care — so the trench has a silence to break.
+
 ## 2026-08-10 — DJ audio engine, mixer and psychedelic performance pass
 
 - Replaced coarse `timeupdate` loop seeking with beat-snapped `AudioBufferSourceNode` loops driven by the audio clock, including fractional beat lengths and genuine slip position recovery.

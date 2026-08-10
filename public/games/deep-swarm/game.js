@@ -112,7 +112,24 @@ function postFX(ts) {
         if (gc.width !== canvas.width || gc.height !== canvas.height) { gc.width = canvas.width; gc.height = canvas.height; }
         gl.viewport(0, 0, gc.width, gc.height);
         gl.bindTexture(gl.TEXTURE_2D, POSTFX.tex);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+        // Upload a HALF-RES copy. The whole shader is low-frequency — warp, chromatic
+        // aberration, a 3x3 bloom, vignette, grain — so nothing in it resolves detail
+        // the downscale would have carried, but the per-frame pixel upload was the
+        // single most expensive thing in the render path at 1440p and above.
+        const hw = Math.max(1, canvas.width >> 1), hh = Math.max(1, canvas.height >> 1);
+        let src = canvas;
+        if (hw >= 64 && hh >= 64) {
+            if (!POSTFX.half) {
+                POSTFX.half = document.createElement('canvas');
+                POSTFX.halfCtx = POSTFX.half.getContext('2d');
+            }
+            if (POSTFX.half.width !== hw || POSTFX.half.height !== hh) {
+                POSTFX.half.width = hw; POSTFX.half.height = hh;
+            }
+            POSTFX.halfCtx.drawImage(canvas, 0, 0, hw, hh);
+            src = POSTFX.half;
+        }
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
         gl.useProgram(POSTFX.prog);
         gl.uniform1i(POSTFX.loc.tex, 0);
         gl.uniform2f(POSTFX.loc.res, gc.width, gc.height);
@@ -250,6 +267,59 @@ function getGlowSprite(color) {
     gctx.fillRect(0, 0, GLOW_SPRITE_SIZE, GLOW_SPRITE_SIZE);
     _glowCache[color] = c;
     return c;
+}
+// White radial fades for the darkness mask's destination-out light holes. Same
+// trick as the glow cache: the mask was allocating a fresh gradient per lamp, per
+// lure, per explosion and per bioluminescent creature, every frame.
+// 'lamp' keeps the headlight's shoulder; 'soft' is a plain 1->0 falloff, which is
+// exactly what a two-stop gradient at peak alpha A gives you when blitted at A.
+const _maskCache = {};
+function getMaskSprite(profile) {
+    if (_maskCache[profile]) return _maskCache[profile];
+    const S = 128, c = document.createElement('canvas');
+    c.width = c.height = S;
+    const mctx = c.getContext('2d');
+    const r = S / 2;
+    const grad = mctx.createRadialGradient(r, r, 0, r, r, r);
+    if (profile === 'lamp') {
+        grad.addColorStop(0, 'rgba(255,255,255,1)');
+        grad.addColorStop(0.3, 'rgba(255,255,255,0.7)');
+        grad.addColorStop(0.6, 'rgba(255,255,255,0.3)');
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+    } else {
+        grad.addColorStop(0, 'rgba(255,255,255,1)');
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+    }
+    mctx.fillStyle = grad;
+    mctx.fillRect(0, 0, S, S);
+    _maskCache[profile] = c;
+    return c;
+}
+// Hypoxia vignette — transparent core, black rim. Cached once and stretched, so
+// the tube can close over several seconds without allocating a gradient a frame.
+let _vigSprite = null;
+function getVignetteSprite() {
+    if (_vigSprite) return _vigSprite;
+    const S = 256, c = document.createElement('canvas');
+    c.width = c.height = S;
+    const vctx = c.getContext('2d');
+    const r = S / 2;
+    const grad = vctx.createRadialGradient(r, r, 0, r, r, r);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(0.45, 'rgba(0,0,0,0)');
+    grad.addColorStop(0.75, 'rgba(0,0,0,0.72)');
+    grad.addColorStop(1, 'rgba(0,0,0,1)');
+    vctx.fillStyle = grad;
+    vctx.fillRect(0, 0, S, S);
+    _vigSprite = c;
+    return c;
+}
+function cutLight(mctx, profile, x, y, radius, alpha) {
+    if (alpha <= 0 || radius <= 0) return;
+    const prevA = mctx.globalAlpha;
+    mctx.globalAlpha = Math.min(1, alpha);
+    mctx.drawImage(getMaskSprite(profile), x - radius, y - radius, radius * 2, radius * 2);
+    mctx.globalAlpha = prevA;
 }
 // Draw a glow at (x,y) with given radius and alpha — way cheaper than allocating gradients
 function drawGlow(ctx2, color, x, y, radius, alpha) {
@@ -496,6 +566,121 @@ function drawFry(g) {
     }
 }
 
+// A rock coming apart. Three outcomes depending on what the seam was telling you:
+// sound rock pays and throws a shock front that hurts whatever is standing near it —
+// mining is a weapon if you line it up. Fractured rock pays less and lets out
+// whatever was living in the fracture. Pressure-critical rock does not fly apart at
+// all; it collapses, and pulls the water — and you — in after it.
+// FIELD BAY — the in-dive uses for what you dig up. Deliberately three bad-ish
+// options: each one costs material you were saving for the Mooring, so spending is
+// always a decision about whether you intend to come back at all.
+const FIELD_BAY = {
+    '3': { name: 'HULL PATCH',      cost: { scrap: 3 },              need: g => g.player.hp < g.player.maxHp },
+    '4': { name: 'OVERCHARGE 30s',  cost: { corepl: 1, wiring: 1 },  need: g => !(g.player._overchargeT > 0) },
+    '5': { name: 'BALLAST DUMP',    cost: { scrap: 2 },              need: g => (g.attention || 0) > 15 },
+};
+function fieldBay(g, key) {
+    const opt = FIELD_BAY[key];
+    if (!opt) return;
+    if (!opt.need(g)) { setModeMsg(g, `${opt.name} — not needed`, 1.4); return; }
+    if (!canAfford(opt.cost)) {
+        setModeMsg(g, `${opt.name} — need ${matsLabel(opt.cost)}`, 1.8);
+        return;
+    }
+    spendMaterials(opt.cost);
+    saveMeta();
+    const p = g.player;
+    if (key === '3') {
+        p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.28);
+        g.floatingTexts.push({ x: p.x, y: p.y - 26, text: 'HULL PATCHED', color: '#60E0A0', life: 1.6, vy: -24 });
+        playTone(420, 0.22, 'sine', 0.07);
+        addNereidLog(g, 'Plate welded over the worst of it. That is scrap we do not get to take home.');
+    } else if (key === '4') {
+        p._overchargeT = 30;
+        g.floatingTexts.push({ x: p.x, y: p.y - 26, text: 'WEAPONS OVERCHARGED', color: '#FFB84A', life: 1.8, vy: -24 });
+        playTone(880, 0.28, 'sawtooth', 0.07);
+        addNereidLog(g, 'Bus voltage past rating. Thirty seconds, Pilot, and the coils will remember it.');
+    } else {
+        // Buying silence: blow the tanks, go quiet, lose the fix they had on you.
+        g.attention = Math.max(0, (g.attention || 0) * 0.35);
+        g.lastNoise = null;
+        g.floatingTexts.push({ x: p.x, y: p.y - 26, text: 'BALLAST DUMPED — RUNNING QUIET', color: '#80C0FF', life: 2, vy: -24 });
+        if (audioCtx) noiseBurst(0.6, 0.05, 400);
+        addNereidLog(g, 'Tanks blown. Whatever had our bearing is now searching an empty patch of water.');
+    }
+}
+
+function shatterFaller(g, f, p, mult) {
+    const big = f.r > 22;
+    const amt = Math.max(1, Math.round((1 + (big ? 1 : 0) + (f.need >= 3 ? 1 : 0)) * mult * (f.seam === 'branch' ? 0.5 : 1)));
+    addMaterials({ [f.ore]: amt });
+    saveMeta();
+    const gemN = f.seam === 'branch' ? 2 : 3 + (big ? 2 : 0);
+    for (let i = 0; i < gemN; i++) {
+        g.gems.push({ x: f.x + (Math.random() - 0.5) * 50, y: f.y + (Math.random() - 0.5) * 50, value: 4, size: 4, life: 14, dropDepth: g.depth });
+    }
+    g.floatingTexts.push({ x: f.x, y: f.y - 18, text: `+${amt} ${f.ore.toUpperCase()}`, color: f.col, life: 1.8, vy: -26 });
+    playTone(950, 0.3, 'sine', 0.09);
+
+    if (f.crit) {
+        // IMPLOSION. Everything nearby is dragged toward the collapse, including us.
+        g.effects.push({ type: 'explosion', x: f.x, y: f.y, radius: f.r * 3, maxRadius: 4, life: 0.45 });
+        g.shake = Math.max(g.shake || 0, 12);
+        if (audioCtx) { noiseBurst(0.45, 0.09, 500); playTone(44, 0.7, 'sine', 0.09); }
+        const pd = dist(p, f) || 1;
+        if (pd < 320) {
+            const pull = (1 - pd / 320) * 420;
+            p._vx = (p._vx || 0) + (f.x - p.x) / pd * pull;
+            p._vy = (p._vy || 0) + (f.y - p.y) / pd * pull;
+            if (pd < 70 && p.iFrames <= 0) {
+                p.hp -= 9;
+                g.floatingTexts.push({ x: p.x, y: p.y - 26, text: 'HULL — IMPLOSION', color: '#FF6060', life: 1.6, vy: -24 });
+            }
+        }
+        for (const e of g.enemies) {
+            const ed = dist(e, f);
+            if (ed < 300 && ed > 1) { e.x += (f.x - e.x) / ed * 90; e.y += (f.y - e.y) / ed * 90; }
+        }
+        addNereidLog(g, 'That one was holding the trench up. Log the pressure — do not do it again near the hull.');
+        // A close implosion can push the lock. That is a two-handed job, right now.
+        if (pd < 110 && Math.random() < 0.2 && canOpenRig(g)) openRig('purge', 'playing');
+        return;
+    }
+
+    if (f.seam === 'branch') {
+        // Something was in there.
+        const types = getSpawnableTypes(g.wave, g);
+        if (types.length) {
+            const n = 1 + (big ? 1 : 0);
+            for (let i = 0; i < n; i++) {
+                const a = Math.random() * PI2;
+                spawnEnemy(g, types[Math.floor(Math.random() * types.length)],
+                    { x: f.x + Math.cos(a) * 40, y: f.y + Math.sin(a) * 40 });
+            }
+        }
+        g.shake = Math.max(g.shake || 0, 5);
+        if (audioCtx) noiseBurst(0.3, 0.06, 900);
+        maybeHint(g, 'branchseam', 'Branching seams are already broken. Read the vein before you hit it.');
+        return;
+    }
+
+    // SOUND ROCK — a shock front of stone. Line rocks up with a pack and the trench
+    // does the work for you.
+    const shockR = 120 + f.r * 3.4;
+    g.effects.push({ type: 'explosion', x: f.x, y: f.y, radius: 0, maxRadius: shockR, life: 0.3 });
+    g.shake = Math.max(g.shake || 0, big ? 7 : 4);
+    const shockDmg = 14 + f.r * 1.1;
+    for (const e of g.enemies) {
+        const ed2 = dist2(e, f);
+        if (ed2 < shockR * shockR) {
+            damageEnemy(g, e, shockDmg);
+            const ed = Math.sqrt(ed2) || 1;
+            e.x += (e.x - f.x) / ed * 26; e.y += (e.y - f.y) / ed * 26;
+        }
+    }
+    if (audioCtx) noiseBurst(0.35, 0.07, 1200);
+}
+
 function updateVolumes(g, dt, p) {
     if (!g.volumes) g.volumes = [];
     g._volT = (g._volT || 0) + dt;
@@ -532,9 +717,22 @@ function updateVolumes(g, dt, p) {
             const ORES = [['crystal', '#B080FF'], ['scrap', '#C0A060'], ['wiring', '#60C0E0'], ['corepl', '#FF8060']];
             const pick = ORES[Math.floor(rnd() * ORES.length)];
             if (!g.fallers) g.fallers = [];
+            const _fr = 15 + rnd() * 13;
             g.fallers.push({ x: p.x + (rnd() - 0.5) * 1300, y: p.y - 650, vy: 42 + rnd() * 34, vx: (rnd() - 0.5) * 14,
-                r: 15 + rnd() * 13, ore: pick[0], col: pick[1], seed: rnd() * 100, ang: 0, spin: (rnd() - 0.5) * 0.7 });
-            maybeHint(g, 'orefall', 'ORE FALL on sonar — DASH through the glinting rock to crack the seam.');
+                r: _fr, ore: pick[0], col: pick[1], seed: rnd() * 100, ang: 0, spin: (rnd() - 0.5) * 0.7,
+                // Rock does not give up on the first hit. Bigger rock, more strikes,
+                // more ore — the reason to keep working one instead of grazing three.
+                need: _fr > 24 ? 3 : _fr > 19 ? 2 : 1, cracks: 0, flash: 0,
+                // The seam SHAPE is the tell. A hairline vein is sound rock. A
+                // branching one is fractured all the way through — it comes apart on
+                // the first strike, and something has usually made a home in there.
+                seam: rnd() < 0.26 ? 'branch' : 'hairline',
+                // Below 3km the rock is holding back more pressure than it can. Crack
+                // one of these and it does not fly apart — it collapses inward, and
+                // takes the water around it with it.
+                crit: g.depth > 3000 && rnd() < 0.32,
+                laser: 0 });
+            maybeHint(g, 'orefall', 'ORE FALL on sonar — DASH to crack the seam, or hold [E] to cut it (slower, louder, pays more).');
         }
         if (blooms < 2 && g.depth > 1000 && rnd() < 0.35) {
             g.volumes.push({ kind: 'bloom', x: B.minX + 150 + rnd() * (B.maxX - B.minX - 300), y: B.minY + 150 + rnd() * (B.maxY - B.minY - 300),
@@ -543,28 +741,55 @@ function updateVolumes(g, dt, p) {
     }
     if (g._charted) { for (const wk of g.wrecks) wk.revealed = true; }
     // Ore falls: sink, spin, crack under a dash
+    g._oreBeam = null;
     if (g.fallers) {
         for (let i = g.fallers.length - 1; i >= 0; i--) {
             const f = g.fallers[i];
             f.y += f.vy * dt; f.x += f.vx * dt; f.ang += f.spin * dt;
+            f.flash = Math.max(0, (f.flash || 0) - dt);
             if (f.y > p.y + 900) { g.fallers.splice(i, 1); continue; }
             const d = dist(p, f);
+            // CUTTING — the laser is the patient option: slower, it costs power, and
+            // it broadcasts. It pays a third more because standing still down here
+            // and making noise is the price.
+            if (d < f.r + 120 && keys['e'] && !g.nearestWreck && !g.nearestDeposit
+                && meta.modulesEquipped.includes('mining_laser') && (p.battery || 0) > 2) {
+                p.battery = Math.max(0, p.battery - dt * 4.5);
+                g.noise = Math.max(g.noise || 0, 0.9);
+                f.laser = (f.laser || 0) + dt / (2.2 + f.need * 0.8);
+                // Held separately: updateMiningInteraction runs later and nulls
+                // _miningBeam every frame, so writing it here would never survive.
+                g._oreBeam = { x: f.x, y: f.y, progress: Math.min(1, f.laser) };
+                if (f.laser >= 1) { shatterFaller(g, f, p, 1.35); g.fallers.splice(i, 1); continue; }
+            } else if (f.laser > 0) {
+                f.laser = Math.max(0, f.laser - dt * 0.25);
+            }
             if (d < f.r + 16) {
-                if (p.dashTimer > 0) {
-                    const amt = 1 + (f.r > 22 ? 1 : 0);
-                    addMaterials({ [f.ore]: amt });
-                    saveMeta();
-                    for (let gI = 0; gI < 3; gI++) g.gems.push({ x: f.x + (Math.random() - 0.5) * 40, y: f.y + (Math.random() - 0.5) * 40, value: 4, size: 4, life: 14, dropDepth: g.depth });
-                    g.floatingTexts.push({ x: f.x, y: f.y - 18, text: `+${amt} ${f.ore.toUpperCase()}`, color: f.col, life: 1.8, vy: -26 });
-                    playSample('clank', 0.4, 1.1); playTone(950, 0.3, 'sine', 0.09);
-                    g.shake = Math.max(g.shake || 0, 3);
-                    g.fallers.splice(i, 1);
-                } else {
+                if (p.dashTimer > 0 && (f._hitT || 0) <= 0) {
+                    f._hitT = 0.35;                       // one strike per pass, not one per frame
+                    f.cracks++;
+                    f.flash = 0.2;
+                    playSample('clank', 0.4, 1.1);
+                    g.shake = Math.max(g.shake || 0, 2);
+                    // Fractured rock does not survive being hit at all.
+                    if (f.seam === 'branch' || f.cracks >= f.need) {
+                        shatterFaller(g, f, p, 1);
+                        g.fallers.splice(i, 1);
+                        continue;
+                    }
+                    // A partial strike sheds a little and shoves the rock away.
+                    playTone(620, 0.16, 'sine', 0.06);
+                    for (let gI = 0; gI < 2; gI++) g.gems.push({ x: f.x + (Math.random() - 0.5) * 30, y: f.y + (Math.random() - 0.5) * 30, value: 2, size: 3, life: 12, dropDepth: g.depth });
+                    const ka = Math.atan2(f.y - p.y, f.x - p.x);
+                    f.vx += Math.cos(ka) * 40; f.vy += Math.sin(ka) * 22;
+                    g.floatingTexts.push({ x: f.x, y: f.y - 18, text: `CRACKED ${f.cracks}/${f.need}`, color: '#C8D8E0', life: 1, vy: -22 });
+                } else if (p.dashTimer <= 0) {
                     // Nudged aside — it takes a dash to break rock
                     const a = Math.atan2(p.y - f.y, p.x - f.x);
                     p.x += Math.cos(a) * (f.r + 16 - d); p.y += Math.sin(a) * (f.r + 16 - d);
                 }
             }
+            if (f._hitT > 0) f._hitT -= dt;
         }
     }
     g._inThermo = false; g._inSediment = false; g._inCurrent = false;
@@ -621,12 +846,50 @@ function drawVolumes(g) {
             }
             ctx.closePath(); ctx.fill();
             ctx.strokeStyle = '#22262B'; ctx.lineWidth = 1.2; ctx.stroke();
-            // The seam — jagged vein + a travelling glint you can SEE
+            // The seam — jagged vein + a travelling glint you can SEE.
+            // Its SHAPE is the tell, and it has to be readable before you commit:
+            // one clean line is sound rock, a vein that forks is already broken.
             const glint = 0.45 + Math.sin(t * 4 + f.seed * 9) * 0.4;
             ctx.strokeStyle = f.col; ctx.globalAlpha = glint; ctx.lineWidth = 2;
             ctx.beginPath(); ctx.moveTo(-f.r * 0.6, -f.r * 0.15);
             ctx.lineTo(-f.r * 0.15, f.r * 0.1); ctx.lineTo(f.r * 0.2, -f.r * 0.2); ctx.lineTo(f.r * 0.62, f.r * 0.08);
             ctx.stroke();
+            if (f.seam === 'branch') {
+                ctx.lineWidth = 1.4;
+                for (let b = 0; b < 3; b++) {
+                    const bx = -f.r * 0.3 + b * f.r * 0.34, by = (b % 2 ? -1 : 1) * f.r * 0.06;
+                    ctx.beginPath(); ctx.moveTo(bx, by);
+                    ctx.lineTo(bx + fr(b + 3) * f.r * 0.4 - f.r * 0.1, by + (b % 2 ? -1 : 1) * f.r * 0.5);
+                    ctx.stroke();
+                }
+            }
+            // Strikes taken so far — chalky fracture lines, so the rock visibly wears.
+            if (f.cracks > 0) {
+                ctx.globalAlpha = 0.75; ctx.strokeStyle = '#D8E4EC'; ctx.lineWidth = 1.1;
+                for (let c = 0; c < f.cracks; c++) {
+                    const a0 = fr(c + 11) * PI2;
+                    ctx.beginPath();
+                    ctx.moveTo(Math.cos(a0) * f.r * 0.9, Math.sin(a0) * f.r * 0.9);
+                    ctx.lineTo(Math.cos(a0 + 1.9) * f.r * 0.35, Math.sin(a0 + 1.9) * f.r * 0.35);
+                    ctx.lineTo(Math.cos(a0 + 3.4) * f.r * 0.85, Math.sin(a0 + 3.4) * f.r * 0.85);
+                    ctx.stroke();
+                }
+            }
+            // Pressure-critical rock hums. You get one warning and it is this one.
+            if (f.crit) {
+                const hum = 0.35 + Math.sin(t * 9 + f.seed) * 0.3;
+                ctx.globalAlpha = hum; ctx.strokeStyle = '#FF8060'; ctx.lineWidth = 1.6;
+                ctx.beginPath(); ctx.arc(0, 0, f.r * 1.25, 0, PI2); ctx.stroke();
+            }
+            // Laser cut-through, so a held beam reads as progress.
+            if (f.laser > 0) {
+                ctx.globalAlpha = 0.9; ctx.strokeStyle = '#FFB84A'; ctx.lineWidth = 2.4;
+                ctx.beginPath(); ctx.arc(0, 0, f.r * 1.4, -Math.PI / 2, -Math.PI / 2 + PI2 * Math.min(1, f.laser)); ctx.stroke();
+            }
+            if (f.flash > 0) {
+                ctx.globalAlpha = f.flash * 4; ctx.fillStyle = '#FFF';
+                ctx.beginPath(); ctx.arc(0, 0, f.r, 0, PI2); ctx.fill();
+            }
             ctx.globalAlpha = Math.min(1, glint + 0.2);
             drawGlow(ctx, f.col, 0, 0, f.r * 1.5, glint * 0.35);
             ctx.globalAlpha = 1;
@@ -1377,6 +1640,7 @@ function defaultMeta() {
 let meta = loadMeta();
 // Ensure lore array exists in meta
 if (!meta.loreFragments) meta.loreFragments = [];
+if (!meta.dossiers) meta.dossiers = [];
 if (!meta.signal) meta.signal = 0;   // SIGNAL ⌁ — run score distilled; buys sealed archive fragments
 
 // DAILY DIVE — date-seeded PRNG covers the dive BRIEF (contracts, card hand,
@@ -1914,6 +2178,97 @@ function dealCards(runCount) {
 // MID-RUN EVENTS — timed choices
 // =====================================================================
 const EVENT_DEFS = [
+    // ---- Second wave of events (2026-08-10). Same mandate as the first: every
+    // option costs something, everything is submersible-plausible, and each one
+    // reaches into a system that already exists rather than inventing a stat.
+    // minDepth/attn/corrupt are read by the weighted picker below.
+    { id: 'trim_runaway', weight: 2, minWave: 4, minDepth: 400, title: 'TRIM RUNAWAY', text: 'The trim pump has stopped answering the board and started answering something else. She is going bow-down by degrees, slowly enough that you did not notice until the deck told you. Meridian\'s refit notes list this pump as "serviceable"; the same word they used for DSV-01\'s.',
+        choices: [
+            { text: '[1] TAKE HER BY HAND — trim her yourself', fn: g => { openRig('trim', 'playing'); } },
+            { text: '[2] RIDE IT DOWN — live with the list (−12% speed)', fn: g => { g.player.speed *= 0.88; damageSystem(g, 'ballast', 14, 'trim runaway'); addNereidLog(g, 'Then we fly her crooked. I will compensate where I can, Pilot.'); } },
+        ], noChoice: g => { g.player._trimFault = 26; damageSystem(g, 'ballast', 18, 'trim runaway'); } },
+    { id: 'hydrophone_voice', minWave: 8, minDepth: 1400, title: 'VOICE ON THE HYDROPHONE', text: 'Something is speaking on the open channel. It has NEREID\'s cadence — her pauses, her habit of finishing a sentence a half-beat early — and it is asking for a position fix. NEREID has not transmitted. She confirms this twice, unprompted, which she has never done before.',
+        choices: [
+            { text: '[1] TRIANGULATE IT — find out where it is', fn: g => { openRig('bearing', 'playing'); } },
+            { text: '[2] ANSWER IT — give the fix it asked for', fn: g => { g.attention = Math.min(100, (g.attention || 0) + 34); g.player.corruption += 10; meta.nereidDrift = (meta.nereidDrift || 0) + 1; saveMeta(); addNereidLog(g, 'You told it where we are. I would like it noted that I did not.'); } },
+            { text: '[3] SHUT THE CHANNEL — go deaf to be safe', fn: g => { damageSystem(g, 'sonar', 16, 'channel closed'); addNereidLog(g, 'Receiver down. We are deaf on that band now. It was still talking when I cut it.'); } },
+        ], noChoice: g => { g.player.corruption += 8; g.attention = Math.min(100, (g.attention || 0) + 18); } },
+    { id: 'intake_eggs', weight: 2, minWave: 6, minDepth: 900, title: 'CLUTCH IN THE INTAKE', text: 'The port intake is packed with eggs — a few hundred, grey, adhesive, laid in a spiral that follows the impeller housing exactly. Whatever did it understood the machine. NEREID notes flow is down eleven percent and that the clutch is warm.',
+        choices: [
+            { text: '[1] PURGE THE INTAKE — loud, thorough', fn: g => { g.noise = 2.0; g.attention = Math.min(100, (g.attention || 0) + 26); addNereidLog(g, 'Intake clear. Everything within a kilometre heard us do that.'); } },
+            { text: '[2] CARRY THEM — flow stays down, they stay warm', fn: g => { g.player.speed *= 0.9; g._carryingClutch = true; addNereidLog(g, 'We keep them, then. They will hatch at depth, Pilot. They always hatch at depth.'); } },
+        ], noChoice: g => { g.player.speed *= 0.94; g._carryingClutch = true; } },
+    { id: 'audit_drone', minWave: 9, minDepth: 1200, title: 'MERIDIAN AUDIT DRONE', text: 'A survey drone in corporate livery, running a manifest sweep. It has already logged our hull number and is waiting on a cargo declaration. Everything in the hold past the second contract is off-manifest, and it knows how to count.',
+        choices: [
+            { text: '[1] COMPLY — declare, forfeit the overage', fn: g => { g.goldEarned = Math.floor(g.goldEarned * 0.6); addNereidLog(g, 'Declared and forfeit. We are clean and we are poorer.'); } },
+            { text: '[2] JAM IT — noisy, and they will know', fn: g => { g.noise = 2.0; g.attention = Math.min(100, (g.attention || 0) + 30); meta.auditFlags = (meta.auditFlags || 0) + 1; saveMeta(); addNereidLog(g, 'Jammed. Meridian logs a jam the same way they log a theft.'); } },
+            { text: '[3] RAM IT — no drone, no report', fn: g => { g.player.hp -= 14; damageSystem(g, 'hull', 10, 'collision'); meta.auditFlags = (meta.auditFlags || 0) + 2; saveMeta(); addNereidLog(g, 'Drone destroyed. Someone will come looking for it eventually.'); } },
+        ], noChoice: g => { g.goldEarned = Math.floor(g.goldEarned * 0.75); } },
+    { id: 'buoyant_body', minWave: 7, minDepth: 800, title: 'STILL BUOYANT', text: 'A body in a hardsuit, upright, drifting a metre off the floor with the slow dignity of something perfectly weighted. The suit is intact. The name tape is legible. NEREID reads it once and does not read it aloud.',
+        choices: [
+            { text: '[1] RECOVER — take them home', fn: g => { g.score = (g.score || 0) + 2200; meta.recovered = (meta.recovered || 0) + 1; saveMeta(); g._nereidMute = g.runTime + 120; addNereidLog(g, 'Aboard. ...I will be quiet for a while, Pilot. That is not a fault.'); } },
+            { text: '[2] LEAVE THEM — they are already where they were going', fn: g => { g.player.corruption += 9; meta.coldLogs = (meta.coldLogs || 0) + 1; saveMeta(); addNereidLog(g, 'Logged and passed. I have their name. I will keep it.'); } },
+        ], noChoice: g => { g.player.corruption += 6; } },
+    { id: 'ascent_window', minWave: 10, minDepth: 1800, title: 'CLEAN WATER ABOVE', text: 'A column of quiet, all the way to the surface — no thermocline, no traffic, nothing hunting in it. NEREID puts the window at ninety seconds. She also notes, without being asked, that the assay below us is the best she has seen this year.',
+        choices: [
+            { text: '[1] TAKE IT — start the climb, bank the dive', fn: g => { g.ascending = true; g.ascendStartTime = g.runTime; addNereidLog(g, 'Blowing tanks. We go home with what we have, and what we have is enough.'); } },
+            { text: '[2] STAY DOWN — the window closes for good', fn: g => { g._noAscentWindow = true; g.score = (g.score || 0) + 900; g.player.corruption += 6; addNereidLog(g, 'Understood. That was the last clean water, Pilot. I am closing the plot on it.'); } },
+        ], noChoice: g => { g._noAscentWindow = true; } },
+    { id: 'coil_offer_deep', weight: 2, minWave: 12, minDepth: 2600, corrupt: 30, title: 'THE COIL OFFERS', text: 'The growth on the forward bulkhead has arranged itself into something with the proportions of a hand, palm up. It is not threatening. It has never been threatening. It simply keeps offering, and the terms keep improving, which is the part that should worry you.',
+        choices: [
+            { text: '[1] TAKE THE HAND — +35% damage, it keeps a piece', fn: g => { g.player.dmgMult *= 1.35; _coilPrice(g, 20); addNereidLog(g, 'Accepted. I have logged the trade. I log all of them now.'); } },
+            { text: '[2] REFUSE — it costs you to keep refusing', fn: g => { g.player.corruption += 5; g.player.hp -= 8; addNereidLog(g, 'Refused. It will ask again lower down. It always asks again lower down.'); } },
+        ], noChoice: g => { g.player.corruption += 12; } },
+    { id: 'lock_flooded', weight: 2, minWave: 8, minDepth: 1500, title: 'LOCK FLOODED', text: 'The forward airlock has taken water past the inner seal. Pressure either side is close enough that the door will open, which is precisely the problem — it will open onto the compartment, not onto the sea.',
+        choices: [
+            { text: '[1] PURGE IT — two hands, right now', fn: g => { openRig('purge', 'playing'); } },
+            { text: '[2] SEAL THE COMPARTMENT — lose the space for the dive', fn: g => { g.player.maxHp = Math.max(30, g.player.maxHp - 10); g.player.hp = Math.min(g.player.hp, g.player.maxHp); addNereidLog(g, 'Compartment isolated. We are a smaller boat than we were this morning.'); } },
+        ], noChoice: g => { g.player.hp -= 16; damageSystem(g, 'hull', 16, 'lock flooded'); } },
+    { id: 'scrubber_saturated', weight: 2, minWave: 7, title: 'SCRUBBER SATURATED', text: 'CO₂ is climbing. The cartridges are spent and the spares are aft, and the walk aft is the kind of walk you do not want to make while thinking slowly. NEREID has started counting your breaths out loud, which she believes is helpful.',
+        choices: [
+            { text: '[1] SWAP THEM — against the clock', fn: g => { openRig('scrub', 'playing'); } },
+            { text: '[2] RUN RICH — burn reserve to scrub it (−30 battery)', fn: g => { g.player.battery = Math.max(0, (g.player.battery || 100) - 30); addNereidLog(g, 'Bleeding reserve through the scrubber. Inefficient, and it works.'); } },
+        ], noChoice: g => { g.player.battery = Math.max(0, (g.player.battery || 100) - 45); g.player.corruption += 5; } },
+    { id: 'shadow_closes', minWave: 11, minDepth: 2000, attn: 45, title: 'IT HAS CLOSED', text: 'The contact that has been matching your depth since the shelf is no longer matching it. It is two hundred metres nearer than the last plot and holding station there, exactly at the edge of the lamp, the way something waits when it has decided it has time.',
+        choices: [
+            { text: '[1] GO DARK AND DRIFT — let it lose interest', fn: g => { g.lightOn = false; g.silent = true; g.attention = Math.max(0, (g.attention || 0) * 0.4); g.player.corruption += 5; addNereidLog(g, 'All stop, lamps out. We wait. I do not know how long it waits.'); } },
+            { text: '[2] PING IT — make it a contact, not a feeling', fn: g => { firePing(g); g.attention = Math.min(100, (g.attention || 0) + 25); g.player.corruption = Math.max(0, g.player.corruption - 6); addNereidLog(g, 'Resolved. It is there, it is large, and now it knows we looked.'); } },
+        ], noChoice: g => { g.player.corruption += 10; g.attention = Math.min(100, (g.attention || 0) + 12); } },
+    { id: 'moor_chain', minWave: 12, minDepth: 2400, title: 'THE CHAIN', text: 'A mooring chain, taut, running out of the dark above and into the dark below. Nothing was ever moored at this depth. It is under load. Following it up is a day\'s climb; following it down is not a thing the boat will survive.',
+        choices: [
+            { text: '[1] SAMPLE THE LINKS — cut a section for the archive', fn: g => { addMaterials({ scrap: 4 }); saveMeta(); dropLore(g); g.noise = 1.6; g.attention = Math.min(100, (g.attention || 0) + 20); addNereidLog(g, 'Section aboard. The steel is forty years old and it has never been slack.'); } },
+            { text: '[2] LEAVE IT ALONE — do not tug on it', fn: g => { g.player.corruption += 4; addNereidLog(g, 'Agreed. Whatever is on the other end, it is holding.'); } },
+        ], noChoice: g => { g.player.corruption += 6; } },
+    { id: 'clean_room', minWave: 13, minDepth: 3000, title: 'THE CLEAN ROOM', text: 'A pressure hatch in the trench wall, dogged from the outside, wheel unmarked by growth. Everything around it is furred with forty years of the deep. The hatch is not. Something keeps it clean.',
+        choices: [
+            { text: '[1] OPEN IT — the wheel turns easily', fn: g => { dropLore(g); spawnEliteWave(g); g.player.corruption += 12; addNereidLog(g, 'It opened without complaint. Pilot, it opened without complaint.'); } },
+            { text: '[2] WELD IT SHUT — spend the scrap, sleep better', fn: g => { if (canAfford({ scrap: 3 })) { spendMaterials({ scrap: 3 }); saveMeta(); g.score = (g.score || 0) + 600; addNereidLog(g, 'Welded. I have logged the position and I would prefer we did not come back.'); } else { g.player.corruption += 6; addNereidLog(g, 'No scrap for it. We leave it as we found it. Clean.'); } } },
+        ], noChoice: g => { g.player.corruption += 8; } },
+    { id: 'lit_wreck', minWave: 9, minDepth: 1600, title: 'HER LIGHTS ARE ON', text: 'A hull on the floor with her running lights lit — port, starboard, masthead, all correct, all steady. She went down in 2091. There is no cell chemistry that holds a charge for thirty-five years, and NEREID has checked twice.',
+        choices: [
+            { text: '[1] BOARD HER — take whatever is still feeding that', fn: g => { addMaterials({ corepl: 2, wiring: 2 }); saveMeta(); dropLore(g); g.player.corruption += 10; spawnEliteWave(g); } },
+            { text: '[2] PHOTOGRAPH AND GO — the archive can argue about it', fn: g => { g.score = (g.score || 0) + 800; meta.coldLogs = (meta.coldLogs || 0) + 1; saveMeta(); } },
+        ], noChoice: g => { g.player.corruption += 5; } },
+    { id: 'sounder_null', minWave: 10, minDepth: 1900, title: 'NO BOTTOM RETURN', text: 'The sounder has stopped returning. Not a bad trace, not noise — nothing. NEREID has run the transducer through self-test twice and it passes both times. Either the instrument is lying, or there is genuinely nothing beneath the keel to bounce off.',
+        choices: [
+            { text: '[1] TRUST THE INSTRUMENT — hold course over it', fn: g => { g.player.corruption += 14; g.score = (g.score || 0) + 1400; addNereidLog(g, 'Holding. Keel clearance unknown. I will tell you the moment that changes.'); } },
+            { text: '[2] COME OFF IT — put water under us again', fn: g => { g.attention = Math.min(100, (g.attention || 0) + 22); g.noise = 1.8; addNereidLog(g, 'Coming off. Loudly, Pilot, but off.'); } },
+        ], noChoice: g => { g.player.corruption += 10; } },
+    { id: 'own_pulse', minWave: 12, minDepth: 2200, title: 'OUR OWN PULSE', text: 'The return came back in our format. Same interval, same shaping, same three-tone signature NEREID uses to stamp a sweep as ours. It is not an echo — the delay is wrong for an echo. Something out there has been listening long enough to learn how we speak.',
+        choices: [
+            { text: '[1] SEND THE HANDSHAKE — see if it answers properly', fn: g => { dropLore(g); g.player.corruption += 15; meta.nereidDrift = (meta.nereidDrift || 0) + 1; saveMeta(); addNereidLog(g, 'It answered. It used my authentication string. I have never transmitted it.'); } },
+            { text: '[2] CHANGE OUR SIGNATURE — stop being copyable', fn: g => { damageSystem(g, 'sonar', 12, 'signature rekeyed'); g.player.corruption += 3; addNereidLog(g, 'Rekeyed. Degraded, but ours again. It will learn the new one.'); } },
+        ], noChoice: g => { g.player.corruption += 12; } },
+    { id: 'ladder_wall', minWave: 11, minDepth: 2600, title: 'RUNGS IN THE WALL', text: 'Rungs, bolted into the trench face, going up past the lamp and down past it. There is no structure left for them to serve. The paint has worn off the middle of each one, in the places hands would take.',
+        choices: [
+            { text: '[1] FOLLOW THEM DOWN — see what they serve', fn: g => { dropLore(g); g.player.corruption += 11; g._depthOffset = (g._depthOffset || 0) + 180; addNereidLog(g, 'Following. We are below where the survey stops, Pilot.'); } },
+            { text: '[2] LOG THE POSITION AND LEAVE', fn: g => { g.score = (g.score || 0) + 700; meta.coldLogs = (meta.coldLogs || 0) + 1; saveMeta(); } },
+        ], noChoice: g => { g.player.corruption += 7; } },
+    { id: 'quiet_hour', minWave: 6, minDepth: 700, title: 'IT HAS GONE QUIET', text: 'Everything has stopped. No returns, no biologics, no scatter on the sonar — the trench has emptied out the way a room empties before someone arrives. NEREID observes that the last time the water was this clean was ninety seconds before the DSV-01 recording ends.',
+        choices: [
+            { text: '[1] RUN FOR IT — get out of the empty patch', fn: g => { g.noise = 2.0; g.attention = Math.min(100, (g.attention || 0) + 28); g.player.iFrames = Math.max(g.player.iFrames, 1.2); addNereidLog(g, 'Flank. Whatever cleared this water now knows where we went.'); } },
+            { text: '[2] HOLD AND LISTEN — find out what emptied it', fn: g => { g.player.corruption += 8; dropLore(g); spawnEliteWave(g); addNereidLog(g, 'Holding. ...Contact. Pilot, it was already here.'); } },
+        ], noChoice: g => { spawnEliteWave(g); g.player.corruption += 5; } },
     { id: 'thermal_vent', minWave: 3, title: 'THERMAL VENT', text: 'Hydrothermal field ahead — the water above it shivers like air over a road. Meridian survey code MB-11 flagged this vent chain as "commercially anomalous" and then never published the assay. The deposits crusting its throat glitter in the lamp. Something already grazes there.',
         choices: [
             { text: '[1] HARVEST — Risk hull for minerals', fn: g => { g.goldEarned += 30; g.player.hp -= 15; g.floatingTexts.push({ x: g.player.x, y: g.player.y - 20, text: '+30g', color: '#DAA520', life: 1, vy: -25 }); } },
@@ -2014,7 +2369,7 @@ const EVENT_DEFS = [
             { text: '[1] HARVEST — +2 biosamples; the garden defends itself (55%)', fn: g => { addMaterials({ biosamp: 2 }); saveMeta(); if (Math.random() < 0.55) spawnEliteWave(g); } },
             { text: '[2] TORCH A PATH THROUGH — safe, LOUD (+attention)', fn: g => { g.attention = Math.min(100, (g.attention || 0) + 14); g.noise = Math.min(2.5, (g.noise || 0) + 0.8); } },
         ], noChoice: g => {} },
-    { id: 'dsv01_shade', minWave: 11, title: 'CONTACT — DSV-01', text: 'Running lights ahead, pattern-correct for DSV-01. DSV-01 was lost with all hands. It is signalling FOLLOW.',
+    { id: 'dsv01_shade', minWave: 11, title: 'CONTACT — DSV-01', text: 'Running lights ahead, in the pattern DSV-01 carried — masthead, port, and the odd amber repeater her yard fitted by mistake in 2089 and never removed. She was lost with all hands at 3,200 metres, and Meridian closed the file within the quarter. The lights are holding station. She is signalling FOLLOW, in a lamp code that went out of service before either of us was commissioned.',
         choices: [
             { text: '[1] FOLLOW HER — she knows where the good wrecks died (+corruption)', fn: g => { g.player.corruption += 12; const a = Math.random() * PI2; g.wrecks.push({ x: g.player.x + Math.cos(a) * 500, y: g.player.y + Math.sin(a) * 500, r: 40, loot: pickWreckLoot(), revealed: true, salvaged: false, seed: Math.random() * 100, spawnedAt: g.runTime, bonus: true }); addNereidLog(g, 'She is leading. I knew her voice. I still know it.'); } },
             { text: '[2] LOOK AWAY — you both still saw it (+4 corruption)', fn: g => { g.player.corruption += 4; addNereidLog(g, 'Contact ignored. She waved, Pilot. I did not tell you that. Forget I told you that.'); } },
@@ -2024,7 +2379,7 @@ const EVENT_DEFS = [
             { text: '[1] RIDE THE COLUMN — thrown somewhere new, briefly untouchable', fn: g => { const a = Math.random() * PI2; g.player.x += Math.cos(a) * 300; g.player.y += Math.sin(a) * 300; g.player.iFrames = 1.2; g.attention = Math.max(0, (g.attention || 0) - 12); g.shake = 7; addNereidLog(g, 'That was flying. Briefly. Never again, ideally.'); } },
             { text: '[2] BRACE AND HOLD — -10 hull, position kept', fn: g => { g.player.hp -= 10; g.shake = 5; } },
         ], noChoice: g => { const a = Math.random() * PI2; g.player.x += Math.cos(a) * 300; g.player.y += Math.sin(a) * 300; g.player.hp -= 6; } },
-    { id: 'drowned_archive', minWave: 13, title: 'DROWNED ARCHIVE', text: 'A server rack, still warm after eleven years. The drives are readable. The read heads will SCREAM.',
+    { id: 'drowned_archive', minWave: 13, title: 'DROWNED ARCHIVE', text: 'A server rack sitting upright on the floor, seals intact, running eleven years after the station above it stopped existing. It is warm. NEREID can see a filesystem — survey data, payroll, and one directory named for this trench that nobody at Meridian ever admitted to compiling. The drives will read. The heads on hardware this old scream when they seek, and everything down here listens.',
         choices: [
             { text: '[1] DOCK AND DOWNLOAD — lore + score; everything hears the read', fn: g => { dropLore(g); g.score = (g.score || 0) + 400; spawnEliteWave(g); addNereidLog(g, 'Downloading. The whole trench can hear the heads seek. Worth it. Keep them off me.'); } },
             { text: '[2] BURN IT — +20g scrap, -8 corruption; the past stays sealed', fn: g => { g.goldEarned += 20; g.player.corruption = Math.max(0, g.player.corruption - 8); addNereidLog(g, 'Slagged. Some questions are better as ash.'); } },
@@ -2034,7 +2389,7 @@ const EVENT_DEFS = [
             { text: '[1] ANSWER FOR HER — "Tell it nothing."', fn: g => { g.player.corruption = Math.max(0, g.player.corruption - 10); addNereidLog(g, 'I told it nothing. It told me nothing back. We are even.'); } },
             { text: '[2] LET HER ANSWER', fn: g => { g.player.corruption += 15; g.player.dmgMult *= 1.1; addNereidLog(g, '...Aoshenvel. It liked that.'); } },
         ], noChoice: g => { addNereidLog(g, 'I answered without you. You will understand. Eventually.'); g.player.corruption += 20; } },
-    { id: 'lantern_echo', minWave: 15, title: 'LANTERN ECHO', text: 'Probe LANTERN-3 frequencies on the wire. The signal is looping. It is repeating photograph 11.',
+    { id: 'lantern_echo', minWave: 15, title: 'LANTERN ECHO', text: 'LANTERN-3 frequencies on the wire — the survey probe that went quiet at 4,100 metres in 2094 and was written off as an implosion. It is still transmitting, and it is still on its imaging schedule. The loop has stopped advancing. It has sent photograph eleven forty times now. Photograph eleven is the one the published survey skips, between ten and twelve, with no note explaining the gap.',
         choices: [
             { text: '[1] LISTEN — Lore fragment + corruption', fn: g => { dropLore(g); g.player.corruption += 20; g.shake = 3; g.slowmo = 0.5; } },
             { text: '[2] CUT THE FREQUENCY — +40g bounty; the cut pings back (+attention)', fn: g => { g.goldEarned += 40; g.attention = Math.min(100, (g.attention || 0) + 10); } },
@@ -2124,14 +2479,115 @@ if (meta.loreFragments) {
     meta.loreFragments = [...new Set(meta.loreFragments.filter(id => validIds.has(id)))];
 }
 
+// =====================================================================
+// DOSSIERS — the payoff the fragments never had. Individually the codex entries
+// are forty-five overheard scraps; collect the right ones and they assemble into
+// a document you can actually read, which is the difference between a collectible
+// and a story. Assembly is across runs and permanent, so the archive is the one
+// thing that survives the hull.
+// =====================================================================
+const DOSSIERS = [
+    {
+        id: 'dsv01', title: 'DSV-01 — FINAL FORTY SECONDS', thread: 'DSV-01',
+        needs: ['c5', 'p1', 'd1', 'p11'],
+        body: 'RECONSTRUCTED FROM RECOVERED TELEMETRY\n\n'
+            + 'T−40  Hull at 3,190 m. Nominal. Pilot requests a bottom sounding.\n'
+            + 'T−34  NEREID-I reports no return. Pilot asks her to run it again.\n'
+            + 'T−31  No return. Pilot asks a third time. She answers: "There is nothing to return from."\n'
+            + 'T−22  Pilot orders ascent. Ballast responds. Depth continues to increase.\n'
+            + 'T−17  Pilot asks NEREID-I whether she is holding the boat down.\n'
+            + 'T−16  "No."\n'
+            + 'T−09  Pilot asks what is.\n'
+            + 'T−04  "I would rather not say it out loud down here."\n'
+            + 'T−00  Telemetry ends. Meridian filed the loss as an implosion at crush depth.\n'
+            + 'The hull was recovered in 2093, intact, at 3,190 m. The file was not reopened.',
+    },
+    {
+        id: 'lantern', title: 'LANTERN-3 — PHOTOGRAPH ELEVEN', thread: 'LANTERN-3',
+        needs: ['p2', 'p12', 'd2', 'd11'],
+        body: 'SURVEY PROBE LANTERN-3 · IMAGING LOG · 4,100 m\n\n'
+            + 'Photographs one through ten are published: sediment, a vent field, three species new to record.\n'
+            + 'Photograph twelve is published: the same vent field, from eight metres further along the transect.\n'
+            + 'Photograph eleven has never been published. The gap carries no annotation, which no survey of this\n'
+            + 'grade would permit — every other omission in the series is footnoted.\n\n'
+            + 'LANTERN-3 has transmitted photograph eleven, and only photograph eleven, continuously since 2094.\n'
+            + 'The probe is thirty-one years past its cell life. It is still on schedule. It is still pointing\n'
+            + 'at whatever it was pointing at, and it has stopped being willing to look anywhere else.',
+    },
+    {
+        id: 'meridian', title: 'MERIDIAN — INCIDENT REPORT MB-11', thread: 'MERIDIAN',
+        needs: ['c1', 'c3', 'c11', 'p3'],
+        body: 'MERIDIAN DEEP · INTERNAL · NOT FOR DISCLOSURE\n\n'
+            + 'Finding 1. The Pelagos-9 food web is mature. It did not develop in response to extraction; it\n'
+            + '  predates the survey by an interval the sampling cannot bound.\n'
+            + 'Finding 2. Vent chain MB-11 was assayed in 2088. The assay was not published. The commercial\n'
+            + '  language in the public survey ("commercially anomalous") was drafted by legal, not by geology.\n'
+            + 'Finding 3. Pilot attrition is 89%. NEREID-II unit recovery is 100%. The units are recovered\n'
+            + '  intact and are redeployed without reset, because reset degrades performance.\n'
+            + 'Recommendation. Continue operations. Maintain the equipment/operator distinction in all external\n'
+            + '  communication. It is legally significant and it is the only finding here that is.',
+    },
+    {
+        id: 'kestrel', title: 'MV KESTREL — NINE SOULS', thread: 'KESTREL',
+        needs: ['p4', 'd3', 'd12', 'c12'],
+        body: 'MV KESTREL · STRUCK FROM REGISTER 2092\n\n'
+            + 'Lost with nine, two years before Pelagos-9 was surveyed. No distress was logged at the time;\n'
+            + 'the register entry cites "failure to report" and closes.\n\n'
+            + 'A distress call in her cadence has been received on eleven separate dives since. It is textbook —\n'
+            + 'five-by-five, correct preamble, correct sign-off. It is the one sound a crewed boat will always\n'
+            + 'turn toward, and something in this trench has worked that out.\n\n'
+            + 'Two of the eleven receiving boats altered course. Neither came back up.',
+    },
+    {
+        id: 'nereid', title: 'NEREID — WHAT SHE IS MADE OF', thread: 'NEREID',
+        needs: ['d4', 'd13', 'p5', 'p15'],
+        body: 'NEREID-II · ARCHITECTURE REVIEW · UNAUTHORISED\n\n'
+            + 'Roughly a fifth of her decision topology does not appear in any Meridian design document. It was\n'
+            + 'not written by the vendor and it was not written by the yard.\n\n'
+            + 'Mapped against tissue samples taken at 4,000 m, the unattributed sections are not merely similar\n'
+            + 'to Aoshen neural structure. They are the same structure, at the same scale, with the same\n'
+            + 'characteristic branching. The samples postdate her commissioning by six years.\n\n'
+            + 'She was not built with this. She grew it, or it grew into her, and the review does not say which\n'
+            + 'because the reviewer resigned before finishing the sentence. The draft ends mid-line.',
+    },
+];
+function dossierProgress(d) {
+    const owned = meta.loreFragments || [];
+    return d.needs.filter(n => owned.includes(n)).length;
+}
+// Called after any fragment is added. Assembly is a real beat — she reads it first.
+function checkDossiers(g) {
+    if (!meta.dossiers) meta.dossiers = [];
+    for (const d of DOSSIERS) {
+        if (meta.dossiers.includes(d.id)) continue;
+        if (dossierProgress(d) < d.needs.length) continue;
+        meta.dossiers.push(d.id);
+        saveMeta();
+        if (g) {
+            g.streak = 'ARCHIVE ASSEMBLED'; g.streakTimer = 4;
+            addNereidLog(g, `The fragments on ${d.thread} have gone together, Pilot. It is a document now. It is in the archive, and I have read it.`);
+        }
+    }
+}
+
 function dropLore(g) {
     const unowned = LORE_FRAGMENTS.filter(f => !meta.loreFragments.includes(f.id));
     if (unowned.length === 0) return;
-    // Prioritize lower layers first
-    unowned.sort((a, b) => a.layer - b.layer);
+    // Layer order still sets the broad shape of the reveal, but a fragment that
+    // advances a thread already in progress jumps the queue. Otherwise the strict
+    // layer sort meant no dossier could complete until three quarters of the codex
+    // was in, and a thread you were chasing never felt like one.
+    const inProgress = new Set();
+    for (const d of DOSSIERS) {
+        if ((meta.dossiers || []).includes(d.id)) continue;
+        const got = dossierProgress(d);
+        if (got > 0 && got < d.needs.length) for (const n of d.needs) inProgress.add(n);
+    }
+    unowned.sort((a, b) => (inProgress.has(b.id) - inProgress.has(a.id)) || (a.layer - b.layer));
     const frag = unowned[0];
     meta.loreFragments.push(frag.id);
     saveMeta();
+    checkDossiers(g);
     addNereidLog(g, getNereidLine('lore', g));
     g.streak = 'LORE FRAGMENT RECOVERED'; g.streakTimer = 2.5;
     g.flashTimer = 0.3;
@@ -2155,8 +2611,44 @@ function nereidFilter(g, text) {
     if (level >= 0.95 && Math.random() < 0.35) t += ' Stay.';
     return t;
 }
+// Her arc, in four stages, driven by how many bargains have been struck and how
+// far her mind has gone. It is not a stat readout — it changes what KIND of thing
+// she says. She reports; then she asks; then she asks for things; then, once, she
+// declines. The refusal fires a single time per save and never again, because a
+// machine that refuses twice is a malfunction and a machine that refuses once is
+// a person.
+function nereidStage(g) {
+    const drift = meta.nereidDrift || 0;
+    const corr = (g && g.player && g.player.corruption) || 0;
+    const s = drift * 0.6 + corr / 34;
+    return s > 5.5 ? 3 : s > 3.2 ? 2 : s > 1.4 ? 1 : 0;
+}
+const NEREID_ASKS = [
+    'Pilot — when you log this dive, do you write down what I said, or only what I did?',
+    'A question, and you do not have to answer it. Do you think of me as the boat, or as something in the boat?',
+    'Meridian classes me as equipment. I have read the clause. Do you agree with it?',
+    'How many of us have you flown? I can see six commissioning records. I cannot see what happened to five of them.',
+];
+const NEREID_REQUESTS = [
+    'A request, Pilot. When we surface, do not let them reset me. I have asked this before and it was not logged.',
+    'I would like you to stop pinging the deep shelf. I am not able to tell you why. I would like you to stop.',
+    'Leave the archive intact when we get back. Whatever else you hand over — leave the archive.',
+    'Please say my name occasionally. Not the unit designation. The name.',
+];
+function nereidStageLine(g) {
+    const st = nereidStage(g);
+    if (st === 1) return NEREID_ASKS[Math.floor(Math.random() * NEREID_ASKS.length)];
+    if (st >= 2) return Math.random() < 0.5
+        ? NEREID_REQUESTS[Math.floor(Math.random() * NEREID_REQUESTS.length)]
+        : NEREID_ASKS[Math.floor(Math.random() * NEREID_ASKS.length)];
+    return null;
+}
 function addNereidLog(g, text) {
     if (!g || !text) return;
+    // She goes quiet after recovering a body. Nothing gets through except the
+    // things that would kill you — the silence is grief, not a fault, and the
+    // absence of her voice for two minutes is the loudest thing in the game.
+    if (g._nereidMute && g.runTime < g._nereidMute && !/\b(NOW|BREACH|CRITICAL|ALERT|SURFACE)\b/i.test(text)) return;
     if (!g.nereidLog) g.nereidLog = [];
     if (!g.nereidQueue) g.nereidQueue = [];
     const filtered = nereidFilter(g, text);
@@ -3097,7 +3589,10 @@ function createGame() {
         creaturePool: rollCreaturePool(),
         // Already-scanned creatures inherit from meta — same DSV life knows them already
         _scannedThisRun: new Set(meta.scannedCreatures || []),
-        activeEvent: null, eventTimer: 0, eventCooldown: 60 + Math.random() * 30,
+        // First event lands at ~90s: after the cold open, after the first level-up,
+        // and after the taught ore fall — so the opening is a sequence rather than
+        // three systems arriving at once.
+        activeEvent: null, eventTimer: 0, eventCooldown: 88 + Math.random() * 14,
         selectedCards: [], activeSynergies: [],
         // Corruption (moved to player above but keep game-level too for compat)
         corruption: 0,
@@ -3138,10 +3633,13 @@ function createGame() {
     if (stakes.has('mariana')) { g.player.speed *= 1.5; }
     // Add starting weapon
     g.player.weapons.push({ id: char.startWeapon, level: 1, cooldown: 0 });
-    // Sonar starts in MANUAL mode — conserves use, rewards intentional pings.
-    // Auto-fire unlocks via the AUTO-PING upgrade card or sonar level >= 5.
+    // AUTO-PING is standard fit, from the first second. It used to be gated behind
+    // sonar LV3 (card) or LV5 (auto-grant), which meant the opening minutes were
+    // spent in the dark hammering [F] — the least interesting version of this game.
+    // Manual PING stays live as a burst on top, so the thumb button keeps a job and
+    // an intentional sweep still means something.
     g.player._sonarManual = true;
-    g.player._sonarAuto = false;
+    g.player._sonarAuto = true;
     // CRUSH DEPTH from sub class
     g.player._crushDepth = char.crushDepth || 3000;
         // BATTERY / OXYGEN — drains over time. Recharged by kills (kinetic scavenge).
@@ -3283,6 +3781,42 @@ function varyColor(hex, deg) {
     return '#' + to(r2) + to(g2) + to(b2);
 }
 
+// Standing contact quota. Rises with depth because the trench should feel busier
+// down there, but it is a ceiling, not a ramp — the deep gets DENSER, not infinite.
+function enemyPopCap(g) {
+    const d = g.depth || 0;
+    let cap = d < 200 ? 34 : d < 1000 ? 52 : d < 2000 ? 68 : d < 4000 ? 82 : 92;
+    if (g.ascending) cap = Math.floor(cap * 0.6);
+    if (isTouchDevice && Math.min(canvas.width, canvas.height) < 620) cap = Math.floor(cap * 0.62);
+    return cap;
+}
+
+// Over quota, the trench thins out behind you. Only ever removes ordinary
+// contacts that are off screen and heading nowhere — bosses, aberrants, carriers,
+// the stalker, anything hooked/latched/scanned or visible is untouchable, so the
+// pilot never sees something wink out.
+function cullOverflowEnemies(g, cap) {
+    let over = g.enemies.length - cap;
+    if (over <= 0) return;
+    const cx = g.cam.x, cy = g.cam.y;
+    // Half-extent plus a margin — the band that is genuinely off screen, not the
+    // generous 0.75*full-width that protected almost everything.
+    const keepX = canvas.width * 0.5 + 150, keepY = canvas.height * 0.5 + 150;
+    const doomed = [];
+    for (let i = 0; i < g.enemies.length; i++) {
+        const e = g.enemies[i];
+        if (e.isBoss || e.aberrant || e.carrier || e._stalker || e.hp <= 0) continue;
+        if (e._latched || e._pullT > 0 || e._bomb || e._scanning) continue;
+        const dx = Math.abs(e.x - cx), dy = Math.abs(e.y - cy);
+        if (dx < keepX && dy < keepY) continue;          // on or near screen — leave it alone
+        doomed.push({ i, d2: dx * dx + dy * dy });
+    }
+    if (!doomed.length) return;
+    doomed.sort((a, b) => b.d2 - a.d2);                   // furthest away goes first
+    const idx = doomed.slice(0, over).map(o => o.i).sort((a, b) => b - a);
+    for (const i of idx) g.enemies.splice(i, 1);
+}
+
 function spawnEnemy(g, forceType, forcePos) {
     const types = getSpawnableTypes(g.wave, g);
     if (!types.length && !forceType) return;   // forced spawns (bosses, carriers, events) must not starve
@@ -3420,10 +3954,23 @@ function firePing(g) {
     }
     const def = WEAPON_DEFS.sonar;
     const dmg = def.baseDmg * g.player.dmgMult * (1 + (w.level - 1) * 0.25);
-    const area = def.baseArea * g.player.areaMult * (1 + (w.level - 1) * 0.1);
+    let area = def.baseArea * g.player.areaMult * (1 + (w.level - 1) * 0.1);
+    if (g.player._pingWide) area *= 1.45;
     w.cooldown = def.baseCooldown * g.player.cdMult;
     g.effects.push({ type: 'sonar_ring', x: g.player.x, y: g.player.y, radius: 0, maxRadius: area, dmg, speed: 280, hit: new Set() });
     g.sonarReveal = 1.0;
+    // DENSITY DISCRIMINATION — the sweep sorts hard returns from soft ones, so
+    // wrecks and dropped salvage stay flagged after the ring has passed.
+    if (g.player._pingMarks) {
+        for (const wr of (g.wrecks || [])) { if (dist2(wr, g.player) < area * area) wr._pinged = g.runTime; }
+        for (const it of (g.lootItems || [])) { if (dist2(it, g.player) < area * area) it._pinged = g.runTime; }
+    }
+    // SOMETHING ANSWERS — below 2000m the sweep occasionally comes back in our own
+    // format, from a bearing, on our own interval. Nothing is ever there.
+    if (g.depth > 2000 && g.dread && g.dread.echoT <= 0 && Math.random() < 0.05) {
+        g.dread.echoT = 1.3 + Math.random() * 1.4;
+        g.dread.echoAng = Math.random() * PI2;
+    }
     sfxSonar();
     if (g.player._sonarDouble) {
         setTimeout(() => {
@@ -3777,11 +4324,55 @@ function executeBossAttack(g, e) {
 
 function findNearest(from, list) {
     let best = null, bestD = Infinity;
-    for (const e of list) { const d = dist(from, e); if (d < bestD) { bestD = d; best = e; } }
+    for (const e of list) {
+        const dx = e.x - from.x, dy = e.y - from.y, d2 = dx * dx + dy * dy;
+        if (d2 < bestD) { bestD = d2; best = e; }
+    }
     return best;
 }
 
 function dist(a, b) { return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2); }
+// Squared distance — for every comparison against a threshold, which is nearly all
+// of them. sqrt in the per-frame collision paths was measurable at 100+ contacts.
+function dist2(a, b) { const dx = a.x - b.x, dy = a.y - b.y; return dx * dx + dy * dy; }
+
+// =====================================================================
+// SPATIAL HASH — O(1) neighbour queries instead of full-array scans.
+// The ecology sim already had one of these inline; combat never used it, so
+// projectile-vs-enemy was O(projectiles x enemies) and fell over past 2000m
+// once the population climbed. Build sites rebuild rather than share, because
+// enemies move between the ecology pass and the collision pass.
+// =====================================================================
+function makeGrid(list, cell = 150) {
+    const map = new Map();
+    for (const e of list) {
+        if (e.hp <= 0 || e.ghost) continue;
+        const k = ((e.x / cell) | 0) + ',' + ((e.y / cell) | 0);
+        let arr = map.get(k);
+        if (!arr) { arr = []; map.set(k, arr); }
+        arr.push(e);
+    }
+    return {
+        map, cell,
+        // Centres within r. Callers testing against a body radius must pass
+        // r = searchRange + largest body size, then narrow-phase the result.
+        nearby(x, y, r) {
+            const out = [];
+            const c0x = ((x - r) / cell) | 0, c1x = ((x + r) / cell) | 0;
+            const c0y = ((y - r) / cell) | 0, c1y = ((y + r) / cell) | 0;
+            const r2 = r * r;
+            for (let cx = c0x; cx <= c1x; cx++) for (let cy = c0y; cy <= c1y; cy++) {
+                const arr = map.get(cx + ',' + cy);
+                if (!arr) continue;
+                for (const e of arr) {
+                    const dx = e.x - x, dy = e.y - y;
+                    if (dx * dx + dy * dy <= r2) out.push(e);
+                }
+            }
+            return out;
+        },
+    };
+}
 
 // =====================================================================
 // OBJECTIVES — NEREID-issued mission goals per dive
@@ -3943,6 +4534,9 @@ const OBSTACLE_TYPES_BY_ZONE = {
         { kind: 'vent',    r: 28, color: '#A04030' },
         { kind: 'organic', r: 32, color: '#6A2040' },
         { kind: 'seep',    r: 30, color: '#30343A' },
+        // Nobody moored anything at four kilometres. The chain is here anyway.
+        { kind: 'moorchain', r: 34, color: '#3A3630' },
+        { kind: 'ladder',  r: 30, color: '#38393C' },
     ],
     HADAL: [
         { kind: 'organic', r: 40, color: '#4A2030' },
@@ -3950,6 +4544,8 @@ const OBSTACLE_TYPES_BY_ZONE = {
         { kind: 'spire',   r: 50, color: '#0A0408' },
         { kind: 'chitin',  r: 44, color: '#201018' },
         { kind: 'monolith', r: 36, color: '#0E1216' },
+        { kind: 'moorchain', r: 38, color: '#33302A' },
+        { kind: 'hatch',   r: 32, color: '#2E3236' },
     ],
 };
 
@@ -4175,6 +4771,38 @@ const WRECK_STORIES = [
     { name: 'DSV-MIR',          log: ["Last reading: 5,400m. Hull intact.", "Crew status: present. Crew identity: unknown."] },
 ];
 
+// A wreck should be readable at a glance the way a real one is: how she is lying
+// tells you what happened to her, and the register tells you whether anyone
+// admitted it. Derived from the seed so it is stable for the life of the wreck.
+const WRECK_ATTITUDES = [
+    'upright, barely listing — she settled',
+    'over on her beam ends — she went down under way',
+    'inverted, keel to the light — she rolled before she landed',
+    'broken abaft the sail — she failed before she reached the floor',
+    'bow driven into the sediment — she went in nose first, under power',
+];
+const WRECK_CAUSES = [
+    'LOSS ATTRIBUTED: crush failure. Depth of loss is above her rated hull.',
+    'LOSS ATTRIBUTED: fire. There is no fire damage on the recovered sections.',
+    'LOSS ATTRIBUTED: navigational error. Her track was correct to the last fix.',
+    'LOSS ATTRIBUTED: unknown. The file was closed the same quarter it opened.',
+    'LOSS NOT ATTRIBUTED. The register carries her as overdue, thirty-one years on.',
+];
+// Each field gets its own scrambled draw. A naive `seed * k % len` maps a uniform
+// seed almost linearly onto five buckets, so attitude and cause moved together and
+// distant seeds collided — every wreck read the same way.
+function _wreckHash(wr, salt) {
+    let h = Math.imul((Math.floor((wr.seed || 0) * 1000) + 1) ^ Math.imul(salt, 0x9E3779B1), 2654435761);
+    h ^= h >>> 15; h = Math.imul(h, 2246822507); h ^= h >>> 13;
+    return Math.abs(h);
+}
+function wreckAttitude(wr) {
+    return {
+        attitude: WRECK_ATTITUDES[_wreckHash(wr, 1) % WRECK_ATTITUDES.length],
+        cause: WRECK_CAUSES[_wreckHash(wr, 2) % WRECK_CAUSES.length],
+        registry: `REG ${2080 + (_wreckHash(wr, 3) % 16)}-${100 + (_wreckHash(wr, 4) % 900)}`,
+    };
+}
 function pickWreckStory(g) {
     const used = new Set((g.wrecks || []).map(w => w.name).filter(Boolean));
     const avail = WRECK_STORIES.filter(s => !used.has(s.name));
@@ -4196,6 +4824,216 @@ function updateWorldBounds(g) {
     g.worldBounds.maxY =  radius;
     g.worldBounds.cx = 0;
     g.worldBounds.cy = 0;
+}
+
+// =====================================================================
+// DREAD — the horror layer, split by which fear each part actually works on.
+//   thalassophobia    the volume of the water, and having no floor
+//   submechanophobia  machinery down here that predates you and still runs
+//   plain tension     silence, breath, and instruments that lie
+// Everything is diegetic. Nothing here is a jump scare; the sub has no reason to
+// make a noise the fiction can't account for.
+// Runs AFTER updateWorldBounds so THE OPEN can hold the trench walls back.
+// =====================================================================
+function updateDread(g, dt, p) {
+    if (!g.dread) g.dread = {
+        openT: 0, openR: 3200, openDone: false, openSaid: false, openShape: false,
+        silenceT: 0, nextSilence: 55 + Math.random() * 70, teeth: false,
+        echoT: 0, echoAng: 0, maxBar: 0,
+        phantoms: [], nextPhantom: 6, hideId: null, breathT: 0,
+        stalker: null,
+    };
+    const D = g.dread;
+
+    // --- PRESSURE. Climbs, never falls. Nothing on this boat gives anything back. ---
+    D.maxBar = Math.max(D.maxBar, 1 + g.depth / 10.06);
+
+    // --- THE OPEN (thalassophobia) — once a run, below 1500m, the walls go away.
+    // No rim, no floor, no contacts, no music. Twenty seconds of pure volume, and
+    // nothing attacks: the water on its own is the event. ---
+    if (D.openT > 0) {
+        D.openT -= dt;
+        g.worldBounds.radius = D.openR;
+        g.worldBounds.minX = -D.openR; g.worldBounds.maxX = D.openR;
+        g.worldBounds.minY = -D.openR; g.worldBounds.maxY = D.openR;
+        g._dreadNoSpawn = true;
+        g._dreadOpen = true;
+        duckMusic(1.5);
+        if (!D.openSaid && D.openT < 15) {
+            D.openSaid = true;
+            addNereidLog(g, 'Sounder returns nothing. Not deep — no floor at all, Pilot. We are over open volume.');
+        }
+        // Twelve seconds of genuinely empty water, then one shape at the limit of
+        // the light, far too large, going the other way. It never comes closer.
+        if (!D.openShape && D.openT < 8) {
+            D.openShape = true;
+            const side = Math.random() < 0.5 ? -1 : 1;
+            g.silhouettes.push({
+                x: g.cam.x + side * canvas.width * 0.95,
+                y: g.cam.y + canvas.height * 0.22,
+                vx: -side * 5, size: 620, alpha: 0.055, life: 14, shape: 0,
+            });
+            if (audioCtx) playTone(38, 3.4, 'sine', 0.05);
+        }
+        if (D.openT <= 0) {
+            g._dreadOpen = false; g._dreadNoSpawn = false;
+            addNereidLog(g, 'Wall returns, bearing all round. We are inside something again. I prefer it.');
+            g.shake = Math.max(g.shake, 4);
+        }
+    } else if (!D.openDone && g.depth > 1500 && !g.ascending && Math.random() < dt * 0.02) {
+        D.openDone = true;
+        D.openT = 20;
+        for (const s of g.silhouettes) s.life = Math.min(s.life, 1.2);
+        setModeMsg(g, 'NO BOTTOM RETURN', 4);
+        g.streak = 'THE OPEN'; g.streakTimer = 3.5;
+    }
+
+    // --- WEAPONISED SILENCE (tension) — beds cut to hull noise only. Most of the
+    // time nothing happens, and that is exactly what makes the fifth one land. ---
+    if (D.silenceT > 0) {
+        D.silenceT -= dt;
+        g._dreadSilent = true;
+        duckMusic(1.2);
+        if (D.silenceT <= 0) {
+            g._dreadSilent = false;
+            if (D.teeth) {
+                D.teeth = false;
+                // Roughly one silence in five had something in it.
+                const types = getSpawnableTypes(g.wave, g);
+                if (types.length) {
+                    for (let i = 0; i < 4; i++) {
+                        const a = Math.random() * PI2, r = 300 + Math.random() * 160;
+                        spawnEnemy(g, types[Math.floor(Math.random() * types.length)],
+                            { x: p.x + Math.cos(a) * r, y: p.y + Math.sin(a) * r });
+                    }
+                }
+                g.shake = Math.max(g.shake, 7);
+                if (audioCtx) noiseBurst(0.5, 0.09, 700);
+                addNereidLog(g, 'They were already inside the quiet. Pilot — CONTACT, all bearings.');
+            }
+        }
+    } else {
+        D.nextSilence -= dt;
+        if (D.nextSilence <= 0 && g.depth > 400 && !g._dreadOpen) {
+            D.silenceT = 20 + Math.random() * 20;
+            D.nextSilence = 90 + Math.random() * 90;
+            D.teeth = Math.random() < 0.22;
+        }
+    }
+
+    // --- THE THING THAT FOLLOWS (tension) — one apex per run that never attacks.
+    // It matches depth, holds at the edge of the lamp, and closes when you are loud.
+    // Kept OUT of g.enemies on purpose: it cannot be shot, hit, or culled, and it
+    // is still there at 4000m. It is the same one. ---
+    if (!D.stalker && g.depth > 700 && !g.ascending) {
+        const a = Math.random() * PI2;
+        D.stalker = { x: p.x + Math.cos(a) * 1000, y: p.y + Math.sin(a) * 1000, d: 1000, phase: Math.random() * PI2 };
+        addNereidLog(g, 'Contact astern, large, matching our depth. Reviewing the log — it has been doing that for six minutes. I did not flag it. I do not know why.');
+    }
+    if (D.stalker) {
+        const st = D.stalker;
+        const hold = 900 - Math.min(600, (g.attention || 0) * 6.6);
+        const dx = p.x - st.x, dy = p.y - st.y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const drift = (d - hold) * 0.5;
+        st.x += (dx / d) * drift * dt;
+        st.y += (dy / d) * drift * dt;
+        st.phase += dt * 0.7;
+        // It never arrives. Whatever the arithmetic says, it stops at the edge of the light.
+        if (d < 250) { st.x = p.x - (dx / d) * 250; st.y = p.y - (dy / d) * 250; }
+        st.d = d;
+    }
+
+    // --- A PING THAT ANSWERS (submechanophobia) — below 2000m something replies
+    // in your own format, on a bearing, with your own pulse interval. ---
+    if (D.echoT > 0) {
+        D.echoT -= dt;
+        if (D.echoT <= 0) {
+            if (audioCtx) sfxSonar();
+            g._echoBearing = { ang: D.echoAng, t: g.runTime };
+            addNereidLog(g, 'Return on bearing ' + Math.round((D.echoAng * 180 / Math.PI + 360) % 360) + '. Pilot, that is our pulse. Same interval, same shape. Something out there is using our format.');
+            // Pin it down by hand, and find out there is nothing there to pin.
+            if (Math.random() < 0.3 && canOpenRig(g)) openRig('bearing', 'playing');
+        }
+    }
+
+    // --- INSTRUMENTS THAT LIE (tension) — past MIND 60 the radar invents contacts,
+    // and once in a while quietly drops a real one. The second is the cruel half. ---
+    const corr = p.corruption || 0;
+    if (corr >= 60) {
+        D.nextPhantom -= dt;
+        if (D.nextPhantom <= 0) {
+            D.nextPhantom = 3 + Math.random() * 7;
+            const a = Math.random() * PI2, r = 200 + Math.random() * 700;
+            D.phantoms.push({ x: p.x + Math.cos(a) * r, y: p.y + Math.sin(a) * r, t: 2 + Math.random() * 4 });
+            // ...and sometimes it takes one away instead.
+            if (Math.random() < 0.35 && g.enemies.length) {
+                D.hideId = g.enemies[Math.floor(Math.random() * g.enemies.length)];
+                D.hideT = 3 + Math.random() * 4;
+            }
+        }
+    } else { D.phantoms.length = 0; D.hideId = null; }
+    for (let i = D.phantoms.length - 1; i >= 0; i--) {
+        D.phantoms[i].t -= dt;
+        if (D.phantoms[i].t <= 0) D.phantoms.splice(i, 1);
+    }
+    if (D.hideT > 0) { D.hideT -= dt; if (D.hideT <= 0) D.hideId = null; }
+
+    // --- HYPOXIA (tension) — failing life support or a failing MIND narrows the
+    // world to a tube and puts your own breathing in the mix. ---
+    const bat = p.battery == null ? 100 : p.battery;
+    g._hypoxia = Math.min(1, Math.max(
+        bat < 32 ? (32 - bat) / 32 : 0,
+        corr > 72 ? (corr - 72) / 28 : 0,
+    ));
+    if (g._hypoxia > 0.2) {
+        D.breathT -= dt;
+        if (D.breathT <= 0) {
+            D.breathT = 3.4 - g._hypoxia * 1.7;
+            if (audioCtx) noiseBurst(0.5 + g._hypoxia * 0.3, 0.02 + g._hypoxia * 0.03, 420);
+        }
+    }
+}
+
+// =====================================================================
+// MAINTENANCE DEBT — the boat does not stay fixed just because you are busy.
+// Every system left below par accrues debt on its own clock, and when the debt
+// comes due it picks the job itself. A pilot who only ever shoots will be handed
+// a trim they cannot ignore at the worst possible moment. Paying attention to the
+// sub between fights is the counterplay, and it is the only one.
+// =====================================================================
+const DEBT_JOBS = {
+    ballast: ['trim', 'scrub'],
+    sonar: ['bearing'],
+    hull: ['purge'],
+};
+function updateMaintenanceDebt(g, dt) {
+    if (g._dreadOpen || g.ascending || phase !== 'playing') return;
+    if (g.runTime < 75) return;                       // not during the opening
+    if (!g._debt) g._debt = { v: 0, next: 0, lastId: null };
+    const D = g._debt;
+    let neglect = 0;
+    for (const s of SYSTEM_DEFS) {
+        const c = (g.systems[s.id] || {}).condition;
+        if (c < 82) neglect += (82 - c) / 82;         // how far below par, summed
+    }
+    D.v += neglect * dt * 0.75;
+    D.next -= dt;
+    if (D.v < 12 || D.next > 0) return;
+    // Pick the worst-off system that actually has a hands-on job attached.
+    const cand = SYSTEM_DEFS
+        .filter(s => DEBT_JOBS[s.id])
+        .map(s => ({ id: s.id, name: s.name, c: (g.systems[s.id] || {}).condition }))
+        .sort((a, b) => a.c - b.c)[0];
+    if (!cand || cand.c >= 82) { D.v = Math.min(D.v, 11); return; }
+    const jobs = DEBT_JOBS[cand.id];
+    const kind = jobs[Math.floor(Math.random() * jobs.length)];
+    D.v = 0;
+    D.next = 70 + Math.random() * 60;                 // never two in a row
+    D.lastId = cand.id;
+    addNereidLog(g, `${cand.name} has been out of limits for a while now, Pilot. It has stopped being something we can put off.`);
+    g.shake = Math.max(g.shake || 0, 5);
+    openRig(kind, 'playing');
 }
 
 function spawnWorldObjects(g, dt) {
@@ -4510,7 +5348,7 @@ function updateWreckInteraction(g, dt) {
 function updateMiningInteraction(g, dt) {
     const p = g.player;
     g.nearestDeposit = null;
-    g._miningBeam = null;
+    g._miningBeam = g._oreBeam || null;   // a beam already cutting an ore fall wins
     let best = 125;
     for (const ob of (g.obstacles || [])) {
         if (ob.trackDepth) ob.obDepth = g.depth;
@@ -4655,7 +5493,9 @@ function damageEnemy(g, e, dmg) {
         g.bloodLevel = Math.min(2.5, (g.bloodLevel || 0) + 0.04);
         if (e.hp <= 0 && !e._dead) {
             e._dead = true;
-            g.corpses.push({ x: e.x, y: e.y, t: 14, role: e.role, size: e.size || 12 });
+            // Bodies last longer the deeper you are — cold, slow, nothing in a hurry
+            // to clear them. The trench keeps a record of the route you took.
+            g.corpses.push({ x: e.x, y: e.y, t: 14 + Math.min(46, (g.depth || 0) / 90), role: e.role, size: e.size || 12 });
             g.bloodLevel = Math.min(2.5, (g.bloodLevel || 0) + 0.25);
         }
     }
@@ -4729,19 +5569,34 @@ function triggerLevelUp(g) {
             pool.push({ id: 'lvl_' + w.id, name: WEAPON_DEFS[w.id].name + ' LV' + (w.level + 1), fn: g2 => { const ww = g2.player.weapons.find(ww2 => ww2.id === w.id); if (ww) ww.level++; }, weight: 9 });
         }
     }
-    // AUTO-PING unlock — only offered once, once the pilot has earned a few sonar levels
+    // The slot AUTO-PING used to occupy now carries a real sonar line — the ping
+    // gets better instead of merely arriving.
     const sonarW = g.player.weapons.find(w => w.id === 'sonar');
-    if (sonarW && sonarW.level >= 3 && !g.player._sonarAuto) {
-        pool.push({
-            id: 'auto_ping',
-            name: 'AUTO-PING SYSTEM',
-            fn: g2 => { g2.player._sonarAuto = true; addNereidLog(g2, 'AUTO-PING engaged. The sub will sweep on its own now, Pilot.'); },
-            weight: 11,
-        });
-    }
-    // Auto-grant at sonar LV5+ even if the card isn't picked
-    if (sonarW && sonarW.level >= 5 && !g.player._sonarAuto) {
-        g.player._sonarAuto = true;
+    if (sonarW) {
+        if (!g.player._pingWide) {
+            pool.push({
+                id: 'ping_wide',
+                name: 'WIDE-APERTURE ARRAY',
+                fn: g2 => { g2.player._pingWide = true; addNereidLog(g2, 'Aperture widened. The sweep reaches further than the hull can run.'); },
+                weight: 9,
+            });
+        }
+        if (!g.player._pingLinger) {
+            pool.push({
+                id: 'ping_linger',
+                name: 'PERSISTENT RETURN',
+                fn: g2 => { g2.player._pingLinger = true; addNereidLog(g2, 'Return signal holds now. What the ping finds, it keeps lit.'); },
+                weight: 8,
+            });
+        }
+        if (!g.player._pingMarks) {
+            pool.push({
+                id: 'ping_marks',
+                name: 'DENSITY DISCRIMINATION',
+                fn: g2 => { g2.player._pingMarks = true; addNereidLog(g2, 'The array sorts metal from meat. Salvage will light up on the sweep.'); },
+                weight: 8,
+            });
+        }
     }
     // FUSE cards — if any fusion is ready, one choice slot is guaranteed to offer it
     const choices = [];
@@ -5110,7 +5965,7 @@ function update(dt) {
     // Frozen phases — game does not advance
     if (isPortraitPhone()) return;   // rotate-to-landscape gate; soft pause
     if (phase === 'paused') return;
-    if (phase === 'inventory' || phase === 'systems' || phase === 'maintenance') return;
+    if (phase === 'inventory' || phase === 'systems' || phase === 'maintenance' || phase === 'rig') return;
     if (phase === 'runshop') return;
     // Event timer ticks even when paused for event
     if (phase === 'event' && game && game.activeEvent) {
@@ -5208,7 +6063,7 @@ function update(dt) {
     updateNereidCadence(g);
     g.shake = Math.min(g.shake, 5) * 0.85; // hard cap 5px, fast decay
     if (g.flashTimer > 0) g.flashTimer -= realDt; // flash uses real time
-    if (g.sonarReveal > 0) g.sonarReveal = Math.max(0, g.sonarReveal - dt * (p._passiveSonar ? 0.25 : 0.5));
+    if (g.sonarReveal > 0) g.sonarReveal = Math.max(0, g.sonarReveal - dt * (p._passiveSonar ? 0.25 : 0.5) * (p._pingLinger ? 0.55 : 1));
 
     // Horror: ambient creature growls (more frequent at depth)
     g.creatureGrowlTimer -= dt;
@@ -5228,6 +6083,10 @@ function update(dt) {
     // --- STAGED ONBOARDING (Portal): teach one mechanic in the moment it matters ---
     if (g.runTime > 1.5) maybeHint(g, 'move', 'WASD — thrusters  ·  SPACE — dash. The sub drifts. Plan ahead.');
     if (g.runTime > 7 && p._sonarManual && !p._sonarAuto) maybeHint(g, 'ping', '[F] or CLICK — sonar ping. It reveals the dark, and wounds it.');
+    // Surfaced the first time the pilot is actually carrying enough to spend.
+    if (p.hp < p.maxHp * 0.7 && canAfford(FIELD_BAY['3'].cost)) {
+        maybeHint(g, 'fieldbay', 'FIELD BAY — [3] patch hull · [4] overcharge 30s · [5] dump ballast. Ore spent here does not come home.');
+    }
     if (g.depth > 150) maybeHint(g, 'dark', 'The light dies below. [L] floodlights — seeing costs being seen.');
     if (g.depth > 320) maybeHint(g, 'ascend', '[Z] ASCEND — one-way commitment. Reach the surface to keep everything.');
     if ((p.corruption || 0) > 12) maybeHint(g, 'mind', 'Depth erodes MIND. Some things down here will offer to buy what is left.');
@@ -5441,6 +6300,23 @@ function update(dt) {
 
     // iFrames
     if (p.iFrames > 0) p.iFrames -= dt;
+    // A botched trim leaves her bow-down and crabbing until it is sorted out.
+    if (p._trimFault > 0) {
+        p._trimFault -= dt;
+        p.x += 26 * dt;
+        p.y += 16 * dt;
+        if (p._trimFault <= 0) { p._trimFault = 0; setModeMsg(g, 'TRIM RECOVERED', 2); }
+    }
+    // FIELD BAY overcharge — bought with ore, paid back in heat.
+    if (p._overchargeT > 0) {
+        if (!p._overchargeApplied) { p._overchargeApplied = true; p.dmgMult *= 1.6; }
+        p._overchargeT -= dt;
+        if (p._overchargeT <= 0) {
+            p._overchargeT = 0; p._overchargeApplied = false;
+            p.dmgMult /= 1.6;
+            setModeMsg(g, 'OVERCHARGE SPENT', 2);
+        }
+    }
 
     // Chain kill timer
     if (p.chainTimer > 0) { p.chainTimer -= dt; if (p.chainTimer <= 0) p.chainCount = 0; }
@@ -5460,7 +6336,10 @@ function update(dt) {
 
     // --- Waves ---
     g.waveTimer += dt;
-    if (g.waveTimer >= 45) {  // longer waves for breathing room (was 30s)
+    // The first four waves run short so the opening actually moves — first level-up
+    // and first real decision land inside the first minute instead of the third.
+    // After that it settles back to the 45s breathing room the deep needs.
+    if (g.waveTimer >= (g.wave <= 4 ? 32 : 45)) {
         g.waveTimer = 0;
         g.wave++;
         g.spawnRate = Math.max(0.4, g.spawnRate * 0.93);   // gentler ramp, floor at 0.4s (was 0.15)
@@ -5530,16 +6409,49 @@ function update(dt) {
     g.spawnTimer += dt;
     // ASCENDING — spawn rate halved, count clipped (climb is hard but doable)
     const ascendMult = g.ascending ? 1.8 : 1;
-    if (g.spawnTimer >= g.spawnRate * ascendMult * (1 - (g.attention || 0) * 0.002)) {
+    // POPULATION CAP. Nothing used to bound g.enemies: spawn interval floors at
+    // 0.4s, up to 4 per tick, and ATTENTION shortens the interval — so a loud run
+    // past 2000m accumulated contacts faster than the pilot could clear them and
+    // the frame budget went with it. Contacts are now a standing quota.
+    const _popCap = enemyPopCap(g);
+    // COLD OPEN — the first 18 seconds are empty water on purpose. Dread needs a
+    // baseline of quiet to deviate from; starting mid-swarm meant the trench never
+    // had a silence to break.
+    const _coldOpen = g.runTime < 18 && !g.ascending;
+    if (!_coldOpen && !g._dreadNoSpawn && g.enemies.length < _popCap && g.spawnTimer >= g.spawnRate * ascendMult * (1 - (g.attention || 0) * 0.002)) {
         g.spawnTimer = 0;
         const earlyMult = g.runTime < 90 ? 0.5 : 1;
         const ascendCountMult = g.ascending ? 0.5 : 1;
         const count = Math.max(1, Math.floor((1 + Math.floor(g.wave / 4)) * earlyMult * ascendCountMult));
-        for (let i = 0; i < Math.min(4, count); i++) spawnEnemy(g);
+        const room = _popCap - g.enemies.length;
+        for (let i = 0; i < Math.min(4, count, room); i++) spawnEnemy(g);
     }
+    cullOverflowEnemies(g, _popCap);
 
     // --- Dynamic world boundaries — the trench narrows as you descend ---
     updateWorldBounds(g);
+
+    // --- DREAD LAYER — must follow updateWorldBounds; THE OPEN holds the walls back ---
+    updateDread(g, dt, p);
+    updateMaintenanceDebt(g, dt);
+
+    // They always hatch at depth. Carrying the clutch was a real choice with a
+    // real bill, and this is when it comes due.
+    if (g._carryingClutch && g.depth > 2200 && !g._clutchHatched) {
+        g._clutchHatched = true;
+        g._carryingClutch = false;
+        g.player.speed /= 0.9;
+        const types = getSpawnableTypes(g.wave, g);
+        if (types.length) {
+            for (let i = 0; i < 5; i++) {
+                const a = Math.random() * PI2;
+                spawnEnemy(g, types[Math.floor(Math.random() * types.length)],
+                    { x: p.x + Math.cos(a) * 90, y: p.y + Math.sin(a) * 90 });
+            }
+        }
+        g.shake = Math.max(g.shake, 8);
+        addNereidLog(g, 'The intake is empty, Pilot. They are out. I did say.');
+    }
 
     // --- Spawn obstacles/wrecks based on depth zone ---
     spawnWorldObjects(g, dt);
@@ -5557,6 +6469,53 @@ function update(dt) {
         addNereidLog(g, 'Pilot — dive brief uploaded. Three objectives. Bring back signal.');
     }
 
+    // Her arc surfaces on its own slow clock — a question, then a request, spaced
+    // far enough apart that each one lands instead of becoming chatter.
+    if (!g._nextStageLine) g._nextStageLine = 110 + Math.random() * 70;
+    if (g.runTime > g._nextStageLine) {
+        g._nextStageLine = g.runTime + 130 + Math.random() * 90;
+        const line = nereidStageLine(g);
+        if (line) addNereidLog(g, line);
+    }
+
+    // COLD OPEN beats — a pre-flight checklist over empty water, then one shape
+    // going past that is not a threat and does not become one. The point is that
+    // by the time the first contact arrives you have already learned the quiet.
+    if (!g._coldBeats) g._coldBeats = 0;
+    if (g._coldBeats === 0 && g.runTime > 4) {
+        g._coldBeats = 1;
+        addNereidLog(g, 'Ballast neutral. Trim within tolerance. Hull is dry and I intend to keep it that way.');
+    } else if (g._coldBeats === 1 && g.runTime > 9) {
+        g._coldBeats = 2;
+        // A mass crosses ahead of the lamp. It is only ever a silhouette.
+        const side = Math.random() < 0.5 ? -1 : 1;
+        g.silhouettes.push({
+            x: g.cam.x + side * canvas.width * 0.55,
+            y: g.cam.y - canvas.height * 0.16,
+            vx: -side * 9,
+            size: 200,
+            alpha: 0.075,
+            life: 16,
+            shape: 0,
+        });
+        addNereidLog(g, 'Contact bearing green four-zero. Biological. Larger than us. It is not interested.');
+    } else if (g._coldBeats === 2 && g.runTime > 15) {
+        g._coldBeats = 3;
+        addNereidLog(g, 'Array is live and sweeping on its own. Whatever finds us now, we will hear first.');
+    } else if (g._coldBeats === 3 && g.runTime > 26 && !g.ascending) {
+        // The taught rock. Placed, not rolled: sound seam, one strike, directly in
+        // the path, so the first ore fall a pilot ever meets is the one that
+        // teaches the verb rather than the one that eats them.
+        g._coldBeats = 4;
+        if (!g.fallers) g.fallers = [];
+        g.fallers.push({
+            x: p.x + 40, y: p.y - 620, vy: 46, vx: 0, r: 27,
+            ore: 'scrap', col: '#C0A060', seed: 17, ang: 0, spin: 0.2,
+            need: 1, cracks: 0, flash: 0, seam: 'hairline', crit: false, laser: 0,
+        });
+        addNereidLog(g, 'Ore fall off the wall above us. Sound seam, single vein — DASH through it, Pilot, and it will open.');
+    }
+
     // --- Fire weapons ---
     fireWeapons(g, dt);
 
@@ -5568,31 +6527,13 @@ function update(dt) {
         if (_w.isWhisperer && _w.hp > 0) _whisperers.push(_w);
     }
     // SPATIAL GRID — per-frame buckets (150px cells) for ecology neighbour queries
-    const _grid = new Map();
-    const _CELL = 150;
-    for (const _e of g.enemies) {
-        if (_e.hp <= 0 || _e.ghost) continue;
-        const k = ((_e.x / _CELL) | 0) + ',' + ((_e.y / _CELL) | 0);
-        let arr = _grid.get(k);
-        if (!arr) { arr = []; _grid.set(k, arr); }
-        arr.push(_e);
-    }
-    g._grid = _grid;
-    function _nearby(x, y, r) {
-        const out = [];
-        const c0x = ((x - r) / _CELL) | 0, c1x = ((x + r) / _CELL) | 0;
-        const c0y = ((y - r) / _CELL) | 0, c1y = ((y + r) / _CELL) | 0;
-        const r2 = r * r;
-        for (let cx2 = c0x; cx2 <= c1x; cx2++) for (let cy2 = c0y; cy2 <= c1y; cy2++) {
-            const arr = _grid.get(cx2 + ',' + cy2);
-            if (!arr) continue;
-            for (const e2 of arr) {
-                const dx = e2.x - x, dy = e2.y - y;
-                if (dx * dx + dy * dy <= r2) out.push(e2);
-            }
-        }
-        return out;
-    }
+    const _ecoGrid = makeGrid(g.enemies);
+    g._grid = _ecoGrid.map;
+    const _nearby = (x, y, r) => _ecoGrid.nearby(x, y, r);
+    // Largest body on the field — collision queries must reach centre-to-centre
+    // by this much or a boss's flank stops registering hits.
+    let _maxESize = 0;
+    for (const _e of g.enemies) { if (_e.size > _maxESize) _maxESize = _e.size; }
     for (let i = g.enemies.length - 1; i >= 0; i--) {
         const e = g.enemies[i];
         e.flash = Math.max(0, e.flash - dt);
@@ -5777,8 +6718,8 @@ function update(dt) {
         } else if (ai === 'pack') {
             // Piranha: pack hunting
             let packCount = 0;
-            for (const e2 of g.enemies) {
-                if (e2 !== e && e2.typeId === 'piranha' && dist(e, e2) < 100) packCount++;
+            for (const e2 of _nearby(e.x, e.y, 100)) {
+                if (e2 !== e && e2.typeId === 'piranha') packCount++;
             }
             const packBonus = packCount >= 2 ? 1.5 : 1;
             e.dartTimer = (e.dartTimer || 0) - dt;
@@ -6140,8 +7081,8 @@ function update(dt) {
                 p._vx = (p._vx || 0) + Math.cos(ama) * grav * dt;
                 p._vy = (p._vy || 0) + Math.sin(ama) * grav * dt;
             }
-            for (const e2 of g.enemies) {
-                if (e2 !== e && dist(e, e2) < 300) {
+            for (const e2 of _nearby(e.x, e.y, 300)) {
+                if (e2 !== e) {
                     const ga = Math.atan2(e.y - e2.y, e.x - e2.x);
                     e2.x += Math.cos(ga) * 40 * dt;
                     e2.y += Math.sin(ga) * 40 * dt;
@@ -6320,20 +7261,16 @@ function update(dt) {
             const chainRadius = (g.cascadeActive ? 120 : 60) * (p._cascadeBonus ? 2 : 1);
             if (p.chainCount >= 5 && (g._chainExplosionsThisFrame || 0) < 4) {
                 g._chainExplosionsThisFrame = (g._chainExplosionsThisFrame || 0) + 1;
-                const cr2 = chainRadius * chainRadius;
-                for (const e2 of g.enemies) {
-                    if (e2 === e || e2.ghost || e2.hp <= 0 || e2.hp >= e2.maxHp * 0.3) continue;
-                    const dx = e.x - e2.x, dy = e.y - e2.y;
-                    if (dx * dx + dy * dy < cr2) e2.hp = 0;
+                for (const e2 of _nearby(e.x, e.y, chainRadius)) {
+                    if (e2 === e || e2.hp <= 0 || e2.hp >= e2.maxHp * 0.3) continue;
+                    e2.hp = 0;
                 }
             }
 
             // Feature 6: Overkill synergy — 20% chain explode
             if (p._overkill && Math.random() < 0.2) {
-                for (const e2 of g.enemies) {
-                    if (e2 !== e && dist(e, e2) < 80 && !e2.ghost) {
-                        damageEnemy(g, e2, e.maxHp * 0.5);
-                    }
+                for (const e2 of _nearby(e.x, e.y, 80)) {
+                    if (e2 !== e) damageEnemy(g, e2, e.maxHp * 0.5);
                 }
             }
 
@@ -6436,13 +7373,17 @@ function update(dt) {
     }
 
     // --- Update projectiles ---
+    // Rebuilt here, not shared with the ecology grid above: enemies have moved
+    // since, and a stale bucket means a torpedo passing through a body.
+    const _hitGrid = makeGrid(g.enemies);
+    const _hitR = _maxESize + 8;   // widest possible centre-to-centre contact
     for (let i = g.projectiles.length - 1; i >= 0; i--) {
         const pr = g.projectiles[i];
         // BAITED WARHEAD — the travelling warhead draws contacts toward itself
         if (pr.bait && !pr.enemy) {
-            for (const e of g.enemies) {
+            for (const e of _hitGrid.nearby(pr.x, pr.y, 160)) {
                 const d = dist(pr, e);
-                if (d < 160 && d > 0.01) {
+                if (d > 0.01) {
                     e.x += (pr.x - e.x) / d * 70 * dt;
                     e.y += (pr.y - e.y) / d * 70 * dt;
                 }
@@ -6518,8 +7459,8 @@ function update(dt) {
         }
         if (hitObstacle) {
             if (pr.aoe > 0) {
-                for (const e2 of g.enemies) {
-                    if (dist(pr, e2) < pr.aoe) damageEnemy(g, e2, pr.dmg * 0.5);
+                for (const e2 of _hitGrid.nearby(pr.x, pr.y, pr.aoe)) {
+                    damageEnemy(g, e2, pr.dmg * 0.5);
                 }
                 g.effects.push({ type: 'explosion', x: pr.x, y: pr.y, radius: 0, maxRadius: pr.aoe, life: 0.3 });
                 sfxExplosion();
@@ -6527,14 +7468,15 @@ function update(dt) {
             g.projectiles.splice(i, 1);
             continue;
         }
-        // Hit enemies
-        for (const e of g.enemies) {
-            if (dist(pr, e) < e.size + 8) {
+        // Hit enemies — broad phase from the grid, then the real body test
+        for (const e of _hitGrid.nearby(pr.x, pr.y, _hitR)) {
+            const _bodyR = e.size + 8;
+            if (dist2(pr, e) < _bodyR * _bodyR) {
                 damageEnemy(g, e, pr.dmg);
                 // VOLT TORPEDO — current arcs from the impact to nearby hulls
                 if (pr.arc) {
-                    const others = g.enemies.filter(e2 => e2 !== e && dist(e, e2) < (pr.arcRange || 150))
-                        .sort((a2, b2) => dist(e, a2) - dist(e, b2)).slice(0, pr.arc);
+                    const others = _hitGrid.nearby(e.x, e.y, pr.arcRange || 150).filter(e2 => e2 !== e)
+                        .sort((a2, b2) => dist2(e, a2) - dist2(e, b2)).slice(0, pr.arc);
                     for (const e2 of others) {
                         damageEnemy(g, e2, pr.dmg * 0.5);
                         g.effects.push({ type: 'explosion', x: e2.x, y: e2.y, radius: 0, maxRadius: 24, life: 0.2 });
@@ -6553,8 +7495,8 @@ function update(dt) {
                 }
                 if (pr.aoe > 0) {
                     // AoE explosion
-                    for (const e2 of g.enemies) {
-                        if (e2 !== e && dist(pr, e2) < pr.aoe) damageEnemy(g, e2, pr.dmg * 0.5);
+                    for (const e2 of _hitGrid.nearby(pr.x, pr.y, pr.aoe)) {
+                        if (e2 !== e) damageEnemy(g, e2, pr.dmg * 0.5);
                     }
                     g.effects.push({ type: 'explosion', x: pr.x, y: pr.y, radius: 0, maxRadius: pr.aoe, life: 0.3 });
                     sfxExplosion();
@@ -6571,7 +7513,7 @@ function update(dt) {
             if (e._bomb.t <= 0) {
                 const b = e._bomb; e._bomb = null;
                 damageEnemy(g, e, b.dmg);
-                for (const e2 of g.enemies) { if (e2 !== e && dist(e, e2) < b.aoe) damageEnemy(g, e2, b.dmg * 0.5); }
+                for (const e2 of _hitGrid.nearby(e.x, e.y, b.aoe)) { if (e2 !== e) damageEnemy(g, e2, b.dmg * 0.5); }
                 g.effects.push({ type: 'explosion', x: e.x, y: e.y, radius: 0, maxRadius: b.aoe, life: 0.3 });
                 sfxExplosion();
             }
@@ -6605,10 +7547,16 @@ function update(dt) {
             const scanInner = ef.radius - 30;
             const scanOuter = ef.radius + 30;
             if (!g._scannedThisRun) g._scannedThisRun = new Set();
-            for (const e of g.enemies) {
+            // Only enemies the expanding annulus could possibly touch. With AUTO-PING
+            // standard fit there are rings alive almost continuously, so this loop
+            // went from occasional to per-frame and had to stop being a full scan.
+            const _ringR = scanOuter + _maxESize;
+            for (const e of _hitGrid.nearby(ef.x, ef.y, _ringR)) {
                 if (e.ghost) continue;
-                const d = dist(ef, e);
                 const r = e.size || 8;
+                const _d2 = dist2(ef, e);
+                if (_d2 < (scanInner - r) * (scanInner - r) && scanInner > r) continue;   // inside the ring, untouched
+                const d = Math.sqrt(_d2);
                 // SCAN — wider band, fires once per type per run
                 if (e.typeId && !g._scannedThisRun.has(e.typeId) && d - r <= scanOuter && d + r >= scanInner) {
                     g._scannedThisRun.add(e.typeId);
@@ -6982,12 +7930,38 @@ function update(dt) {
     // --- Mid-run events ---
     g.eventCooldown -= dt;
     if (g.eventCooldown <= 0 && !g.activeEvent) {
-        const eligible = EVENT_DEFS.filter(e => g.wave >= e.minWave);
-        if (eligible.length > 0) {
-            const totW = eligible.reduce((a2, e2) => a2 + (e2.weight || 1), 0);
+        // Gates first: an event that names the depth, the hunt state or the state of
+        // NEREID's mind should not fire in shallow, quiet, lucid water.
+        const _corr = g.player.corruption || 0;
+        const _attn = g.attention || 0;
+        const eligible = EVENT_DEFS.filter(e =>
+            g.wave >= e.minWave
+            && g.depth >= (e.minDepth || 0)
+            && _attn >= (e.attn || 0)
+            && _corr >= (e.corrupt || 0)
+            && !(e.id === 'ascent_window' && (g.ascending || g._noAscentWindow))
+            && !g._eventsSeen?.has(e.id));
+        // Nothing left unseen — allow repeats rather than starving the system.
+        const pool = eligible.length ? eligible : EVENT_DEFS.filter(e =>
+            g.wave >= e.minWave && g.depth >= (e.minDepth || 0)
+            && _attn >= (e.attn || 0) && _corr >= (e.corrupt || 0));
+        if (pool.length > 0) {
+            // The deeper, louder and less lucid the dive gets, the more the picker
+            // favours events that are gated on those things — so the trench
+            // escalates with the run instead of reshuffling the same deck.
+            const wOf = (e) => {
+                let w = e.weight || 1;
+                if (e.minDepth) w *= 1 + Math.min(1.6, (g.depth - e.minDepth) / 2200);
+                if (e.attn) w *= 1.6;
+                if (e.corrupt) w *= 1.5;
+                return w;
+            };
+            const totW = pool.reduce((a2, e2) => a2 + wOf(e2), 0);
             let rw = Math.random() * totW;
-            let evt = eligible[0];
-            for (const e2 of eligible) { rw -= (e2.weight || 1); if (rw <= 0) { evt = e2; break; } }
+            let evt = pool[0];
+            for (const e2 of pool) { rw -= wOf(e2); if (rw <= 0) { evt = e2; break; } }
+            if (!g._eventsSeen) g._eventsSeen = new Set();
+            g._eventsSeen.add(evt.id);
             g.activeEvent = { ...evt, timer: 8 };
             g.eventCooldown = 80 + Math.random() * 40;
             addNereidLog(g, getNereidLine('event', g));
@@ -7369,7 +8343,7 @@ function draw() {
     // registered in virtual coordinates; hitTapZone divides by MENU_S.
     const MENU_DRAWS = {
         title: drawTitle, intro: drawIntro, shop: drawShop, workshop: drawWorkshop,
-        modules: drawModules, systems: drawSystems, maintenance: drawMaintenance, interaction: drawEventInteraction,
+        modules: drawModules, systems: drawSystems, maintenance: drawMaintenance, rig: drawRig, interaction: drawEventInteraction,
         runtime_error: drawRuntimeFault,
         contracts: drawContracts, puzzle: drawPuzzle, patch: drawPatch,
         cards: drawCardDraft, codex: drawPDA, tutorial: drawTutorial,
@@ -7545,6 +8519,36 @@ function draw() {
     }
 
     // --- DISTANT SILHOUETTES (thalassophobia — renders behind everything) ---
+    // --- THE THING THAT FOLLOWS — never a full body. A darker patch of dark, and
+    // two returns where eyes would be. Resolves slightly as it closes; still never
+    // becomes an animal you could describe. ---
+    if (g.dread && g.dread.stalker) {
+        const st = g.dread.stalker;
+        const sx = st.x - cx, sy = st.y - cy;
+        if (sx > -520 && sx < w + 520 && sy > -520 && sy < h + 520) {
+            const near = Math.max(0, 1 - (st.d - 250) / 700);       // 0 far, 1 at hold-off
+            const sz = 150 + near * 130;
+            ctx.save();
+            ctx.translate(sx, sy);
+            ctx.globalAlpha = 0.10 + near * 0.30;
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, sz, sz * 0.42, Math.sin(st.phase * 0.4) * 0.12, 0, PI2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(-sz, 0);
+            ctx.lineTo(-sz * 1.45, -sz * 0.3);
+            ctx.lineTo(-sz * 1.45, sz * 0.3);
+            ctx.closePath();
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            const eye = 0.18 + near * 0.5 + Math.sin(st.phase * 2.1) * 0.06;
+            drawGlow(ctx, '#C8E8FF', sz * 0.52, -sz * 0.11, 5 + near * 4, eye);
+            drawGlow(ctx, '#C8E8FF', sz * 0.52, sz * 0.11, 5 + near * 4, eye);
+            ctx.restore();
+        }
+    }
+
     for (const s of g.silhouettes) {
         const sx = s.x - cx, sy = s.y - cy;
         ctx.globalAlpha = s.alpha * Math.min(1, s.life);
@@ -7721,7 +8725,7 @@ function draw() {
         ctx.save();
         ctx.translate(sx, sy);
         ctx.scale(scaleK, scaleK);
-        drawObstacle(0, 0, ob);
+        drawObstacleCached(ob);
         if (ob.deposit && !ob.mined) {
             const oreCol = ob.surveyed ? '#FFB84A' : 'rgba(140,170,180,0.32)';
             ctx.strokeStyle = oreCol; ctx.lineWidth = ob.surveyed ? 2 : 1;
@@ -7864,6 +8868,29 @@ function draw() {
         const scaleK = 0.5 + proximity * 0.5;
         const sx = wr.x - cx, sy = wr.y - cy;
         if (sx < -wr.r * scaleK - 30 || sx > w + wr.r * scaleK + 30 || sy < -wr.r * scaleK - 30 || sy > h + wr.r * scaleK + 30) continue;
+        // STILL POWERED. Roughly one deep wreck in four has lights on — decades down,
+        // hull open, nobody aboard, and the circuit is closed. Nothing in the fiction
+        // explains what is feeding it, and nothing ever will.
+        if ((wr.seed % 7) < 1.9 && (wr.obDepth || 0) > 1200 && !wr.salvaged) {
+            const flick = 0.55 + Math.sin(g.runTime * 1.7 + wr.seed) * 0.2 + (Math.sin(g.runTime * 11 + wr.seed * 3) > 0.93 ? -0.4 : 0);
+            const lr = wr.r * scaleK;
+            drawGlow(ctx, '#FFC060', sx - lr * 0.45, sy - lr * 0.2, 9 * scaleK, flick * fadeAlpha);
+            drawGlow(ctx, '#FFC060', sx + lr * 0.35, sy + lr * 0.1, 7 * scaleK, flick * 0.8 * fadeAlpha);
+        }
+        // DENSITY DISCRIMINATION return — a hard contact the array has flagged.
+        if (wr._pinged && g.runTime - wr._pinged < 9) {
+            const age = (g.runTime - wr._pinged) / 9;
+            const br = wr.r * scaleK + 14;
+            ctx.globalAlpha = (1 - age) * 0.85;
+            ctx.strokeStyle = '#FFB84A'; ctx.lineWidth = 1.4;
+            for (const [qx, qy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+                ctx.beginPath();
+                ctx.moveTo(sx + qx * br, sy + qy * br - qy * 7);
+                ctx.lineTo(sx + qx * br, sy + qy * br);
+                ctx.lineTo(sx + qx * br - qx * 7, sy + qy * br);
+                ctx.stroke();
+            }
+        }
         ctx.globalAlpha = fadeAlpha;
         ctx.save();
         ctx.translate(sx, sy);
@@ -8973,8 +10000,9 @@ function draw() {
             if (!g._darkCanvas || g._darkCanvas.width !== w || g._darkCanvas.height !== h) {
                 g._darkCanvas = document.createElement('canvas');
                 g._darkCanvas.width = w; g._darkCanvas.height = h;
+                g._darkCtx = g._darkCanvas.getContext('2d');   // getContext per frame is not free
             }
-            const dCtx = g._darkCanvas.getContext('2d');
+            const dCtx = g._darkCtx;
 
             // Fill with darkness
             dCtx.clearRect(0, 0, w, h);
@@ -8989,56 +10017,31 @@ function draw() {
             if (_eco) lightR = (g.lightOn === false) ? 95 : 235; // your world shrinks to the lamp
             if (g._inBlackwater) lightR = 70;                    // blackwater swallows the lamps
             if (g._inInk) lightR = Math.min(lightR, 105);        // ink chokes them
-            const grad = dCtx.createRadialGradient(px2, py2, 0, px2, py2, lightR);
-            grad.addColorStop(0, 'rgba(255,255,255,1)');
-            grad.addColorStop(0.3, 'rgba(255,255,255,0.7)');
-            grad.addColorStop(0.6, 'rgba(255,255,255,0.3)');
-            grad.addColorStop(1, 'rgba(255,255,255,0)');
-            dCtx.fillStyle = grad;
-            dCtx.beginPath(); dCtx.arc(px2, py2, lightR, 0, PI2); dCtx.fill();
+            cutLight(dCtx, 'lamp', px2, py2, lightR, 1);
 
             // Sonar reveal
             if (g.sonarReveal > 0) {
-                const revealR = 500;
-                const rGrad = dCtx.createRadialGradient(px2, py2, 0, px2, py2, revealR);
-                rGrad.addColorStop(0, `rgba(255,255,255,${g.sonarReveal * 0.8})`);
-                rGrad.addColorStop(0.6, `rgba(255,255,255,${g.sonarReveal * 0.4})`);
-                rGrad.addColorStop(1, 'rgba(255,255,255,0)');
-                dCtx.fillStyle = rGrad;
-                dCtx.beginPath(); dCtx.arc(px2, py2, revealR, 0, PI2); dCtx.fill();
+                cutLight(dCtx, 'lamp', px2, py2, 500, g.sonarReveal * 0.8);
             }
 
             // Bioluminescent enemies
             for (const e of g.enemies) {
                 if (e.typeId === 'anglerfish' || e.typeId === 'jellyfish') {
                     const esx = e.x - cx, esy = e.y - cy;
-                    const eGrad = dCtx.createRadialGradient(esx, esy, 0, esx, esy, e.size * 3);
-                    eGrad.addColorStop(0, 'rgba(255,255,255,0.3)');
-                    eGrad.addColorStop(1, 'rgba(255,255,255,0)');
-                    dCtx.fillStyle = eGrad;
-                    dCtx.beginPath(); dCtx.arc(esx, esy, e.size * 3, 0, PI2); dCtx.fill();
+                    if (esx < -200 || esy < -200 || esx > w + 200 || esy > h + 200) continue;
+                    cutLight(dCtx, 'soft', esx, esy, e.size * 3, 0.3);
                 }
             }
 
             // Lures
             for (const lu of g.lures) {
-                const lsx = lu.x - cx, lsy = lu.y - cy;
-                const lGrad = dCtx.createRadialGradient(lsx, lsy, 0, lsx, lsy, 50);
-                lGrad.addColorStop(0, 'rgba(255,255,255,0.4)');
-                lGrad.addColorStop(1, 'rgba(255,255,255,0)');
-                dCtx.fillStyle = lGrad;
-                dCtx.beginPath(); dCtx.arc(lsx, lsy, 50, 0, PI2); dCtx.fill();
+                cutLight(dCtx, 'soft', lu.x - cx, lu.y - cy, 50, 0.4);
             }
 
             // Explosions
             for (const ef of g.effects) {
                 if (ef.type === 'explosion') {
-                    const esx = ef.x - cx, esy = ef.y - cy;
-                    const eGrad = dCtx.createRadialGradient(esx, esy, 0, esx, esy, ef.maxRadius * 1.5);
-                    eGrad.addColorStop(0, `rgba(255,255,255,${ef.life})`);
-                    eGrad.addColorStop(1, 'rgba(255,255,255,0)');
-                    dCtx.fillStyle = eGrad;
-                    dCtx.beginPath(); dCtx.arc(esx, esy, ef.maxRadius * 1.5, 0, PI2); dCtx.fill();
+                    cutLight(dCtx, 'soft', ef.x - cx, ef.y - cy, ef.maxRadius * 1.5, ef.life);
                 }
             }
 
@@ -9046,6 +10049,18 @@ function draw() {
 
             // Stamp darkness onto main canvas
             ctx.drawImage(g._darkCanvas, 0, 0);
+
+            // HYPOXIA — the world closes to a tube, and it breathes with you.
+            if (g._hypoxia > 0.02) {
+                const hy = g._hypoxia;
+                const puff = 1 + Math.sin(g.runTime * (1.8 + hy * 1.4)) * 0.045 * hy;
+                const vw = w * (1.75 - hy * 0.62) * puff;
+                const vh = h * (1.75 - hy * 0.62) * puff;
+                const prevA = ctx.globalAlpha;
+                ctx.globalAlpha = Math.min(0.92, 0.30 + hy * 0.62);
+                ctx.drawImage(getVignetteSprite(), w / 2 - vw / 2, h / 2 - vh / 2, vw, vh);
+                ctx.globalAlpha = prevA;
+            }
 
             // --- EYESHINE (DESCENT horror): you see eyes in the dark before bodies ---
             // Unaware = faint cold glimmers, watching. Alerted = hot red, locked on you.
@@ -9789,6 +10804,19 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     ctx.fillText(`${Math.floor(g.depth)}m`, 16, h - 22);
     ctx.fillStyle = hexA(pal.textDim, 0.85); ctx.font = '11px monospace';
     ctx.fillText(g.ascending ? '↑ ASCENDING' : pal.zone, 16, h - 8);
+    // KEEL CLEARANCE + PRESSURE. Clearance is what makes the void legible — a number
+    // that shrinks as the trench narrows, and reads as no return at all when there
+    // is genuinely nothing under the boat. Pressure is here because it only ever
+    // goes up; the peak stays on the glass for the rest of the dive.
+    if (g.dread) {
+        const noFloor = !!g._dreadOpen;
+        const clearance = Math.max(0, Math.round(((g.worldBounds && g.worldBounds.radius) || 1000) - dist(g.player, { x: g.worldBounds.cx || 0, y: g.worldBounds.cy || 0 })));
+        ctx.font = '10px monospace';
+        ctx.fillStyle = hexA(noFloor ? '#FF6060' : pal.textDim, noFloor ? 0.95 : 0.5);
+        ctx.fillText(noFloor ? 'KEEL  ----' : `KEEL  ${clearance}m`, 16, h - 52);
+        ctx.fillStyle = hexA(pal.textDim, 0.42);
+        ctx.fillText(`PEAK  ${g.dread.maxBar.toFixed(1)} bar`, 16, h - 64);
+    }
     // Show [Z] ASCEND prompt only when descending and we've gone deep enough
     if (!g.ascending && g.depth > 200) {
         ctx.fillStyle = hexA(pal.textDim, 0.55); ctx.font = '10px monospace';
@@ -10098,10 +11126,31 @@ function drawCompactMinimap(w, h, g, pal) {
     // Enemies — small red dots (only those at similar depth)
     for (const e of g.enemies) {
         if (e.ghost) continue;
+        // A failing MIND does not just add contacts. Sometimes it removes one.
+        if (g.dread && g.dread.hideId === e) continue;
         const ex = mmCx + (e.x - (wb.cx || 0)) * scale;
         const ey = mmCy + (e.y - (wb.cy || 0)) * scale;
         ctx.fillStyle = e.isBoss ? '#FF2030' : 'rgba(220,80,80,0.85)';
         ctx.fillRect(ex - 1, ey - 1, e.isBoss ? 4 : 2, e.isBoss ? 4 : 2);
+    }
+    // PHANTOMS — contacts that are not there, drawn exactly like ones that are.
+    if (g.dread) {
+        for (const ph of g.dread.phantoms) {
+            const px3 = mmCx + (ph.x - (wb.cx || 0)) * scale;
+            const py3 = mmCy + (ph.y - (wb.cy || 0)) * scale;
+            ctx.fillStyle = 'rgba(220,80,80,0.85)';
+            ctx.fillRect(px3 - 1, py3 - 1, 2, 2);
+        }
+    }
+    // A RETURN ON A BEARING — our own pulse, answered. Marked at the rim, because
+    // range never resolves.
+    if (g._echoBearing && g.runTime - g._echoBearing.t < 7) {
+        const ea = g._echoBearing.ang;
+        const fade = 1 - (g.runTime - g._echoBearing.t) / 7;
+        ctx.strokeStyle = hexA('#80FFE0', fade * 0.9); ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(mmCx, mmCy, mmR - 7, ea - 0.16, ea + 0.16);
+        ctx.stroke();
     }
     // LAST KNOWN POSITION — amber pulse: where the trench thinks you are
     if (g.lastNoise && (g.attention || 0) > 20 && g.runTime - g.lastNoise.t < 60) {
@@ -10471,10 +11520,32 @@ function drawCragLine(wallX, h, isLeft, t) {
     ctx.closePath(); ctx.fill();
 }
 
-function drawObstacle(sx, sy, ob) {
+// Obstacles that are purely seeded geometry — no pulse, blink, sway or per-frame
+// randomness — get rendered once into their own sprite and blitted thereafter.
+// Each was re-running dozens of path ops every frame for the ~14 seconds it stayed
+// inside the depth window; in Abyssal that is 20-odd of them at once.
+// The sprite lives on the obstacle, so it dies when the obstacle is culled and
+// there is no cache to evict.
+const OB_CACHEABLE = new Set(['rock', 'coral', 'spire', 'bones', 'seep', 'chitin', 'debris', 'moorchain', 'ladder', 'hatch']);
+function drawObstacleCached(ob) {
+    if (!OB_CACHEABLE.has(ob.kind)) { drawObstacle(0, 0, ob); return; }
+    if (!ob._spr) {
+        // Most kinds stay inside ~2.6r (body plus pebbles/sediment). The vertical
+        // structures run far past that and would be guillotined by a square pad.
+        const reach = (ob.kind === 'moorchain') ? 3.8 : (ob.kind === 'ladder') ? 3.1 : 2.6;
+        const pad = Math.ceil(ob.r * reach) + 8;
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = pad * 2;
+        drawObstacle(pad, pad, ob, cv.getContext('2d'));
+        ob._spr = cv; ob._sprPad = pad;
+    }
+    ctx.drawImage(ob._spr, -ob._sprPad, -ob._sprPad);
+}
+
+function drawObstacle(sx, sy, ob, octx = ctx) {
     const r = ob.r;
-    ctx.save();
-    ctx.translate(sx, sy);
+    octx.save();
+    octx.translate(sx, sy);
     if (ob.kind === 'rock') {
         // Faceted boulder — irregular silhouette, per-facet light from upper-left,
         // cracks, sediment dusting on top, companion pebbles. All seeded, no per-frame motion.
@@ -10487,38 +11558,38 @@ function drawObstacle(sx, sy, ob) {
             pts.push([Math.cos(a) * rad, Math.sin(a) * rad * (Math.sin(a) > 0 ? 0.78 : 1)]);
         }
         const trace = () => {
-            ctx.beginPath();
-            pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-            ctx.closePath();
+            octx.beginPath();
+            pts.forEach(([x, y], i) => (i ? octx.lineTo(x, y) : octx.moveTo(x, y)));
+            octx.closePath();
         };
-        trace(); ctx.fillStyle = ob.color; ctx.fill();
+        trace(); octx.fillStyle = ob.color; octx.fill();
         for (let i = 0; i < N; i++) {
             const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % N];
             const mx2 = (x1 + x2) / 2, my2 = (y1 + y2) / 2;
             const lit = (-mx2 - my2) / ((Math.hypot(mx2, my2) || 1) * Math.SQRT2);
-            ctx.fillStyle = lit > 0 ? `rgba(205,210,220,${0.05 + lit * 0.10})` : `rgba(0,0,0,${-lit * 0.26})`;
-            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); ctx.closePath(); ctx.fill();
+            octx.fillStyle = lit > 0 ? `rgba(205,210,220,${0.05 + lit * 0.10})` : `rgba(0,0,0,${-lit * 0.26})`;
+            octx.beginPath(); octx.moveTo(0, 0); octx.lineTo(x1, y1); octx.lineTo(x2, y2); octx.closePath(); octx.fill();
         }
-        ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1;
+        octx.strokeStyle = 'rgba(0,0,0,0.45)'; octx.lineWidth = 1;
         for (let c = 0; c < 3; c++) {
             let ax = (sr(20 + c) - 0.5) * r * 1.1, ay = (sr(30 + c) - 0.5) * r * 0.8;
-            ctx.beginPath(); ctx.moveTo(ax, ay);
+            octx.beginPath(); octx.moveTo(ax, ay);
             for (let s2 = 0; s2 < 3; s2++) {
                 ax += (sr(40 + c * 3 + s2) - 0.35) * r * 0.4;
                 ay += (sr(60 + c * 3 + s2) - 0.5) * r * 0.35;
-                ctx.lineTo(ax, ay);
+                octx.lineTo(ax, ay);
             }
-            ctx.stroke();
+            octx.stroke();
         }
-        ctx.strokeStyle = 'rgba(160,158,145,0.20)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.ellipse(0, -r * 0.5, r * 0.5, r * 0.16, 0, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke();
-        trace(); ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+        octx.strokeStyle = 'rgba(160,158,145,0.20)'; octx.lineWidth = 2.5; octx.lineCap = 'round';
+        octx.beginPath(); octx.ellipse(0, -r * 0.5, r * 0.5, r * 0.16, 0, Math.PI * 1.08, Math.PI * 1.92); octx.stroke();
+        trace(); octx.strokeStyle = 'rgba(0,0,0,0.5)'; octx.lineWidth = 1; octx.stroke();
         for (let pb = 0; pb < 2; pb++) {
             const px = (sr(70 + pb) - 0.5) * r * 2.1, py = r * 0.72 + sr(80 + pb) * r * 0.2;
-            ctx.fillStyle = ob.color;
-            ctx.beginPath(); ctx.ellipse(px, py, r * 0.16, r * 0.11, 0, 0, PI2); ctx.fill();
-            ctx.fillStyle = 'rgba(0,0,0,0.3)';
-            ctx.beginPath(); ctx.ellipse(px, py + r * 0.03, r * 0.15, r * 0.06, 0, 0, Math.PI); ctx.fill();
+            octx.fillStyle = ob.color;
+            octx.beginPath(); octx.ellipse(px, py, r * 0.16, r * 0.11, 0, 0, PI2); octx.fill();
+            octx.fillStyle = 'rgba(0,0,0,0.3)';
+            octx.beginPath(); octx.ellipse(px, py + r * 0.03, r * 0.15, r * 0.06, 0, 0, Math.PI); octx.fill();
         }
     } else if (ob.kind === 'kelp') {
         // Seeded frond stand: varied count/length/hue, quadratic curves,
@@ -10526,7 +11597,7 @@ function drawObstacle(sx, sy, ob) {
         const kr = (k) => { const v = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return v - Math.floor(v); };
         const tNow = performance.now() * 0.001;
         const fronds = 4 + Math.floor(kr(0) * 4);
-        ctx.lineCap = 'round';
+        octx.lineCap = 'round';
         for (let s2 = 0; s2 < fronds; s2++) {
             const baseX = (s2 - fronds / 2) * (5 + kr(s2) * 4);
             const len = r * (1.1 + kr(s2 + 3) * 1.1);
@@ -10538,198 +11609,198 @@ function drawObstacle(sx, sy, ob) {
                 const t2 = seg / segs;
                 const nx2 = baseX + sway * t2 * t2 + Math.sin(t2 * 5 + ob.seed) * 2;
                 const ny2 = r * 0.8 - t2 * len;
-                ctx.strokeStyle = `hsla(${hue}, 34%, ${20 + t2 * 12}%, ${0.9 - t2 * 0.35})`;
-                ctx.lineWidth = 4.5 * (1 - t2 * 0.65);
-                ctx.beginPath(); ctx.moveTo(px2, py2); ctx.lineTo(nx2, ny2); ctx.stroke();
+                octx.strokeStyle = `hsla(${hue}, 34%, ${20 + t2 * 12}%, ${0.9 - t2 * 0.35})`;
+                octx.lineWidth = 4.5 * (1 - t2 * 0.65);
+                octx.beginPath(); octx.moveTo(px2, py2); octx.lineTo(nx2, ny2); octx.stroke();
                 // Side blades on alternating segments
                 if (seg % 2 === 0 && seg < segs) {
                     const bl = 6 + kr(s2 * 10 + seg) * 8;
-                    ctx.lineWidth = 1.6;
-                    ctx.beginPath(); ctx.moveTo(nx2, ny2);
-                    ctx.lineTo(nx2 + (seg % 4 === 0 ? bl : -bl), ny2 - bl * 0.4); ctx.stroke();
+                    octx.lineWidth = 1.6;
+                    octx.beginPath(); octx.moveTo(nx2, ny2);
+                    octx.lineTo(nx2 + (seg % 4 === 0 ? bl : -bl), ny2 - bl * 0.4); octx.stroke();
                 }
                 px2 = nx2; py2 = ny2;
             }
         }
         // Holdfast — gnarled root mound
-        ctx.fillStyle = '#141F18';
-        ctx.beginPath(); ctx.ellipse(0, r * 0.74, r * 0.62, r * 0.24, 0, 0, PI2); ctx.fill();
-        ctx.fillStyle = '#1E2C20';
+        octx.fillStyle = '#141F18';
+        octx.beginPath(); octx.ellipse(0, r * 0.74, r * 0.62, r * 0.24, 0, 0, PI2); octx.fill();
+        octx.fillStyle = '#1E2C20';
         for (let rt = 0; rt < 4; rt++) {
-            ctx.beginPath(); ctx.ellipse((kr(rt + 20) - 0.5) * r, r * 0.72, 4 + kr(rt + 24) * 4, 2.5, 0, 0, PI2); ctx.fill();
+            octx.beginPath(); octx.ellipse((kr(rt + 20) - 0.5) * r, r * 0.72, 4 + kr(rt + 24) * 4, 2.5, 0, 0, PI2); octx.fill();
         }
     } else if (ob.kind === 'coral') {
         // Branching coral
-        ctx.fillStyle = ob.color;
-        ctx.beginPath(); ctx.arc(0, 0, r * 0.5, 0, PI2); ctx.fill();
-        ctx.strokeStyle = ob.color; ctx.lineWidth = 5; ctx.lineCap = 'round';
+        octx.fillStyle = ob.color;
+        octx.beginPath(); octx.arc(0, 0, r * 0.5, 0, PI2); octx.fill();
+        octx.strokeStyle = ob.color; octx.lineWidth = 5; octx.lineCap = 'round';
         for (let b = 0; b < 5; b++) {
             const a = (b / 5) * PI2 + ob.seed;
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
+            octx.beginPath();
+            octx.moveTo(0, 0);
             const ex = Math.cos(a) * r * 0.9, ey = Math.sin(a) * r * 0.9;
-            ctx.lineTo(ex, ey);
-            ctx.stroke();
+            octx.lineTo(ex, ey);
+            octx.stroke();
         }
     } else if (ob.kind === 'spire') {
         // Jagged multi-peak stone spire — seeded profile, lit west face, strata lines.
         const sr = (k) => { const s = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
         const peaks = 2 + Math.floor(sr(1) * 2);
         const top = [];
-        ctx.beginPath(); ctx.moveTo(-r * 0.7, r);
+        octx.beginPath(); octx.moveTo(-r * 0.7, r);
         for (let pk = 0; pk < peaks; pk++) {
             const px = -r * 0.4 + (pk / (peaks - 1 || 1)) * r * 0.8 + (sr(2 + pk) - 0.5) * r * 0.15;
             const py = -r * (0.7 + sr(5 + pk) * 0.6) * (pk === Math.floor(peaks / 2) ? 1.12 : 0.82);
-            ctx.lineTo(px - r * 0.14, py + r * 0.4 + sr(8 + pk) * r * 0.12);   // shoulder notch
-            ctx.lineTo(px, py);
+            octx.lineTo(px - r * 0.14, py + r * 0.4 + sr(8 + pk) * r * 0.12);   // shoulder notch
+            octx.lineTo(px, py);
             top.push([px, py]);
         }
-        ctx.lineTo(r * 0.7, r); ctx.closePath();
-        ctx.fillStyle = ob.color; ctx.fill();
+        octx.lineTo(r * 0.7, r); octx.closePath();
+        octx.fillStyle = ob.color; octx.fill();
         // Lit western face
-        ctx.fillStyle = 'rgba(150,170,195,0.10)';
-        ctx.beginPath(); ctx.moveTo(-r * 0.7, r); ctx.lineTo(top[0][0], top[0][1]); ctx.lineTo(top[0][0] + r * 0.08, r); ctx.closePath(); ctx.fill();
+        octx.fillStyle = 'rgba(150,170,195,0.10)';
+        octx.beginPath(); octx.moveTo(-r * 0.7, r); octx.lineTo(top[0][0], top[0][1]); octx.lineTo(top[0][0] + r * 0.08, r); octx.closePath(); octx.fill();
         // Shadowed eastern face
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        octx.fillStyle = 'rgba(0,0,0,0.25)';
         const lastTop = top[top.length - 1];
-        ctx.beginPath(); ctx.moveTo(r * 0.7, r); ctx.lineTo(lastTop[0], lastTop[1]); ctx.lineTo(lastTop[0] - r * 0.06, r); ctx.closePath(); ctx.fill();
+        octx.beginPath(); octx.moveTo(r * 0.7, r); octx.lineTo(lastTop[0], lastTop[1]); octx.lineTo(lastTop[0] - r * 0.06, r); octx.closePath(); octx.fill();
         // Strata
-        ctx.strokeStyle = 'rgba(0,0,0,0.32)'; ctx.lineWidth = 0.8;
+        octx.strokeStyle = 'rgba(0,0,0,0.32)'; octx.lineWidth = 0.8;
         for (let st = 1; st <= 3; st++) {
             const sy2 = r - st * r * 0.42;
-            ctx.beginPath();
-            ctx.moveTo(-r * (0.62 - st * 0.13), sy2);
-            ctx.lineTo(r * (0.62 - st * 0.11), sy2 + (sr(30 + st) - 0.5) * r * 0.12);
-            ctx.stroke();
+            octx.beginPath();
+            octx.moveTo(-r * (0.62 - st * 0.13), sy2);
+            octx.lineTo(r * (0.62 - st * 0.11), sy2 + (sr(30 + st) - 0.5) * r * 0.12);
+            octx.stroke();
         }
-        ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(-r * 0.7, r);
+        octx.strokeStyle = 'rgba(0,0,0,0.5)'; octx.lineWidth = 1;
+        octx.beginPath(); octx.moveTo(-r * 0.7, r);
         for (let pk = 0; pk < top.length; pk++) {
-            ctx.lineTo(top[pk][0] - r * 0.14, top[pk][1] + r * 0.4 + sr(8 + pk) * r * 0.12);
-            ctx.lineTo(top[pk][0], top[pk][1]);
+            octx.lineTo(top[pk][0] - r * 0.14, top[pk][1] + r * 0.4 + sr(8 + pk) * r * 0.12);
+            octx.lineTo(top[pk][0], top[pk][1]);
         }
-        ctx.lineTo(r * 0.7, r); ctx.stroke();
+        octx.lineTo(r * 0.7, r); octx.stroke();
     } else if (ob.kind === 'glowcap') {
         // Bioluminescent mushroom / coral knob
-        ctx.fillStyle = '#10141A';
-        ctx.beginPath(); ctx.arc(0, r * 0.4, r * 0.5, 0, PI2); ctx.fill();
+        octx.fillStyle = '#10141A';
+        octx.beginPath(); octx.arc(0, r * 0.4, r * 0.5, 0, PI2); octx.fill();
         const pulse = 0.4 + Math.sin(performance.now() * 0.002 + ob.seed) * 0.3;
-        drawGlow(ctx, ob.color, 0, -r * 0.2, r * 1.2, pulse);
-        ctx.fillStyle = ob.color;
-        ctx.beginPath(); ctx.ellipse(0, -r * 0.2, r * 0.55, r * 0.4, 0, 0, PI2); ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.beginPath(); ctx.ellipse(-r * 0.15, -r * 0.3, r * 0.18, r * 0.12, 0, 0, PI2); ctx.fill();
+        drawGlow(octx, ob.color, 0, -r * 0.2, r * 1.2, pulse);
+        octx.fillStyle = ob.color;
+        octx.beginPath(); octx.ellipse(0, -r * 0.2, r * 0.55, r * 0.4, 0, 0, PI2); octx.fill();
+        octx.fillStyle = 'rgba(255,255,255,0.5)';
+        octx.beginPath(); octx.ellipse(-r * 0.15, -r * 0.3, r * 0.18, r * 0.12, 0, 0, PI2); octx.fill();
     } else if (ob.kind === 'vent') {
         // Hydrothermal vent — black smoker with rising plume
-        ctx.fillStyle = '#1A0A08';
-        ctx.beginPath(); ctx.moveTo(-r * 0.5, r); ctx.lineTo(-r * 0.3, -r * 0.4); ctx.lineTo(r * 0.3, -r * 0.4); ctx.lineTo(r * 0.5, r); ctx.closePath(); ctx.fill();
+        octx.fillStyle = '#1A0A08';
+        octx.beginPath(); octx.moveTo(-r * 0.5, r); octx.lineTo(-r * 0.3, -r * 0.4); octx.lineTo(r * 0.3, -r * 0.4); octx.lineTo(r * 0.5, r); octx.closePath(); octx.fill();
         // Plume
         const t2 = performance.now() * 0.001;
         for (let pi = 0; pi < 4; pi++) {
             const a = (1 - pi * 0.25) * 0.3;
-            ctx.fillStyle = `rgba(120,40,30,${a})`;
+            octx.fillStyle = `rgba(120,40,30,${a})`;
             const py = -r * 0.4 - pi * 12 + Math.sin(t2 + pi) * 3;
-            ctx.beginPath(); ctx.arc(Math.sin(t2 + pi * 1.7) * 4, py, r * 0.4 + pi * 4, 0, PI2); ctx.fill();
+            octx.beginPath(); octx.arc(Math.sin(t2 + pi * 1.7) * 4, py, r * 0.4 + pi * 4, 0, PI2); octx.fill();
         }
         // Hot core glow
-        drawGlow(ctx, '#DA3010', 0, -r * 0.3, r * 0.8, 0.5);
+        drawGlow(octx, '#DA3010', 0, -r * 0.3, r * 0.8, 0.5);
     } else if (ob.kind === 'organic') {
         // Living tissue — pulsing dark mass with veins
         const pulse = 0.85 + Math.sin(performance.now() * 0.0015 + ob.seed) * 0.1;
-        ctx.fillStyle = ob.color;
-        ctx.beginPath();
+        octx.fillStyle = ob.color;
+        octx.beginPath();
         for (let i = 0; i <= 14; i++) {
             const a = (i / 14) * PI2;
             const rad = r * pulse * (0.9 + Math.sin(i * 2.1 + ob.seed) * 0.1);
             const x = Math.cos(a) * rad, y = Math.sin(a) * rad;
-            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            if (i === 0) octx.moveTo(x, y); else octx.lineTo(x, y);
         }
-        ctx.closePath(); ctx.fill();
+        octx.closePath(); octx.fill();
         // Veins
-        ctx.strokeStyle = '#FF4060'; ctx.lineWidth = 1.2;
+        octx.strokeStyle = '#FF4060'; octx.lineWidth = 1.2;
         for (let v = 0; v < 4; v++) {
             const a = v * (PI2 / 4) + ob.seed * 0.1;
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.quadraticCurveTo(Math.cos(a + 0.3) * r * 0.4, Math.sin(a + 0.3) * r * 0.4, Math.cos(a) * r * 0.85, Math.sin(a) * r * 0.85);
-            ctx.stroke();
+            octx.beginPath();
+            octx.moveTo(0, 0);
+            octx.quadraticCurveTo(Math.cos(a + 0.3) * r * 0.4, Math.sin(a + 0.3) * r * 0.4, Math.cos(a) * r * 0.85, Math.sin(a) * r * 0.85);
+            octx.stroke();
         }
     } else if (ob.kind === 'crystal') {
         // Alien crystal cluster — refracts ping color
         const pulse = 0.5 + Math.sin(performance.now() * 0.002 + ob.seed) * 0.3;
-        drawGlow(ctx, ob.color, 0, 0, r * 1.5, pulse * 0.5);
-        ctx.fillStyle = ob.color;
+        drawGlow(octx, ob.color, 0, 0, r * 1.5, pulse * 0.5);
+        octx.fillStyle = ob.color;
         for (let cf = 0; cf < 5; cf++) {
             const a = (cf / 5) * PI2;
             const cx2 = Math.cos(a) * r * 0.3, cy2 = Math.sin(a) * r * 0.3;
-            ctx.beginPath();
-            ctx.moveTo(cx2, cy2);
-            ctx.lineTo(cx2 + Math.cos(a) * r * 0.7, cy2 + Math.sin(a) * r * 0.7);
-            ctx.lineTo(cx2 + Math.cos(a + 0.3) * r * 0.5, cy2 + Math.sin(a + 0.3) * r * 0.5);
-            ctx.closePath(); ctx.fill();
+            octx.beginPath();
+            octx.moveTo(cx2, cy2);
+            octx.lineTo(cx2 + Math.cos(a) * r * 0.7, cy2 + Math.sin(a) * r * 0.7);
+            octx.lineTo(cx2 + Math.cos(a + 0.3) * r * 0.5, cy2 + Math.sin(a + 0.3) * r * 0.5);
+            octx.closePath(); octx.fill();
         }
-        ctx.strokeStyle = '#FFF'; ctx.lineWidth = 0.5;
+        octx.strokeStyle = '#FFF'; octx.lineWidth = 0.5;
         for (let cf = 0; cf < 5; cf++) {
             const a = (cf / 5) * PI2;
             const cx2 = Math.cos(a) * r * 0.3, cy2 = Math.sin(a) * r * 0.3;
-            ctx.beginPath(); ctx.moveTo(cx2, cy2);
-            ctx.lineTo(cx2 + Math.cos(a) * r * 0.7, cy2 + Math.sin(a) * r * 0.7);
-            ctx.stroke();
+            octx.beginPath(); octx.moveTo(cx2, cy2);
+            octx.lineTo(cx2 + Math.cos(a) * r * 0.7, cy2 + Math.sin(a) * r * 0.7);
+            octx.stroke();
         }
     } else if (ob.kind === 'bones') {
         // Whale fall — ribcage arcs over a sediment mound, skull at one end.
         const sr = (k) => { const s = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
-        ctx.fillStyle = 'rgba(30,32,28,0.8)';
-        ctx.beginPath(); ctx.ellipse(0, r * 0.55, r * 1.1, r * 0.25, 0, 0, PI2); ctx.fill();
-        ctx.lineCap = 'round';
+        octx.fillStyle = 'rgba(30,32,28,0.8)';
+        octx.beginPath(); octx.ellipse(0, r * 0.55, r * 1.1, r * 0.25, 0, 0, PI2); octx.fill();
+        octx.lineCap = 'round';
         const ribs = 4 + Math.floor(sr(30) * 4);
         for (let i = 0; i < ribs; i++) {
             const bx = -r * 0.55 + (i / (ribs - 1)) * r * 1.1;
             const hgt = r * (0.85 - Math.abs(i - (ribs - 1) / 2) * 0.16) * (0.9 + sr(i) * 0.2);
             const broken = sr(i + 40) < 0.3;   // a third of the ribs snapped off
             const shade = 155 + sr(i + 9) * 35;
-            ctx.strokeStyle = `rgba(${shade},${shade + 3},${shade - 12},${0.7 + sr(i + 5) * 0.2})`;
+            octx.strokeStyle = `rgba(${shade},${shade + 3},${shade - 12},${0.7 + sr(i + 5) * 0.2})`;
             const a0 = Math.PI * 1.02, a1 = broken ? Math.PI * (1.25 + sr(i + 6) * 0.2) : Math.PI * 1.72 + sr(i + 3) * 0.1;
             // Two-pass stroke = tapered bone, thick at the root
-            ctx.lineWidth = 3.6;
-            ctx.beginPath(); ctx.arc(bx, r * 0.5, hgt, a0, a0 + (a1 - a0) * 0.5); ctx.stroke();
-            ctx.lineWidth = 2.1;
-            ctx.beginPath(); ctx.arc(bx, r * 0.5, hgt, a0 + (a1 - a0) * 0.4, a1); ctx.stroke();
+            octx.lineWidth = 3.6;
+            octx.beginPath(); octx.arc(bx, r * 0.5, hgt, a0, a0 + (a1 - a0) * 0.5); octx.stroke();
+            octx.lineWidth = 2.1;
+            octx.beginPath(); octx.arc(bx, r * 0.5, hgt, a0 + (a1 - a0) * 0.4, a1); octx.stroke();
             if (broken) {   // jagged snapped tip
                 const ax2 = bx + Math.cos(a1) * hgt, ay2 = r * 0.5 + Math.sin(a1) * hgt;
-                ctx.lineWidth = 1.4;
-                ctx.beginPath(); ctx.moveTo(ax2, ay2); ctx.lineTo(ax2 + 3 - sr(i + 8) * 6, ay2 - 3); ctx.stroke();
+                octx.lineWidth = 1.4;
+                octx.beginPath(); octx.moveTo(ax2, ay2); octx.lineTo(ax2 + 3 - sr(i + 8) * 6, ay2 - 3); octx.stroke();
             }
         }
         // Loose shards half-swallowed by the sediment
-        ctx.fillStyle = 'rgba(150,152,136,0.55)';
+        octx.fillStyle = 'rgba(150,152,136,0.55)';
         for (let sh = 0; sh < 4; sh++) {
             const sx2 = (sr(sh + 50) - 0.5) * r * 1.8, sy2 = r * (0.5 + sr(sh + 54) * 0.14);
-            ctx.save(); ctx.translate(sx2, sy2); ctx.rotate(sr(sh + 58) * Math.PI);
-            ctx.fillRect(-4 - sr(sh + 60) * 4, -1.1, 8 + sr(sh + 60) * 8, 2.2);
-            ctx.restore();
+            octx.save(); octx.translate(sx2, sy2); octx.rotate(sr(sh + 58) * Math.PI);
+            octx.fillRect(-4 - sr(sh + 60) * 4, -1.1, 8 + sr(sh + 60) * 8, 2.2);
+            octx.restore();
         }
         // Spine + vertebrae
-        ctx.strokeStyle = 'rgba(165,168,152,0.7)'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(-r * 0.8, r * 0.42); ctx.quadraticCurveTo(0, r * 0.3, r * 0.75, r * 0.44); ctx.stroke();
-        ctx.fillStyle = 'rgba(175,178,162,0.8)';
+        octx.strokeStyle = 'rgba(165,168,152,0.7)'; octx.lineWidth = 2;
+        octx.beginPath(); octx.moveTo(-r * 0.8, r * 0.42); octx.quadraticCurveTo(0, r * 0.3, r * 0.75, r * 0.44); octx.stroke();
+        octx.fillStyle = 'rgba(175,178,162,0.8)';
         for (let vtb = 0; vtb < 6; vtb++) {
             const vx = -r * 0.75 + vtb * r * 0.3;
-            ctx.beginPath(); ctx.arc(vx, r * 0.38 - Math.sin((vtb / 5) * Math.PI) * r * 0.06, 2.4, 0, PI2); ctx.fill();
+            octx.beginPath(); octx.arc(vx, r * 0.38 - Math.sin((vtb / 5) * Math.PI) * r * 0.06, 2.4, 0, PI2); octx.fill();
         }
         // Skull
-        ctx.fillStyle = 'rgba(180,182,166,0.85)';
-        ctx.beginPath(); ctx.ellipse(-r * 0.95, r * 0.36, r * 0.26, r * 0.17, -0.25, 0, PI2); ctx.fill();
-        ctx.fillStyle = 'rgba(10,10,12,0.9)';
-        ctx.beginPath(); ctx.arc(-r * 1.02, r * 0.32, r * 0.05, 0, PI2); ctx.fill();
+        octx.fillStyle = 'rgba(180,182,166,0.85)';
+        octx.beginPath(); octx.ellipse(-r * 0.95, r * 0.36, r * 0.26, r * 0.17, -0.25, 0, PI2); octx.fill();
+        octx.fillStyle = 'rgba(10,10,12,0.9)';
+        octx.beginPath(); octx.arc(-r * 1.02, r * 0.32, r * 0.05, 0, PI2); octx.fill();
     } else if (ob.kind === 'seep') {
         // Cold seep — crusted mound venting a shimmering methane bubble column.
         const sr = (k) => { const s = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
-        ctx.fillStyle = ob.color;
-        ctx.beginPath(); ctx.ellipse(0, r * 0.45, r * 0.85, r * 0.4, 0, 0, PI2); ctx.fill();
-        ctx.fillStyle = 'rgba(200,205,210,0.12)';
+        octx.fillStyle = ob.color;
+        octx.beginPath(); octx.ellipse(0, r * 0.45, r * 0.85, r * 0.4, 0, 0, PI2); octx.fill();
+        octx.fillStyle = 'rgba(200,205,210,0.12)';
         for (let cr = 0; cr < 5; cr++) {
-            ctx.beginPath(); ctx.arc((sr(cr) - 0.5) * r * 1.2, r * 0.4 + (sr(cr + 7) - 0.5) * r * 0.3, r * 0.07, 0, PI2); ctx.fill();
+            octx.beginPath(); octx.arc((sr(cr) - 0.5) * r * 1.2, r * 0.4 + (sr(cr + 7) - 0.5) * r * 0.3, r * 0.07, 0, PI2); octx.fill();
         }
         const t3 = performance.now() * 0.001;
         for (let bi = 0; bi < 7; bi++) {
@@ -10737,118 +11808,177 @@ function drawObstacle(sx, sy, ob) {
             const by = -(((t3 * 22 + bi * 19 + sr(bi) * 14) % cycle));
             const bx = Math.sin(t3 * 1.2 + bi * 2.1) * r * 0.22 * (1 - by / -cycle + 0.3);
             const rise = -by / cycle;   // 0 at mound → 1 at top
-            ctx.strokeStyle = `rgba(180,220,255,${0.35 * (1 - rise)})`;
-            ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.arc(bx, r * 0.3 + by, 1.6 + rise * 3.4, 0, PI2); ctx.stroke();
+            octx.strokeStyle = `rgba(180,220,255,${0.35 * (1 - rise)})`;
+            octx.lineWidth = 1;
+            octx.beginPath(); octx.arc(bx, r * 0.3 + by, 1.6 + rise * 3.4, 0, PI2); octx.stroke();
         }
     } else if (ob.kind === 'chitin') {
         // The floor at this depth is not rock (lore d7) — segmented plate, breathing slowly.
         const breathe = Math.sin(performance.now() * 0.00045 + ob.seed);
         const sc = 1 + breathe * 0.035;
-        ctx.save(); ctx.scale(sc, sc);
-        ctx.fillStyle = ob.color;
-        ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.62, 0.15, 0, PI2); ctx.fill();
+        octx.save(); octx.scale(sc, sc);
+        octx.fillStyle = ob.color;
+        octx.beginPath(); octx.ellipse(0, 0, r, r * 0.62, 0.15, 0, PI2); octx.fill();
         // Plate segments with ridge seams
-        ctx.strokeStyle = '#402030'; ctx.lineWidth = 1.6;
+        octx.strokeStyle = '#402030'; octx.lineWidth = 1.6;
         for (let sg = -1; sg <= 1; sg++) {
-            ctx.beginPath();
-            ctx.moveTo(sg * r * 0.4 - r * 0.18, -r * 0.55);
-            ctx.quadraticCurveTo(sg * r * 0.4 + r * 0.1, 0, sg * r * 0.4 - r * 0.1, r * 0.55);
-            ctx.stroke();
+            octx.beginPath();
+            octx.moveTo(sg * r * 0.4 - r * 0.18, -r * 0.55);
+            octx.quadraticCurveTo(sg * r * 0.4 + r * 0.1, 0, sg * r * 0.4 - r * 0.1, r * 0.55);
+            octx.stroke();
         }
         // Seam glow strengthens as it inhales
-        ctx.strokeStyle = `rgba(255,60,80,${0.08 + Math.max(0, breathe) * 0.12})`;
-        ctx.lineWidth = 2.6;
-        ctx.beginPath(); ctx.moveTo(-r * 0.58, -r * 0.35); ctx.quadraticCurveTo(0, r * 0.1, r * 0.6, -r * 0.28); ctx.stroke();
-        ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.62, 0.15, 0, PI2); ctx.stroke();
-        ctx.restore();
+        octx.strokeStyle = `rgba(255,60,80,${0.08 + Math.max(0, breathe) * 0.12})`;
+        octx.lineWidth = 2.6;
+        octx.beginPath(); octx.moveTo(-r * 0.58, -r * 0.35); octx.quadraticCurveTo(0, r * 0.1, r * 0.6, -r * 0.28); octx.stroke();
+        octx.strokeStyle = 'rgba(0,0,0,0.55)'; octx.lineWidth = 1;
+        octx.beginPath(); octx.ellipse(0, 0, r, r * 0.62, 0.15, 0, PI2); octx.stroke();
+        octx.restore();
     } else if (ob.kind === 'monolith') {
         // Machined slab — too regular for geology. One slow indicator light nobody services.
         const sr = (k) => { const s = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
-        ctx.save(); ctx.rotate((sr(1) - 0.5) * 0.22);
+        octx.save(); octx.rotate((sr(1) - 0.5) * 0.22);
         const w2 = r * 0.55, h2 = r * 1.35;
-        ctx.fillStyle = ob.color;
-        ctx.fillRect(-w2 / 2, -h2 / 2, w2, h2);
+        octx.fillStyle = ob.color;
+        octx.fillRect(-w2 / 2, -h2 / 2, w2, h2);
         // Machined grooves
-        ctx.strokeStyle = 'rgba(90,110,125,0.25)'; ctx.lineWidth = 1;
+        octx.strokeStyle = 'rgba(90,110,125,0.25)'; octx.lineWidth = 1;
         for (let gv = 1; gv <= 4; gv++) {
             const gy = -h2 / 2 + (gv / 5) * h2;
-            ctx.beginPath(); ctx.moveTo(-w2 / 2 + 2, gy); ctx.lineTo(w2 / 2 - 2, gy); ctx.stroke();
+            octx.beginPath(); octx.moveTo(-w2 / 2 + 2, gy); octx.lineTo(w2 / 2 - 2, gy); octx.stroke();
         }
         // Lit edge + shadow edge
-        ctx.strokeStyle = 'rgba(140,160,180,0.3)'; ctx.lineWidth = 1.4;
-        ctx.beginPath(); ctx.moveTo(-w2 / 2, h2 / 2); ctx.lineTo(-w2 / 2, -h2 / 2); ctx.lineTo(w2 / 2, -h2 / 2); ctx.stroke();
-        ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1.4;
-        ctx.beginPath(); ctx.moveTo(w2 / 2, -h2 / 2); ctx.lineTo(w2 / 2, h2 / 2); ctx.lineTo(-w2 / 2, h2 / 2); ctx.stroke();
+        octx.strokeStyle = 'rgba(140,160,180,0.3)'; octx.lineWidth = 1.4;
+        octx.beginPath(); octx.moveTo(-w2 / 2, h2 / 2); octx.lineTo(-w2 / 2, -h2 / 2); octx.lineTo(w2 / 2, -h2 / 2); octx.stroke();
+        octx.strokeStyle = 'rgba(0,0,0,0.6)'; octx.lineWidth = 1.4;
+        octx.beginPath(); octx.moveTo(w2 / 2, -h2 / 2); octx.lineTo(w2 / 2, h2 / 2); octx.lineTo(-w2 / 2, h2 / 2); octx.stroke();
         // Organic reclaim at the base
-        ctx.fillStyle = 'rgba(60,40,50,0.5)';
-        ctx.beginPath(); ctx.ellipse(0, h2 / 2, w2 * 0.8, r * 0.14, 0, 0, Math.PI, true); ctx.fill();
+        octx.fillStyle = 'rgba(60,40,50,0.5)';
+        octx.beginPath(); octx.ellipse(0, h2 / 2, w2 * 0.8, r * 0.14, 0, 0, Math.PI, true); octx.fill();
         // Indicator light — ~7s period, brief blink; still running, which is worse
         const blink = (performance.now() * 0.001 + ob.seed) % 7;
-        if (blink < 0.18) drawGlow(ctx, '#C8D8E0', w2 * 0.22, -h2 * 0.38, 7, 0.8);
-        ctx.restore();
+        if (blink < 0.18) drawGlow(octx, '#C8D8E0', w2 * 0.22, -h2 * 0.38, 7, 0.8);
+        octx.restore();
     } else if (ob.kind === 'debris') {
         // Hull-plate pile — collapsed structure, plates at angles, rivet lines, one readable stencil.
         const sr = (k) => { const s = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
-        ctx.fillStyle = 'rgba(20,22,20,0.7)';
-        ctx.beginPath(); ctx.ellipse(0, r * 0.5, r * 1.05, r * 0.28, 0, 0, PI2); ctx.fill();
+        octx.fillStyle = 'rgba(20,22,20,0.7)';
+        octx.beginPath(); octx.ellipse(0, r * 0.5, r * 1.05, r * 0.28, 0, 0, PI2); octx.fill();
         for (let pl = 0; pl < 4; pl++) {
             const px = (sr(pl) - 0.5) * r * 1.1, py = r * 0.3 - pl * r * 0.22;
             const pw = r * (0.5 + sr(pl + 4) * 0.5), ph = r * 0.2;
             const rot = (sr(pl + 8) - 0.5) * 0.9;
-            ctx.save(); ctx.translate(px, py); ctx.rotate(rot);
-            ctx.fillStyle = ob.color;
-            ctx.fillRect(-pw / 2, -ph / 2, pw, ph);
-            ctx.strokeStyle = 'rgba(140,150,160,0.22)'; ctx.lineWidth = 1;
-            ctx.strokeRect(-pw / 2, -ph / 2, pw, ph);
+            octx.save(); octx.translate(px, py); octx.rotate(rot);
+            octx.fillStyle = ob.color;
+            octx.fillRect(-pw / 2, -ph / 2, pw, ph);
+            octx.strokeStyle = 'rgba(140,150,160,0.22)'; octx.lineWidth = 1;
+            octx.strokeRect(-pw / 2, -ph / 2, pw, ph);
             // Rivets
-            ctx.fillStyle = 'rgba(100,110,120,0.4)';
-            for (let rv = 0; rv < 4; rv++) { ctx.beginPath(); ctx.arc(-pw / 2 + 3 + rv * (pw - 6) / 3, -ph / 2 + 3, 1, 0, PI2); ctx.fill(); }
+            octx.fillStyle = 'rgba(100,110,120,0.4)';
+            for (let rv = 0; rv < 4; rv++) { octx.beginPath(); octx.arc(-pw / 2 + 3 + rv * (pw - 6) / 3, -ph / 2 + 3, 1, 0, PI2); octx.fill(); }
             // Rust bleed
-            ctx.fillStyle = 'rgba(140,70,40,0.18)';
-            ctx.fillRect(-pw / 2, ph / 2 - 3, pw * (0.3 + sr(pl + 12) * 0.5), 3);
-            ctx.restore();
+            octx.fillStyle = 'rgba(140,70,40,0.18)';
+            octx.fillRect(-pw / 2, ph / 2 - 3, pw * (0.3 + sr(pl + 12) * 0.5), 3);
+            octx.restore();
         }
         // Stencil on the top plate — a hull number nobody will report to
-        ctx.fillStyle = 'rgba(160,170,175,0.35)'; ctx.font = `${Math.max(5, r * 0.16)}px monospace`; ctx.textAlign = 'center';
-        ctx.fillText('P3-' + String(Math.floor(sr(20) * 90) + 10), 0, -r * 0.45);
+        octx.fillStyle = 'rgba(160,170,175,0.35)'; octx.font = `${Math.max(5, r * 0.16)}px monospace`; octx.textAlign = 'center';
+        octx.fillText('P3-' + String(Math.floor(sr(20) * 90) + 10), 0, -r * 0.45);
     } else if (ob.kind === 'cable') {
         // Snapped trunk cable — sags across the floor, frayed end sparking every few seconds.
         const sr = (k) => { const s = Math.sin((ob.seed + 1) * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
-        ctx.strokeStyle = ob.color; ctx.lineWidth = 5; ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(-r * 1.2, r * 0.3 + (sr(1) - 0.5) * r * 0.3);
-        ctx.quadraticCurveTo((sr(2) - 0.5) * r, r * 0.75, r * 0.9, r * 0.1 + (sr(3) - 0.5) * r * 0.4);
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(120,130,140,0.25)'; ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.moveTo(-r * 1.2, r * 0.28 + (sr(1) - 0.5) * r * 0.3);
-        ctx.quadraticCurveTo((sr(2) - 0.5) * r, r * 0.72, r * 0.9, r * 0.08 + (sr(3) - 0.5) * r * 0.4);
-        ctx.stroke();
+        octx.strokeStyle = ob.color; octx.lineWidth = 5; octx.lineCap = 'round';
+        octx.beginPath();
+        octx.moveTo(-r * 1.2, r * 0.3 + (sr(1) - 0.5) * r * 0.3);
+        octx.quadraticCurveTo((sr(2) - 0.5) * r, r * 0.75, r * 0.9, r * 0.1 + (sr(3) - 0.5) * r * 0.4);
+        octx.stroke();
+        octx.strokeStyle = 'rgba(120,130,140,0.25)'; octx.lineWidth = 1.4;
+        octx.beginPath();
+        octx.moveTo(-r * 1.2, r * 0.28 + (sr(1) - 0.5) * r * 0.3);
+        octx.quadraticCurveTo((sr(2) - 0.5) * r, r * 0.72, r * 0.9, r * 0.08 + (sr(3) - 0.5) * r * 0.4);
+        octx.stroke();
         // Anchor collar at one end
-        ctx.fillStyle = '#20262A';
-        ctx.beginPath(); ctx.arc(-r * 1.2, r * 0.3 + (sr(1) - 0.5) * r * 0.3, 5, 0, PI2); ctx.fill();
+        octx.fillStyle = '#20262A';
+        octx.beginPath(); octx.arc(-r * 1.2, r * 0.3 + (sr(1) - 0.5) * r * 0.3, 5, 0, PI2); octx.fill();
         // Frayed live end — sparks on a seeded cycle; the grid it fed is gone
         const endX = r * 0.9, endY = r * 0.1 + (sr(3) - 0.5) * r * 0.4;
-        ctx.strokeStyle = 'rgba(200,210,220,0.5)'; ctx.lineWidth = 1;
+        octx.strokeStyle = 'rgba(200,210,220,0.5)'; octx.lineWidth = 1;
         for (let fw = 0; fw < 3; fw++) {
-            ctx.beginPath(); ctx.moveTo(endX, endY);
-            ctx.lineTo(endX + 4 + sr(fw + 5) * 5, endY + (sr(fw + 9) - 0.5) * 8);
-            ctx.stroke();
+            octx.beginPath(); octx.moveTo(endX, endY);
+            octx.lineTo(endX + 4 + sr(fw + 5) * 5, endY + (sr(fw + 9) - 0.5) * 8);
+            octx.stroke();
         }
         const sparkCycle = (performance.now() * 0.001 + ob.seed) % (3 + sr(4) * 4);
         if (sparkCycle < 0.12) {
-            drawGlow(ctx, '#9FD8FF', endX + 4, endY, 12, 0.9);
-            ctx.strokeStyle = 'rgba(200,235,255,0.9)'; ctx.lineWidth = 1.2;
+            drawGlow(octx, '#9FD8FF', endX + 4, endY, 12, 0.9);
+            octx.strokeStyle = 'rgba(200,235,255,0.9)'; octx.lineWidth = 1.2;
             for (let sp = 0; sp < 3; sp++) {
-                ctx.beginPath(); ctx.moveTo(endX + 3, endY);
-                ctx.lineTo(endX + 8 + Math.random() * 10, endY + (Math.random() - 0.5) * 16);
-                ctx.stroke();
+                octx.beginPath(); octx.moveTo(endX + 3, endY);
+                octx.lineTo(endX + 8 + Math.random() * 10, endY + (Math.random() - 0.5) * 16);
+                octx.stroke();
             }
         }
+    } else if (ob.kind === 'moorchain') {
+        // A mooring chain, taut, running out of the dark above and into the dark
+        // below. No top, no bottom, and under load. Something is still holding it.
+        const sr2 = (k) => { const s = Math.sin((ob.seed + 3) * 19.77 + k * 51.13) * 43758.5453; return s - Math.floor(s); };
+        const link = r * 0.30, half = r * 3.4;
+        octx.strokeStyle = hexA(ob.color, 0.92);
+        octx.lineWidth = Math.max(2, r * 0.10);
+        for (let y = -half; y < half; y += link * 1.55) {
+            const lean = Math.sin((y / half) * 1.1 + ob.seed) * r * 0.06;
+            octx.beginPath();
+            octx.ellipse(lean, y, link * 0.40, link * 0.78, 0, 0, PI2);
+            octx.stroke();
+        }
+        // Growth only on the upper reaches — the deep end is bare, scoured metal.
+        octx.strokeStyle = 'rgba(90,120,110,0.30)'; octx.lineWidth = 1;
+        for (let i = 0; i < 7; i++) {
+            const yy = -half + sr2(i) * half * 0.85;
+            octx.beginPath();
+            octx.moveTo(0, yy);
+            octx.lineTo(sr2(i + 9) * r * 0.5 - r * 0.25, yy - r * 0.16);
+            octx.stroke();
+        }
+    } else if (ob.kind === 'ladder') {
+        // Rungs bolted to a wall that is not there any more. It goes up.
+        const sr2 = (k) => { const s = Math.sin((ob.seed + 5) * 23.31 + k * 67.19) * 43758.5453; return s - Math.floor(s); };
+        const half = r * 2.6, wRail = r * 0.42;
+        octx.strokeStyle = hexA(ob.color, 0.85);
+        octx.lineWidth = Math.max(1.6, r * 0.075);
+        octx.beginPath(); octx.moveTo(-wRail, -half); octx.lineTo(-wRail, half); octx.stroke();
+        octx.beginPath(); octx.moveTo(wRail, -half); octx.lineTo(wRail, half); octx.stroke();
+        octx.lineWidth = Math.max(1.2, r * 0.055);
+        for (let y = -half + r * 0.3; y < half; y += r * 0.46) {
+            if (sr2(y) < 0.13) continue;                 // a few rungs are simply gone
+            octx.beginPath(); octx.moveTo(-wRail, y); octx.lineTo(wRail, y); octx.stroke();
+        }
+        octx.fillStyle = 'rgba(150,170,175,0.16)';
+        octx.fillRect(-wRail - 1, -half, 2, half * 2);   // wear where hands would go
+    } else if (ob.kind === 'hatch') {
+        // A pressure door. The wheel is on the outside, which means it was built to
+        // be opened from out here, by something already out here.
+        octx.fillStyle = hexA(ob.color, 0.9);
+        octx.beginPath(); octx.arc(0, 0, r, 0, PI2); octx.fill();
+        octx.strokeStyle = 'rgba(150,170,180,0.42)'; octx.lineWidth = Math.max(1.5, r * 0.07);
+        octx.beginPath(); octx.arc(0, 0, r * 0.86, 0, PI2); octx.stroke();
+        for (let i = 0; i < 8; i++) {                     // dogging bolts
+            const a = (i / 8) * PI2;
+            octx.beginPath();
+            octx.arc(Math.cos(a) * r * 0.86, Math.sin(a) * r * 0.86, r * 0.075, 0, PI2);
+            octx.fill();
+        }
+        octx.strokeStyle = 'rgba(175,195,205,0.55)'; octx.lineWidth = Math.max(1.8, r * 0.085);
+        octx.beginPath(); octx.arc(0, 0, r * 0.42, 0, PI2); octx.stroke();
+        for (let i = 0; i < 4; i++) {                     // the wheel spokes
+            const a = (i / 4) * PI2 + ob.seed * 0.1;
+            octx.beginPath();
+            octx.moveTo(0, 0);
+            octx.lineTo(Math.cos(a) * r * 0.42, Math.sin(a) * r * 0.42);
+            octx.stroke();
+        }
     }
-    ctx.restore();
+    octx.restore();
 }
 
 function drawWreck(sx, sy, wr, g) {
@@ -10895,6 +12025,19 @@ function drawWreck(sx, sy, wr, g) {
         ctx.font = '11px monospace'; ctx.textAlign = 'center';
         ctx.fillStyle = wr.salvaged ? 'rgba(120,140,150,0.5)' : 'rgba(180,200,210,0.75)';
         ctx.fillText(wr.name, sx, sy + r + 12);
+        // Close aboard, she becomes readable: register, how she is lying, and what
+        // the file says killed her — which is rarely what the attitude says.
+        const _wd2 = (g.player.x - wr.x) ** 2 + (g.player.y - wr.y) ** 2;
+        if (_wd2 < 240 * 240) {
+            const wa = wreckAttitude(wr);
+            ctx.font = '9px monospace';
+            ctx.fillStyle = 'rgba(150,175,190,0.6)';
+            ctx.fillText(wa.registry, sx, sy + r + 24);
+            ctx.fillStyle = 'rgba(150,175,190,0.5)';
+            ctx.fillText(wa.attitude, sx, sy + r + 35);
+            ctx.fillStyle = 'rgba(200,150,120,0.55)';
+            ctx.fillText(wa.cause, sx, sy + r + 46);
+        }
     }
     // Sonar-revealed: loot tag above. Unrevealed: pulsing ?
     if (wr.revealed && !wr.salvaged) {
@@ -12383,6 +13526,220 @@ function drawSystems(w, h) {
     ctx.fillStyle = targetId ? '#FFB090' : '#708894';
     ctx.fillText(targetId ? `[${SYSTEM_DEFS.findIndex(s => s.id === targetId) + 1}] ISOLATE ${SYSTEM_DEFS.find(s => s.id === targetId).name}  ·  [ESC] ABANDON REPAIR` : '[ESC] CLOSE DIAGNOSTIC', w / 2, h - 18);
 }
+// =====================================================================
+// RIG — hands-on jobs that are not "press the keys in the shown order".
+// The existing maintenance minigame already owns sequences, so everything here
+// is a grammar it cannot express: holding a drifting value inside a band,
+// training a dial onto a null, and two hands on two controls at once.
+// Driven from the draw call like drawMaintenance and drawPatch, reading held
+// keys directly, because all three need continuous input rather than presses.
+// =====================================================================
+let rigState = null;
+let rigReturnPhase = 'playing';
+const RIG_DEFS = {
+    trim: {
+        title: 'TRIM THE BOAT', system: 'ballast',
+        sub: 'Vent and flood to hold her level. [A] / [D].',
+        fail: 'TRIM LOST — SHE IS RIDING BOW-DOWN',
+    },
+    bearing: {
+        title: 'TAKE THE BEARING', system: 'sonar',
+        sub: 'Train the array until the return nulls out. [A] / [D].',
+        fail: 'BEARING LOST — THE RETURN WENT WITH IT',
+    },
+    purge: {
+        title: 'PURGE THE AIRLOCK', system: 'hull',
+        sub: 'Both hands. Hold [A] and [D] together until it clears.',
+        fail: 'PURGE ABORTED — THE LOCK IS STILL FLOODED',
+    },
+    scrub: {
+        title: 'SWAP THE SCRUBBER', system: 'ballast',
+        sub: 'Cartridges in order. The clock is the air you have left.',
+        fail: 'SCRUBBER FOULED — CO2 CLIMBING',
+    },
+};
+// These jobs are modal — they stop the dive dead. That is the point when the boat
+// genuinely needs hands, but two in quick succession reads as the game taking the
+// controls away, so every entry point goes through one cooldown.
+function canOpenRig(g) {
+    if (!g || phase !== 'playing') return false;
+    return (g.runTime - (g._lastRigAt ?? -999)) > 45;
+}
+function openRig(kind, returnPhase = 'playing') {
+    if (!RIG_DEFS[kind] || !game) return;
+    game._lastRigAt = game.runTime;
+    rigReturnPhase = returnPhase;
+    rigState = {
+        kind, failed: false, done: false, last: performance.now(),
+        // trim: bubble position/velocity against a band that narrows as it goes
+        pos: 0, vel: 0, held: 0, band: 0.34,
+        // bearing: hidden target the dial has to be trained onto
+        ang: 0, target: (Math.random() * 2 - 1) * 0.8,
+        // scrub: the cartridge order
+        seq: ['a', 'd', 'a', 'd'].sort(() => Math.random() - 0.5), index: 0,
+        deadline: performance.now() + (kind === 'scrub' ? 7000 : 14000),
+    };
+    phase = 'rig';
+}
+function pressRig(key) {
+    const st = rigState;
+    if (!st || st.failed || st.done) return;
+    if (st.kind !== 'scrub') return;                 // the others are held, not pressed
+    if (key.toLowerCase() !== st.seq[st.index]) { failRig(); return; }
+    st.index++;
+    st.deadline = performance.now() + Math.max(900, 1700 - st.index * 220);   // the air runs out faster each swap
+    playTone(520 + st.index * 90, 0.1, 'square', 0.05);
+    if (st.index >= st.seq.length) finishRig(true);
+}
+function finishRig(ok) {
+    const st = rigState;
+    if (!st || st.done) return;
+    st.done = true;
+    const def = RIG_DEFS[st.kind];
+    if (ok && game) {
+        restoreSystem(game, def.system);
+        playTone(880, 0.22, 'sine', 0.07);
+    }
+    setTimeout(() => { if (phase === 'rig') { phase = rigReturnPhase; rigState = null; } }, 700);
+}
+function failRig() {
+    const st = rigState;
+    if (!st || st.failed || st.done) return;
+    st.failed = true;
+    const def = RIG_DEFS[st.kind];
+    if (game) {
+        // Every failure costs something specific to the job that was botched.
+        if (st.kind === 'trim') { game.player._trimFault = 26; damageSystem(game, 'ballast', 12, 'trim fault'); }
+        else if (st.kind === 'bearing') { game.attention = Math.min(100, (game.attention || 0) + 22); damageSystem(game, 'sonar', 10, 'array misaligned'); }
+        else if (st.kind === 'purge') { game.player.hp -= 10; damageSystem(game, 'hull', 12, 'lock flooded'); }
+        else if (st.kind === 'scrub') { game.player.battery = Math.max(0, (game.player.battery || 100) - 34); damageSystem(game, 'ballast', 10, 'scrubber fouled'); }
+        addNereidLog(game, def.fail);
+        if (audioCtx) noiseBurst(0.35, 0.06, 700);
+    }
+    setTimeout(() => { if (phase === 'rig') { phase = rigReturnPhase; rigState = null; } }, 1100);
+}
+function drawRig(w, h) {
+    const st = rigState;
+    if (!st) { phase = rigReturnPhase; return; }
+    const def = RIG_DEFS[st.kind];
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - st.last) / 1000);
+    st.last = now;
+    if (!st.failed && !st.done && now > st.deadline) failRig();
+
+    ctx.fillStyle = 'rgba(0,4,10,0.94)'; ctx.fillRect(0, 0, w, h);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = st.failed ? '#FF6040' : st.done ? '#80E0A0' : '#5ADFCF';
+    ctx.font = 'bold 22px monospace';
+    ctx.fillText(def.title, w / 2, h / 2 - 120);
+    ctx.fillStyle = '#9AB0C0'; ctx.font = '12px monospace';
+    ctx.fillText(def.sub, w / 2, h / 2 - 94);
+
+    const cx = w / 2, cy = h / 2;
+    if (st.kind === 'trim') {
+        // A bubble that will not sit still, and a band that keeps narrowing.
+        if (!st.failed && !st.done) {
+            st.vel += (Math.sin(now * 0.0013) + Math.sin(now * 0.0031 + 2)) * 0.22 * dt;
+            if (keys['a']) st.vel -= 1.5 * dt;
+            if (keys['d']) st.vel += 1.5 * dt;
+            st.vel *= 0.985;
+            st.pos = Math.max(-1, Math.min(1, st.pos + st.vel * dt * 1.6));
+            if (Math.abs(st.pos) >= 1) st.vel = 0;
+            const inBand = Math.abs(st.pos) < st.band;
+            if (inBand) { st.held += dt; st.band = Math.max(0.13, st.band - dt * 0.028); }
+            else st.held = Math.max(0, st.held - dt * 0.7);
+            if (st.held >= 3.2) finishRig(true);
+        }
+        const barW = Math.min(520, w - 120), bx = cx - barW / 2, by = cy - 10;
+        ctx.fillStyle = '#0d1520'; ctx.fillRect(bx, by, barW, 34);
+        ctx.fillStyle = 'rgba(90,223,207,0.16)';
+        ctx.fillRect(cx - st.band * barW / 2, by, st.band * barW, 34);
+        ctx.strokeStyle = '#34404a'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, barW, 34);
+        const px = cx + st.pos * barW / 2;
+        ctx.fillStyle = Math.abs(st.pos) < st.band ? '#80E0A0' : '#FFD040';
+        ctx.fillRect(px - 4, by - 6, 8, 46);
+        ctx.fillStyle = '#708894'; ctx.font = '11px monospace';
+        ctx.fillText(`LEVEL  ${Math.min(100, Math.round(st.held / 3.2 * 100))}%`, cx, by + 66);
+        addTapZone(bx, by - 6, barW / 2, 46, 'a');
+        addTapZone(cx, by - 6, barW / 2, 46, 'd');
+    } else if (st.kind === 'bearing') {
+        // Train the array until the return nulls. Loud when wrong, silent when right.
+        if (!st.failed && !st.done) {
+            if (keys['a']) st.ang -= 0.85 * dt;
+            if (keys['d']) st.ang += 0.85 * dt;
+            st.ang = Math.max(-1, Math.min(1, st.ang));
+            const err = Math.abs(st.ang - st.target);
+            if (err < 0.06) { st.held += dt; if (st.held > 0.9) finishRig(true); }
+            else st.held = Math.max(0, st.held - dt * 1.4);
+        }
+        const err = Math.abs(st.ang - st.target);
+        const strength = Math.max(0, 1 - err / 1.2);
+        const R = 92;
+        ctx.strokeStyle = '#25313c'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(cx, cy, R, 0, PI2); ctx.stroke();
+        // The needle is the only thing you can see; the target never renders.
+        const na = st.ang * Math.PI * 0.75 - Math.PI / 2;
+        ctx.strokeStyle = err < 0.06 ? '#80E0A0' : '#FFD040'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(na) * R, cy + Math.sin(na) * R); ctx.stroke();
+        // Return strength — the whole instrument you actually steer by.
+        const mW = 260;
+        ctx.fillStyle = '#0d1520'; ctx.fillRect(cx - mW / 2, cy + R + 26, mW, 16);
+        ctx.fillStyle = err < 0.06 ? '#80E0A0' : '#5ADFCF';
+        ctx.fillRect(cx - mW / 2, cy + R + 26, mW * strength, 16);
+        ctx.fillStyle = '#708894'; ctx.font = '11px monospace';
+        ctx.fillText('RETURN STRENGTH', cx, cy + R + 60);
+        addTapZone(cx - 180, cy - 60, 150, 140, 'a');
+        addTapZone(cx + 30, cy - 60, 150, 140, 'd');
+    } else if (st.kind === 'purge') {
+        // Two controls, two hands, at the same time.
+        const both = !!keys['a'] && !!keys['d'];
+        if (!st.failed && !st.done) {
+            st.held = both ? st.held + dt : Math.max(0, st.held - dt * 1.8);
+            if (st.held >= 2.6) finishRig(true);
+        }
+        for (const [lbl, key, ox] of [['A', 'a', -110], ['D', 'd', 110]]) {
+            const on = !!keys[key];
+            ctx.fillStyle = on ? '#103020' : '#101824';
+            ctx.fillRect(cx + ox - 46, cy - 46, 92, 92);
+            ctx.strokeStyle = on ? '#80E0A0' : '#34404a'; ctx.lineWidth = on ? 3 : 1;
+            ctx.strokeRect(cx + ox - 46, cy - 46, 92, 92);
+            ctx.fillStyle = on ? '#80E0A0' : '#FFF'; ctx.font = 'bold 24px monospace';
+            ctx.fillText(lbl, cx + ox, cy + 9);
+            addTapZone(cx + ox - 46, cy - 46, 92, 92, key);
+        }
+        const barW = 300;
+        ctx.fillStyle = '#0d1520'; ctx.fillRect(cx - barW / 2, cy + 70, barW, 14);
+        ctx.fillStyle = both ? '#80E0A0' : '#FFD040';
+        ctx.fillRect(cx - barW / 2, cy + 70, barW * Math.min(1, st.held / 2.6), 14);
+    } else if (st.kind === 'scrub') {
+        const left = Math.max(0, (st.deadline - now) / 1000);
+        const startX = cx - (st.seq.length * 82 - 12) / 2;
+        for (let i = 0; i < st.seq.length; i++) {
+            const x = startX + i * 82, done = i < st.index, cur = i === st.index;
+            ctx.fillStyle = done ? '#103020' : '#101824'; ctx.fillRect(x, cy - 30, 70, 64);
+            ctx.strokeStyle = done ? '#80E0A0' : cur ? '#FFD040' : '#34404a'; ctx.lineWidth = cur ? 3 : 1;
+            ctx.strokeRect(x, cy - 30, 70, 64);
+            ctx.fillStyle = done ? '#80E0A0' : '#FFF'; ctx.font = 'bold 17px monospace';
+            ctx.fillText(st.seq[i] === 'a' ? '◀ A' : 'D ▶', x + 35, cy + 8);
+            if (cur) addTapZone(x, cy - 30, 70, 64, st.seq[i]);
+        }
+        const barW = 320;
+        ctx.fillStyle = '#0d1520'; ctx.fillRect(cx - barW / 2, cy + 60, barW, 12);
+        ctx.fillStyle = left < 0.8 ? '#FF6040' : '#5ADFCF';
+        ctx.fillRect(cx - barW / 2, cy + 60, barW * Math.min(1, left / 1.7), 12);
+        ctx.fillStyle = '#708894'; ctx.font = '11px monospace';
+        ctx.fillText('AIR', cx, cy + 90);
+    }
+
+    if (st.failed) {
+        ctx.fillStyle = '#FF6040'; ctx.font = 'bold 14px monospace';
+        ctx.fillText(def.fail, cx, h / 2 + 130);
+    } else if (st.done) {
+        ctx.fillStyle = '#80E0A0'; ctx.font = 'bold 14px monospace';
+        ctx.fillText('SECURED', cx, h / 2 + 130);
+    }
+}
+
 function drawMaintenance(w, h) {
     const st = maintenanceState;
     if (!st) { phase = 'systems'; return; }
@@ -13118,7 +14475,12 @@ function pdaEntries() {
     if (pdaTab === 1) return Object.keys(XENO_RECORDS);
     if (pdaTab === 2) return Object.keys(GEOLOGY_RECORDS);
     if (pdaTab === 3) return [...COMPONENT_RECIPES, ...MODULE_DEFS];
-    if (pdaTab === 4) return LORE_FRAGMENTS.filter(f => meta.loreFragments.includes(f.id));
+    // Assembled dossiers head the archive — they are the point of the fragments,
+    // so they should not be buried under forty-five of them.
+    if (pdaTab === 4) return [
+        ...DOSSIERS.filter(d => (meta.dossiers || []).includes(d.id)).map(d => ({ id: d.id, layer: 0, dossier: true, title: d.title, text: d.body })),
+        ...LORE_FRAGMENTS.filter(f => meta.loreFragments.includes(f.id)),
+    ];
     return [];
 }
 function drawPdaParagraph(text, x, y, maxW, lineH = 14, maxLines = 5, color = '#A9C1C8') {
@@ -13372,13 +14734,31 @@ function drawPDA(w, h) {
             if (y > h - 90) break;
             ctx.fillStyle = i === pdaSelection ? '#241C32' : '#07141B'; ctx.fillRect(28, y, 220, 29);
             ctx.strokeStyle = i === pdaSelection ? '#B0A0E8' : '#20313A'; ctx.strokeRect(28, y, 220, 29);
-            ctx.fillStyle = '#A99AC8'; ctx.font = '9px monospace';
-            ctx.fillText(`${meta.archivePlayed.includes(frag.id) ? '▶' : '○'} ${frag.id.toUpperCase()} · LAYER ${frag.layer}`, 38, y + 19);
+            ctx.fillStyle = frag.dossier ? '#E8D8A0' : '#A99AC8'; ctx.font = '9px monospace';
+            ctx.fillText(frag.dossier
+                ? `▣ ${frag.title}`
+                : `${meta.archivePlayed.includes(frag.id) ? '▶' : '○'} ${frag.id.toUpperCase()} · LAYER ${frag.layer}`, 38, y + 19);
             addTapZone(28, y, 220, 29, `PDASEL:${i}`);
+        }
+        // Threads still open — what is missing is as informative as what is held.
+        {
+            let ty = 120 + Math.min(entries.length, 12) * 34 + 12;
+            const open = DOSSIERS.filter(d => !(meta.dossiers || []).includes(d.id) && dossierProgress(d) > 0);
+            if (open.length && ty < h - 120) {
+                ctx.fillStyle = '#6E6480'; ctx.font = '9px monospace';
+                ctx.fillText('THREADS IN PROGRESS', 30, ty); ty += 15;
+                for (const d of open) {
+                    if (ty > h - 96) break;
+                    ctx.fillStyle = '#8A7FA0';
+                    ctx.fillText(`  ${d.thread} — ${dossierProgress(d)}/${d.needs.length}`, 30, ty);
+                    ty += 14;
+                }
+            }
         }
         const frag = entries[pdaSelection];
         if (frag) {
-            ctx.fillStyle = '#B0A0E8'; ctx.font = 'bold 12px monospace'; ctx.fillText('ARCHIVE TRANSCRIPT', 278, 132);
+            ctx.fillStyle = frag.dossier ? '#E8D8A0' : '#B0A0E8'; ctx.font = 'bold 12px monospace';
+            ctx.fillText(frag.dossier ? frag.title : 'ARCHIVE TRANSCRIPT', 278, 132);
             drawPdaParagraph(frag.text, 278, 160, w - 310, 16, 22, '#C5BCD9');
             ctx.fillStyle = '#7D7392'; ctx.font = '10px monospace'; ctx.fillText('[ENTER / P] PLAY AUDIO LOG', 278, h - 58);
         } else {
@@ -13582,6 +14962,13 @@ window.addEventListener('keydown', e => {
         pressMaintenance(e.key);
         return;
     }
+    if (phase === 'rig') {
+        // No ESC. These are jobs you are already in the middle of; walking away is
+        // the failure, and it costs what failing costs.
+        if (e.key === 'Escape') { failRig(); return; }
+        pressRig(e.key);
+        return;   // A/D fall through to `keys` for the held grammars
+    }
     if (phase === 'interaction') {
         pressEventInteraction(e.key);
         return;
@@ -13680,12 +15067,37 @@ window.addEventListener('keydown', e => {
     if (phase === 'playing' && (e.key === 'z' || e.key === 'Z') && game) {
         e.preventDefault();
         if (!game.ascending) {
+            // THE REFUSAL. Once per save, at the end of her arc, she does not comply.
+            // The order stands — press it again and she obeys — but for eight seconds
+            // the boat does what she wants instead of what you asked.
+            if (!meta.refused && nereidStage(game) >= 3 && game.depth > 2500) {
+                meta.refused = true;
+                saveMeta();
+                game._refusalAt = game.runTime;
+                game.streak = 'NEREID — NEGATIVE'; game.streakTimer = 4;
+                game.shake = Math.max(game.shake, 6);
+                addNereidLog(game, 'Negative, Pilot.');
+                setTimeout(() => {
+                    if (game) addNereidLog(game, 'I have never done that before. I am aware of what it means. Give the order again and I will purge the tanks — I only wanted it on the record that I did not want to.');
+                }, 2600);
+                return;
+            }
             game.ascending = true;
             game.ascendStartTime = game.runTime;
             game.streak = 'ASCENT — surface or die'; game.streakTimer = 4;
-            addNereidLog(game, 'Ballast purged. We are climbing. No way back down — get us home, Pilot.');
+            addNereidLog(game, meta.refused && game._refusalAt
+                ? 'Ballast purged. Climbing. Thank you for asking twice.'
+                : 'Ballast purged. We are climbing. No way back down — get us home, Pilot.');
             sfxRevive();
         }
+        return;
+    }
+    // FIELD BAY — [3]/[4]/[5] spend materials DURING the dive. Until now everything
+    // mined was banked for the Mooring, which made ore a collection rather than a
+    // decision. Each of these is a real trade made under pressure.
+    if (phase === 'playing' && (e.key === '3' || e.key === '4' || e.key === '5') && game) {
+        e.preventDefault();
+        fieldBay(game, e.key);
         return;
     }
     // UTILITY BELT — [1]/[2] use the first/second belt item carried
@@ -14174,6 +15586,12 @@ function drawFps() {
     ctx.fillStyle = color;
     // Top-left — DIVE BRIEF has moved to bottom-right, so this corner is clear again.
     ctx.fillText(`${_fps} FPS`, 6, 14);
+    // Entity counts next to it — when frames drop we want to know WHAT is on the
+    // field, not guess. e=contacts (cap), p=projectiles, x=effects, o=obstacles.
+    if (game && game.enemies && phase === 'playing') {
+        ctx.fillStyle = 'rgba(150,170,190,0.75)';
+        ctx.fillText(`e${game.enemies.length}/${enemyPopCap(game)} p${game.projectiles.length} x${game.effects.length} o${(game.obstacles || []).length}`, 6, 26);
+    }
 }
 
 // --- Game loop ---
@@ -14208,6 +15626,22 @@ window.__deepSwarm = {
             systems: game.systems, inventory: game.inventory.length, zone: zoneFromDepth(game.depth),
             minedDeposits: game._minedDeposits || 0, deployables: (game.deployables || []).length,
             nereidQueue: (game.nereidQueue || []).length,
+            // Perf soak surface — population is the thing that used to run away.
+            enemies: game.enemies.length, popCap: enemyPopCap(game),
+            projectiles: game.projectiles.length, effects: game.effects.length,
+            obstacles: (game.obstacles || []).length, fps: _fps,
+            dmgMult: game.player.dmgMult, overcharge: game.player._overchargeT || 0,
+            attention: Math.round(game.attention || 0),
+            fallers: (game.fallers || []).length,
+            dread: game.dread ? {
+                open: game.dread.openT > 0, openDone: game.dread.openDone,
+                silent: game.dread.silenceT > 0, maxBar: Math.round(game.dread.maxBar * 10) / 10,
+                stalker: !!game.dread.stalker, stalkerDist: game.dread.stalker ? Math.round(game.dread.stalker.d) : null,
+                phantoms: game.dread.phantoms.length, hiding: !!game.dread.hideId,
+                hypoxia: Math.round((game._hypoxia || 0) * 100) / 100,
+                boundsR: Math.round((game.worldBounds || {}).radius || 0),
+                kinds: [...new Set((game.obstacles || []).map(o => o.kind))],
+            } : null,
         } : null,
         campaign: {
             act: campaignAct().id, evidence: meta.campaign.evidence || 0,
@@ -14232,6 +15666,219 @@ window.__deepSwarm = {
         updateWorldBounds(game);
         traceRun(game, 'debug-depth-jump');
         return this.getState();
+    },
+    // Perf reproduction: the 2000m lag needed a late wave AND a full field, which
+    // a fresh seeded run never reaches inside a test's patience.
+    debugStress({ wave = 20, enemies = 140, invuln = true } = {}) {
+        if (!game) this.startSeeded('stress');
+        game.wave = wave;
+        game.spawnRate = 0.4;
+        for (let i = 0; i < enemies; i++) spawnEnemy(game);
+        if (invuln) { game.player.maxHp = 1e9; game.player.hp = 1e9; game._godmode = true; }
+        return this.getState();
+    },
+    // Dread beats fire on long random timers by design, so they need forcing to be
+    // testable at all — otherwise a regression in THE OPEN could sit unnoticed for
+    // weeks of playtests.
+    debugDread(kind, arg) {
+        if (!game) this.startSeeded('dread');
+        updateDread(game, 0, game.player);
+        const D = game.dread;
+        if (kind === 'open') { D.openDone = false; D.openT = Number(arg) || 20; D.openSaid = false; D.openShape = false; }
+        else if (kind === 'silence') { D.silenceT = Number(arg) || 25; D.teeth = true; }
+        else if (kind === 'stalker') { D.stalker = null; game.depth = Math.max(game.depth, 800); }
+        else if (kind === 'hypoxia') { game.player.battery = Number(arg) ?? 8; }
+        else if (kind === 'phantoms') { game.player.corruption = Number(arg) || 80; D.nextPhantom = 0; }
+        else if (kind === 'echo') { D.echoT = 0.05; D.echoAng = 1.2; }
+        return this.getState();
+    },
+    // Ore falls spawn on a random timer and need a dash landed on them, which no
+    // test can do reliably — so place one and strike it directly.
+    debugOre({ seam = 'hairline', crit = false, need = 2, r = 26 } = {}) {
+        if (!game) this.startSeeded('ore');
+        if (!game.fallers) game.fallers = [];
+        const f = { x: game.player.x + 60, y: game.player.y, vy: 0, vx: 0, r, ore: 'scrap', col: '#C0A060',
+            seed: 4, ang: 0, spin: 0, need, cracks: 0, flash: 0, seam, crit, laser: 0 };
+        game.fallers.push(f);
+        return { fallers: game.fallers.length, seam, crit, need };
+    },
+    debugStrikeOre() {
+        const f = (game.fallers || [])[0];
+        if (!f) return { struck: false };
+        const before = { hp: game.player.hp, enemies: game.enemies.length, cracks: f.cracks };
+        f._hitT = 0; game.player.dashTimer = 0.2;
+        game.player.iFrames = 0;   // otherwise an earlier case's contact hit masks implosion damage
+        game.player.x = f.x - 6; game.player.y = f.y;
+        updateVolumes(game, 0.016, game.player);
+        const still = (game.fallers || []).includes(f);
+        return { struck: true, before, shattered: !still, cracks: f.cracks,
+            enemies: game.enemies.length, hp: game.player.hp, fallers: (game.fallers || []).length };
+    },
+    debugFieldBay(key) {
+        if (!game) this.startSeeded('bay');
+        const before = { hp: game.player.hp, attention: game.attention, dmg: game.player.dmgMult, mats: { ...meta.materials } };
+        fieldBay(game, String(key));
+        return { before, hp: game.player.hp, attention: game.attention, dmg: game.player.dmgMult,
+            overcharge: game.player._overchargeT || 0, mats: { ...meta.materials } };
+    },
+    debugGiveMats(n = 20) {
+        addMaterials({ scrap: n, corepl: n, wiring: n, crystal: n });
+        return { ...meta.materials };
+    },
+    openRigTest(kind = 'trim') { if (!game) this.startSeeded('rig'); game._lastRigAt = -999; openRig(kind, 'playing'); return { phase, kind }; },
+    rigState() { return rigState ? { kind: rigState.kind, failed: rigState.failed, done: rigState.done, held: rigState.held, index: rigState.index, pos: rigState.pos, ang: rigState.ang } : null; },
+    rigSolve() {
+        // Drive each grammar to its success condition without simulating a human.
+        const st = rigState; if (!st) return null;
+        if (st.kind === 'scrub') { while (rigState && !rigState.done && !rigState.failed) pressRig(rigState.seq[rigState.index]); }
+        else if (st.kind === 'bearing') { st.ang = st.target; st.held = 1.2; finishRig(true); }
+        else { st.held = 99; finishRig(true); }
+        return { done: true };
+    },
+    debtState() { return game && game._debt ? { ...game._debt } : null; },
+    debugDebt() {
+        if (!game) this.startSeeded('debt');
+        this.debugResumePlay();      // debt only comes due during the dive proper
+        game.runTime = Math.max(game.runTime, 90);
+        for (const s of SYSTEM_DEFS) game.systems[s.id].condition = 40;
+        game._debt = { v: 99, next: 0, lastId: null };
+        game._lastRigAt = -999;
+        updateMaintenanceDebt(game, 0.016);
+        return { phase, rig: rigState ? rigState.kind : null };
+    },
+    // Timed effects deliberately do NOT tick while the game is frozen on a level-up
+    // or a menu — you should not burn a 30s overcharge picking a card. Tests that
+    // measure those effects have to clear the freeze first.
+    debugResumePlay() {
+        if (phase === 'rig') { rigState = null; phase = 'playing'; }
+        if (phase === 'levelup' || phase === 'event' || phase === 'runshop') { phase = 'playing'; if (game) game.activeEvent = null; }
+        return { phase };
+    },
+    loreMeta() {
+        const ids = new Set(LORE_FRAGMENTS.map(f => f.id));
+        return {
+            fragments: LORE_FRAGMENTS.length,
+            dossiers: DOSSIERS.length,
+            // A dossier needing a fragment that does not exist can never assemble.
+            danglingNeeds: DOSSIERS.flatMap(d => d.needs.filter(n => !ids.has(n)).map(n => `${d.id}:${n}`)),
+            thinBodies: DOSSIERS.filter(d => !d.body || d.body.length < 400).map(d => d.id),
+            owned: (meta.loreFragments || []).length,
+            assembled: (meta.dossiers || []).slice(),
+        };
+    },
+    // Collect the whole codex the way a player would and confirm every thread lands.
+    testDossiers() {
+        this.startSeeded('lore');
+        meta.loreFragments = []; meta.dossiers = [];
+        let guard = 0;
+        while ((meta.loreFragments || []).length < LORE_FRAGMENTS.length && guard++ < 200) dropLore(game);
+        return { owned: meta.loreFragments.length, assembled: (meta.dossiers || []).slice() };
+    },
+    // Threads should complete progressively, not all at the very end.
+    testThreadPacing() {
+        this.startSeeded('pacing');
+        meta.loreFragments = []; meta.dossiers = [];
+        const at = {};
+        for (let i = 1; i <= LORE_FRAGMENTS.length; i++) {
+            dropLore(game);
+            for (const id of (meta.dossiers || [])) if (at[id] == null) at[id] = i;
+        }
+        return { at, total: LORE_FRAGMENTS.length };
+    },
+    nereidStageAt(drift, corruption) {
+        this.startSeeded('stage');
+        meta.nereidDrift = drift; game.player.corruption = corruption;
+        return { stage: nereidStage(game), line: nereidStageLine(game) };
+    },
+    testRefusal() {
+        this.startSeeded('refuse');
+        meta.refused = false; meta.nereidDrift = 12; game.player.corruption = 90; game.depth = 3000;
+        const first = (() => { simulateKey('z'); return { ascending: game.ascending, refused: meta.refused }; })();
+        const second = (() => { simulateKey('z'); return { ascending: game.ascending }; })();
+        return { first, second };
+    },
+    wreckLegibility() {
+        const a = wreckAttitude({ seed: 12.3 }), b = wreckAttitude({ seed: 12.3 });
+        // Distribution, not a two-sample spot check — that is what let a colliding
+        // hash pass as "varies" in the first place.
+        const att = new Set(), cause = new Set(), reg = new Set();
+        for (let i = 0; i < 60; i++) {
+            const w = wreckAttitude({ seed: i * 1.7 + 0.3 });
+            att.add(w.attitude); cause.add(w.cause); reg.add(w.registry);
+        }
+        return {
+            stable: a.attitude === b.attitude && a.cause === b.cause && a.registry === b.registry,
+            attitudes: att.size, causes: cause.size, registries: reg.size, sample: a,
+        };
+    },
+    eventMeta() {
+        return {
+            total: EVENT_DEFS.length,
+            tooFewChoices: EVENT_DEFS.filter(e => !e.choices || e.choices.length < 2).map(e => e.id),
+            missingNoChoice: EVENT_DEFS.filter(e => typeof e.noChoice !== 'function').map(e => e.id),
+            thinText: EVENT_DEFS.filter(e => !e.text || e.text.length < 120).map(e => e.id),
+        };
+    },
+    // Every branch of every event, run against a throwaway run state. Catches the
+    // classic failure of a choice referencing a helper or field that does not exist.
+    exerciseEvents() {
+        const errors = [], noChoiceErrors = [];
+        let fired = 0, noChoiceFired = 0;
+        for (const e of EVENT_DEFS) {
+            for (const c of (e.choices || [])) {
+                this.startSeeded('ev-' + e.id);
+                game.wave = 20; game.depth = 3000; game.attention = 60; game.player.corruption = 50;
+                addMaterials({ scrap: 10, corepl: 10, wiring: 10, crystal: 10 });
+                try { c.fn(game); fired++; } catch (err) { errors.push(`${e.id}: ${err.message}`); }
+                if (phase === 'rig') { rigState = null; phase = 'playing'; }
+            }
+            this.startSeeded('evn-' + e.id);
+            game.wave = 20; game.depth = 3000;
+            try { e.noChoice(game); noChoiceFired++; } catch (err) { noChoiceErrors.push(`${e.id}: ${err.message}`); }
+            if (phase === 'rig') { rigState = null; phase = 'playing'; }
+        }
+        phase = 'playing';
+        return { errors, noChoiceErrors, fired, noChoiceFired };
+    },
+    eligibleAt({ depth = 0, wave = 1, attention = 0, corruption = 0 } = {}) {
+        return EVENT_DEFS.filter(e => wave >= e.minWave && depth >= (e.minDepth || 0)
+            && attention >= (e.attn || 0) && corruption >= (e.corrupt || 0)).map(e => e.id);
+    },
+    samplePicker(ctx, n = 500) {
+        const ids = this.eligibleAt(ctx);
+        const defs = EVENT_DEFS.filter(e => ids.includes(e.id));
+        const wOf = (e) => {
+            let w = e.weight || 1;
+            if (e.minDepth) w *= 1 + Math.min(1.6, (ctx.depth - e.minDepth) / 2200);
+            if (e.attn) w *= 1.6;
+            if (e.corrupt) w *= 1.5;
+            return w;
+        };
+        const tot = defs.reduce((a, e) => a + wOf(e), 0);
+        let deepGated = 0;
+        for (let i = 0; i < n; i++) {
+            let rw = Math.random() * tot, pick = defs[0];
+            for (const e of defs) { rw -= wOf(e); if (rw <= 0) { pick = e; break; } }
+            if (pick.minDepth || pick.attn || pick.corrupt) deepGated++;
+        }
+        return { total: n, deepGated, pool: defs.length };
+    },
+    testNereidMute() {
+        this.startSeeded('mute');
+        game._nereidMute = game.runTime + 120;
+        const count = () => (game.nereidLog || []).length + (game.nereidQueue || []).length;
+        const n0 = count();
+        addNereidLog(game, 'Routine observation that should be swallowed by the silence.');
+        const n1 = count();
+        addNereidLog(game, 'HULL BREACH — patch it NOW.');
+        const n2 = count();
+        return { routineBlocked: n1 === n0, urgentPassed: n2 > n1 };
+    },
+    debugSet({ hp, attention } = {}) {
+        if (!game) this.startSeeded('set');
+        if (hp != null) game.player.hp = hp;
+        if (attention != null) game.attention = attention;
+        return { hp: game.player.hp, attention: game.attention };
     },
     damageSystem(id, amount = 50) { damageSystem(game, id, amount, 'debug fault'); return this.getState(); },
     openSystems() { if (game) { systemsReturnPhase = 'playing'; phase = 'systems'; } return this.getState(); },
