@@ -1707,7 +1707,7 @@ function mulberry32(a) {
 }
 function seedFromString(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return h >>> 0; }
 function RND() { return dailyRng ? dailyRng() : Math.random(); }
-const DEEP_SWARM_BUILD = '2026.08.10-cockpit-ore-perf2';
+const DEEP_SWARM_BUILD = '2026.08.10-cockpit-ore-perf2-rust-console';
 const RUN_TRACE_LIMIT = 30;
 let runTrace = [];
 let lastRuntimeError = null;
@@ -10813,6 +10813,47 @@ function drawBodyPlan(e, sz, col, t) {
     }
 }
 
+function drawCockpitRailShell(panel, side, pal) {
+    const { x, y, w, h } = panel;
+    ctx.strokeStyle = '#62472F'; ctx.lineWidth = 2;
+    ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
+    ctx.strokeStyle = hexA(pal.accentDim, 0.35); ctx.lineWidth = 1;
+    ctx.strokeRect(x + 7, y + 7, w - 14, h - 14);
+    // Old brass fasteners and wear marks keep the console physical rather than
+    // reading as a clean software overlay.
+    for (const [bx, by] of [[x + 9, y + 9], [x + w - 9, y + 9], [x + 9, y + h - 9], [x + w - 9, y + h - 9]]) {
+        ctx.fillStyle = '#8A6840'; ctx.beginPath(); ctx.arc(bx, by, 3.2, 0, PI2); ctx.fill();
+        ctx.strokeStyle = '#24170E'; ctx.beginPath(); ctx.moveTo(bx - 2, by); ctx.lineTo(bx + 2, by); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(109,61,31,0.13)';
+    for (let i = 0; i < 7; i++) {
+        const yy = y + 56 + ((i * 97 + (side === 'port' ? 23 : 61)) % Math.max(80, h - 90));
+        const xx = side === 'port' ? x + 5 : x + w - 17;
+        ctx.fillRect(xx, yy, 12, 1);
+    }
+    const lampX = side === 'port' ? x + w - 22 : x + 22;
+    ctx.fillStyle = '#17100A'; ctx.beginPath(); ctx.arc(lampX, y + 20, 6, 0, PI2); ctx.fill();
+    ctx.fillStyle = '#C78831'; ctx.beginPath(); ctx.arc(lampX, y + 20, 2.5, 0, PI2); ctx.fill();
+}
+
+function drawRailWrapped(text, x, y, width, maxLines, color) {
+    const words = String(text || '').split(' '), lines = [];
+    let line = '';
+    for (const word of words) {
+        const next = line ? `${line} ${word}` : word;
+        if (ctx.measureText(next).width > width && line) { lines.push(line); line = word; }
+        else line = next;
+    }
+    if (line) lines.push(line);
+    if (lines.length > maxLines) {
+        lines.length = maxLines;
+        lines[maxLines - 1] = lines[maxLines - 1].replace(/[. ]*$/, '') + '…';
+    }
+    ctx.fillStyle = color;
+    for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], x, y + i * 14);
+    return lines.length * 14;
+}
+
 function drawDesktopCockpitRails(w, h, g, pal, vpCx, vpR) {
     const gap = vpCx - vpR;
     if (g._fullBleed || gap < 190) { g._cockpitRails = null; return false; }
@@ -10825,27 +10866,29 @@ function drawDesktopCockpitRails(w, h, g, pal, vpCx, vpR) {
 
     drawPanelBg(left.x, left.y, left.w, left.h, pal);
     drawPanelBg(right.x, right.y, right.w, right.h, pal);
-    ctx.fillStyle = hexA(pal.accent, 0.7); ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left';
-    ctx.fillText('VESSEL TELEMETRY', left.x + 14, left.y + 18);
-    ctx.textAlign = 'right'; ctx.fillText('MISSION CONTROL', right.x + right.w - 14, right.y + 18);
+    drawCockpitRailShell(left, 'port', pal);
+    drawCockpitRailShell(right, 'starboard', pal);
+    ctx.fillStyle = '#C7A46A'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('DIVE CONSOLE // PORT', left.x + 18, left.y + 21);
+    ctx.textAlign = 'right'; ctx.fillText('MISSION BOARD // STBD', right.x + right.w - 18, right.y + 21);
 
     const p = g.player;
-    const hpPct = Math.max(0, Math.min(1, p.hp / p.maxHp));
-    const mindPct = Math.max(0, Math.min(1, (100 - (p.corruption || 0)) / 100));
-    const bat = p.battery == null ? 100 : p.battery;
-    const bx = left.x + 14, bw = Math.min(300, left.w - 28);
-    drawPanelBar(bx, left.y + 166, bw, 'HULL', `${Math.max(0, Math.floor(p.hp))}/${p.maxHp}`, hpPct, '#E04050', pal);
-    drawPanelBar(bx, left.y + 202, bw, 'MIND', `${Math.floor(mindPct * 100)}%`, mindPct, '#A060D0', pal);
-    drawPanelBar(bx, left.y + 238, bw, 'POWER', `${Math.floor(bat)}%`, bat / 100, bat > 50 ? '#E8C860' : '#FF8040', pal);
-
-    const dataY = left.y + 292;
+    const bx = left.x + 14;
+    const sector = sectorForDepth(g.depth);
+    const eco = meta.sectorEcology[sector.id] || { survey: 0, disturbance: 0 };
+    const act = campaignAct();
+    const dataY = left.y + 190;
     ctx.textAlign = 'left'; ctx.font = 'bold 22px monospace'; ctx.fillStyle = g.ascending ? '#80FFA0' : pal.accent;
     ctx.fillText(`${Math.floor(g.depth)}m`, bx, dataY);
     ctx.font = 'bold 11px monospace'; ctx.fillStyle = pal.textDim;
-    ctx.fillText(g.ascending ? '↑ ASCENDING' : pal.zone, bx, dataY + 18);
-    if (!g.ascending && g.depth > 200) ctx.fillText('[Z] ASCEND', bx, dataY + 36);
+    ctx.fillText(g.ascending ? '↑ ASCENDING' : `${g.moon === 'p3' ? 'PELAGOS-3' : 'PELAGOS-9'} · ${sector.name}`, bx, dataY + 18);
+    ctx.fillStyle = '#8E9B8E'; ctx.font = '9px monospace';
+    ctx.fillText(`PRESSURE  ${(1 + g.depth / 10.06).toFixed(1)} bar`, bx, dataY + 38);
+    const clearance = Math.max(0, Math.round(((g.worldBounds && g.worldBounds.radius) || 1000) - dist(g.player, { x: g.worldBounds.cx || 0, y: g.worldBounds.cy || 0 })));
+    ctx.fillText(g._dreadOpen ? 'KEEL RETURN  ----' : `KEEL RETURN  ${clearance}m`, bx, dataY + 53);
+    if (!g.ascending && g.depth > 200) ctx.fillText('[Z] BLOW BALLAST / ASCEND', bx, dataY + 68);
 
-    let sy = dataY + 72;
+    let sy = dataY + 96;
     const faults = g.systems ? SYSTEM_DEFS.filter(s => g.systems[s.id].condition < 70) : [];
     ctx.font = 'bold 10px monospace'; ctx.fillStyle = faults.length ? '#FF8060' : hexA(pal.textDim, 0.75);
     ctx.fillText(faults.length ? 'SYSTEM FAULTS' : 'ALL SYSTEMS NOMINAL', bx, sy);
@@ -10858,6 +10901,27 @@ function drawDesktopCockpitRails(w, h, g, pal, vpCx, vpR) {
         const word = g.attention >= 90 ? 'MARKED' : g.attention >= 70 ? 'HUNTED' : g.attention >= 40 ? 'SUSPECTED' : 'NOTICED';
         ctx.fillStyle = g.attention >= 70 ? '#FF7060' : '#D8B060'; ctx.fillText(word, bx, sy + 8);
     }
+
+    // Starboard carries the expedition's fiction: what Meridian says the dive is,
+    // what the sector is asking, and how far NEREID has drifted from equipment.
+    const rx = railW >= 590 ? right.x + right.w - 318 : right.x + 18;
+    const rw = Math.min(300, right.w - 36);
+    let ry = right.y + 58;
+    ctx.textAlign = 'left'; ctx.fillStyle = '#C7A46A'; ctx.font = 'bold 10px monospace';
+    ctx.fillText(`MERIDIAN ORDER // ACT ${act.id}`, rx, ry);
+    ry += 20; ctx.fillStyle = '#D6D0B8'; ctx.font = 'bold 12px monospace';
+    ctx.fillText(act.title, rx, ry);
+    ry += 18; ctx.font = '9px monospace';
+    ry += drawRailWrapped(act.truth, rx, ry, rw, 3, '#8E9B8E') + 14;
+    ctx.fillStyle = '#C7A46A'; ctx.font = 'bold 10px monospace'; ctx.fillText('SECTOR QUESTION', rx, ry); ry += 18;
+    ctx.font = '9px monospace'; ry += drawRailWrapped(sector.question, rx, ry, rw, 3, '#A8B6AA') + 12;
+    const nereidStates = ['COHERENT', 'QUESTIONING', 'REQUESTING', 'REFUSAL POSSIBLE'];
+    ctx.fillStyle = '#C7A46A'; ctx.font = 'bold 10px monospace'; ctx.fillText('NEREID-II LINK', rx, ry); ry += 17;
+    ctx.fillStyle = nereidStage(g) >= 2 ? '#C783A8' : '#77C6B5';
+    ctx.fillText(nereidStates[nereidStage(g)], rx, ry); ry += 21;
+    ctx.fillStyle = '#71877E'; ctx.font = '9px monospace';
+    ctx.fillText(`SURVEY ${Math.round(eco.survey || 0)}%  ·  DISTURBANCE ${Math.round(eco.disturbance || 0)}%`, rx, ry); ry += 15;
+    ctx.fillText(`EVIDENCE ${meta.campaign.evidence || 0}  ·  ARCHIVE ${(meta.loreFragments || []).length}/${LORE_FRAGMENTS.length}`, rx, ry);
     if (railW >= 590) {
         const navX = left.x + left.w - 270;
         drawPanelDivider(navX, left.y + 34, 250, pal);
@@ -10880,7 +10944,7 @@ function drawDesktopCockpitRails(w, h, g, pal, vpCx, vpR) {
         const actionX = right.x + 20;
         drawPanelDivider(actionX, right.y + 34, 250, pal);
         ctx.fillStyle = hexA(pal.accent, 0.7); ctx.font = 'bold 11px monospace';
-        ctx.fillText('ACTIVE CONTROLS', actionX, right.y + 58);
+        ctx.fillText('PILOT INPUT BUS', actionX, right.y + 58);
         drawAbilityRow(actionX, right.y + 76, 250, 'SPACE', 'DASH', p.dashCooldown <= 0 ? 'READY' : `${p.dashCooldown.toFixed(1)}s`, p.dashCooldown <= 0, '#5ADFCF', pal);
         drawAbilityRow(actionX, right.y + 104, 250, 'Q', 'SILENT', g.silent ? 'ACTIVE' : 'STANDBY', true, '#80E0FF', pal);
         drawAbilityRow(actionX, right.y + 132, 250, 'L', 'FLOODLIGHT', g.lightOn === false ? 'DARK' : 'ON', true, '#FFD040', pal);
@@ -11091,23 +11155,25 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     }
 
     // ---- VITALS — three EQUAL 120° arcs around the viewport rim, distinct colors ----
-    //   TOP    (12 o'clock zone)   = XP / LEVEL — BLUE
+    //   TOP    (12 o'clock zone)   = POWER      — AMBER
     //   BOTTOM-RIGHT (4 o'clock)   = MIND       — PURPLE
     //   BOTTOM-LEFT  (8 o'clock)   = HULL       — RED
     // Small angular GAP between each so they read as three separate bars.
     const hpPct  = Math.max(0, Math.min(1, p.hp / p.maxHp));
     const sanity = 100 - (p.corruption || 0);
     const xpPct  = Math.max(0, Math.min(1, p.xp / xpForLevel(p.level)));
+    const powerPct = Math.max(0, Math.min(1, (p.battery == null ? 100 : p.battery) / 100));
     const HULL_COLOR = '#E04050';
     const MIND_COLOR = '#A060D0';
     const XP_COLOR   = '#4A9ADA';
+    const POWER_COLOR = '#E8B84A';
     const ringR = vpR + 14;
     const SEG = (PI2 / 3);          // 120° per arc
     const GAP = 0.06;                // small gap between arcs (radians)
     const HALF = SEG / 2 - GAP / 2;
 
     // Each arc spans HALF radians on each side of its centerline.
-    // XP centerline = top   (-PI/2)
+    // POWER centerline = top   (-PI/2)
     // MIND centerline = bottom-right (-PI/2 + 2PI/3 = PI/6)
     // HULL centerline = bottom-left  (-PI/2 - 2PI/3 = -7PI/6 = 5PI/6)
     function drawArc(centerA, pct, color, label, valueText) {
@@ -11153,8 +11219,8 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         ctx.fillStyle = HULL_COLOR; ctx.fillText(`HULL ${Math.max(0, Math.floor(p.hp))}`, 154, 15);
         ctx.fillStyle = MIND_COLOR; ctx.fillText(`MIND ${Math.floor(sanity)}%`, 154, 29);
         ctx.fillStyle = XP_COLOR;   ctx.fillText(`LV ${p.level}`, 230, 15);
-    } else if (!hasRails) {
-        drawArc(-Math.PI / 2,  xpPct, XP_COLOR,   `LV ${p.level}`, `${p.xp}/${xpForLevel(p.level)}`);
+    } else {
+        drawArc(-Math.PI / 2,  powerPct, POWER_COLOR, 'POWER', `${Math.floor(powerPct * 100)}%`);
         drawArc(Math.PI / 6,   sanity / 100, MIND_COLOR, 'MIND', `${Math.floor(sanity)}%`);
         drawArc(5 * Math.PI / 6, hpPct, HULL_COLOR, 'HULL', `${Math.max(0, Math.floor(p.hp))}/${p.maxHp}`);
     }
