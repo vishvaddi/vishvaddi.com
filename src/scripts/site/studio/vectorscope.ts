@@ -7,56 +7,43 @@ export interface Vectorscope {
   setActive: (on: boolean) => void;
 }
 
-interface Spore {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
+interface Shockwave {
+  radius: number;
   life: number;
-  hue: number;
+  rotation: number;
 }
 
 export function buildVectorscope(): Vectorscope {
-  const root = el("div", "wa-spectral"); root.dataset.visualizer = "signal-reef";
+  const root = el("div", "wa-spectral"); root.dataset.visualizer = "void-coil";
   const canvas = document.createElement("canvas");
-  canvas.className = "wa-vectorscope";
-  canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-label", "Signal Reef living master-bus visualiser showing bass mass, midrange branches, high-frequency spores and stereo phase threads");
+  canvas.className = "wa-vectorscope"; canvas.setAttribute("role", "img");
+  canvas.setAttribute("aria-label", "Void Coil circular master-bus visualiser showing spectral energy, stereo width, phase and transient shockwaves");
   const controls = el("div", "wa-spectral-controls");
-  let intensity = Number(localStorage.getItem("vv_studio_reef_drive")) || 0.76;
-  let trail = Number(localStorage.getItem("vv_studio_reef_afterimage")) || 0.8;
+  let intensity = Number(localStorage.getItem("vv_studio_void_drive")) || .74;
+  let trail = Number(localStorage.getItem("vv_studio_void_decay")) || .78;
   const makeRange = (label: string, value: number, onInput: (next: number) => void): HTMLInputElement => {
-    const input = document.createElement("input");
-    input.type = "range"; input.min = "0.2"; input.max = "1"; input.step = "0.02"; input.value = String(value);
-    input.setAttribute("aria-label", label);
-    input.addEventListener("input", () => onInput(Number(input.value)));
-    return input;
+    const input = document.createElement("input"); input.type = "range"; input.min = ".2"; input.max = "1"; input.step = ".02"; input.value = String(value);
+    input.setAttribute("aria-label", label); input.addEventListener("input", () => onInput(Number(input.value))); return input;
   };
-  const driveInput = makeRange("Signal Reef drive", intensity, (value) => { intensity = value; localStorage.setItem("vv_studio_reef_drive", String(value)); });
-  const trailInput = makeRange("Signal Reef afterimage", trail, (value) => { trail = value; localStorage.setItem("vv_studio_reef_afterimage", String(value)); });
-  controls.append(el("span", "wa-spectral-id", "SIGNAL REEF"), el("span", "wa-spectral-lbl", "DRIVE"), driveInput, el("span", "wa-spectral-lbl", "AFTERIMAGE"), trailInput);
-  help(controls, "A living master-bus map: bass builds the body, mids grow branches, highs shed spores and the twin threads show stereo phase.");
+  const driveInput = makeRange("Void Coil drive", intensity, (value) => { intensity = value; localStorage.setItem("vv_studio_void_drive", String(value)); });
+  const decayInput = makeRange("Void Coil decay", trail, (value) => { trail = value; localStorage.setItem("vv_studio_void_decay", String(value)); });
+  controls.append(el("span", "wa-spectral-id", "VOID COIL"), el("span", "wa-spectral-lbl", "DRIVE"), driveInput, el("span", "wa-spectral-lbl", "DECAY"), decayInput);
+  help(controls, "A circular master-bus instrument: frequency runs from the core to the rim, the centre plots stereo phase and red fractures mark transients.");
   root.append(canvas, controls);
 
-  const g = canvas.getContext("2d")!;
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const frequency = new Uint8Array(1024), left = new Uint8Array(2048), right = new Uint8Array(2048);
-  const spores: Spore[] = [];
-  let width = 0, height = 0, dpr = 1, active = false, raf = 0, last = 0;
-  let drive = 0, transient = 0, correlation = 0, stereoWidth = 0, hue = 158, spawnClock = 0;
+  const g = canvas.getContext("2d")!, reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const frequency = new Uint8Array(1024), left = new Uint8Array(2048), right = new Uint8Array(2048), shocks: Shockwave[] = [];
+  let width = 0, height = 0, dpr = 1, active = false, raf = 0, last = 0, drive = 0, transient = 0, correlation = 0, stereoWidth = 0, lastShock = 0;
 
   const resize = (): void => {
     const rect = canvas.getBoundingClientRect(); if (!rect.width || !rect.height) return;
-    dpr = Math.min(2, devicePixelRatio || 1);
-    width = canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    height = canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    g.fillStyle = "#04040c"; g.fillRect(0, 0, width, height);
+    dpr = Math.min(2, devicePixelRatio || 1); width = canvas.width = Math.max(1, Math.floor(rect.width * dpr)); height = canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+    g.fillStyle = "#020406"; g.fillRect(0, 0, width, height);
   };
   new ResizeObserver(resize).observe(canvas);
 
   const energy = (from: number, to: number): number => {
-    let sum = 0; const end = Math.min(to, frequency.length);
-    for (let i = from; i < end; i++) sum += frequency[i];
+    let sum = 0; const end = Math.min(to, frequency.length); for (let i = from; i < end; i++) sum += frequency[i];
     return end > from ? sum / (end - from) / 255 : 0;
   };
 
@@ -74,101 +61,95 @@ export function buildVectorscope(): Vectorscope {
     stereoWidth += ((count ? difference / count : 0) - stereoWidth) * .16;
   };
 
-  const reefAmplitude = (fraction: number, time: number, idle: boolean): number => {
-    const bin = Math.min(frequency.length - 1, Math.floor(Math.pow(fraction, 1.75) * 500));
-    const measured = frequency[bin] / 255;
-    return Math.max(measured, idle ? .13 + Math.sin(time * .7 + fraction * 11) * .045 : 0);
+  const spectrumAt = (fraction: number, time: number, idle: boolean): number => {
+    const bin = Math.min(frequency.length - 1, Math.floor(Math.pow(fraction, 1.72) * 500)), measured = frequency[bin] / 255;
+    return Math.max(measured, idle ? .105 + Math.sin(fraction * 19 + time * .42) * .025 : 0);
   };
 
-  const drawBody = (time: number, low: number, mid: number, high: number, idle: boolean): void => {
-    const leftEdge = width * .055, span = width * .89, centre = height * .52;
-    const body = g.createLinearGradient(leftEdge, 0, leftEdge + span, 0);
-    body.addColorStop(0, `hsla(${(hue + 28) % 360},100%,58%,.2)`); body.addColorStop(.48, `hsla(${(hue + 118) % 360},100%,62%,.28)`); body.addColorStop(1, `hsla(${(hue + 224) % 360},100%,62%,.12)`);
-    g.globalCompositeOperation = "lighter"; g.fillStyle = body; g.beginPath();
-    for (let pass = 0; pass < 2; pass++) {
-      for (let point = 0; point <= 120; point++) {
-        const index = pass ? 120 - point : point, fraction = index / 120, amplitude = reefAmplitude(fraction, time, idle);
-        const pulse = Math.sin(fraction * 13 + time * (.55 + high)) * height * .012;
-        const thickness = height * (.025 + amplitude * (.09 + intensity * .08) + low * .018);
-        const y = centre + pulse + (pass ? thickness : -thickness);
-        const x = leftEdge + fraction * span;
-        if (!pass && point === 0) g.moveTo(x, y); else g.lineTo(x, y);
-      }
+  const drawAperture = (cx: number, cy: number, radius: number, time: number): void => {
+    const voidGradient = g.createRadialGradient(cx, cy, 0, cx, cy, radius * 1.08);
+    voidGradient.addColorStop(0, "#000103"); voidGradient.addColorStop(.42, "#03080b"); voidGradient.addColorStop(.78, "#08060c"); voidGradient.addColorStop(1, "#010203");
+    g.globalCompositeOperation = "source-over"; g.fillStyle = voidGradient; g.beginPath(); g.arc(cx, cy, radius * 1.08, 0, Math.PI * 2); g.fill();
+    g.globalCompositeOperation = "lighter";
+    for (let ring = 1; ring <= 4; ring++) {
+      g.setLineDash([2 * dpr, (9 + ring * 3) * dpr]); g.lineDashOffset = reduceMotion ? 0 : time * (ring % 2 ? 3 : -2) * dpr;
+      g.strokeStyle = ring === 3 ? "rgba(117,38,82,.16)" : "rgba(48,190,185,.105)"; g.lineWidth = .7 * dpr;
+      g.beginPath(); g.arc(cx, cy, radius * (.2 + ring * .18), 0, Math.PI * 2); g.stroke();
     }
-    g.closePath(); g.shadowColor = `hsla(${(hue + 95) % 360},100%,60%,.75)`; g.shadowBlur = (5 + drive * 15) * dpr; g.fill(); g.shadowBlur = 0;
-
-    for (let branch = 0; branch < 26; branch++) {
-      const fraction = (branch + .65) / 27, amplitude = reefAmplitude(fraction, time, idle);
-      const x = leftEdge + fraction * span, direction = branch % 2 ? 1 : -1;
-      const phaseSample = Math.min(left.length - 1, Math.floor(fraction * 1024));
-      const phase = ((left[phaseSample] || 128) - (right[phaseSample] || 128)) / 128;
-      const startY = centre + Math.sin(fraction * 13 + time * .55) * height * .012;
-      const length = height * (.055 + amplitude * (.18 + intensity * .12) + mid * .035);
-      const endX = x + phase * width * .045 + Math.sin(branch * 2.17 + time * .23) * width * .012;
-      const endY = startY + direction * length;
-      g.beginPath(); g.moveTo(x, startY);
-      g.bezierCurveTo(x + direction * width * .018, startY + direction * length * .25, endX - direction * width * .014, endY - direction * length * .25, endX, endY);
-      g.strokeStyle = `hsla(${(hue + branch * 17 + amplitude * 80) % 360},100%,${58 + high * 18}%,${.2 + amplitude * .62})`;
-      g.lineWidth = (.55 + amplitude * 2.4) * dpr; g.shadowColor = g.strokeStyle; g.shadowBlur = (2 + amplitude * 8) * dpr; g.stroke(); g.shadowBlur = 0;
-      g.fillStyle = `hsla(${(hue + 120 + branch * 11) % 360},100%,72%,${.24 + high * .5})`;
-      g.beginPath(); g.arc(endX, endY, (.8 + high * 2.8 + amplitude * 1.5) * dpr, 0, Math.PI * 2); g.fill();
+    g.setLineDash([]);
+    for (let tick = 0; tick < 48; tick++) {
+      const angle = tick / 48 * Math.PI * 2, outer = radius * .99, inner = outer - radius * (tick % 6 ? .018 : .04);
+      g.strokeStyle = tick % 12 === 0 ? "rgba(207,65,75,.42)" : "rgba(77,220,210,.16)"; g.lineWidth = (tick % 12 === 0 ? 1.2 : .6) * dpr;
+      g.beginPath(); g.moveTo(cx + Math.cos(angle) * inner, cy + Math.sin(angle) * inner); g.lineTo(cx + Math.cos(angle) * outer, cy + Math.sin(angle) * outer); g.stroke();
     }
   };
 
-  const drawPhaseThreads = (time: number): void => {
-    const centre = height * .52, leftEdge = width * .055, span = width * .89;
-    [left, right].forEach((channel, channelIndex) => {
+  const drawCoil = (cx: number, cy: number, radius: number, time: number, idle: boolean): void => {
+    const coilGradient = g.createRadialGradient(cx, cy, radius * .08, cx, cy, radius);
+    coilGradient.addColorStop(0, "rgba(102,228,217,.92)"); coilGradient.addColorStop(.48, "rgba(48,173,174,.78)"); coilGradient.addColorStop(.78, "rgba(111,43,91,.66)"); coilGradient.addColorStop(1, "rgba(160,53,78,.5)");
+    g.globalCompositeOperation = "lighter";
+    for (let echo = 2; echo >= 0; echo--) {
       g.beginPath();
-      for (let point = 0; point <= 160; point++) {
-        const fraction = point / 160, sample = channel[Math.min(channel.length - 1, Math.floor(fraction * 1024))];
-        const signal = ((sample || 128) - 128) / 128;
-        const y = centre + signal * height * (.08 + intensity * .055) + Math.sin(fraction * 9 + time * .4 + channelIndex * Math.PI) * height * .006;
-        const x = leftEdge + fraction * span;
+      for (let point = 0; point <= 280; point++) {
+        const fraction = point / 280, amplitude = spectrumAt(fraction, time, idle);
+        const angle = -Math.PI / 2 + fraction * Math.PI * 5.25 + time * (reduceMotion ? 0 : .025) + echo * .015;
+        const base = radius * (.1 + fraction * .78), signal = amplitude * radius * (.025 + intensity * .09);
+        const fracture = Math.sin(fraction * 47 - time * .6) * radius * .008 * amplitude;
+        const stereoSample = Math.min(left.length - 1, Math.floor(fraction * 1024));
+        const phaseOffset = (((left[stereoSample] || 128) - (right[stereoSample] || 128)) / 128) * radius * .035;
+        const r = base + signal + fracture + phaseOffset * (echo === 0 ? 1 : .35);
+        const x = cx + Math.cos(angle) * r, y = cy + Math.sin(angle) * r;
         if (!point) g.moveTo(x, y); else g.lineTo(x, y);
       }
-      const gradient = g.createLinearGradient(leftEdge, 0, leftEdge + span, 0);
-      gradient.addColorStop(0, channelIndex ? "#ff65c8" : "#65ffd5"); gradient.addColorStop(.52, "#f6ff88"); gradient.addColorStop(1, channelIndex ? "#7b8dff" : "#dc62ff");
-      g.strokeStyle = gradient; g.globalAlpha = .5 + drive * .42; g.lineWidth = (channelIndex ? 1.1 : 1.6) * dpr; g.shadowColor = channelIndex ? "#ff65c8" : "#65ffd5"; g.shadowBlur = 5 * dpr; g.stroke();
-    });
-    g.globalAlpha = 1; g.shadowBlur = 0;
+      g.strokeStyle = echo ? `rgba(76,214,205,${.07 + echo * .035})` : coilGradient;
+      g.lineWidth = (echo ? 1.1 + echo : 1.2 + drive * 3.2) * dpr; g.shadowColor = echo ? "#246d70" : "#3ad8d0"; g.shadowBlur = (echo ? 3 : 7 + drive * 13) * dpr; g.stroke();
+    }
+    g.shadowBlur = 0;
+    for (let node = 4; node < 36; node++) {
+      const fraction = node / 38, amplitude = spectrumAt(fraction, time, idle); if (node % 3 && amplitude < .22) continue;
+      const angle = -Math.PI / 2 + fraction * Math.PI * 5.25 + time * .025, r = radius * (.1 + fraction * .78) + amplitude * radius * (.025 + intensity * .09);
+      g.fillStyle = node % 5 === 0 ? `rgba(207,65,75,${.2 + amplitude * .6})` : `rgba(115,225,216,${.18 + amplitude * .55})`;
+      g.beginPath(); g.arc(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r, (.8 + amplitude * 2.2) * dpr, 0, Math.PI * 2); g.fill();
+    }
   };
 
-  const updateSpores = (time: number, high: number): void => {
-    if (!reduceMotion && transient > .018 && time - spawnClock > .045) {
-      spawnClock = time; const count = Math.min(8, 2 + Math.floor(transient * 30));
-      for (let i = 0; i < count; i++) {
-        const phase = time * 5.17 + i * 2.399, x = width * (.18 + ((Math.sin(phase * 1.7) + 1) * .38));
-        spores.push({ x, y: height * .52, vx: Math.cos(phase) * width * .0009, vy: Math.sin(phase) * height * .0027, life: 1, hue: (hue + i * 31) % 360 });
-      }
-      if (spores.length > 90) spores.splice(0, spores.length - 90);
+  const drawPhaseCore = (cx: number, cy: number, radius: number): void => {
+    const count = Math.min(1024, left.length, right.length); g.beginPath();
+    for (let i = 0; i < count; i += 3) {
+      const l = (left[i] - 128) / 128, r = (right[i] - 128) / 128;
+      const x = cx + (l - r) * radius * .12, y = cy - (l + r) * radius * .12;
+      if (!i) g.moveTo(x, y); else g.lineTo(x, y);
     }
+    if (drive < .008) { g.beginPath(); g.arc(cx, cy, radius * .045, 0, Math.PI * 2); }
+    g.strokeStyle = "rgba(183,71,130,.7)"; g.lineWidth = (1 + drive * 2) * dpr; g.shadowColor = "#8c365f"; g.shadowBlur = 6 * dpr; g.stroke(); g.shadowBlur = 0;
+    const core = g.createRadialGradient(cx, cy, 0, cx, cy, radius * .13); core.addColorStop(0, "rgba(0,0,0,.98)"); core.addColorStop(.68, "rgba(1,5,8,.94)"); core.addColorStop(1, "rgba(51,200,192,.22)");
+    g.fillStyle = core; g.beginPath(); g.arc(cx, cy, radius * .13, 0, Math.PI * 2); g.fill();
+  };
+
+  const drawShockwaves = (cx: number, cy: number, radius: number, time: number): void => {
+    if (!reduceMotion && transient > .022 && time - lastShock > .08) { lastShock = time; shocks.push({ radius: .18, life: 1, rotation: time * .7 }); if (shocks.length > 7) shocks.shift(); }
     g.globalCompositeOperation = "lighter";
-    for (let i = spores.length - 1; i >= 0; i--) {
-      const spore = spores[i]; spore.x += spore.vx; spore.y += spore.vy; spore.vy *= .995; spore.life -= .012 + high * .006;
-      if (spore.life <= 0) { spores.splice(i, 1); continue; }
-      g.fillStyle = `hsla(${spore.hue},100%,70%,${spore.life * .72})`; g.shadowColor = g.fillStyle; g.shadowBlur = 7 * dpr;
-      g.beginPath(); g.arc(spore.x, spore.y, (1 + (1 - spore.life) * 2) * dpr, 0, Math.PI * 2); g.fill();
+    for (let i = shocks.length - 1; i >= 0; i--) {
+      const shock = shocks[i]; shock.radius += .009 + transient * .015; shock.life -= .018;
+      if (shock.life <= 0 || shock.radius > 1.05) { shocks.splice(i, 1); continue; }
+      g.strokeStyle = `rgba(218,53,63,${shock.life * .5})`; g.lineWidth = (1 + shock.life * 2) * dpr; g.shadowColor = "#c93242"; g.shadowBlur = 8 * dpr;
+      g.beginPath(); g.arc(cx, cy, radius * shock.radius, shock.rotation, shock.rotation + Math.PI * 1.12); g.stroke();
+      g.beginPath(); g.arc(cx, cy, radius * shock.radius, shock.rotation + Math.PI * 1.38, shock.rotation + Math.PI * 1.82); g.stroke();
     }
     g.shadowBlur = 0;
   };
 
   const frame = (now: number): void => {
-    raf = requestAnimationFrame(frame);
-    if (!active || document.hidden || now - last < (reduceMotion ? 80 : 16)) return;
+    raf = requestAnimationFrame(frame); if (!active || document.hidden || now - last < (reduceMotion ? 80 : 16)) return;
     last = now; if (!width) resize(); if (!width) return;
-    const analyser = masterAnalyser;
-    if (analyser) analyser.getByteFrequencyData(frequency.subarray(0, analyser.frequencyBinCount)); else frequency.fill(0);
-    readStereo();
+    const analyser = masterAnalyser; if (analyser) analyser.getByteFrequencyData(frequency.subarray(0, analyser.frequencyBinCount)); else frequency.fill(0); readStereo();
     const low = energy(1, 18), mid = energy(18, 110), high = energy(110, 420), nextDrive = low * .5 + mid * .32 + high * .18;
-    transient = Math.max(0, nextDrive - drive * 1.14, transient * .87); drive += (nextDrive - drive) * .19; hue = (hue + .055 + high * .28) % 360;
-    g.globalCompositeOperation = "source-over"; g.fillStyle = `rgba(3,3,11,${Math.max(.05, .3 - trail * .25)})`; g.fillRect(0, 0, width, height);
-    const time = reduceMotion ? 0 : now / 1000, idle = drive < .012;
-    const atmosphere = g.createLinearGradient(0, 0, width, height);
-    atmosphere.addColorStop(0, `hsla(${(hue + 25) % 360},100%,45%,${.018 + low * .055})`); atmosphere.addColorStop(.5, `hsla(${(hue + 130) % 360},100%,48%,${.018 + mid * .045})`); atmosphere.addColorStop(1, `hsla(${(hue + 245) % 360},100%,52%,${.012 + high * .055})`);
-    g.fillStyle = atmosphere; g.fillRect(0, 0, width, height);
-    drawBody(time, low, mid, high, idle); drawPhaseThreads(time); updateSpores(time, high);
-    g.globalCompositeOperation = "source-over"; g.fillStyle = "rgba(218,255,243,.76)"; g.font = `${8 * dpr}px ui-monospace, monospace`;
-    g.fillText(`SIGNAL REEF  B ${Math.round(low * 99)}  M ${Math.round(mid * 99)}  H ${Math.round(high * 99)}  WIDTH ${Math.round(stereoWidth * 99)}  PHASE ${correlation.toFixed(2)}`, 9 * dpr, height - 10 * dpr);
+    transient = Math.max(0, nextDrive - drive * 1.14, transient * .87); drive += (nextDrive - drive) * .19;
+    g.globalCompositeOperation = "source-over"; g.fillStyle = `rgba(1,3,5,${Math.max(.07, .34 - trail * .24)})`; g.fillRect(0, 0, width, height);
+    const cx = width / 2, cy = height * .49, radius = Math.min(width, height) * .43, time = reduceMotion ? 0 : now / 1000, idle = drive < .012;
+    drawAperture(cx, cy, radius, time); drawCoil(cx, cy, radius, time, idle); drawPhaseCore(cx, cy, radius); drawShockwaves(cx, cy, radius, time);
+    g.globalCompositeOperation = "source-over"; g.fillStyle = "rgba(132,181,181,.76)"; g.font = `${8 * dpr}px ui-monospace, monospace`;
+    g.fillText(`VOID COIL  B ${Math.round(low * 99)}  M ${Math.round(mid * 99)}  H ${Math.round(high * 99)}  WIDTH ${Math.round(stereoWidth * 99)}  PHASE ${correlation.toFixed(2)}`, 9 * dpr, height - 10 * dpr);
   };
 
   return { root, canvas, setActive: (on: boolean) => { active = on; if (on) { resize(); if (!raf) raf = requestAnimationFrame(frame); } } };

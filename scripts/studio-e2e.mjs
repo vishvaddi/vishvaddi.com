@@ -197,7 +197,18 @@ try {
   await page.locator('.wa-dj-deck-a .wa-dj-loopbar .wa-btn', { hasText: 'LOOP' }).click()
   await page.waitForFunction(() => Number(document.querySelector('.wa-dj-deck-a')?.dataset.loopWraps || 0) >= 2)
   check('dj: loop wraps on the audio engine clock', Number(await page.locator('.wa-dj-deck-a').getAttribute('data-loop-wraps')) >= 2)
+  const quarterSpan = await page.locator('.wa-dj-deck-a').evaluate((node) => Number(node.dataset.loopOut) - Number(node.dataset.loopIn))
+  await page.locator('.wa-dj-deck-a .wa-dj-loop-length').selectOption('0.5')
+  await page.waitForFunction(() => Number(document.querySelector('.wa-dj-deck-a')?.dataset.loopWraps || 0) >= 1)
+  const halfSpan = await page.locator('.wa-dj-deck-a').evaluate((node) => Number(node.dataset.loopOut) - Number(node.dataset.loopIn))
+  check('dj: changing loop length rebuilds the live loop', halfSpan > quarterSpan * 1.8 && halfSpan < quarterSpan * 2.2, `${quarterSpan.toFixed(3)}→${halfSpan.toFixed(3)}s`)
   await page.locator('.wa-dj-deck-a .wa-dj-loopbar .wa-btn', { hasText: 'LOOP' }).click()
+  await page.locator('.wa-dj-deck-a .wa-dj-loopbar .wa-btn', { hasText: 'IN' }).click()
+  await page.waitForTimeout(140)
+  await page.locator('.wa-dj-deck-a .wa-dj-loopbar .wa-btn', { hasText: 'OUT' }).click()
+  await page.waitForFunction(() => document.querySelector('.wa-dj-deck-a')?.dataset.loopActive === 'true' && Number(document.querySelector('.wa-dj-deck-a')?.dataset.loopWraps || 0) >= 1)
+  check('dj: manual IN and OUT replace the previous loop', await page.locator('.wa-dj-deck-a').getAttribute('data-loop-active') === 'true')
+  await page.locator('.wa-dj-deck-a .wa-dj-loopbar .wa-btn', { hasText: 'LOOP ON' }).click()
   const platter = await page.locator('.wa-dj-deck-a .wa-dj-platter').boundingBox()
   if (platter) {
     const y = platter.y + platter.height / 2

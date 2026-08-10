@@ -204,7 +204,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   const scopeWell = el("div", "wa-panel wa-mix-scope");
   const mixOrb = buildVectorscope();
   help(scopeWell, "Master output — the finished mix, post-limiter.");
-  scopeWell.append(el("div", "wa-fx-title", "SIGNAL REEF"), mixOrb.root);
+  scopeWell.append(el("div", "wa-fx-title", "VOID COIL"), mixOrb.root);
   mixPage.append(p.mixer, scopeWell, p.devicePanel);
 
   const pages: Record<ModeId, HTMLElement> = {

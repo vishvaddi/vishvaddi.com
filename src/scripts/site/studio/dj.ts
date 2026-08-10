@@ -263,6 +263,10 @@ export function buildDj(): { root: HTMLElement } {
 
   const updateLoop = (deck: Deck): void => {
     deck.loop.classList.toggle("active", deck.loopOn); deck.loop.setAttribute("aria-pressed", String(deck.loopOn));
+    deck.loop.textContent = deck.loopOn ? "LOOP ON" : "LOOP";
+    deck.root.dataset.loopActive = String(deck.loopOn);
+    deck.root.dataset.loopIn = deck.loopIn == null ? "" : deck.loopIn.toFixed(4);
+    deck.root.dataset.loopOut = deck.loopOut == null ? "" : deck.loopOut.toFixed(4);
     drawDeckWaveform(deck);
   };
 
@@ -287,12 +291,19 @@ export function buildDj(): { root: HTMLElement } {
     if (!deck.buffer || deck.loopIn == null || deck.loopOut == null || deck.loopOut <= deck.loopIn) return;
     if (deck.loopSource) stopLoopPlayback(deck, false);
     const context = ac(), source = context.createBufferSource();
-    source.buffer = deck.buffer; source.loop = true; source.loopStart = deck.loopIn; source.loopEnd = deck.loopOut;
+    const loopStart = clamp(deck.loopIn, 0, Math.max(0, deck.buffer.duration - .01));
+    const loopEnd = clamp(deck.loopOut, loopStart + .01, deck.buffer.duration);
+    if (loopEnd <= loopStart) { deck.loopOn = false; updateLoop(deck); return; }
+    deck.loopIn = loopStart; deck.loopOut = loopEnd;
+    source.buffer = deck.buffer; source.loop = true; source.loopStart = loopStart; source.loopEnd = loopEnd;
     source.playbackRate.value = 1 + deck.pitch / 100; source.connect(ensureDeckNodes(deck).input);
-    deck.audio.pause(); deck.loopStartPosition = clamp(deck.audio.currentTime, deck.loopIn, deck.loopOut); deck.virtualTime = deck.loopStartPosition;
+    const span = loopEnd - loopStart, requested = deck.audio.currentTime;
+    const wrapped = loopStart + (((requested - loopStart) % span) + span) % span;
+    deck.audio.pause(); deck.loopStartPosition = wrapped >= loopEnd - .001 ? loopStart : wrapped; deck.virtualTime = deck.loopStartPosition;
     deck.loopStartedAt = context.currentTime; deck.loopWraps = 0; deck.loopSource = source;
     deck.playIntent = true; source.start(0, deck.loopStartPosition); deck.root.classList.add("playing"); deck.play.classList.add("active"); deck.play.textContent = "STOP";
     deck.root.dataset.loopWraps = "0";
+    updateLoop(deck);
   };
 
   const decks: Deck[] = (["A", "B"] as DeckId[]).map((id) => {
@@ -378,17 +389,37 @@ export function buildDj(): { root: HTMLElement } {
       const audio = deck.audio as HTMLAudioElement & { preservesPitch?: boolean; mozPreservesPitch?: boolean; webkitPreservesPitch?: boolean };
       audio.preservesPitch = active; audio.mozPreservesPitch = active; audio.webkitPreservesPitch = active;
     });
-    loopLength.addEventListener("change", () => { deck.loopBeats = Number(loopLength.value); });
+    loopLength.addEventListener("change", () => {
+      deck.loopBeats = Number(loopLength.value);
+      if (!deck.loopOn || deck.loopIn == null) return;
+      const wasPlaying = Boolean(deck.loopSource) || !deck.audio.paused, position = deckTime(deck);
+      if (deck.loopSource) stopLoopPlayback(deck, false);
+      deck.audio.currentTime = position;
+      deck.loopOut = Math.min(deck.audio.duration || Infinity, deck.loopIn + deck.loopBeats * 60 / (deck.bpm || 120));
+      updateLoop(deck); if (wasPlaying) startLoopPlayback(deck);
+    });
     const snapToBeat = (position: number): number => { const beat = 60 / (deck.bpm || 120); return clamp(Math.round(position / beat) * beat, 0, deck.audio.duration || Infinity); };
-    loopIn.addEventListener("click", () => { deck.loopIn = snapToBeat(deckTime(deck)); deck.loopOut = null; });
+    loopIn.addEventListener("click", () => {
+      const wasPlaying = Boolean(deck.loopSource) || !deck.audio.paused, position = deckTime(deck);
+      if (deck.loopSource) stopLoopPlayback(deck, wasPlaying);
+      deck.audio.currentTime = position; deck.loopIn = position; deck.loopOut = null; deck.loopOn = false; updateLoop(deck);
+    });
     loopOut.addEventListener("click", () => {
-      if (deck.loopIn == null) deck.loopIn = snapToBeat(deckTime(deck));
-      deck.loopOut = Math.max(snapToBeat(deckTime(deck)), deck.loopIn + 0.05); deck.loopOn = true; updateLoop(deck);
-      if (!deck.audio.paused || deck.loopSource) startLoopPlayback(deck);
+      const wasPlaying = Boolean(deck.loopSource) || !deck.audio.paused, position = deckTime(deck);
+      if (deck.loopSource) stopLoopPlayback(deck, false);
+      if (deck.loopIn == null) deck.loopIn = position;
+      const minimum = deck.loopIn + Math.max(.05, 60 / (deck.bpm || 120) * .25);
+      deck.loopOut = Math.min(deck.audio.duration || Infinity, Math.max(position, minimum)); deck.loopOn = deck.loopOut > deck.loopIn; updateLoop(deck);
+      deck.audio.currentTime = deck.loopIn; if (wasPlaying && deck.loopOn) startLoopPlayback(deck);
     });
     loop.addEventListener("click", () => {
       const wasPlaying = Boolean(deck.loopSource) || !deck.audio.paused;
-      if (!deck.loopOn) { deck.loopIn = snapToBeat(deckTime(deck)); deck.loopOut = Math.min(deck.audio.duration || Infinity, deck.loopIn + deck.loopBeats * 60 / (deck.bpm || 120)); deck.loopOn = true; if (wasPlaying) startLoopPlayback(deck); }
+      if (!deck.loopOn) {
+        const duration = deck.loopBeats * 60 / (deck.bpm || 120), trackEnd = deck.audio.duration || Infinity;
+        deck.loopIn = snapToBeat(deckTime(deck)); deck.loopOut = Math.min(trackEnd, deck.loopIn + duration);
+        if (Number.isFinite(trackEnd) && deck.loopOut - deck.loopIn < Math.min(duration, trackEnd)) deck.loopIn = Math.max(0, deck.loopOut - Math.min(duration, trackEnd));
+        deck.loopOn = deck.loopOut > deck.loopIn; if (wasPlaying && deck.loopOn) startLoopPlayback(deck);
+      }
       else { deck.loopOn = false; if (deck.loopSource) stopLoopPlayback(deck, wasPlaying); }
       updateLoop(deck);
     });

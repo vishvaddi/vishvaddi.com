@@ -68,7 +68,7 @@ for (const [name, width, height] of viewports) {
         })
         check(`${name}: MIX panels are compact`, mixLayout.gaps.every((gap) => gap <= 20), `${mixLayout.gaps.join('/')}px trailing space`)
         check(`${name}: MIX channels stay on one row`, mixLayout.channelRows === 1, `${mixLayout.channelRows} rows`)
-        check(`${name}: MIX uses the single Signal Reef visualiser`, await page.locator('.wa-page-mix .wa-spectral[data-visualizer="signal-reef"]').count() === 1 && await page.locator('.wa-page-mix .wa-spectral-mode, .wa-page-mix .wa-master-scope').count() === 0)
+        check(`${name}: MIX uses the single Void Coil visualiser`, await page.locator('.wa-page-mix .wa-spectral[data-visualizer="void-coil"]').count() === 1 && await page.locator('.wa-page-mix .wa-spectral-mode, .wa-page-mix .wa-master-scope').count() === 0)
         if (name === 'desktop') await page.screenshot({ path: 'C:/tmp/studio-mix-desktop.png', fullPage: false })
       }
       if ((name === 'phone' || name === 'landscape') && mode === 'DRUMS') {
