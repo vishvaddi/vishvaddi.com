@@ -112,24 +112,18 @@ function postFX(ts) {
         if (gc.width !== canvas.width || gc.height !== canvas.height) { gc.width = canvas.width; gc.height = canvas.height; }
         gl.viewport(0, 0, gc.width, gc.height);
         gl.bindTexture(gl.TEXTURE_2D, POSTFX.tex);
-        // Upload a HALF-RES copy. The whole shader is low-frequency — warp, chromatic
-        // aberration, a 3x3 bloom, vignette, grain — so nothing in it resolves detail
-        // the downscale would have carried, but the per-frame pixel upload was the
-        // single most expensive thing in the render path at 1440p and above.
-        const hw = Math.max(1, canvas.width >> 1), hh = Math.max(1, canvas.height >> 1);
-        let src = canvas;
-        if (hw >= 64 && hh >= 64) {
-            if (!POSTFX.half) {
-                POSTFX.half = document.createElement('canvas');
-                POSTFX.halfCtx = POSTFX.half.getContext('2d');
-            }
-            if (POSTFX.half.width !== hw || POSTFX.half.height !== hh) {
-                POSTFX.half.width = hw; POSTFX.half.height = hh;
-            }
-            POSTFX.halfCtx.drawImage(canvas, 0, 0, hw, hh);
-            src = POSTFX.half;
+        // Full-res upload. A half-res copy was tried as a perf win on the grounds that
+        // the shader is low-frequency (warp, chromatic aberration, 3x3 bloom, vignette,
+        // grain) — but this texture is the ENTIRE SCENE, not an effect buffer, so
+        // downscaling it softened every sprite, glyph and HUD edge in the game.
+        // texImage2D reallocates GPU storage on every call; texSubImage2D reuses it,
+        // which buys back most of the cost of uploading full resolution.
+        if (POSTFX.texW !== gc.width || POSTFX.texH !== gc.height) {
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+            POSTFX.texW = gc.width; POSTFX.texH = gc.height;
+        } else {
+            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
         }
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
         gl.useProgram(POSTFX.prog);
         gl.uniform1i(POSTFX.loc.tex, 0);
         gl.uniform2f(POSTFX.loc.res, gc.width, gc.height);
