@@ -4,7 +4,7 @@
 // (SOUND is the sole browse-and-scroll exception, by design).
 // This module RE-HOUSES panels built elsewhere — it builds no instruments.
 import { el, btn, help } from "./helpers";
-import { buildVectorscope } from "./vectorscope";
+import { buildOrb } from "./orb";
 
 export type ModeId = "drums" | "pads" | "synth" | "song" | "dj" | "mix";
 
@@ -151,24 +151,24 @@ export function buildLayout(p: LayoutPanels): Layout {
   // XY field column on the left of whichever view is up (LYSERGIC, F)
   const synthMain = el("div", "wa-synth-main");
   const synthSide = el("div", "wa-synth-side");
-  // WAVE ⇄ VECTOR share one screen slot: the waveform reads the synth bus,
-  // the vectorscope the master bus, so they answer different questions.
+  // WAVE ⇄ SPHERE share one screen slot: the waveform reads the synth bus,
+  // the sphere the master bus, so they answer different questions.
   const scopeWrap = el("div", "wa-xy-wrap");
   const scopeHead = el("div", "wa-scope-head");
-  const scopeTab = btn("WAVE", "wa-btn-sm active"), orbTab = btn("VECTOR", "wa-btn-sm");
-  help(orbTab, "Stereo vectorscope — left against right. A vertical trace is mono, a wide cloud is stereo, horizontal means out of phase.");
-  const orb = buildVectorscope();
-  orb.root.hidden = true;
+  const scopeTab = btn("WAVE", "wa-btn-sm active"), orbTab = btn("SPHERE", "wa-btn-sm");
+  help(orbTab, "The Lysergic geodesic sphere — the whole mix pushes, tears and chromatically splits its wireframe.");
+  const orb = buildOrb();
+  orb.canvas.hidden = true;
   scopeHead.append(el("div", "wa-fx-title", "SCREEN"), scopeTab, orbTab);
   const showOrb = (on: boolean): void => {
-    p.scope.hidden = on; orb.root.hidden = !on;
+    p.scope.hidden = on; orb.canvas.hidden = !on;
     scopeTab.classList.toggle("active", !on); orbTab.classList.toggle("active", on);
     orb.setActive(on && !soundPage.hidden);
     localStorage.setItem("vv_studio_screen", on ? "orb" : "scope");
   };
   scopeTab.addEventListener("click", () => showOrb(false));
   orbTab.addEventListener("click", () => showOrb(true));
-  scopeWrap.append(scopeHead, p.scope, orb.root);
+  scopeWrap.append(scopeHead, p.scope, orb.canvas);
   showOrb(localStorage.getItem("vv_studio_screen") === "orb");
   synthSide.append(p.xyPanel, scopeWrap, p.chordPanel);
   synthMain.append(synthSide, synthViewHost);
@@ -202,9 +202,9 @@ export function buildLayout(p: LayoutPanels): Layout {
   p.mixer.classList.add("wa-mix-channels");
   p.devicePanel.classList.add("wa-mix-flex");
   const scopeWell = el("div", "wa-panel wa-mix-scope");
-  const mixOrb = buildVectorscope();
+  const mixOrb = buildOrb();
   help(scopeWell, "Master output — the finished mix, post-limiter.");
-  scopeWell.append(el("div", "wa-fx-title", "VOID COIL"), mixOrb.root);
+  scopeWell.append(el("div", "wa-fx-title", "LYSERGIC SPHERE"), mixOrb.canvas);
   mixPage.append(p.mixer, scopeWell, p.devicePanel);
 
   const pages: Record<ModeId, HTMLElement> = {
@@ -226,7 +226,7 @@ export function buildLayout(p: LayoutPanels): Layout {
     modeKeyBtns.forEach((b, i) => b.classList.toggle("active", MODES[i].id === next));
     (Object.keys(pages) as ModeId[]).forEach((id) => { pages[id].hidden = id !== next; });
     if (next === "synth") p.onSynthVisible();
-    orb.setActive(next === "synth" && !orb.root.hidden);
+    orb.setActive(next === "synth" && !orb.canvas.hidden);
     mixOrb.setActive(next === "mix");
     p.onModeChange(MODES.find((m) => m.id === next)!.label);
     localStorage.setItem("vv_studio_mode", next);

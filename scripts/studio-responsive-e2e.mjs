@@ -68,7 +68,7 @@ for (const [name, width, height] of viewports) {
         })
         check(`${name}: MIX panels are compact`, mixLayout.gaps.every((gap) => gap <= 20), `${mixLayout.gaps.join('/')}px trailing space`)
         check(`${name}: MIX channels stay on one row`, mixLayout.channelRows === 1, `${mixLayout.channelRows} rows`)
-        check(`${name}: MIX uses the single Void Coil visualiser`, await page.locator('.wa-page-mix .wa-spectral[data-visualizer="void-coil"]').count() === 1 && await page.locator('.wa-page-mix .wa-spectral-mode, .wa-page-mix .wa-master-scope').count() === 0)
+        check(`${name}: MIX uses the single Lysergic sphere`, await page.locator('.wa-page-mix .wa-orb[data-visualizer="lysergic-sphere"]').count() === 1 && await page.locator('.wa-page-mix .wa-spectral, .wa-page-mix .wa-master-scope').count() === 0)
         if (name === 'desktop') await page.screenshot({ path: 'C:/tmp/studio-mix-desktop.png', fullPage: false })
       }
       if ((name === 'phone' || name === 'landscape') && mode === 'DRUMS') {
@@ -91,6 +91,7 @@ for (const [name, width, height] of viewports) {
           const decks = [...document.querySelectorAll('.wa-dj-deck')].map((node) => node.getBoundingClientRect())
           const crossfader = document.querySelector('.wa-dj-crossfader input')?.getBoundingClientRect()
           const platter = document.querySelector('.wa-dj-platter')?.getBoundingClientRect()
+          const quartz = document.querySelector('.wa-dj-quartz')?.getBoundingClientRect()
           const pitch = document.querySelector('.wa-dj-pitch-fader input')?.getBoundingClientRect()
           const host = document.querySelector('.wa-dj-decks')?.getBoundingClientRect()
           const library = document.querySelector('.wa-dj-library')?.getBoundingClientRect()
@@ -98,11 +99,13 @@ for (const [name, width, height] of viewports) {
           const mixerRect = mixer?.getBoundingClientRect()
           const recordStatus = document.querySelector('.wa-dj-record-status')?.getBoundingClientRect()
           const performanceButtons = [...document.querySelectorAll('.wa-dj-deck .wa-dj-performance .wa-btn')].map((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height, clipped: node.scrollWidth > node.clientWidth + 1 }))
-          return { widths: decks.map((deck) => Math.round(deck.width)), tops: decks.map((deck) => Math.round(deck.top)), crossfader: crossfader?.width ?? 0, platter: platter?.width ?? 0, pitchWidth: pitch?.width ?? 0, pitchHeight: pitch?.height ?? 0, hostBottom: host?.bottom ?? 0, libraryTop: library?.top ?? 0, performanceButtons, mixerScroll: mixer ? mixer.scrollHeight - mixer.clientHeight : 999, mixerBottom: mixerRect?.bottom ?? 0, recordBottom: recordStatus?.bottom ?? 999 }
+          const quartzClear = !platter || !quartz || quartz.bottom <= platter.top || quartz.right <= platter.left || quartz.left >= platter.right
+          return { widths: decks.map((deck) => Math.round(deck.width)), tops: decks.map((deck) => Math.round(deck.top)), crossfader: crossfader?.width ?? 0, platter: platter?.width ?? 0, quartzClear, quartzGap: platter && quartz ? platter.top - quartz.bottom : 0, pitchWidth: pitch?.width ?? 0, pitchHeight: pitch?.height ?? 0, hostBottom: host?.bottom ?? 0, libraryTop: library?.top ?? 0, performanceButtons, mixerScroll: mixer ? mixer.scrollHeight - mixer.clientHeight : 999, mixerBottom: mixerRect?.bottom ?? 0, recordBottom: recordStatus?.bottom ?? 999 }
         })
         check(`${name}: DJ exposes two usable decks`, djLayout.widths.length === 2 && djLayout.widths.every((width) => width >= (name === 'desktop' || name === 'laptop' ? 260 : 320)), djLayout.widths.join('/'))
         check(`${name}: DJ crossfader is usable`, djLayout.crossfader >= 90, `${Math.round(djLayout.crossfader)}px`)
         check(`${name}: DJ platter is turntable-sized`, djLayout.platter >= 220, `${Math.round(djLayout.platter)}px`)
+        check(`${name}: quartz badge clears the platter`, djLayout.quartzClear, `${Math.round(djLayout.quartzGap)}px gap`)
         check(`${name}: DJ pitch control is vertical`, djLayout.pitchHeight > djLayout.pitchWidth * 2, `${Math.round(djLayout.pitchWidth)}×${Math.round(djLayout.pitchHeight)}px`)
         check(`${name}: DJ performance buttons do not squash`, djLayout.performanceButtons.every((button) => button.width >= 28 && button.height >= 30 && !button.clipped), `${Math.round(Math.min(...djLayout.performanceButtons.map((button) => button.width)))}×${Math.round(Math.min(...djLayout.performanceButtons.map((button) => button.height)))}px min`)
         check(`${name}: DJ mixer needs no internal scroll`, djLayout.mixerScroll <= 1 && djLayout.recordBottom <= djLayout.mixerBottom + 1, `${Math.round(djLayout.mixerScroll)}px overflow`)
