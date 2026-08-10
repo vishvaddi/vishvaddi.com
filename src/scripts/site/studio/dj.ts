@@ -526,6 +526,7 @@ export function buildDj(): { root: HTMLElement } {
 
   const animate = (): void => {
     if (root.offsetParent) decks.forEach((deck, deckIndex) => {
+      if (!deck.playIntent && !deck.loopSource && deck.audio.paused) { deck.root.classList.remove("playing"); deck.play.classList.remove("active"); deck.play.textContent = "START · STOP"; }
       if (deck.loopSource && deck.loopIn != null && deck.loopOut != null) {
         const span = deck.loopOut - deck.loopIn, elapsed = Math.max(0, ac().currentTime - deck.loopStartedAt) * (1 + deck.pitch / 100);
         deck.virtualTime = deck.loopIn + ((deck.loopStartPosition - deck.loopIn + elapsed) % span);
