@@ -48,6 +48,7 @@ import { buildPlayback } from "./playback";
 import { knob } from "./knob";
 import { bindKeyboard } from "./keymap";
 import { buildLayout } from "./layout";
+import { buildDj } from "./dj";
 
 // One color per scene (A-H), distinct from the accent/amber/blue already
 // used for state (playhead.playing/queued/selected) — identity, not status.
@@ -263,11 +264,12 @@ export async function initStudio(): Promise<void> {
   laneInspector.append(laneInsp.panel);
   // ── Vinyl scratchpad ── (scratch.ts — Phase 0 split)
   const scratchPanel = buildScratchpad(getChopBuffer);
+  const dj = buildDj();
 
   const layout = buildLayout({
     beat, mpcPanel, padSeqPanel, padGrid, pianoRoll, synthKeys,
     keysHeader: synth.keysHeader, synthPanel, xyPanel: synth.xyPanel, scope: synth.scope, chordPanel: synth.chordPanel,
-    sessionGrid, launchStatus, song, mixer: mixer.root, devicePanel,
+    sessionGrid, launchStatus, song, djPanel: dj.root, mixer: mixer.root, devicePanel,
     chop, scratchPanel, inspector, laneInspector,
     onSynthVisible: () => synth.waveRedraws().forEach((fn) => fn()),
     onModeChange: (label) => { lcdMode.textContent = label; },
@@ -289,7 +291,7 @@ export async function initStudio(): Promise<void> {
   const { showTutorialStep } = buildTutorial({
     tabBtns, padGrid, selectedSampleEditor, waveform, eventLane, pianoRoll,
     gridSel, presetRow, sessionGrid, devicePanel, exportBtn,
-    transportBar, tutorialBtn,
+    transportBar, tutorialBtn, djPanel: dj.root,
   });
   tutorialBtn.addEventListener("click", () => showTutorialStep(0));
 

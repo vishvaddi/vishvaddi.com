@@ -21,7 +21,7 @@ export interface KeyboardDeps {
   redoBtn: HTMLElement;
   /** transport EXPORT key — Ctrl+S opens its modal */
   exportBtn?: HTMLElement;
-  /** chassis mode keys, in order — 1-5 select them */
+  /** chassis mode keys, in order — 1-6 select them */
   modeKeyBtns?: HTMLElement[];
 }
 
@@ -39,10 +39,10 @@ export function bindKeyboard(deps: KeyboardDeps): void {
       else if (key === "s") { ev.preventDefault(); deps.exportBtn?.click(); }
       return;
     }
-    // Alt+1–5 selects a mode. Bare digits are NOT free: 1–4 are pad keys in
+    // Alt+1–6 selects a mode. Bare digits are NOT free: 1–4 are pad keys in
     // DRUMS/PADS and 2/3/5 are note keys in SYNTH, so Alt is what keeps mode
     // switching from stealing them.
-    if (ev.altKey && !ev.shiftKey && /^[1-5]$/.test(ev.key)) {
+    if (ev.altKey && !ev.shiftKey && /^[1-6]$/.test(ev.key)) {
       const target = deps.modeKeyBtns?.[Number(ev.key) - 1];
       if (target) { ev.preventDefault(); target.click(); }
     }

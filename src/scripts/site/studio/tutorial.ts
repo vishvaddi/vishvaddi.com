@@ -18,10 +18,11 @@ export interface TutorialTargets {
   exportBtn: HTMLElement;
   transportBar: HTMLElement;
   tutorialBtn: HTMLElement;
+  djPanel: HTMLElement;
 }
 
 export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: number) => void } {
-  const { tabBtns, padGrid, selectedSampleEditor, waveform, eventLane, pianoRoll, gridSel, presetRow, sessionGrid, devicePanel, exportBtn, transportBar, tutorialBtn } = t;
+  const { tabBtns, padGrid, selectedSampleEditor, waveform, eventLane, pianoRoll, gridSel, presetRow, sessionGrid, devicePanel, exportBtn, transportBar, tutorialBtn, djPanel } = t;
   const shortcutsBox = el("div", "wa-help-shortcuts");
   shortcutsBox.append(el("div", "wa-fx-title", "KEYBOARD SHORTCUTS"));
   ([
@@ -29,12 +30,15 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
     ["Ctrl+Z", "Undo"],
     ["Ctrl+Shift+Z or Ctrl+Y", "Redo"],
     ["Ctrl+S", "Open project / export"],
-    ["Alt+1–5", "Switch Studio mode"],
+    ["Alt+1–6", "Switch Studio mode"],
     ["1-4, Q-R, A-F, Z-V", "Play MPC pads (DRUMS & PADS modes)"],
     ["Z–M row", "Play synth notes C3–B3 (SYNTH mode)"],
     ["Q–P row", "Play synth notes C4–E5 (SYNTH mode)"],
     ["− / =", "Shift synth keyboard octave (SYNTH mode)"],
     ["Enter", "Confirm the typed BPM"],
+    ["W / E / R", "Deck A play / cue / sync (DJ mode)"],
+    ["I / O / P", "Deck B play / cue / sync (DJ mode)"],
+    ["[ / ]", "Move crossfader left / right (DJ mode)"],
   ] as const).forEach(([key, desc]) => {
     const row = el("div", "wa-help-shortcut-row");
     row.append(el("span", "wa-help-key", key), el("span", "wa-help-desc", desc));
@@ -61,6 +65,11 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
     { section: "Arrange", title: "Session view", text: "The three track rows run across sixteen scene columns. Launch single clips or a whole scene — changes land on the next bar so transitions stay in time." },
     { section: "Arrange", title: "Arrangement & automation", text: "Build a song by chaining scene blocks, reordering them and changing repeat length. Automation ramps can target synth cutoff/volume or master volume/reverb across each block." },
     { section: "Arrange", title: "Song, kit & patch libraries", text: "Factory songs and kits provide complete starting points. Save named user songs, drum kits and synth patches locally, or move each library between browsers with JSON import/export." },
+    { section: "DJ", title: "Loading tracks safely", text: "Use LOAD on either deck, drop a local audio file onto a deck, or add several files to the browser library. Audio stays on this device and is not uploaded. Library file access lasts only for this browser session." },
+    { section: "DJ", title: "Deck transport, cueing & jog", text: "PLAY starts or pauses. SET CUE stores the main cue; CUE pauses and returns there. Click the waveform to seek, or drag the jog wheel for fine positioning. HOT 1–8 sets an empty cue and jumps to a stored cue; right-click a hot cue to clear it." },
+    { section: "DJ", title: "Tempo, sync, loops & slip", text: "TEMPO shifts playback ±16%; MASTER TEMPO preserves pitch. SYNC matches the other loaded deck. Choose a beat length and press LOOP for an automatic loop, or mark IN and OUT manually. SLIP lets the underlying timeline advance while a loop repeats." },
+    { section: "DJ", title: "EQ, crossfader & recording", text: "Each deck has trim, three-band isolator EQ, a bipolar filter and channel level. The equal-power crossfader blends both decks. REC captures only the local DJ bus and downloads the mix as browser-native WebM audio." },
+    { section: "DJ", title: "Streaming service boundary", text: "Public YouTube and SoundCloud embeds cannot be routed into the Studio EQ, cue or recording bus under their platform rules. A compliant streaming deck requires a separately licensed provider SDK; the Studio does not pretend an embed is a mixable deck." },
     { section: "Mix", title: "Mixer & device rack", text: "The Mixer sets channel/synth/master levels. The Devices panel is the actual signal chain — Channel EQ, Bus Compressor, Feedback Delay, Convolution Reverb and Master Limiter each have their own editable parameters plus a bypass toggle." },
     { section: "Mix", title: "Metronome & BPM", text: "Type an exact BPM directly, or use the – / + buttons. The Metro toggle enables the click (included in export while on); its volume slider sits right beside the toggle." },
     { section: "Mix", title: "Save, export & undo", text: "Save Project downloads an editable file with patterns, sounds and settings; Open Project loads it back. Render launched clips or the arrangement to WAV/MP3, or export drum, pad and synth stems. Undo/Redo covers destructive edits." },
@@ -107,7 +116,7 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
   help(browseHelpBtn, "Switch to a searchable reference covering every section, plus keyboard shortcuts.");
   help(takeTourBtn, "Switch back to the guided step-by-step tour.");
   // workspace = nav-proxy index (layout.ts navButtons):
-  // 0 PADS/perform+inspector · 1 PADS/chop · 2 PADS/steps · 3 KEYS · 4 SONG · 5 MIX · 6 SOUND/patch
+  // 0 PADS/perform+inspector · 1 PADS/chop · 2 PADS/steps · 3 KEYS · 4 SONG · 5 MIX · 6 SOUND/patch · 7 DJ
   const tutorialSteps: Array<{ workspace: number; target: HTMLElement; title: string; text: string }> = [
     { workspace: 0, target: padGrid, title: "The PADS mode", text: "The mode keys under the LCD switch the whole screen, hardware style. PADS is the sampling and performance mode — start here whenever you are building a new beat." },
     { workspace: 0, target: padGrid, title: "Play the pads", text: "Use the mouse, touch, computer keyboard or MIDI controller. Drop an audio file directly onto any pad to replace it." },
@@ -119,6 +128,7 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
     { workspace: 6, target: presetRow, title: "The VV-1 synth", text: "The Patch view holds the full editor. Search or randomize a patch, or drag the envelope shape and watch the live waveform preview react. Simple view collapses the editor to the essentials — Advanced view reveals the full mod matrix." },
     { workspace: 4, target: sessionGrid, title: "Launch clips and scenes", text: "Each column is a track and each row a scene. Launch single clips or a whole row — changes wait for the next bar so transitions stay in time." },
     { workspace: 5, target: devicePanel, title: "Process the sound", text: "Use macros, groove controls and device bypass switches to shape the complete signal chain." },
+    { workspace: 7, target: djPanel, title: "Mix local tracks", text: "The DJ mode is a real two-deck local mixer: load or drop audio, set cues and loops, match tempo, shape each deck with EQ and filter, then record the local mix. Browse Help has the full DJ control reference and explains the licensed-provider boundary." },
     { workspace: 5, target: exportBtn, title: "Save and export", text: "Save an editable project before exporting. WAV preserves full quality; MP3 is smaller for sharing." },
     { workspace: 5, target: transportBar, title: "Transport stays available", text: "Playback, BPM, grid, metronome, undo and tutorial controls remain visible in every mode. Space plays/stops; Ctrl+Z undoes." },
     { workspace: 5, target: tutorialBtn, title: "Come back anytime", text: "This same button reopens things later — Browse Help (top of this card) is a searchable reference for every section plus the full keyboard-shortcut list, or replay this tour from the start." },

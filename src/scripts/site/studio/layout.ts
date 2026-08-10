@@ -25,7 +25,7 @@ function drawMasterScope(canvas: HTMLCanvasElement, page: HTMLElement): void {
   frame();
 }
 
-export type ModeId = "drums" | "pads" | "synth" | "song" | "mix";
+export type ModeId = "drums" | "pads" | "synth" | "song" | "dj" | "mix";
 
 export interface LayoutPanels {
   beat: HTMLElement;
@@ -42,6 +42,7 @@ export interface LayoutPanels {
   sessionGrid: HTMLElement;
   launchStatus: HTMLElement;
   song: HTMLElement;                // arrangement lanes + help (grid/status re-homed here)
+  djPanel: HTMLElement;
   mixer: HTMLElement;
   devicePanel: HTMLElement;
   chop: HTMLElement;
@@ -66,6 +67,7 @@ const MODES: Array<{ id: ModeId; label: string; helpText: string }> = [
   { id: "pads", label: "PADS", helpText: "Perform on the 16 pads, edit the selected pad, chop breaks and scratch." },
   { id: "synth", label: "SYNTH", helpText: "The VV-1: piano roll or patch editor above always-playable keys." },
   { id: "song", label: "CLIPS", helpText: "The clip launcher — every track's clips across the eight scenes." },
+  { id: "dj", label: "DJ", helpText: "Mix local audio across two decks with cues, loops, EQ, sync and recording." },
   { id: "mix", label: "MIX", helpText: "Mixer, master devices, project save and export." },
 ];
 
@@ -207,6 +209,11 @@ export function buildLayout(p: LayoutPanels): Layout {
   const songPage = el("div", "wa-page wa-page-song");
   songPage.append(p.song);
 
+  // ── DJ ── two local-file decks. Provider embeds deliberately stay outside
+  // this audio graph: their public APIs do not license extraction or mixing.
+  const djPage = el("div", "wa-page wa-page-dj");
+  djPage.append(p.djPanel);
+
   // ── MIX ── one console faceplate: channel strips fill the upper aperture
   // beside a master scope well, devices span the bottom as a rail. Export is
   // a rare terminal action, so it lives behind a transport key, not here.
@@ -223,9 +230,9 @@ export function buildLayout(p: LayoutPanels): Layout {
 
   const pages: Record<ModeId, HTMLElement> = {
     drums: drumsPage, pads: padsPage,
-    synth: soundPage, song: songPage, mix: mixPage,
+    synth: soundPage, song: songPage, dj: djPage, mix: mixPage,
   };
-  workarea.append(drumsPage, padsPage, soundPage, songPage, mixPage);
+  workarea.append(drumsPage, padsPage, soundPage, songPage, djPage, mixPage);
 
   // ── chassis mode keys ──
   const modeBar = el("div", "wa-modebar");
@@ -258,7 +265,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   setMode(activeMode);
 
   // tutorial nav proxies — composite actions per tour stop:
-  // 0 pads/perform+inspector · 1 pads/chop · 2 pads/steps · 3 synth/roll · 4 song · 5 mix · 6 synth/patch
+  // 0 pads/perform+inspector · 1 pads/chop · 2 pads/steps · 3 synth/roll · 4 song · 5 mix · 6 synth/patch · 7 dj
   const nav = (fn: () => void): HTMLElement => {
     const b = el("button", "wa-nav-proxy") as HTMLButtonElement;
     b.type = "button";
@@ -273,6 +280,7 @@ export function buildLayout(p: LayoutPanels): Layout {
     nav(() => setMode("song")),
     nav(() => setMode("mix")),
     nav(() => { setMode("synth"); synthView = "patch"; paintSynthView(); }),
+    nav(() => setMode("dj")),
   ];
 
   return { modeBar, workarea, getActiveMode: () => activeMode, navButtons, modeKeyBtns };

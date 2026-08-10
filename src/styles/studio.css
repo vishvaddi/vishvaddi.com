@@ -482,6 +482,81 @@
   background: #050a0c; border: 1px solid #1e262a; border-radius: 4px;
   box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.8), 0 0 10px rgba(95, 168, 138, 0.12);
 }
+
+/* ── DJ Studio ──────────────────────────────────────────────────────────────
+   A performance surface, not a decorative CDJ skin. The hierarchy follows
+   the actual set workflow: track/readout → waveform → transport/jog → cues →
+   channel shaping. Every control remains a native, labelled input/button. */
+.wa-page-dj { overflow: hidden; }
+.wa-dj { height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 8px; color: var(--wa-text); }
+.wa-dj-decks { min-height: 0; flex: 1 1 auto; display: grid; grid-template-columns: minmax(310px, 1fr) 150px minmax(310px, 1fr); gap: 8px; }
+.wa-dj-deck { min-width: 0; min-height: 0; padding: 10px; display: grid; grid-template-columns: minmax(0, 1fr) 104px; grid-template-rows: auto auto 92px auto minmax(112px, 1fr); gap: 7px 10px; overflow: auto; border-color: color-mix(in srgb, var(--wa-accent) 30%, var(--wa-border)); background: radial-gradient(circle at 22% 18%, rgba(95,168,138,.07), transparent 30%), linear-gradient(145deg, #171b1d, #101315 65%); }
+.wa-dj-deck-b.dragover { outline: 2px solid #c978a0; outline-offset: -4px; }
+.wa-dj-deck-a.dragover { outline: 2px solid #db9e56; outline-offset: -4px; }
+.wa-dj-deck-head { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; }
+.wa-dj-deck-badge { padding: 4px 7px; border: 1px solid var(--wa-border-2); color: var(--wa-phos); font: 700 10px/1 var(--wa-mono); letter-spacing: .12em; }
+.wa-dj-track-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 11px/1.2 var(--wa-mono); letter-spacing: .04em; }
+.wa-dj-display { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto auto; gap: 12px; padding: 5px 8px; border: 1px solid var(--wa-screen-border); background: var(--wa-screen); color: var(--wa-phos); font: 700 11px/1 var(--wa-mono); }
+.wa-dj-time { font-size: 16px; }
+.wa-dj-waveform { grid-column: 1 / -1; width: 100%; height: 92px; border: 1px solid var(--wa-screen-border); cursor: crosshair; touch-action: none; }
+.wa-dj-transport { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px; align-content: start; }
+.wa-dj-transport .wa-dj-play { grid-column: 1 / -1; min-height: 40px; font-weight: 800; }
+.wa-dj-jog { grid-column: 2; grid-row: 4 / 6; width: 96px; height: 96px; place-self: start center; position: relative; display: grid; place-items: center; border: 1px solid #4b5254; border-radius: 50%; background: repeating-radial-gradient(circle, #191d1f 0 5px, #111416 6px 8px); box-shadow: inset 0 0 0 8px #0c0e0f, inset 0 0 0 9px #596063, 0 5px 18px #0008; cursor: ew-resize; touch-action: none; }
+.wa-dj-jog::after { content: ""; width: 5px; height: 30px; position: absolute; top: 8px; border-radius: 4px; background: var(--wa-phos); opacity: .65; }
+.wa-dj-jog-ring { position: absolute; inset: 19px; border: 1px solid #596063; border-radius: 50%; }
+.wa-dj-jog-label { color: var(--wa-phos); font: 800 20px/1 var(--wa-mono); }
+.wa-dj-jog.touching { box-shadow: inset 0 0 0 8px #0c0e0f, inset 0 0 0 10px var(--wa-phos), 0 0 18px rgba(95,168,138,.3); }
+.wa-dj-performance { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.wa-dj-loopbar { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 4px; }
+.wa-dj-loop-length { min-width: 0; font-size: 9px; padding-inline: 2px; }
+.wa-dj-hotcues { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 4px; }
+.wa-dj-hotcue { min-height: 30px; padding: 3px; font-size: 9px; }
+.wa-dj-hotcue.set { border-color: #db9e56; color: #f1c07f; background: rgba(219,158,86,.12); }
+.wa-dj-deck-b .wa-dj-hotcue.set { border-color: #c978a0; color: #e3a7c4; background: rgba(201,120,160,.12); }
+.wa-dj-controls { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 5px; align-items: end; }
+.wa-dj-range { min-width: 0; display: flex; flex-direction: column; gap: 3px; color: var(--wa-muted); font: 700 8px/1 var(--wa-mono); text-align: center; letter-spacing: .08em; }
+.wa-dj-range input { width: 100%; min-width: 0; accent-color: var(--wa-phos); }
+.wa-dj-mixer { min-width: 0; padding: 10px 8px; display: flex; flex-direction: column; gap: 9px; align-items: stretch; overflow: auto; background: linear-gradient(#1b2022,#101315); }
+.wa-dj-mixer .wa-fx-title { text-align: center; }
+.wa-dj-crossfader { margin-top: auto; }
+.wa-dj-record { min-height: 34px; }
+.wa-dj-record.active { color: #f2b6b0; border-color: #df675f; box-shadow: 0 0 12px rgba(223,103,95,.3); }
+.wa-dj-record-status { color: var(--wa-muted); font: 700 8px/1.3 var(--wa-mono); text-align: center; }
+.wa-dj-policy { margin-top: auto; padding: 7px; border: 1px solid var(--wa-border); color: var(--wa-muted); font: 8px/1.45 var(--wa-mono); }
+.wa-dj-policy strong { color: var(--wa-text); }
+.wa-dj-library { flex: 0 0 auto; max-height: 116px; padding: 7px 9px; display: grid; grid-template-columns: auto auto 1fr; gap: 7px 10px; align-items: center; overflow: auto; }
+.wa-dj-private { justify-self: end; color: var(--wa-phos); font: 700 8px/1 var(--wa-mono); letter-spacing: .08em; }
+.wa-dj-library-rows { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 3px; }
+.wa-dj-library-row { min-width: 0; display: grid; grid-template-columns: minmax(120px,1fr) 70px auto auto; gap: 5px; align-items: center; }
+.wa-dj-library-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 10px/1.2 var(--wa-mono); }
+.wa-dj-library-bpm { color: var(--wa-phos); font: 9px/1 var(--wa-mono); text-align: right; }
+
+@media (max-width: 1040px) {
+  .wa-dj-decks { grid-template-columns: minmax(270px,1fr) 118px minmax(270px,1fr); }
+  .wa-dj-deck { grid-template-columns: minmax(0,1fr) 82px; padding: 7px; gap: 5px; }
+  .wa-dj-jog { width: 76px; height: 76px; }
+  .wa-dj-jog::after { height: 23px; }
+  .wa-dj-controls { grid-template-columns: repeat(4,minmax(0,1fr)); }
+}
+
+@media (max-width: 900px) {
+  .immersive-page .wa-modebar .wa-modekey:nth-child(5)::before { content: "◎"; }
+  .immersive-page .wa-modebar .wa-modekey:nth-child(6)::before { content: "≡"; }
+  .wa-page-dj { overflow: auto !important; overscroll-behavior: contain; }
+  .wa-dj { height: auto; min-height: 100%; }
+  .wa-dj-decks { display: flex; flex: 0 0 auto; flex-direction: column; overflow: visible; }
+  .wa-dj-deck { min-height: 540px; overflow: visible; grid-template-columns: minmax(0,1fr) 90px; }
+  .wa-dj-jog { width: 84px; height: 84px; }
+  .wa-dj-mixer { min-height: 190px; overflow: visible; order: 3; }
+  .wa-dj-deck-b { order: 2; }
+  .wa-dj-mixer { order: 3; }
+  .wa-dj-controls { grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .wa-dj-loopbar { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .wa-dj-hotcues { grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .wa-dj-library { max-height: none; grid-template-columns: 1fr auto; }
+  .wa-dj-private { grid-column: 1 / -1; justify-self: start; }
+  .wa-dj-library-row { grid-template-columns: minmax(0,1fr) 64px auto auto; }
+}
 .wa-scope[hidden], .wa-vectorscope[hidden], .wa-spectral[hidden] { display: none; }
 .wa-spectral { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .wa-spectral-controls {

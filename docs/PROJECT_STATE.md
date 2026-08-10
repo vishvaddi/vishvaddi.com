@@ -1,13 +1,14 @@
 # Project State
 
-_Last updated: 2026-08-09 — Site tools now share one responsive navigation shell; Lattice supports shortcut-first deep nesting._
+_Last updated: 2026-08-10 — Studio now includes a tested, local-first two-deck DJ workstation._
 
 ## Current Position
 
-- `/studio/` is an immersive, viewport-filling browser workstation with a graphite-and-neon Lysergic identity, audio-reactive signal displays and mode-specific mobile compositions rather than a scaled desktop layout. Its primary modes are drums, pads, synth, clips/arrangement and mix.
-- Studio supports 4–32-step straight/triplet patterns; drums and sliced/recorded samples; Bass, Lead and Harmony synth lanes; accent/slide; Web MIDI; patch, kit and song libraries; scene chains; automation; effects; Morph/Terrain performance; project persistence; WAV/MP3 and stem export.
+- `/studio/` is an immersive, viewport-filling browser workstation with a graphite-and-neon Lysergic identity, audio-reactive signal displays and mode-specific mobile compositions rather than a scaled desktop layout. Its primary modes are drums, pads, synth, clips/arrangement, DJ and mix.
+- Studio supports 4–32-step straight/triplet patterns; drums and sliced/recorded samples; Bass, Lead and Harmony synth lanes; accent/slide; Web MIDI; patch, kit and song libraries; scene chains; automation; effects; Morph/Terrain performance; project persistence; WAV/MP3 and stem export. DJ adds two local-file decks with waveform seeking, BPM analysis, jog control, main/hot cues, beat/manual loops, slip, sync, master tempo, three-band EQ, filters, channel levels, equal-power crossfade and local WebM mix recording.
+- DJ files stay in-browser and are never uploaded. Cue/BPM metadata persists by file fingerprint, while file access and the browser library are deliberately session-only. Public YouTube and SoundCloud embeds remain outside the mix bus because their public APIs do not license audio extraction, cross-service mixing or recording; a future streaming deck requires a separately licensed provider SDK.
 - Studio opens with a playable `MIDNIGHT ACID` demo and one non-modal hint. New blank/demo replacement, imported projects, songs and patches apply in place with confirmation; arrangement, tempo, title and mixer state participate in persistence/history rather than forcing a reload.
-- Studio source and browser suites cover first-run state, core edit/undo/autosave/playback/export, mixer synchronisation/persistence, in-place project replacement, the five modes, three synth lanes, Signal Garden keyboard control, arrangement automation, viewport fit, mobile control dimensions and tutorial stacking.
+- Studio source and browser suites cover first-run state, core edit/undo/autosave/playback/export, mixer synchronisation/persistence, in-place project replacement, all six modes, local DJ decode/BPM/cue/library behaviour, three synth lanes, Signal Garden keyboard control, arrangement automation, viewport fit, mobile control dimensions, DJ stacking/library clearance and tutorial stacking.
 - `/site/programme/` uses a true desktop workspace: the searchable tools rail is anchored 24 px from the viewport edge and the editor fills all remaining width. At 1,440 px the editor spans 1,168 px from x=248 to x=1,416; Android landscape retains an 812 px editor in an 844 px viewport. Focused browser coverage checks rail position, full workspace use, overflow, fullscreen, tutorial restoration and chart-first mode.
 - Every `/site/*` tool page now uses that same desktop workspace shell automatically: a 200 px searchable rail at x=24 and content beginning at x=248. At 390 px every tool uses the same 342×46 px compact picker at x=24. The hub no longer duplicates priority tools in a Quick start section.
 - Lattice retains its recursive saved-data format while making unlimited-depth nesting keyboard-first. Nested grids now start at 1×1; `Ctrl+Enter` adds and enters a child, repeated presses keep nesting, and `Alt+Enter` adds an editable sibling. Matching touch buttons and searchable help expose the same workflow.
@@ -35,6 +36,7 @@ _Last updated: 2026-08-09 — Site tools now share one responsive navigation she
 
 ## Next Actions
 
+- Run a real Android Chrome audio pass with two full-length tracks, wired headphones and a 20-minute recording; browser automation verifies workflow and geometry but cannot validate device latency, thermal throttling or long-session audio stability.
 - Playtest Deep Swarm’s expedition pacing, mining yields, sector disturbance and PDA readability across desktop and Android landscape; use the session trace if a long run fails.
 - Playtest Carromancy on the live domain across mouse and landscape touch, then tune cushion restitution and spin against filmed real-board references.
 - Play 10-20 real runs and review the local telemetry before changing target curves, rewards or Charm prices again.

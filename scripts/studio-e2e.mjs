@@ -5,6 +5,15 @@
 import { chromium } from 'playwright-core'
 
 const BASE = process.argv[2] ?? 'http://localhost:4321'
+const testWav = (() => {
+  const sampleRate = 8000, samples = sampleRate * 2, out = Buffer.alloc(44 + samples * 2)
+  out.write('RIFF', 0); out.writeUInt32LE(36 + samples * 2, 4); out.write('WAVEfmt ', 8)
+  out.writeUInt32LE(16, 16); out.writeUInt16LE(1, 20); out.writeUInt16LE(1, 22)
+  out.writeUInt32LE(sampleRate, 24); out.writeUInt32LE(sampleRate * 2, 28); out.writeUInt16LE(2, 32); out.writeUInt16LE(16, 34)
+  out.write('data', 36); out.writeUInt32LE(samples * 2, 40)
+  for (let i = 0; i < samples; i++) out.writeInt16LE(Math.round(Math.sin(i / sampleRate * Math.PI * 2 * 220) * 10000), 44 + i * 2)
+  return out
+})()
 const results = []
 let failed = 0
 
@@ -169,6 +178,15 @@ try {
   await page.locator('.wa-transport button', { hasText: 'Undo' }).click()
   await page.waitForTimeout(300)
   check('project: replacement can be undone', await page.locator('.wa-cell.on').count() > 0)
+
+  // ── DJ: local file enters a real deck and cue workflow ──
+  await page.locator('.wa-modekey', { hasText: 'DJ' }).click()
+  await page.locator('.wa-dj-deck-a input[type="file"]').setInputFiles({ name: 'local-test.wav', mimeType: 'audio/wav', buffer: testWav })
+  await page.waitForFunction(() => document.querySelector('.wa-dj-deck-a .wa-dj-bpm')?.textContent?.includes('BPM') && !document.querySelector('.wa-dj-deck-a .wa-dj-bpm')?.textContent?.includes('ERROR'))
+  check('dj: local file loads and analyses', (await page.locator('.wa-dj-deck-a .wa-dj-track-title').textContent()) === 'local-test.wav')
+  await page.locator('.wa-dj-deck-a .wa-dj-hotcue').first().click()
+  check('dj: hot cue can be set', await page.locator('.wa-dj-deck-a .wa-dj-hotcue').first().evaluate((node) => node.classList.contains('set')))
+  check('dj: local file is added to browser library', await page.locator('.wa-dj-library-row', { hasText: 'local-test.wav' }).count() === 1)
 
   // ── console clean ──
   check('console: no errors', consoleErrors.length === 0, consoleErrors.slice(0, 2).join(' | '))

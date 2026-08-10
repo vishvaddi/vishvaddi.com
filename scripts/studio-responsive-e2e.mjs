@@ -39,7 +39,7 @@ for (const [name, width, height] of viewports) {
     check(`${name}: no document horizontal overflow`, geometry.docWidth <= geometry.clientWidth + 1, `${geometry.docWidth}/${geometry.clientWidth}`)
     check(`${name}: workstation fills viewport`, Math.abs(geometry.winHeight - geometry.viewportHeight) <= 2, `${geometry.winHeight}/${geometry.viewportHeight}`)
 
-    for (const mode of ['DRUMS', 'PADS', 'SYNTH', 'CLIPS', 'MIX']) {
+    for (const mode of ['DRUMS', 'PADS', 'SYNTH', 'CLIPS', 'DJ', 'MIX']) {
       await page.locator('.wa-modekey', { hasText: mode }).click()
       check(`${name}: ${mode} opens`, await page.locator('.wa-modekey', { hasText: mode }).evaluate((node) => node.classList.contains('active')))
       if ((name === 'desktop' || name === 'laptop') && mode === 'PADS') {
@@ -83,6 +83,21 @@ for (const [name, width, height] of viewports) {
         const widths = await page.locator('.wa-mixer .wa-ch').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().width))
         check(`${name}: MIX channels remain readable`, widths.every((width) => width >= 72), `${Math.round(Math.min(...widths))}px min`)
       }
+      if (mode === 'DJ') {
+        const djLayout = await page.evaluate(() => {
+          const decks = [...document.querySelectorAll('.wa-dj-deck')].map((node) => node.getBoundingClientRect())
+          const crossfader = document.querySelector('.wa-dj-crossfader input')?.getBoundingClientRect()
+          const host = document.querySelector('.wa-dj-decks')?.getBoundingClientRect()
+          const library = document.querySelector('.wa-dj-library')?.getBoundingClientRect()
+          return { widths: decks.map((deck) => Math.round(deck.width)), tops: decks.map((deck) => Math.round(deck.top)), crossfader: crossfader?.width ?? 0, hostBottom: host?.bottom ?? 0, libraryTop: library?.top ?? 0 }
+        })
+        check(`${name}: DJ exposes two usable decks`, djLayout.widths.length === 2 && djLayout.widths.every((width) => width >= (name === 'desktop' || name === 'laptop' ? 260 : 320)), djLayout.widths.join('/'))
+        check(`${name}: DJ crossfader is usable`, djLayout.crossfader >= 90, `${Math.round(djLayout.crossfader)}px`)
+        if (name === 'phone' || name === 'landscape') {
+          check(`${name}: DJ decks stack instead of squash`, djLayout.tops[1] > djLayout.tops[0] + 400, djLayout.tops.join('/'))
+          check(`${name}: DJ library follows the decks`, djLayout.libraryTop >= djLayout.hostBottom - 1, `${Math.round(djLayout.hostBottom)}/${Math.round(djLayout.libraryTop)}`)
+        }
+      }
     }
 
     await page.locator('.wa-modekey', { hasText: 'SYNTH' }).click()
@@ -121,6 +136,8 @@ for (const [name, width, height] of viewports) {
       await page.locator('.wa-tutorial-card button', { hasText: 'Close' }).click()
     }
     await page.screenshot({ path: `C:/tmp/studio-${name}.png`, fullPage: false })
+    await page.locator('.wa-modekey', { hasText: 'DJ' }).click()
+    await page.screenshot({ path: `C:/tmp/studio-dj-${name}.png`, fullPage: false })
     check(`${name}: console clean`, errors.length === 0, errors.slice(0, 2).join(' | '))
   } catch (error) {
     check(`${name}: run completed`, false, String(error).slice(0, 180))
