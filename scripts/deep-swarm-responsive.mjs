@@ -25,8 +25,15 @@ try {
   await page.waitForFunction(() => window.__deepSwarm?.build, null, { timeout: 15000 })
   for (const [name, width, height, expectRails] of cases) {
     await page.setViewportSize({ width, height })
+    await page.waitForFunction(([w, h]) => {
+      const canvas = document.querySelector('#c')
+      return canvas && canvas.width === w && canvas.height === h
+    }, [width, height], { timeout: 10000 })
     await page.evaluate(seed => window.__deepSwarm.startSeeded(seed), `responsive-${name}`)
-    await page.waitForTimeout(180)
+    await page.waitForFunction(([w, rails]) => {
+      const hud = window.__deepSwarm?.getState()?.game?.hud
+      return hud && hud.porthole.x === w / 2 && hud.rails === rails
+    }, [width, expectRails], { timeout: 10000 })
     const state = await page.evaluate(() => window.__deepSwarm.getState().game)
     check(`${name}: expected responsive mode`, state.hud.rails === expectRails, `${width}×${height}, rails ${state.hud.rails}`)
     if (state.hud.rails) {
