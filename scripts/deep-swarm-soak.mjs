@@ -53,7 +53,7 @@ try {
       `  |  contacts avg ${String(avg(en)).padStart(3)} max ${String(Math.max(...en)).padStart(3)} cap ${samples[0].popCap}` +
       `  |  proj ${avg(samples.map(s => s.projectiles))} fx ${avg(samples.map(s => s.effects))} obs ${avg(samples.map(s => s.obstacles))}` +
       `  |  frame p95 ${perf.p95.toFixed(1)} p99 ${perf.p99.toFixed(1)}ms` +
-      `  (update ${perf.updateP95.toFixed(1)} draw ${perf.drawP95.toFixed(1)} post ${perf.postP95.toFixed(1)}) long ${perf.longFrames}`
+      `  (update ${perf.updateP95.toFixed(1)} draw ${perf.drawP95.toFixed(1)} post ${perf.postP95.toFixed(1)}) long ${perf.longFrames} fx ${perf.fx}`
     )
   }
 

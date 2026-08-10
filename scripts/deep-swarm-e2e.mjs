@@ -70,7 +70,11 @@ try {
       return fillText(...args)
     }
   })
-  await page.waitForTimeout(120)
+  await page.waitForFunction(() => {
+    if (window.__deepSwarm?.getState()?.phase !== 'runtime_error') return false
+    const pixel = document.querySelector('#c').getContext('2d').getImageData(0, 0, 1, 1).data
+    return pixel[0] === 6 && pixel[1] === 1 && pixel[2] === 4
+  }, null, { timeout: 3000 })
   const faultState = await page.evaluate(() => {
     const render = document.querySelector('#c').getContext('2d')
     return {

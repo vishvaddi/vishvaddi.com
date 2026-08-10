@@ -3847,16 +3847,18 @@ function cullOverflowEnemies(g, cap) {
     let over = g.enemies.length - cap;
     if (over <= 0) return;
     const cx = g.cam.x, cy = g.cam.y;
-    // Half-extent plus a margin — the band that is genuinely off screen, not the
-    // generous 0.75*full-width that protected almost everything.
-    const keepX = canvas.width * 0.5 + 150, keepY = canvas.height * 0.5 + 150;
+    // The world is clipped by the porthole. Canvas width includes the cockpit
+    // rails, so using it here retained and simulated contacts the player could
+    // never see on wide screens.
+    const visibleR = g._fullBleed ? Math.hypot(canvas.width, canvas.height) / 2 : (g._vpR || Math.min(canvas.width, canvas.height) / 2);
+    const keepR2 = Math.pow(visibleR + 180, 2);
     const doomed = [];
     for (let i = 0; i < g.enemies.length; i++) {
         const e = g.enemies[i];
         if (e.isBoss || e.aberrant || e.carrier || e._stalker || e.hp <= 0) continue;
         if (e._latched || e._pullT > 0 || e._bomb || e._scanning) continue;
         const dx = Math.abs(e.x - cx), dy = Math.abs(e.y - cy);
-        if (dx < keepX && dy < keepY) continue;          // on or near screen — leave it alone
+        if (dx * dx + dy * dy < keepR2) continue;         // on or near the porthole — leave it alone
         doomed.push({ i, d2: dx * dx + dy * dy });
     }
     if (!doomed.length) return;
@@ -9124,10 +9126,10 @@ function draw() {
         const aberrantJitter = e.aberrant ? (Math.random() - 0.5) * 3 : 0;
 
         // Soft glow behind every enemy (cached sprite — no per-frame allocation)
-        drawGlow(ctx, col, sx, sy, e.size * 3, 0.4);
+        if (_perf.fx !== 'reduced' || e.isBoss || e.aberrant) drawGlow(ctx, col, sx, sy, e.size * 3, 0.4);
 
         // UNKNOWN CONTACT tag — first encounter (per run), tag fades when scanned
-        if (e.typeId && g._scannedThisRun && !g._scannedThisRun.has(e.typeId) && !e.isBoss && !isGhost) {
+        if (_perf.fx !== 'reduced' && e.typeId && g._scannedThisRun && !g._scannedThisRun.has(e.typeId) && !e.isBoss && !isGhost) {
             const pulse = 0.5 + Math.sin(t * 3 + e.x * 0.05) * 0.3;
             ctx.fillStyle = `rgba(180,200,220,${pulse})`;
             ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center';
@@ -10225,7 +10227,8 @@ function draw() {
         const caustAlpha = 0.04 * (1 - g.depth / 500);
         ctx.globalAlpha = caustAlpha;
         ctx.fillStyle = '#5ADFCF';
-        for (let ci = 0; ci < 12; ci++) {
+        const caustics = _perf.fx === 'reduced' ? 5 : 12;
+        for (let ci = 0; ci < caustics; ci++) {
             const cx2 = (Math.sin(t * 0.3 + ci * 2.1) * 0.5 + 0.5) * w;
             const cy2 = (Math.cos(t * 0.25 + ci * 1.7) * 0.5 + 0.5) * h;
             ctx.beginPath(); ctx.arc(cx2, cy2, 30 + Math.sin(t + ci) * 15, 0, PI2); ctx.fill();
@@ -10250,8 +10253,10 @@ function draw() {
     ctx.fillRect(0, 0, w, h);
 
     // --- SOFT SCANLINES (barely there — texture, not obstruction) ---
-    ctx.fillStyle = texturePattern('water-scanline', 4, 'rgba(0,0,0,0.025)');
-    ctx.fillRect(0, 0, w, h);
+    if (_perf.fx !== 'reduced') {
+        ctx.fillStyle = texturePattern('water-scanline', 4, 'rgba(0,0,0,0.025)');
+        ctx.fillRect(0, 0, w, h);
+    }
 
     // --- GENTLE VIGNETTE (cinematic, not claustrophobic) ---
     const vigGrad2 = ctx.createRadialGradient(w / 2, h / 2, h * 0.4, w / 2, h / 2, h * 0.85);
@@ -16050,7 +16055,7 @@ window.addEventListener('keydown', e => {
 
 // --- FPS tracking ---
 let _fps = 60, _fpsLast = 0, _fpsFrames = 0, _fpsAccum = 0;
-const _perf = { frame: [], update: [], draw: [], post: [], p95: 0, p99: 0, updateP95: 0, drawP95: 0, postP95: 0, longFrames: 0, sample: 0 };
+const _perf = { frame: [], update: [], draw: [], post: [], p95: 0, p99: 0, updateP95: 0, drawP95: 0, postP95: 0, longFrames: 0, sample: 0, fx: 'full', lowUntil: 0 };
 function _perfPush(bucket, value) {
     bucket.push(Math.round(value * 100) / 100);
     if (bucket.length > 240) bucket.shift();
@@ -16070,6 +16075,9 @@ function _recordPerf(frame, updateMs, drawMs, postMs) {
     _perf.updateP95 = _percentile(_perf.update, 0.95);
     _perf.drawP95 = _percentile(_perf.draw, 0.95);
     _perf.postP95 = _percentile(_perf.post, 0.95);
+    const now = performance.now();
+    if (_perf.p95 > 18) { _perf.fx = 'reduced'; _perf.lowUntil = now + 6000; }
+    else if (now > _perf.lowUntil && _perf.p95 < 13) _perf.fx = 'full';
 }
 function _tickFps(ts) {
     if (_fpsLast === 0) { _fpsLast = ts; return; }
@@ -16175,7 +16183,7 @@ window.__deepSwarm = {
             projectiles: game.projectiles.length, effects: game.effects.length,
             obstacles: (game.obstacles || []).length, fps: _fps,
             perf: { p95: _perf.p95, p99: _perf.p99, updateP95: _perf.updateP95,
-                drawP95: _perf.drawP95, postP95: _perf.postP95, longFrames: _perf.longFrames },
+                drawP95: _perf.drawP95, postP95: _perf.postP95, longFrames: _perf.longFrames, fx: _perf.fx },
             dmgMult: game.player.dmgMult, overcharge: game.player._overchargeT || 0,
             attention: Math.round(game.attention || 0),
             fallers: (game.fallers || []).length,

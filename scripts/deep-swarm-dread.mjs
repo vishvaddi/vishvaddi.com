@@ -36,7 +36,7 @@ try {
 
   const baseR = (await dread()).boundsR
   await page.evaluate(() => window.__deepSwarm.debugDread('open', 20))
-  await page.waitForTimeout(600)
+  await until(async () => (await dread()).boundsR > baseR)
   const open = await dread()
   check('THE OPEN: walls recede', open.open && open.boundsR > baseR, `${baseR} -> ${open.boundsR}`)
   check('THE OPEN: keel reads no return', open.open, 'openT active')
