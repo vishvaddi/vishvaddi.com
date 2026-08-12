@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-08-12 — Deep Swarm: compact dark cockpit and pilot options
+
+- Reworked the side consoles into centred 250 × 460 px instrument pods so the porthole remains dominant at desktop, full-HD, ultrawide and short-desktop sizes.
+- Removed the bright brass/orange framing in favour of worn gunmetal, oxidised steel and dim teal indicators.
+- Renamed the shared survival reserve on the rim to O₂ / POWER: it drives life support but also feeds lights, weapons, mining and electrical systems, so calling it oxygen alone would be false.
+- AUTO-PING now defaults off and persists as a pause option; manual F/click/tap sonar remains available. Added a persisted camera-motion option alongside the existing audio, zoom, text and contrast controls.
+
 ## 2026-08-10 — Deep Swarm: full-resolution render restored, and the junction becomes three faults
 
 - Reverted the half-resolution post-processing upload. The justification for it — that the shader is low-frequency and resolves no detail the downscale would carry — was wrong about what the texture is: it is the entire scene, not an effect buffer, so halving it softened every sprite, glyph and HUD edge in the game.

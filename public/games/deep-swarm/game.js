@@ -1683,6 +1683,7 @@ function defaultMeta() {
         scannedCreatures: [], aberrantScanned: [],
         // Feature 5: Best chain
         bestChain: 0,
+        autoPing: false, cameraMotion: true,
     };
 }
 let meta = loadMeta();
@@ -1707,7 +1708,7 @@ function mulberry32(a) {
 }
 function seedFromString(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return h >>> 0; }
 function RND() { return dailyRng ? dailyRng() : Math.random(); }
-const DEEP_SWARM_BUILD = '2026.08.10-cockpit-ore-perf2-rust-console';
+const DEEP_SWARM_BUILD = '2026.08.12-compact-dark-cockpit';
 const RUN_TRACE_LIMIT = 30;
 let runTrace = [];
 let lastRuntimeError = null;
@@ -1772,6 +1773,8 @@ if (!meta._uiScaleV2) {
     meta.uiScale = (('ontouchstart' in window) || navigator.maxTouchPoints > 0) ? 1.15 : 1.3;
 }
 if (meta.hudContrast === undefined) meta.hudContrast = false;
+if (meta.autoPing === undefined) meta.autoPing = false;
+if (meta.cameraMotion === undefined) meta.cameraMotion = true;
 if (!meta.hintsSeen) meta.hintsSeen = [];
 UI_SCALE = meta.uiScale;
 // Migrate missing meta fields
@@ -3681,13 +3684,10 @@ function createGame() {
     if (stakes.has('mariana')) { g.player.speed *= 1.5; }
     // Add starting weapon
     g.player.weapons.push({ id: char.startWeapon, level: 1, cooldown: 0 });
-    // AUTO-PING is standard fit, from the first second. It used to be gated behind
-    // sonar LV3 (card) or LV5 (auto-grant), which meant the opening minutes were
-    // spent in the dark hammering [F] — the least interesting version of this game.
-    // Manual PING stays live as a burst on top, so the thumb button keeps a job and
-    // an intentional sweep still means something.
+    // Manual sonar keeps each reveal intentional; pilots who prefer continuous
+    // coverage can opt into AUTO-PING from the pause console.
     g.player._sonarManual = true;
-    g.player._sonarAuto = true;
+    g.player._sonarAuto = meta.autoPing;
     // CRUSH DEPTH from sub class
     g.player._crushDepth = char.crushDepth || 3000;
         // BATTERY / OXYGEN — drains over time. Recharged by kills (kinetic scavenge).
@@ -8445,8 +8445,9 @@ function draw() {
     g._fullBleed = small;
 
     // Camera: center the world on the porthole center
-    const cx = g.cam.x - vpCx + (g.shake ? (Math.random() - 0.5) * g.shake : 0);
-    const cy = g.cam.y - vpCy + (g.shake ? (Math.random() - 0.5) * g.shake : 0);
+    const cameraShake = meta.cameraMotion ? g.shake : 0;
+    const cx = g.cam.x - vpCx + (cameraShake ? (Math.random() - 0.5) * cameraShake : 0);
+    const cy = g.cam.y - vpCy + (cameraShake ? (Math.random() - 0.5) * cameraShake : 0);
 
     // ===== LAYOUT: top = lore/info, viewport = center, bottom = gameplay bars =====
     const p = g.player;
@@ -10815,25 +10816,25 @@ function drawBodyPlan(e, sz, col, t) {
 
 function drawCockpitRailShell(panel, side, pal) {
     const { x, y, w, h } = panel;
-    ctx.strokeStyle = '#62472F'; ctx.lineWidth = 2;
+    ctx.strokeStyle = '#18242A'; ctx.lineWidth = 2;
     ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
-    ctx.strokeStyle = hexA(pal.accentDim, 0.35); ctx.lineWidth = 1;
+    ctx.strokeStyle = '#26343A'; ctx.lineWidth = 1;
     ctx.strokeRect(x + 7, y + 7, w - 14, h - 14);
-    // Old brass fasteners and wear marks keep the console physical rather than
-    // reading as a clean software overlay.
+    // Worn gunmetal keeps the console physical without bright framing pulling
+    // attention away from the water beyond the glass.
     for (const [bx, by] of [[x + 9, y + 9], [x + w - 9, y + 9], [x + 9, y + h - 9], [x + w - 9, y + h - 9]]) {
-        ctx.fillStyle = '#8A6840'; ctx.beginPath(); ctx.arc(bx, by, 3.2, 0, PI2); ctx.fill();
-        ctx.strokeStyle = '#24170E'; ctx.beginPath(); ctx.moveTo(bx - 2, by); ctx.lineTo(bx + 2, by); ctx.stroke();
+        ctx.fillStyle = '#34434A'; ctx.beginPath(); ctx.arc(bx, by, 3.2, 0, PI2); ctx.fill();
+        ctx.strokeStyle = '#090D10'; ctx.beginPath(); ctx.moveTo(bx - 2, by); ctx.lineTo(bx + 2, by); ctx.stroke();
     }
-    ctx.fillStyle = 'rgba(109,61,31,0.13)';
+    ctx.fillStyle = 'rgba(76,105,104,0.10)';
     for (let i = 0; i < 7; i++) {
         const yy = y + 56 + ((i * 97 + (side === 'port' ? 23 : 61)) % Math.max(80, h - 90));
         const xx = side === 'port' ? x + 5 : x + w - 17;
         ctx.fillRect(xx, yy, 12, 1);
     }
     const lampX = side === 'port' ? x + w - 22 : x + 22;
-    ctx.fillStyle = '#17100A'; ctx.beginPath(); ctx.arc(lampX, y + 20, 6, 0, PI2); ctx.fill();
-    ctx.fillStyle = '#C78831'; ctx.beginPath(); ctx.arc(lampX, y + 20, 2.5, 0, PI2); ctx.fill();
+    ctx.fillStyle = '#060A0C'; ctx.beginPath(); ctx.arc(lampX, y + 20, 6, 0, PI2); ctx.fill();
+    ctx.fillStyle = '#426C68'; ctx.beginPath(); ctx.arc(lampX, y + 20, 2.5, 0, PI2); ctx.fill();
 }
 
 function drawRailWrapped(text, x, y, width, maxLines, color) {
@@ -10858,17 +10859,19 @@ function drawDesktopCockpitRails(w, h, g, pal, vpCx, vpR) {
     const gap = vpCx - vpR;
     if (g._fullBleed || gap < 190) { g._cockpitRails = null; return false; }
     const margin = 12;
-    const railW = gap - margin * 2;
-    const railY = 36, railH = h - 72;
-    const left = { x: margin, y: railY, w: railW, h: railH };
-    const right = { x: w - margin - railW, y: railY, w: railW, h: railH };
+    const railW = Math.min(250, gap - 44);
+    const railH = Math.min(460, h - 104);
+    const railY = Math.round((h - railH) / 2);
+    const innerEdge = vpCx - vpR - 22;
+    const left = { x: Math.max(margin, innerEdge - railW), y: railY, w: railW, h: railH };
+    const right = { x: w - left.x - railW, y: railY, w: railW, h: railH };
     g._cockpitRails = { left, right };
 
     drawPanelBg(left.x, left.y, left.w, left.h, pal);
     drawPanelBg(right.x, right.y, right.w, right.h, pal);
     drawCockpitRailShell(left, 'port', pal);
     drawCockpitRailShell(right, 'starboard', pal);
-    ctx.fillStyle = '#C7A46A'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#607A78'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'left';
     ctx.fillText('DIVE CONSOLE // PORT', left.x + 18, left.y + 21);
     ctx.textAlign = 'right'; ctx.fillText('MISSION BOARD // STBD', right.x + right.w - 18, right.y + 21);
 
@@ -10877,7 +10880,7 @@ function drawDesktopCockpitRails(w, h, g, pal, vpCx, vpR) {
     const sector = sectorForDepth(g.depth);
     const eco = meta.sectorEcology[sector.id] || { survey: 0, disturbance: 0 };
     const act = campaignAct();
-    const dataY = left.y + 190;
+    const dataY = left.y + 174;
     ctx.textAlign = 'left'; ctx.font = 'bold 22px monospace'; ctx.fillStyle = g.ascending ? '#80FFA0' : pal.accent;
     ctx.fillText(`${Math.floor(g.depth)}m`, bx, dataY);
     ctx.font = 'bold 11px monospace'; ctx.fillStyle = pal.textDim;
@@ -10907,16 +10910,16 @@ function drawDesktopCockpitRails(w, h, g, pal, vpCx, vpR) {
     const rx = railW >= 590 ? right.x + right.w - 318 : right.x + 18;
     const rw = Math.min(300, right.w - 36);
     let ry = right.y + 58;
-    ctx.textAlign = 'left'; ctx.fillStyle = '#C7A46A'; ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'left'; ctx.fillStyle = '#607A78'; ctx.font = 'bold 10px monospace';
     ctx.fillText(`MERIDIAN ORDER // ACT ${act.id}`, rx, ry);
     ry += 20; ctx.fillStyle = '#D6D0B8'; ctx.font = 'bold 12px monospace';
     ctx.fillText(act.title, rx, ry);
     ry += 18; ctx.font = '9px monospace';
     ry += drawRailWrapped(act.truth, rx, ry, rw, 3, '#8E9B8E') + 14;
-    ctx.fillStyle = '#C7A46A'; ctx.font = 'bold 10px monospace'; ctx.fillText('SECTOR QUESTION', rx, ry); ry += 18;
+    ctx.fillStyle = '#607A78'; ctx.font = 'bold 10px monospace'; ctx.fillText('SECTOR QUESTION', rx, ry); ry += 18;
     ctx.font = '9px monospace'; ry += drawRailWrapped(sector.question, rx, ry, rw, 3, '#A8B6AA') + 12;
     const nereidStates = ['COHERENT', 'QUESTIONING', 'REQUESTING', 'REFUSAL POSSIBLE'];
-    ctx.fillStyle = '#C7A46A'; ctx.font = 'bold 10px monospace'; ctx.fillText('NEREID-II LINK', rx, ry); ry += 17;
+    ctx.fillStyle = '#607A78'; ctx.font = 'bold 10px monospace'; ctx.fillText('NEREID-II LINK', rx, ry); ry += 17;
     ctx.fillStyle = nereidStage(g) >= 2 ? '#C783A8' : '#77C6B5';
     ctx.fillText(nereidStates[nereidStage(g)], rx, ry); ry += 21;
     ctx.fillStyle = '#71877E'; ctx.font = '9px monospace';
@@ -11155,7 +11158,7 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     }
 
     // ---- VITALS — three EQUAL 120° arcs around the viewport rim, distinct colors ----
-    //   TOP    (12 o'clock zone)   = POWER      — AMBER
+    //   TOP    (12 o'clock zone)   = LIFE SUPPORT / POWER RESERVE
     //   BOTTOM-RIGHT (4 o'clock)   = MIND       — PURPLE
     //   BOTTOM-LEFT  (8 o'clock)   = HULL       — RED
     // Small angular GAP between each so they read as three separate bars.
@@ -11166,14 +11169,14 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     const HULL_COLOR = '#E04050';
     const MIND_COLOR = '#A060D0';
     const XP_COLOR   = '#4A9ADA';
-    const POWER_COLOR = '#E8B84A';
+    const POWER_COLOR = '#6FA8A2';
     const ringR = vpR + 14;
     const SEG = (PI2 / 3);          // 120° per arc
     const GAP = 0.06;                // small gap between arcs (radians)
     const HALF = SEG / 2 - GAP / 2;
 
     // Each arc spans HALF radians on each side of its centerline.
-    // POWER centerline = top   (-PI/2)
+    // LIFE SUPPORT centerline = top   (-PI/2)
     // MIND centerline = bottom-right (-PI/2 + 2PI/3 = PI/6)
     // HULL centerline = bottom-left  (-PI/2 - 2PI/3 = -7PI/6 = 5PI/6)
     function drawArc(centerA, pct, color, label, valueText) {
@@ -11220,7 +11223,7 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         ctx.fillStyle = MIND_COLOR; ctx.fillText(`MIND ${Math.floor(sanity)}%`, 154, 29);
         ctx.fillStyle = XP_COLOR;   ctx.fillText(`LV ${p.level}`, 230, 15);
     } else {
-        drawArc(-Math.PI / 2,  powerPct, POWER_COLOR, 'POWER', `${Math.floor(powerPct * 100)}%`);
+        drawArc(-Math.PI / 2,  powerPct, POWER_COLOR, 'O₂ / POWER', `${Math.floor(powerPct * 100)}%`);
         drawArc(Math.PI / 6,   sanity / 100, MIND_COLOR, 'MIND', `${Math.floor(sanity)}%`);
         drawArc(5 * Math.PI / 6, hpPct, HULL_COLOR, 'HULL', `${Math.max(0, Math.floor(p.hp))}/${p.maxHp}`);
     }
@@ -11415,13 +11418,8 @@ function drawPanelBg(x, y, w, h, pal) {
     ctx.fillRect(x, y, w, h);
     ctx.fillStyle = texturePattern('panel-scanline', 3, 'rgba(127,168,150,0.02)');
     ctx.fillRect(x, y, w, h);
-    const isLeftPanel = x < canvas.width / 2;
-    ctx.strokeStyle = hexA(pal.accent, 0.3); ctx.lineWidth = 2;
-    const outerX = isLeftPanel ? 0.5 : x + w - 0.5;
-    ctx.beginPath(); ctx.moveTo(outerX, y); ctx.lineTo(outerX, y + h); ctx.stroke();
-    ctx.strokeStyle = hexA(pal.accentDim, 0.4); ctx.lineWidth = 1;
-    const innerX = isLeftPanel ? x + w - 0.5 : x + 0.5;
-    ctx.beginPath(); ctx.moveTo(innerX, y); ctx.lineTo(innerX, y + h); ctx.stroke();
+    ctx.strokeStyle = '#111C22'; ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
 }
 
 // =====================================================================
@@ -12851,8 +12849,8 @@ function drawPauseOverlay(w, h, g) {
     ctx.fillStyle = '#5ADFCF';
     ctx.font = 'bold 26px monospace';
     const compact = h < 460;
-    const rowH = compact ? 30 : 36;
-    let ry = compact ? 52 : h / 2 - 150;
+    const rowH = compact ? 25 : 36;
+    let ry = compact ? 42 : h / 2 - 180;
     ctx.fillText('PAUSED', w / 2, ry - (compact ? 18 : 24));
     // Every row is a tap zone — phones have no keyboard. ◂ ▸ rows get
     // split zones (left half = down, right half = up).
@@ -12865,10 +12863,12 @@ function drawPauseOverlay(w, h, g) {
         { label: '[N] Next track (this zone)', key: 'n' },
         { label: `[V] World zoom: ${meta.worldZoom ? Math.round(meta.worldZoom * 100) + '%' : 'auto'}`, key: 'v' },
         { label: `[T] HUD text: ${Math.round((meta.uiScale || 1) * 100)}%`, key: 't' },
+        { label: `[F] Auto-ping: ${meta.autoPing ? 'ON' : 'off'}`, key: 'f' },
+        { label: `[C] Camera motion: ${meta.cameraMotion ? 'ON' : 'off'}`, key: 'c' },
         { label: `[H] High-contrast HUD: ${meta.hudContrast ? 'ON' : 'off'}`, key: 'h' },
         { label: '[Q] Quit to Title', key: 'q', color: '#C47840' },
     ];
-    ctx.font = (compact ? '12px' : '13px') + ' monospace';
+    ctx.font = (compact ? '11px' : '13px') + ' monospace';
     const zoneW = 300;
     for (const row of rows) {
         ctx.fillStyle = row.color || '#AAB8C2';
@@ -15809,6 +15809,17 @@ window.addEventListener('keydown', e => {
             if (picked && game) setModeMsg(game, '♪ ' + picked, 2.5);
             return;
         }
+        if (e.key === 'f' || e.key === 'F') {
+            meta.autoPing = !meta.autoPing;
+            if (game) game.player._sonarAuto = meta.autoPing;
+            saveMeta();
+            return;
+        }
+        if (e.key === 'c' || e.key === 'C') {
+            meta.cameraMotion = !meta.cameraMotion;
+            saveMeta();
+            return;
+        }
         if (e.key === 'h' || e.key === 'H') {
             meta.hudContrast = !meta.hudContrast;
             saveMeta();
@@ -16239,6 +16250,7 @@ window.__deepSwarm = {
     build: DEEP_SWARM_BUILD,
     getState: () => ({
         phase, error: lastRuntimeError, trace: [...runTrace],
+        options: { autoPing: meta.autoPing, cameraMotion: meta.cameraMotion },
         game: game ? {
             depth: game.depth, wave: game.wave, hp: game.player.hp, battery: game.player.battery,
             systems: game.systems, inventory: game.inventory.length, zone: zoneFromDepth(game.depth),
@@ -16251,7 +16263,7 @@ window.__deepSwarm = {
             perf: { p95: _perf.p95, p99: _perf.p99, updateP95: _perf.updateP95,
                 drawP95: _perf.drawP95, postP95: _perf.postP95, longFrames: _perf.longFrames, fx: _perf.fx },
             dmgMult: game.player.dmgMult, overcharge: game.player._overchargeT || 0,
-            attention: Math.round(game.attention || 0),
+            attention: Math.round(game.attention || 0), autoPing: game.player._sonarAuto,
             fallers: (game.fallers || []).length,
             ore: (game.fallers || []).map(f => ({ x: Math.round(f.x - game.player.x), y: Math.round(f.y - game.player.y),
                 vx: Math.round(f.vx), vy: Math.round(f.vy), cracks: f.cracks, need: f.need, engaged: Math.round((f.engaged || 0) * 10) / 10 })),

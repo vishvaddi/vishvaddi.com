@@ -43,6 +43,7 @@ try {
       const inBounds = left.x >= 0 && right.x + right.w <= width && left.y >= 0 && left.y + left.h <= height
       check(`${name}: rails clear the playfield`, leftClear && rightClear, `left ${leftClear}, right ${rightClear}`)
       check(`${name}: rails remain in canvas`, inBounds)
+      check(`${name}: rails stay compact`, left.w <= 250 && right.w <= 250 && left.h <= 460 && right.h <= 460, `${left.w}×${left.h}`)
     }
     if (process.env.DEEP_SWARM_SCREENSHOTS) await page.screenshot({ path: `C:/tmp/deep-swarm-${name}.png` })
   }
