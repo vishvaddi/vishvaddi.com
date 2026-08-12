@@ -100,10 +100,10 @@ try {
   check('runtime: resume returns to the interrupted dive', recoveredState.phase === 'playing' && !recoveredState.error, recoveredState.phase)
   errors.splice(expectedErrors)
 
-  const deployableState = await page.evaluate(() => window.__deepSwarm.triggerDeployableWeapon('decoy_launcher'))
-  check('runtime: deployable weapons initialise their state',
-    deployableState.phase === 'playing' && deployableState.game.deployables === 1 && !deployableState.error,
-    `${deployableState.phase} · deployables ${deployableState.game.deployables}`)
+  const wakeState = await page.evaluate(() => window.__deepSwarm.triggerDeployableWeapon('decoy_launcher'))
+  check('weapons: Cavitation Wake arms the next dash',
+    wakeState.phase === 'playing' && wakeState.game.wakeArmed === 1 && wakeState.game.deployables === 0 && !wakeState.error,
+    `${wakeState.phase} · armed ${wakeState.game.wakeArmed}`)
 
   const fieldState = await page.evaluate(() => window.__deepSwarm.testElectricField())
   check('weapons: Electric Field applies its full pulse damage',
@@ -132,8 +132,8 @@ try {
     `${musicState.campaign.musicStage} · ${musicState.campaign.musicGenre}`)
 
   const cadenceState = await page.evaluate(() => window.__deepSwarm.queueNereidTest())
-  check('NEREID: routine observations queue instead of talking over each other',
-    cadenceState.game.nereidQueue === 3 && cadenceState.phase === 'playing',
+  check('NEREID: routine observations collapse to the latest useful line',
+    cadenceState.game.nereidQueue === 1 && cadenceState.phase === 'playing',
     `${cadenceState.game.nereidQueue} queued`)
 
   await page.evaluate(() => {

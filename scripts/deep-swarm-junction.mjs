@@ -64,6 +64,7 @@ try {
   // water, which is both the intended skill and a winnability proof.
   const dryRoute = (m) => {
     const wet = new Set(m.flooded)
+    const dead = new Set(m.deadCells || [])
     const goal = m.oy * m.W + m.ox
     const search = (allowWet) => {
       const start = m.py * m.W + m.px
@@ -78,6 +79,8 @@ try {
           if (nx < 0 || ny < 0 || nx >= m.W || ny >= m.H) continue
           const ni = ny * m.W + nx
           if (prev.has(ni)) continue
+          if (dead.has(ni)) continue
+          if (m.arcs.some(a => a.x === nx && a.y === ny)) continue
           if (!allowWet && wet.has(ni) && ni !== goal) continue
           prev.set(ni, c); q.push(ni)
         }
@@ -93,9 +96,13 @@ try {
 
   await setReward(null)
   j = (await open('arc')).junction
-  const route = dryRoute(j)
+  let route = dryRoute(j)
   check('arc: a dry route to the output exists', !!route, route ? `${route.length} steps` : 'none')
-  for (const step of route || []) {
+  let routeGuard = 0
+  while (!j.over && routeGuard++ < 30) {
+    route = dryRoute(j)
+    const step = route && route[0]
+    if (step == null) break
     if (j.over) break
     const nx = step % j.W, ny = (step - nx) / j.W
     const dx = nx - j.px, dy = ny - j.py

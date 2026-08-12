@@ -1,5 +1,17 @@
 # Run Log
 
+## 2026-08-12 — Deep Swarm pressure cockpit and pursuit loop
+
+- Centred compact desktop rails in the side bays, removed the duplicate desktop score/objective overlays and put detailed instruments behind `[I]`.
+- Reduced NEREID routine cadence to one latest-useful queued line, suppressed it during close threats and moved short captions inside the viewport.
+- Replaced loose ore-fall pursuit with denser sonar-surveyed mineral formations fixed to the trench; removed random P9 ladders, chains and hatches in favour of organic terrain.
+- Replaced Acoustic Decoy with Cavitation Wake while retaining its internal save id. The weapon arms the next dash and lays a damage/knockback corridor.
+- Added approach, hunt, crisis and relief encounter phases; relief gates narrative events and an untouched crisis awards escape score.
+- Added D–ABYSSAL score ranks plus peak multiplier, longest chain and best-hit summaries. Hull damage clears the active chain.
+- Made sonar an explicit reserve/exposure trade and added deterministic phase, substrate and ghost return feedback.
+- Updated core, mining, dread and junction harnesses. The junction proof now replans around the arc's growing dead path rather than asserting a stale static route.
+- Verified core E2E including Android portrait/landscape, mining, dread, events, junction and rig suites; responsive layouts at 1280×800, 1920×1080, 2560×1080, 1366×768 and 844×390; performance soak at 300/1200/2500/4200 m (59–60 fps average, worst p95 5.9 ms); `astro check` (154 files, zero errors) and production build.
+
 ## 2026-08-12 — Deep Swarm: compact dark cockpit and pilot options
 
 - Reworked the side consoles into centred 250 × 460 px instrument pods so the porthole remains dominant at desktop, full-HD, ultrawide and short-desktop sizes.

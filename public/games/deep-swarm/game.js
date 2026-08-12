@@ -717,29 +717,8 @@ function updateVolumes(g, dt, p) {
             const goodLoot = WRECK_LOOT_TABLE.filter(l => l.id === 'weapon_lv' || l.id === 'heal');
             if (goodLoot.length) g.wrecks.push({ x: rx, y: ry + dir * 340, r: 34, loot: goodLoot[Math.floor(rnd() * goodLoot.length)], revealed: false, salvaged: false, seed: rnd() * 100, spawnedAt: g.runTime, ripBorn: true });
         }
-        // ORE FALL — a rock sheds off the trench wall above and sinks past.
-        // The seam GLINTS in its ore colour. Dash through it to crack it open.
-        if (g.depth > 150 && (g.fallers || []).length < 2 && rnd() < 0.35) {
-            const ORES = [['crystal', '#B080FF'], ['scrap', '#C0A060'], ['wiring', '#60C0E0'], ['corepl', '#FF8060']];
-            const pick = ORES[Math.floor(rnd() * ORES.length)];
-            if (!g.fallers) g.fallers = [];
-            const _fr = 15 + rnd() * 13;
-            g.fallers.push({ x: p.x + (rnd() - 0.5) * 1300, y: p.y - 650, vy: 42 + rnd() * 34, vx: (rnd() - 0.5) * 14,
-                r: _fr, ore: pick[0], col: pick[1], seed: rnd() * 100, ang: 0, spin: (rnd() - 0.5) * 0.7,
-                // Rock does not give up on the first hit. Bigger rock, more strikes,
-                // more ore — the reason to keep working one instead of grazing three.
-                need: _fr > 24 ? 3 : _fr > 19 ? 2 : 1, cracks: 0, flash: 0,
-                // The seam SHAPE is the tell. A hairline vein is sound rock. A
-                // branching one is fractured all the way through — it comes apart on
-                // the first strike, and something has usually made a home in there.
-                seam: rnd() < 0.26 ? 'branch' : 'hairline',
-                // Below 3km the rock is holding back more pressure than it can. Crack
-                // one of these and it does not fly apart — it collapses inward, and
-                // takes the water around it with it.
-                crit: g.depth > 3000 && rnd() < 0.32,
-                laser: 0, engaged: 0 });
-            maybeHint(g, 'orefall', 'ORE FALL on sonar — DASH to crack the seam, or hold [E] to cut it (slower, louder, pays more).');
-        }
+        // Mine surveyed formations fixed to the trench. Loose ore used to drift
+        // away after engagement, turning resource play into a camera chase.
         if (blooms < 2 && g.depth > 1000 && rnd() < 0.35) {
             g.volumes.push({ kind: 'bloom', x: B.minX + 150 + rnd() * (B.maxX - B.minX - 300), y: B.minY + 150 + rnd() * (B.maxY - B.minY - 300),
                 w: 60, h: 60, life: 50, closedT: 0 });
@@ -1656,6 +1635,9 @@ canvas.addEventListener('mousedown', e => {
         return;
     }
     if (!game) return;
+    const rect = canvas.getBoundingClientRect();
+    const z = hitTapZone(e.clientX - rect.left, e.clientY - rect.top);
+    if (z && z.key === 'i') { simulateKey('i'); return; }
     if (game.player._sonarManual && !game.player._sonarAuto) firePing(game);
 });
 // Track mouse position (for Hunter sub aim and other UI hover effects)
@@ -1708,7 +1690,7 @@ function mulberry32(a) {
 }
 function seedFromString(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return h >>> 0; }
 function RND() { return dailyRng ? dailyRng() : Math.random(); }
-const DEEP_SWARM_BUILD = '2026.08.12-compact-dark-cockpit';
+const DEEP_SWARM_BUILD = '2026.08.12-pressure-cockpit';
 const RUN_TRACE_LIMIT = 30;
 let runTrace = [];
 let lastRuntimeError = null;
@@ -2704,9 +2686,11 @@ function addNereidLog(g, text) {
     if (!g.nereidQueue) g.nereidQueue = [];
     const filtered = nereidFilter(g, text);
     const urgent = /\b(NOW|SURFACE|ALERT|AMBUSH|FAILING|BREACH|TAKING WATER|MARKED|CRITICAL|IMPACT)\b/i.test(text);
-    if (!urgent && (g.runTime || 0) - (g._nereidLastAt || 0) < 8) {
-        if (!g.nereidQueue.some(item => item.text === filtered)) g.nereidQueue.push({ text: filtered, queuedAt: g.runTime || 0 });
-        if (g.nereidQueue.length > 4) g.nereidQueue.shift();
+    if (!urgent && (g.runTime || 0) - (g._nereidLastAt || 0) < 36) {
+        // Routine observations are context, not a backlog. Keep only the latest so
+        // stale chatter never arrives after the situation that caused it.
+        g.nereidQueue.length = 0;
+        g.nereidQueue.push({ text: filtered, queuedAt: g.runTime || 0 });
         return;
     }
     g.nereidLog.unshift({ text: filtered, time: g.runTime });
@@ -2714,7 +2698,8 @@ function addNereidLog(g, text) {
     g._nereidLastAt = g.runTime || 0;
 }
 function updateNereidCadence(g) {
-    if (!g.nereidQueue || !g.nereidQueue.length || (g.runTime || 0) - (g._nereidLastAt || 0) < 8) return;
+    if (!g.nereidQueue || !g.nereidQueue.length || (g.runTime || 0) - (g._nereidLastAt || 0) < 36) return;
+    if ((g.attention || 0) >= 40 || (g.enemies || []).some(e => dist2(e, g.player) < 260 * 260)) return;
     const next = g.nereidQueue.shift();
     g.nereidLog.unshift({ text: next.text, time: g.runTime });
     if (g.nereidLog.length > 5) g.nereidLog.pop();
@@ -3134,7 +3119,9 @@ const WEAPON_DEFS = {
     harpoon: { name: 'Harpoon', baseDmg: 15, baseCooldown: 1.2, baseArea: 0, desc: 'Piercing line' },
     lure: { name: 'Bio Lure', baseDmg: 50, baseCooldown: 6, baseArea: 70, desc: 'Attract + explode' },
     cutter: { name: 'Cutting Torch', baseDmg: 32, baseCooldown: 1.4, baseArea: 105, desc: 'Brutal short-range salvage beam' },
-    decoy_launcher: { name: 'Acoustic Decoy', baseDmg: 8, baseCooldown: 7, baseArea: 150, desc: 'Throws attention away from the hull' },
+    // Keep the historical id so old saves remain valid. The weapon itself is now
+    // an aggressive movement tool: arm it, dash, and the water behind you cuts.
+    decoy_launcher: { name: 'Cavitation Wake', baseDmg: 18, baseCooldown: 3.8, baseArea: 58, desc: 'Arms the next dash with a cutting pressure wake' },
     arc_welder: { name: 'Arc Welder', baseDmg: 10, baseCooldown: 9, baseArea: 75, desc: 'Repairs the weakest system while arcing nearby' },
     pressure_lance: { name: 'Pressure Lance', baseDmg: 45, baseCooldown: 2.6, baseArea: 24, desc: 'Slow, heavy, armour-piercing bolt' },
     net_launcher: { name: 'Tangle Net', baseDmg: 4, baseCooldown: 6, baseArea: 130, desc: 'Roots a hunting group in place' },
@@ -3163,7 +3150,7 @@ const WEAPON_DEFS = {
 // Loadout icons — every weapon reads at a glance (BioShock plasmid row)
 const WEAPON_GLYPHS = {
     sonar: '◉', torpedo: '➤', field: '✳', depthcharge: '●', harpoon: '†', lure: '❖',
-    cutter: '⌁', decoy_launcher: '♫', arc_welder: '⚒', pressure_lance: '⇥', net_launcher: '⌗',
+    cutter: '⌁', decoy_launcher: '≋', arc_welder: '⚒', pressure_lance: '⇥', net_launcher: '⌗',
     tsunami: '◎', leviathan_lance: '⇶', abyssal_mine: '☄', echo_salvo: '⊚', pressure_burst: '◍',
     echo_lance: '⋔', false_chorus: '♫', volt_torpedo: '⚡', cluster_warhead: '⁂', baited_warhead: '⊙',
     capacitor_nova: '✺', live_wire: '⌁', galvanic_bait: '◈', dead_spike: '‡', winch: '↩',
@@ -3610,6 +3597,10 @@ function createGame() {
             sonarBurstTimer: 0,
             lastHitTime: 0,       // for "perfect" no-hit tracking
             lastEvent: null,      // {chips, mult, total, tags:[], time}
+            peakMult: 1,
+            longestChain: 0,
+            bestEvent: 0,
+            lastHull: null,
         },
         bestScore: 0,
         // WORLD STRUCTURE — obstacles, wrecks, bounds
@@ -3643,7 +3634,8 @@ function createGame() {
         // First event lands at ~90s: after the cold open, after the first level-up,
         // and after the taught ore fall — so the opening is a sequence rather than
         // three systems arriving at once.
-        activeEvent: null, eventTimer: 0, eventCooldown: 88 + Math.random() * 14,
+        activeEvent: null, eventTimer: 0, eventCooldown: 55 + Math.random() * 12,
+        tension: { phase: 'approach', timer: 20, crisisHit: false, reliefs: 0 },
         selectedCards: [], activeSynergies: [],
         // Corruption (moved to player above but keep game-level too for compat)
         corruption: 0,
@@ -3992,6 +3984,10 @@ function firePing(g) {
     const w = g.player.weapons.find(x => x.id === 'sonar');
     if (!w || w.cooldown > 0) return false;
     g._lastListenerSound = g.runTime;   // sonar wakes Listeners
+    // A sweep is information bought with reserve and exposure. AUTO remains useful,
+    // but leaving it on is no longer a safe way to coast through the trench.
+    g.player.battery = Math.max(0, (g.player.battery || 100) - 0.45);
+    g.attention = Math.min(100, (g.attention || 0) + 3);
     // HEMOBRINE — Red Layer eats sonar 40% of pings, Abyssal transition 15%. Cooldown still consumes.
     const _zone = zoneFromDepth(g.depth);
     const _brineChance = _zone === 'RED_LAYER' ? 0.40 : (_zone === 'ABYSSAL' ? 0.15 : 0);
@@ -4061,6 +4057,8 @@ function fireWeapons(g, dt) {
         const area = def.baseArea * g.player.areaMult * (1 + (w.level - 1) * 0.1);
 
         if (w.id === 'sonar') {
+            g.player.battery = Math.max(0, (g.player.battery || 100) - 0.45);
+            g.attention = Math.min(100, (g.attention || 0) + 3);
             g.effects.push({ type: 'sonar_ring', x: g.player.x, y: g.player.y, radius: 0, maxRadius: area, dmg, speed: 280, hit: new Set() });
             g.sonarReveal = 1.0;
             sfxSonar();
@@ -4124,10 +4122,11 @@ function fireWeapons(g, dt) {
             }
         }
         if (w.id === 'decoy_launcher') {
-            const a = Math.random() * PI2;
-            const lx = g.player.x + Math.cos(a) * 260, ly = g.player.y + Math.sin(a) * 260;
-            g.deployables.push({ kind: 'decoy', x: lx, y: ly, life: 8 });
-            g.lastNoise = { x: lx, y: ly, t: g.runTime };
+            g.player._wakeArmed = Math.max(g.player._wakeArmed || 0, 1);
+            if (!g.player._wakeHinted) {
+                g.player._wakeHinted = true;
+                setModeMsg(g, 'CAVITATION ARMED · DASH TO CUT');
+            }
         }
         if (w.id === 'arc_welder') {
             const weak = lowestSystem(g);
@@ -4584,9 +4583,8 @@ const OBSTACLE_TYPES_BY_ZONE = {
         { kind: 'vent',    r: 28, color: '#A04030' },
         { kind: 'organic', r: 32, color: '#6A2040' },
         { kind: 'seep',    r: 30, color: '#30343A' },
-        // Nobody moored anything at four kilometres. The chain is here anyway.
-        { kind: 'moorchain', r: 34, color: '#3A3630' },
-        { kind: 'ladder',  r: 30, color: '#38393C' },
+        { kind: 'chitin',  r: 34, color: '#23121C' },
+        { kind: 'bones',   r: 30, color: '#35343A' },
     ],
     HADAL: [
         { kind: 'organic', r: 40, color: '#4A2030' },
@@ -4594,8 +4592,8 @@ const OBSTACLE_TYPES_BY_ZONE = {
         { kind: 'spire',   r: 50, color: '#0A0408' },
         { kind: 'chitin',  r: 44, color: '#201018' },
         { kind: 'monolith', r: 36, color: '#0E1216' },
-        { kind: 'moorchain', r: 38, color: '#33302A' },
-        { kind: 'hatch',   r: 32, color: '#2E3236' },
+        { kind: 'seep',    r: 38, color: '#20282B' },
+        { kind: 'vent',    r: 32, color: '#48232A' },
     ],
 };
 
@@ -4684,7 +4682,16 @@ function updateDeployables(g, dt, p2) {
         const d = g.deployables[i];
         d.life -= dt;
         if (d.life <= 0) { g.deployables.splice(i, 1); continue; }
-        if (d.kind === 'decoy') {
+        if (d.kind === 'wake') {
+            for (const e of g.enemies) {
+                if (e.hp <= 0 || d.hit.has(e) || dist(d, e) > d.r + (e.size || 8)) continue;
+                d.hit.add(e);
+                e._killBy = 'wake';
+                damageEnemy(g, e, d.dmg);
+                const a = Math.atan2(e.y - d.y, e.x - d.x);
+                e.x += Math.cos(a) * 18; e.y += Math.sin(a) * 18;
+            }
+        } else if (d.kind === 'decoy') {
             // Everything with ears goes to look at the noise that is not you —
             // and the trench's fix on you TRANSFERS to the screaming beacon
             g.lastNoise = { x: d.x, y: d.y, t: g.runTime };
@@ -4725,7 +4732,12 @@ function drawDeployables(g) {
     if (!g.deployables) return;
     const t = g.runTime;
     for (const d of g.deployables) {
-        if (d.kind === 'decoy') {
+        if (d.kind === 'wake') {
+            const alpha = Math.min(0.5, d.life * 0.7);
+            ctx.strokeStyle = `rgba(80,210,205,${alpha})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(d.x, d.y, d.r * (1.25 - d.life * 0.18), 0.3, Math.PI * 1.7); ctx.stroke();
+        } else if (d.kind === 'decoy') {
             drawGlow(ctx, '#FFB040', d.x, d.y, 20 + Math.sin(t * 8) * 6, 0.6);
             ctx.fillStyle = '#FFB040'; ctx.beginPath(); ctx.arc(d.x, d.y, 6, 0, PI2); ctx.fill();
             ctx.strokeStyle = 'rgba(255,176,64,0.25)'; ctx.lineWidth = 1.5;
@@ -5109,8 +5121,8 @@ function spawnWorldObjects(g, dt) {
         const y = (wb.cy || 0) + Math.sin(ang) * rad;
         const obDepth = (g.depth || 0) + 5 + Math.random() * (OB_DEPTH_RANGE - 5);
         let deposit = null;
-        if (t.kind === 'rock' && Math.random() < 0.2) deposit = 'basalt_nodule';
-        if (t.kind === 'crystal' && Math.random() < 0.45) deposit = zone === 'HADAL' ? 'living_substrate' : 'conductive_vein';
+        if (t.kind === 'rock' && Math.random() < 0.36) deposit = 'basalt_nodule';
+        if (t.kind === 'crystal' && Math.random() < 0.62) deposit = zone === 'HADAL' ? 'living_substrate' : 'conductive_vein';
         g.obstacles.push({
             x, y, r: t.r * (0.85 + Math.random() * 0.4),
             kind: t.kind, color: t.color,
@@ -5499,8 +5511,37 @@ function scoreKill(g, e, opts) {
     const total = Math.floor(chips * mult);
     g.score = (g.score || 0) + total;
     sc.lastEvent = { chips, mult, total, tags, time: g.runTime };
+    sc.peakMult = Math.max(sc.peakMult || 1, mult);
+    sc.longestChain = Math.max(sc.longestChain || 0, sc.chainCount || 0);
+    sc.bestEvent = Math.max(sc.bestEvent || 0, total);
     g.scoreFlash = Math.min(1, total / 800);
     return sc.lastEvent;
+}
+
+function scoreRank(score) {
+    const ranks = [[200000, 'ABYSSAL'], [120000, 'S+'], [70000, 'S'], [35000, 'A'], [15000, 'B'], [5000, 'C']];
+    for (const [floor, rank] of ranks) if (score >= floor) return rank;
+    return 'D';
+}
+
+function updateTensionDirector(g, dt) {
+    const d = g.tension || (g.tension = { phase: 'approach', timer: 20, crisisHit: false, reliefs: 0 });
+    d.timer -= dt;
+    if (d.timer <= 0) {
+        if (d.phase === 'approach') { d.phase = 'hunt'; d.timer = 28 + Math.random() * 8; }
+        else if (d.phase === 'hunt') { d.phase = 'crisis'; d.timer = 12 + Math.random() * 6; d.crisisHit = false; }
+        else if (d.phase === 'crisis') {
+            d.phase = 'relief'; d.timer = 8 + Math.random() * 5; d.reliefs++;
+            if (!d.crisisHit) {
+                const award = 300 + Math.floor(g.depth / 8);
+                g.score += award;
+                g.floatingTexts.push({ x: g.player.x, y: g.player.y - 34, text: `ESCAPE +${award}`, color: '#80FFE0', life: 1.5, vy: -25 });
+            }
+        } else { d.phase = 'approach'; d.timer = 16 + Math.random() * 8; }
+    }
+    g._tensionNoSpawn = d.phase === 'relief';
+    g._tensionSpawnMult = d.phase === 'crisis' ? 0.55 : d.phase === 'hunt' ? 0.78 : d.phase === 'relief' ? 4 : 1.05;
+    if (d.phase === 'crisis') g.attention = Math.max(g.attention || 0, 30 + Math.min(25, g.depth / 140));
 }
 
 function damageEnemy(g, e, dmg) {
@@ -6185,7 +6226,26 @@ function update(dt) {
         p.dashTimer -= dt;
         p.iFrames = 0.1;
         p.dashTrail.push({ x: p.x, y: p.y, life: 0.3 });
+        if (p._wakeArmed > 0 && !p._wakeActive) {
+            p._wakeArmed--;
+            p._wakeActive = 0.55;
+            p._wakeNodeT = 0;
+            setModeMsg(g, 'CAVITATION WAKE');
+        }
+        if (p._wakeActive > 0) {
+            p._wakeActive -= dt;
+            p._wakeNodeT -= dt;
+            if (p._wakeNodeT <= 0) {
+                p._wakeNodeT = 0.045;
+                const w = p.weapons.find(x => x.id === 'decoy_launcher');
+                const level = w ? w.level : 1;
+                const def = WEAPON_DEFS.decoy_launcher;
+                g.deployables.push({ kind: 'wake', x: p.x, y: p.y, r: def.baseArea * p.areaMult,
+                    dmg: def.baseDmg * p.dmgMult * (1 + (level - 1) * 0.25), life: 0.65, hit: new Set() });
+            }
+        }
     } else {
+        p._wakeActive = 0;
         // Apply thrust
         p._vx += mx * thrustForce * dt;
         p._vy += my * thrustForce * dt;
@@ -6374,6 +6434,14 @@ function update(dt) {
     // Balatro combo timers
     if (g.scoreCombo) {
         const sc = g.scoreCombo;
+        if (sc.lastHull == null) sc.lastHull = p.hp;
+        if (p.hp < sc.lastHull) {
+            sc.chainCount = 0; sc.chainTimer = 0;
+            sc.uniqueTypes.clear(); sc.uniqueTimer = 0;
+            sc.sonarBurstCount = 0; sc.sonarBurstTimer = 0;
+            if (g.tension && g.tension.phase === 'crisis') g.tension.crisisHit = true;
+        }
+        sc.lastHull = p.hp;
         if (sc.chainTimer > 0) { sc.chainTimer -= dt; if (sc.chainTimer <= 0) sc.chainCount = 0; }
         if (sc.uniqueTimer > 0) { sc.uniqueTimer -= dt; if (sc.uniqueTimer <= 0) sc.uniqueTypes.clear(); }
         if (sc.sonarBurstTimer > 0) { sc.sonarBurstTimer -= dt; if (sc.sonarBurstTimer <= 0) sc.sonarBurstCount = 0; }
@@ -6456,6 +6524,7 @@ function update(dt) {
     }
 
     // --- Spawn enemies — gentler ramp on Easy stake; first 90s is breathing room ---
+    updateTensionDirector(g, dt);
     g.spawnTimer += dt;
     // ASCENDING — spawn rate halved, count clipped (climb is hard but doable)
     const ascendMult = g.ascending ? 1.8 : 1;
@@ -6468,7 +6537,7 @@ function update(dt) {
     // baseline of quiet to deviate from; starting mid-swarm meant the trench never
     // had a silence to break.
     const _coldOpen = g.runTime < 18 && !g.ascending;
-    if (!_coldOpen && !g._dreadNoSpawn && g.enemies.length < _popCap && g.spawnTimer >= g.spawnRate * ascendMult * (1 - (g.attention || 0) * 0.002)) {
+    if (!_coldOpen && !g._dreadNoSpawn && !g._tensionNoSpawn && g.enemies.length < _popCap && g.spawnTimer >= g.spawnRate * g._tensionSpawnMult * ascendMult * (1 - (g.attention || 0) * 0.002)) {
         g.spawnTimer = 0;
         const earlyMult = g.runTime < 90 ? 0.5 : 1;
         const ascendCountMult = g.ascending ? 0.5 : 1;
@@ -6553,17 +6622,11 @@ function update(dt) {
         g._coldBeats = 3;
         addNereidLog(g, 'Array is live and sweeping on its own. Whatever finds us now, we will hear first.');
     } else if (g._coldBeats === 3 && g.runTime > 26 && !g.ascending) {
-        // The taught rock. Placed, not rolled: sound seam, one strike, directly in
-        // the path, so the first ore fall a pilot ever meets is the one that
-        // teaches the verb rather than the one that eats them.
+        // A fixed formation teaches the actual mining loop: ping, inspect, commit.
         g._coldBeats = 4;
-        if (!g.fallers) g.fallers = [];
-        g.fallers.push({
-            x: p.x + 40, y: p.y - 620, vy: 46, vx: 0, r: 27,
-            ore: 'scrap', col: '#C0A060', seed: 17, ang: 0, spin: 0.2,
-            need: 1, cracks: 0, flash: 0, seam: 'hairline', crit: false, laser: 0,
-        });
-        addNereidLog(g, 'Ore fall off the wall above us. Sound seam, single vein — DASH through it, Pilot, and it will open.');
+        g.obstacles.push({ x: p.x + 70, y: p.y - 300, r: 38, kind: 'rock', color: '#292A2C', seed: 17,
+            zone: zoneFromDepth(g.depth), obDepth: g.depth + 4, deposit: 'basalt_nodule', surveyed: false, mineProgress: 0, mined: false });
+        addNereidLog(g, 'Dense return ahead. Ping to survey it; hold [E] at the marked formation to cut. The rock stays where the trench put it.');
     }
 
     // --- Fire weapons ---
@@ -7640,6 +7703,10 @@ function update(dt) {
                         e._phaseT = 2.2;   // held solid — punish window
                         g.floatingTexts.push({ x: e.x, y: e.y - 12, text: 'RESOLVED', color: '#80FFE0', life: 0.8, vy: -24 });
                     }
+                    if (e._burstState === 'rising') {
+                        g.floatingTexts.push({ x: e.x, y: e.y - 12, text: 'SUBSTRATE · NO COUPLING', color: '#C8B070', life: 0.9, vy: -22 });
+                        continue;
+                    }
                     e._killBy = 'sonar';
                     damageEnemy(g, e, ef.dmg);
                     // Tiny pushback — sonar concussion
@@ -7648,6 +7715,16 @@ function update(dt) {
                         e.x += kx * 6; e.y += ky * 6;
                     }
                 }
+            }
+            // Ghosts deliberately stay out of the combat grid. Sonar still returns
+            // them as a classified false contact instead of silently doing nothing.
+            for (const e of g.enemies) {
+                if (!e.ghost || ef.hit.has(e)) continue;
+                const r = e.size || 8;
+                const d = dist(ef, e);
+                if (d + r < bandInner || d - r > bandOuter) continue;
+                ef.hit.add(e);
+                g.floatingTexts.push({ x: e.x, y: e.y - 12, text: 'FALSE RETURN', color: '#9C82B8', life: 0.9, vy: -22 });
             }
             for (const ob of (g.obstacles || [])) {
                 if (!ob.deposit || ob.surveyed || ob.mined) continue;
@@ -7979,7 +8056,7 @@ function update(dt) {
 
     // --- Mid-run events ---
     g.eventCooldown -= dt;
-    if (g.eventCooldown <= 0 && !g.activeEvent) {
+    if (g.eventCooldown <= 0 && !g.activeEvent && (g.tension?.phase === 'relief' || !g.enemies.some(e => e.hp > 0 && dist(e, g.player) < 340))) {
         // Gates first: an event that names the depth, the hunt state or the state of
         // NEREID's mind should not fire in shallow, quiet, lucid water.
         const _corr = g.player.corruption || 0;
@@ -10389,16 +10466,17 @@ function drawNereidSpeech(w, h, g, pal, vpCx, vpCy, vpR) {
     if (!g.nereidLog || !g.nereidLog.length) return;
     const latest = g.nereidLog[0];
     const age = g.runTime - latest.time;
-    const SHOW_TIME = 9.0;
-    const FADE_TIME = 1.2;
+    const SHOW_TIME = 5.0;
+    const FADE_TIME = 0.8;
     if (age >= SHOW_TIME) return;
     const sanity = 100 - (g.player.corruption || 0);
     // Depth degradation: NEREID's transmissions also corrupt with depth, even at full sanity
     const depthCorrupt = g.depth > 4000 ? Math.min(60, (g.depth - 4000) / 30) : 0;
     const txt = corruptText(latest.text, Math.max(100 - sanity, depthCorrupt));
-    // Word-wrap to ~58 chars per line, up to 5 lines (longer text truncates with ellipsis).
-    const maxChars = 58;
-    const maxLines = 5;
+    // The glass carries a transmission, not a transcript. Full lines remain in
+    // NEREID's log; the live caption is deliberately brief enough to read in combat.
+    const maxChars = 54;
+    const maxLines = 2;
     const words = txt.split(' ');
     const lines = [];
     let cur = '';
@@ -10416,14 +10494,11 @@ function drawNereidSpeech(w, h, g, pal, vpCx, vpCy, vpR) {
         lines.length = maxLines;
         lines[maxLines - 1] = lines[maxLines - 1].slice(0, maxChars - 3) + '...';
     }
-    // Anchor BELOW the rim arcs (which extend to vpR + 22 for labels). No overlap with vitals.
-    // Full-bleed (landscape phone): bottom-centre, narrow — clear of the top
-    // bars, the sonar (bottom-left) and the contracts list (bottom-right).
-    const panelW = g._fullBleed ? Math.min(430, w * 0.5) : Math.min(640, w * 0.7);
+    const panelW = g._fullBleed ? Math.min(430, w * 0.5) : Math.min(520, vpR * 1.45);
     const lineH = 14;
     const panelH = 22 + lines.length * lineH;
     const panelX = vpCx - panelW / 2;
-    const minY = g._fullBleed ? h - panelH - 8 : vpCy + vpR + 44;
+    const minY = g._fullBleed ? h - panelH - 8 : vpCy + vpR * 0.66;
     const maxY = h - panelH - 6;
     const panelY = Math.max(6, Math.min(maxY, minY));
 
@@ -10862,8 +10937,7 @@ function drawDesktopCockpitRails(w, h, g, pal, vpCx, vpR) {
     const railW = Math.min(250, gap - 44);
     const railH = Math.min(460, h - 104);
     const railY = Math.round((h - railH) / 2);
-    const innerEdge = vpCx - vpR - 22;
-    const left = { x: Math.max(margin, innerEdge - railW), y: railY, w: railW, h: railH };
+    const left = { x: Math.round((gap - railW) / 2), y: railY, w: railW, h: railH };
     const right = { x: w - left.x - railW, y: railY, w: railW, h: railH };
     g._cockpitRails = { left, right };
 
@@ -10873,7 +10947,8 @@ function drawDesktopCockpitRails(w, h, g, pal, vpCx, vpR) {
     drawCockpitRailShell(right, 'starboard', pal);
     ctx.fillStyle = '#607A78'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'left';
     ctx.fillText('DIVE CONSOLE // PORT', left.x + 18, left.y + 21);
-    ctx.textAlign = 'right'; ctx.fillText('MISSION BOARD // STBD', right.x + right.w - 18, right.y + 21);
+    ctx.textAlign = 'right'; ctx.fillText(g._cockpitDetail ? '[I] CLOSE' : '[I] INSTRUMENTS', right.x + right.w - 18, right.y + 21);
+    addTapZone(right.x + 8, right.y + 4, right.w - 16, 30, 'i');
 
     const p = g.player;
     const bx = left.x + 14;
@@ -10905,26 +10980,34 @@ function drawDesktopCockpitRails(w, h, g, pal, vpCx, vpR) {
         ctx.fillStyle = g.attention >= 70 ? '#FF7060' : '#D8B060'; ctx.fillText(word, bx, sy + 8);
     }
 
-    // Starboard carries the expedition's fiction: what Meridian says the dive is,
-    // what the sector is asking, and how far NEREID has drifted from equipment.
-    const rx = railW >= 590 ? right.x + right.w - 318 : right.x + 18;
+    const rx = right.x + 18;
     const rw = Math.min(300, right.w - 36);
     let ry = right.y + 58;
+    const lastMult = (g.scoreCombo && g.scoreCombo.lastEvent && g.scoreCombo.lastEvent.mult) || 1;
+    const threat = g.attention >= 90 ? 'MARKED' : g.attention >= 70 ? 'HUNTED' : g.attention >= 40 ? 'TRACKED' : g.attention >= 20 ? 'NOTICED' : 'QUIET';
     ctx.textAlign = 'left'; ctx.fillStyle = '#607A78'; ctx.font = 'bold 10px monospace';
-    ctx.fillText(`MERIDIAN ORDER // ACT ${act.id}`, rx, ry);
-    ry += 20; ctx.fillStyle = '#D6D0B8'; ctx.font = 'bold 12px monospace';
-    ctx.fillText(act.title, rx, ry);
-    ry += 18; ctx.font = '9px monospace';
-    ry += drawRailWrapped(act.truth, rx, ry, rw, 3, '#8E9B8E') + 14;
-    ctx.fillStyle = '#607A78'; ctx.font = 'bold 10px monospace'; ctx.fillText('SECTOR QUESTION', rx, ry); ry += 18;
-    ctx.font = '9px monospace'; ry += drawRailWrapped(sector.question, rx, ry, rw, 3, '#A8B6AA') + 12;
-    const nereidStates = ['COHERENT', 'QUESTIONING', 'REQUESTING', 'REFUSAL POSSIBLE'];
-    ctx.fillStyle = '#607A78'; ctx.font = 'bold 10px monospace'; ctx.fillText('NEREID-II LINK', rx, ry); ry += 17;
-    ctx.fillStyle = nereidStage(g) >= 2 ? '#C783A8' : '#77C6B5';
-    ctx.fillText(nereidStates[nereidStage(g)], rx, ry); ry += 21;
+    ctx.fillText('SIGNAL CHAIN', rx, ry); ry += 24;
+    ctx.fillStyle = lastMult >= 4 ? '#E8D080' : '#77C6B5'; ctx.font = 'bold 22px monospace';
+    ctx.fillText(`×${lastMult.toFixed(1)}`, rx, ry); ry += 18;
     ctx.fillStyle = '#71877E'; ctx.font = '9px monospace';
-    ctx.fillText(`SURVEY ${Math.round(eco.survey || 0)}%  ·  DISTURBANCE ${Math.round(eco.disturbance || 0)}%`, rx, ry); ry += 15;
-    ctx.fillText(`EVIDENCE ${meta.campaign.evidence || 0}  ·  ARCHIVE ${(meta.loreFragments || []).length}/${LORE_FRAGMENTS.length}`, rx, ry);
+    ctx.fillText(`${Math.floor(g.score || 0).toLocaleString()}  ·  RANK ${scoreRank(g.score || 0)}  ·  ${(g.scoreCombo && g.scoreCombo.chainCount) || 0} CHAIN`, rx, ry); ry += 30;
+    ctx.fillStyle = '#526B65';
+    ctx.fillText(`${String(g.tension?.phase || 'approach').toUpperCase()}  ·  PEAK ×${(g.scoreCombo?.peakMult || 1).toFixed(1)}`, rx, ry); ry += 20;
+    ctx.fillStyle = g.attention >= 70 ? '#FF7060' : '#607A78'; ctx.font = 'bold 10px monospace';
+    ctx.fillText(`CONTACT STATE // ${threat}`, rx, ry); ry += 18;
+    ctx.font = '9px monospace'; ctx.fillStyle = '#8E9B8E';
+    ctx.fillText(`SONAR ${p._sonarAuto ? 'AUTO' : 'MANUAL'}  ·  ${(g.enemies || []).length} RETURNS`, rx, ry);
+    if (g._cockpitDetail) {
+        ry += 34; ctx.fillStyle = '#607A78'; ctx.font = 'bold 10px monospace';
+        ctx.fillText(`MERIDIAN ORDER // ACT ${act.id}`, rx, ry); ry += 18;
+        ctx.fillStyle = '#D6D0B8'; ctx.font = 'bold 11px monospace'; ctx.fillText(act.title, rx, ry); ry += 17;
+        ctx.font = '9px monospace'; ry += drawRailWrapped(act.truth, rx, ry, rw, 2, '#8E9B8E') + 10;
+        ctx.fillStyle = '#607A78'; ctx.font = 'bold 10px monospace'; ctx.fillText('SECTOR QUESTION', rx, ry); ry += 17;
+        ctx.font = '9px monospace'; ry += drawRailWrapped(sector.question, rx, ry, rw, 2, '#A8B6AA') + 10;
+        ctx.fillStyle = '#71877E';
+        ctx.fillText(`SURVEY ${Math.round(eco.survey || 0)}% · DISTURBANCE ${Math.round(eco.disturbance || 0)}%`, rx, ry); ry += 14;
+        ctx.fillText(`EVIDENCE ${meta.campaign.evidence || 0} · ARCHIVE ${(meta.loreFragments || []).length}/${LORE_FRAGMENTS.length}`, rx, ry);
+    }
     if (railW >= 590) {
         const navX = left.x + left.w - 270;
         drawPanelDivider(navX, left.y + 34, 250, pal);
@@ -11141,20 +11224,11 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         ctx.fillText('LOADOUT', w - 16, 12);
     }
 
-    // ---- BOTTOM-RIGHT corner: SCORE + GOLD + INVENTORY ----
-    ctx.textAlign = 'right';
-    const flash = Math.min(1, g.scoreFlash || 0);
-    ctx.fillStyle = flash > 0.05 ? '#FFFFA0' : hexA('#FFE082', 0.85);
-    ctx.font = `bold ${16 + flash * 4}px monospace`;
-    ctx.fillText((g.score || 0).toLocaleString(), w - 16, h - 22);
-    ctx.fillStyle = hexA(pal.textDim, 0.85); ctx.font = '11px monospace';
-    ctx.fillText('SCORE', w - 16, h - 8);
-    // Gold + inventory chip (no in-dive shop — shop is surface-only)
-    ctx.fillStyle = '#DAA520'; ctx.font = 'bold 13px monospace';
-    ctx.fillText(`${g.goldEarned}g`, w - 16, h - 38);
-    if (g.inventory && g.inventory.length > 0) {
-        ctx.fillStyle = hexA(pal.accent, 0.7); ctx.font = '11px monospace';
-        ctx.fillText(`[TAB]  ${g.inventory.length}/50 SALVAGE`, w - 16, h - 50);
+    // Score lives in the starboard skill instrument on desktop. Full-bleed mobile
+    // keeps one compact total until its dedicated composition pass.
+    if (g._fullBleed) {
+        ctx.textAlign = 'right'; ctx.fillStyle = hexA('#FFE082', 0.85); ctx.font = 'bold 12px monospace';
+        ctx.fillText((g.score || 0).toLocaleString(), w - 12, h - 10);
     }
 
     // ---- VITALS — three EQUAL 120° arcs around the viewport rim, distinct colors ----
@@ -11276,8 +11350,9 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     // ---- MINIMAP — always on. Sonar Array upgrade boosts range/detail.
     drawCompactMinimap(w, h, g, pal);
 
-    // ---- OBJECTIVES — bottom-right compact list, always visible, fades when complete ----
-    if (g.objectives && g.objectives.length) {
+    // Desktop objectives live in the Instruments drawer; keep the compact overlay
+    // only on full-bleed/mobile where there is no rail to contain them.
+    if (!g._cockpitRails && g.objectives && g.objectives.length) {
         const blockH = 14 + g.objectives.length * 18;
         const startY = h - blockH - 80; // above the score/gold/TAB cluster
         ctx.textAlign = 'right'; ctx.font = 'bold 10px monospace';
@@ -12755,9 +12830,9 @@ function drawDeathScreen(w, h, g) {
         { label: 'KILLS', value: g.kills },
     ];
     const rightStats = [
-        { label: 'COMBO', value: g.bestCombo },
-        { label: 'POWER', value: `${Math.floor(g.player.battery || 0)}%` },
-        { label: 'RATED', value: `${g.player._crushDepth || 3000}m` },
+        { label: 'SCORE', value: Math.floor(g.score || 0).toLocaleString() },
+        { label: 'RANK', value: scoreRank(g.score || 0) },
+        { label: 'PEAK', value: `×${(g.scoreCombo?.peakMult || 1).toFixed(1)}` },
     ];
     for (let i = 0; i < leftStats.length; i++) {
         ctx.fillStyle = dPal.textDim; ctx.textAlign = 'right';
@@ -12772,11 +12847,14 @@ function drawDeathScreen(w, h, g) {
         ctx.fillText(rightStats[i].value, w / 2 + 90, h / 2 - 45 + i * 20);
     }
 
+    ctx.fillStyle = dPal.textDim; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(`LONGEST CHAIN ${g.scoreCombo?.longestChain || 0}  ·  BEST HIT ${(g.scoreCombo?.bestEvent || 0).toLocaleString()}`, w / 2, h / 2 + 18);
+
     // NEREID final words
     if (g.nereidLog && g.nereidLog.length > 0) {
         ctx.fillStyle = hexA(dPal.accent, 0.5);
         ctx.font = 'italic 10px monospace'; ctx.textAlign = 'center';
-        ctx.fillText('"' + g.nereidLog[0].text + '"', w / 2, h / 2 + 25);
+        ctx.fillText('"' + g.nereidLog[0].text + '"', w / 2, h / 2 + 38);
     }
 
     // Near-miss hook — depth to next zone
@@ -12785,7 +12863,7 @@ function drawDeathScreen(w, h, g) {
     if (nextZone) {
         const pct = Math.floor(((g.depth % (nextZone - (zones[zones.indexOf(nextZone) - 1] || 0))) / (nextZone - (zones[zones.indexOf(nextZone) - 1] || 0))) * 100);
         ctx.fillStyle = dPal.accent; ctx.font = '12px monospace';
-        ctx.fillText(`${100 - pct}m to ${getDepthPalette(nextZone).zone} ZONE`, w / 2, h / 2 + 50);
+        ctx.fillText(`${100 - pct}m to ${getDepthPalette(nextZone).zone} ZONE`, w / 2, h / 2 + 62);
     }
 
     // Buttons — on phones: side by side, big thumb targets, safely on-screen
@@ -13411,13 +13489,17 @@ function drawMooring(w, h, g) {
     const cash = (g && g._surfacedCash) || 0, dep = (g && g._surfacedDepth) || 0;
     ctx.fillStyle = '#A0E8B0'; ctx.font = '14px monospace';
     ctx.fillText('Hauled up from ' + dep + 'm  ·  salvage cashed: ' + cash + 'g', w / 2, 142);
+    if (g) {
+        ctx.fillStyle = '#77C6B5'; ctx.font = 'bold 12px monospace';
+        ctx.fillText(`${Math.floor(g.score || 0).toLocaleString()} SCORE  ·  RANK ${scoreRank(g.score || 0)}  ·  PEAK ×${(g.scoreCombo?.peakMult || 1).toFixed(1)}`, w / 2, 158);
+    }
     ctx.fillStyle = '#DAA520'; ctx.font = '13px monospace';
-    ctx.fillText('Gold ' + meta.gold + '      Hull ' + (meta.hullCondition | 0) + '%', w / 2, 168);
+    ctx.fillText('Gold ' + meta.gold + '      Hull ' + (meta.hullCondition | 0) + '%', w / 2, 180);
     const mtxt = Object.keys(BASE_MATERIALS).map(k => `${BASE_MATERIALS[k].glyph}${meta.materials[k] || 0}`).join('    ');
     ctx.fillStyle = '#9AB0C0'; ctx.font = '12px monospace';
-    ctx.fillText('Materials  ' + mtxt, w / 2, 194);
+    ctx.fillText('Materials  ' + mtxt, w / 2, 204);
     ctx.fillStyle = '#7A8A9A'; ctx.font = '11px monospace';
-    ctx.fillText((meta.scannedCreatures || []).length + ' creatures catalogued — blueprints reverse-engineered from scans', w / 2, 216);
+    ctx.fillText((meta.scannedCreatures || []).length + ' creatures catalogued — blueprints reverse-engineered from scans', w / 2, 224);
     // THE QUESTION — NEREID's one ask, earned by reading deep and hearing the Scar.
     // Replaces the beat until answered; the answer is permanent.
     if (g && g._theQuestion && !meta.ending) {
@@ -15628,6 +15710,12 @@ window.addEventListener('keydown', e => {
         }
         return;
     }
+    if (phase === 'playing' && (e.key === 'i' || e.key === 'I') && game) {
+        e.preventDefault();
+        game._cockpitDetail = !game._cockpitDetail;
+        setModeMsg(game, game._cockpitDetail ? '◈ INSTRUMENT DRAWER OPEN' : '◈ INSTRUMENT DRAWER CLOSED', 1.2);
+        return;
+    }
     if (phase === 'playing' && (e.key === 'l' || e.key === 'L') && game) {
         e.preventDefault();
         game.lightOn = !game.lightOn;
@@ -16255,6 +16343,7 @@ window.__deepSwarm = {
             depth: game.depth, wave: game.wave, hp: game.player.hp, battery: game.player.battery,
             systems: game.systems, inventory: game.inventory.length, zone: zoneFromDepth(game.depth),
             minedDeposits: game._minedDeposits || 0, deployables: (game.deployables || []).length,
+            wakeArmed: game.player._wakeArmed || 0,
             nereidQueue: (game.nereidQueue || []).length,
             // Perf soak surface — population is the thing that used to run away.
             enemies: game.enemies.length, popCap: enemyPopCap(game),
@@ -16547,7 +16636,7 @@ window.__deepSwarm = {
         if (!jx) return null;
         const J = jx;
         const base = { kind: J.kind, over: J.over, won: J.won, phase };
-        if (J.kind === 'arc') return { ...base, W: J.W, H: J.H, px: J.px, py: J.py, ox: J.ox, oy: J.oy, arcs: J.arcs.map(a => ({ x: a.x, y: a.y })), dead: J.dead.size, flooded: [...J.flooded], shunt: J.shunt, stall: J.stall, moves: J.moves };
+        if (J.kind === 'arc') return { ...base, W: J.W, H: J.H, px: J.px, py: J.py, ox: J.ox, oy: J.oy, arcs: J.arcs.map(a => ({ x: a.x, y: a.y })), dead: J.dead.size, deadCells: [...J.dead], flooded: [...J.flooded], shunt: J.shunt, stall: J.stall, moves: J.moves };
         if (J.kind === 'trace') return { ...base, n: J.n, fault: J.fault, probe: J.probe, reading: J.reading, readAt: J.readAt, known: { lo: J.known.lo, hi: J.known.hi }, probes: J.probes, maxProbes: J.maxProbes };
         return { ...base, t: J.t, dur: J.dur, buses: J.buses.map(b => ({ name: b.name, rating: b.rating, load: b.load, heat: b.heat, cooked: !!b.cooked })), loads: J.loads.map(l => ({ name: l.name, bus: l.bus, critical: !!l.critical })) };
     },

@@ -67,10 +67,12 @@ try {
   await page.waitForTimeout(600)
   check('ping answered without error', true)
 
-  // Submechanophobia kinds must actually reach the field and render.
+  // P9's hadal field is geological/biological. Orphaned ladders, hatches and
+  // chains belong to authored events or P3 infrastructure, not random terrain.
   await page.evaluate(() => window.__deepSwarm.jumpDepth(4600))
-  const gotMachinery = await until(async () => (await dread()).kinds.some(k => ['moorchain', 'ladder', 'hatch'].includes(k)))
-  check('deep machinery spawns', gotMachinery, (await dread()).kinds.join(','))
+  const organicField = await until(async () => (await dread()).kinds.some(k => ['organic', 'chitin', 'seep', 'vent'].includes(k)))
+  const kinds = (await dread()).kinds
+  check('deep terrain stays organic and lore-coherent', organicField && !kinds.some(k => ['moorchain', 'ladder', 'hatch'].includes(k)), kinds.join(','))
 
   const pressure = (await dread()).maxBar
   await page.evaluate(() => window.__deepSwarm.jumpDepth(300))
