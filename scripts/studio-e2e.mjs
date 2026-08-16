@@ -169,9 +169,40 @@ try {
   await page.waitForTimeout(300)
   check('workflow: arrangement edits undo', chainAdded === chainBefore + 1 && await page.locator('.wa-chain-block').count() === chainBefore)
 
+  // ── S1: lanes are independent — adding to pads leaves drums/synth alone ──
+  const laneCounts = () => page.evaluate(() =>
+    [...document.querySelectorAll('.wa-arrange-lane')].map((row) => row.querySelectorAll('.wa-chain-block').length))
+  const lanesBefore = await laneCounts()
+  await page.locator('.wa-arrange-lane').nth(1).locator('.wa-lane-add').click()
+  await page.waitForTimeout(200)
+  const lanesAfter = await laneCounts()
+  check('lanes: per-lane add touches only its own lane',
+    lanesAfter[1] === lanesBefore[1] + 1 && lanesAfter[0] === lanesBefore[0] && lanesAfter[2] === lanesBefore[2],
+    JSON.stringify({ lanesBefore, lanesAfter }))
+  await page.locator('.wa-transport button[aria-label="Undo"]').click({ timeout: 5000 })
+  await page.waitForTimeout(300)
+
+  // ── S1: the clip decides the editor (double-tap → drum grid, scene selected) ──
+  await page.locator('.wa-session-row').nth(1).locator('.wa-clip').nth(2).dblclick()
+  await page.waitForTimeout(300)
+  check('clips: double-tap opens the drum editor', await page.locator('.wa-page-drums').isVisible())
+  await openMode(page, 'CLIPS')
+  await page.waitForTimeout(200)
+  const selScene = await page.evaluate(() => {
+    const firstTrackRow = [...document.querySelectorAll('.wa-session-row')][1]
+    return [...firstTrackRow.querySelectorAll('.wa-clip')].findIndex((cell) => cell.classList.contains('sel'))
+  })
+  check('clips: double-tap selected the tapped scene', selScene === 2, `scene idx ${selScene}`)
+
+  // ── S1: automation + song library fold shut by default ──
+  check('song page: automation and library are folded',
+    await page.locator('.wa-fold').count() === 2
+    && await page.evaluate(() => [...document.querySelectorAll('.wa-fold')].every((d) => !d.open)))
+
   // ── workflow: loading a song applies in place, no page restart ──
   page.on('dialog', (d) => d.accept())
   await page.evaluate(() => { window.__noReload = true })
+  await page.locator('.wa-fold-head', { hasText: 'SONGS' }).click()  // library folds shut by default (S1)
   await page.selectOption('.wa-song-library select', 'factory:NEON HORIZON')
   await page.locator('.wa-song-library button', { hasText: 'Load' }).first().click()
   await page.waitForTimeout(700)

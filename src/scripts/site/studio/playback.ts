@@ -47,11 +47,19 @@ export function buildPlayback(deps: PlaybackDeps): void {
     const random = rackState.devices.player ? (Math.random() * 2 - 1) * rackState.grooveRandom / 1000 : 0;
     const when = baseWhen + (s % 2 === 1 ? transport.swing * stepDur() : 0) + groove + random;
     const drumClip = clip.play.drums, padClip = clip.play.pads, synthClip = clip.play.synth;
-    const arrangementBlock = transport.songMode ? blockAt("synth", songPos.bar) : null;
-    const automationProgress = arrangementBlock ? Math.max(0, Math.min(1, (songPos.bar - arrangementBlock.startBar + s / Math.max(1, patternLengths[arrangementBlock.scene])) / arrangementBlock.bars)) : 0;
+    // Lanes are independent now (S1): a ramp lives on whichever lane's block
+    // the user attached it to, so search every track's block at this bar.
+    const automationBlocks = transport.songMode
+      ? TRACKS.map((track) => blockAt(track, songPos.bar)).filter((block): block is NonNullable<typeof block> => block !== null)
+      : [];
+    const blockProgress = (block: NonNullable<ReturnType<typeof blockAt>>): number =>
+      Math.max(0, Math.min(1, (songPos.bar - block.startBar + s / Math.max(1, patternLengths[block.scene])) / block.bars));
     const automatedValue = (lane: string, param: string): number | null => {
-      const ramp = arrangementBlock?.automation?.find((item) => item.lane === lane && item.param === param);
-      return ramp ? ramp.from + (ramp.to - ramp.from) * automationProgress : null;
+      for (const block of automationBlocks) {
+        const ramp = block.automation?.find((item) => item.lane === lane && item.param === param);
+        if (ramp) return ramp.from + (ramp.to - ramp.from) * blockProgress(block);
+      }
+      return null;
     };
     const masterVolume = automatedValue("master", "volume");
     if (masterVolume !== null && engine.master) engine.master.gain.setValueAtTime(Math.max(0, Math.min(1, masterVolume)), baseWhen);

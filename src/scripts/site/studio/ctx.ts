@@ -18,6 +18,9 @@ export interface StudioCtx {
   refreshVisibleState: () => void
   /** Repaint the transport's recording-target chip (REC → scene). */
   updateRecChip: () => void
+  /** FLM rule: the clip decides the editor. Select the scene and open the
+   *  track's own editor (drums grid / pad steps / piano roll). */
+  openTrackEditor: (track: "drums" | "pads" | "synth", scene: number) => void
 }
 
 export const ctx = {} as StudioCtx

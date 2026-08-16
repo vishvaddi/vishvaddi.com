@@ -153,8 +153,10 @@ export function buildSession(): SessionView {
       const cell = btn("", "wa-clip");
       cell.classList.remove("wa-btn");
       cell.style.setProperty("--scene-color", SCENE_COLORS[scene]);
-      help(cell, `Launch ${TRACK_LABELS[track].toLowerCase()} clip ${label}. Tracks can play clips from different scenes.`);
+      help(cell, `Launch ${TRACK_LABELS[track].toLowerCase()} clip ${label} — double-tap to edit it. Tracks can play clips from different scenes.`);
       cell.addEventListener("click", () => launchClip(track, scene));
+      // FLM: the clip decides the editor — double-tap opens the right one.
+      cell.addEventListener("dblclick", () => ctx.openTrackEditor(track, scene));
       sessionCells[scene].push(cell);
       row.append(cell);
     });
@@ -170,41 +172,67 @@ export function buildSession(): SessionView {
   addBtn.setAttribute("aria-label", "Add selected scene");
   shorterBtn.setAttribute("aria-label", "Remove one repeat bar");
   longerBtn.setAttribute("aria-label", "Add one repeat bar");
+  // Real per-track lanes (S1). The old composer edited only arrangement.drums
+  // and mirrored it onto pads/synth every commit — the data model and the
+  // scheduler supported independence all along; only the UI collapsed it.
+  let selLane: TrackId = "drums";
   let selectedBlock = -1;
-  const canonical = (): ArrangeBlock[] => arrangement.drums;
+  const laneOf = (): ArrangeBlock[] => arrangement[selLane];
   const normaliseStarts = () => {
-    let cursor = 0;
-    canonical().forEach((block) => { block.startBar = cursor; cursor += block.bars; });
-    TRACKS.slice(1).forEach((track) => { arrangement[track] = canonical().map((block) => ({ ...block, automation: block.automation?.map((r) => ({ ...r })) })); });
+    TRACKS.forEach((track) => {
+      let cursor = 0;
+      arrangement[track].forEach((block) => { block.startBar = cursor; cursor += block.bars; });
+    });
   };
+  const composerTitle = el("span", "wa-fx-title", "ARRANGEMENT — DRUMS");
   const paintChain = () => {
     chain.replaceChildren();
-    if (!canonical().length) chain.append(el("span", "wa-chain-empty", "Add scenes to build an arrangement"));
+    composerTitle.textContent = `ARRANGEMENT — ${TRACK_LABELS[selLane]}`;
+    if (TRACKS.every((track) => !arrangement[track].length)) chain.append(el("span", "wa-chain-empty", "Add scenes to build an arrangement — each track keeps its own lane"));
     TRACKS.forEach((track) => {
       const row = el("div", "wa-arrange-lane");
-      row.append(el("span", "wa-arrange-lane-name", TRACK_LABELS[track]));
+      row.classList.toggle("sel-lane", track === selLane);
+      const name = btn(TRACK_LABELS[track], "wa-arrange-lane-name");
+      name.classList.remove("wa-btn");
+      help(name, `Select the ${TRACK_LABELS[track].toLowerCase()} lane — the arrangement tools edit the selected lane.`);
+      name.addEventListener("click", () => { selLane = track; selectedBlock = Math.min(selectedBlock, arrangement[track].length - 1); paintChain(); paintAutomation(); });
+      row.append(name);
       const clips = el("div", "wa-arrange-lane-clips");
       arrangement[track].forEach((block, index) => {
-        const item = track === "drums"
-          ? btn(`${SCENE_LABELS[block.scene]} ×${block.bars}`, "wa-chain-block")
-          : el("span", "wa-track-block", `${SCENE_LABELS[block.scene]} ×${block.bars}`);
-        item.classList.remove("wa-btn"); item.classList.toggle("active", index === selectedBlock);
+        const item = btn(`${SCENE_LABELS[block.scene]} ×${block.bars}`, "wa-chain-block");
+        item.classList.remove("wa-btn");
+        item.classList.toggle("active", track === selLane && index === selectedBlock);
         item.style.setProperty("--block-bars", String(block.bars));
         item.style.setProperty("--scene-color", SCENE_COLORS[block.scene]);
         if (block.automation?.length) item.classList.add("automated");
-        if (item instanceof HTMLButtonElement) item.addEventListener("click", () => { selectedBlock = index; paintChain(); paintAutomation(); });
+        help(item, `Scene ${SCENE_LABELS[block.scene]} for ${block.bars} bar${block.bars > 1 ? "s" : ""} — tap to select, double-tap to edit the clip.`);
+        item.addEventListener("click", () => { selLane = track; selectedBlock = index; paintChain(); paintAutomation(); });
+        item.addEventListener("dblclick", () => ctx.openTrackEditor(track, block.scene));
         clips.append(item);
       });
+      // Per-lane add: the selected scene joins THIS lane — one tap, no
+      // lane-switch dance.
+      const laneAdd = btn("＋", "wa-lane-add");
+      laneAdd.classList.remove("wa-btn");
+      help(laneAdd, `Append scene ${SCENE_LABELS[clip.sel]} to the ${TRACK_LABELS[track].toLowerCase()} lane.`);
+      laneAdd.addEventListener("click", () => {
+        ctx.checkpoint();
+        selLane = track;
+        arrangement[track].push({ scene: clip.sel, bars: 1, startBar: 0, automation: [] });
+        selectedBlock = arrangement[track].length - 1;
+        commitChain(); paintAutomation();
+      });
+      clips.append(laneAdd);
       row.append(clips); chain.append(row);
     });
   };
   const commitChain = () => { normaliseStarts(); saveAll(); paintChain(); };
-  addBtn.addEventListener("click", () => { ctx.checkpoint(); canonical().push({ scene: clip.sel, bars: 1, startBar: 0, automation: [] }); selectedBlock = canonical().length - 1; commitChain(); });
-  leftBtn.addEventListener("click", () => { if (selectedBlock <= 0) return; ctx.checkpoint(); [canonical()[selectedBlock - 1], canonical()[selectedBlock]] = [canonical()[selectedBlock], canonical()[selectedBlock - 1]]; selectedBlock--; commitChain(); });
-  rightBtn.addEventListener("click", () => { if (selectedBlock < 0 || selectedBlock >= canonical().length - 1) return; ctx.checkpoint(); [canonical()[selectedBlock + 1], canonical()[selectedBlock]] = [canonical()[selectedBlock], canonical()[selectedBlock + 1]]; selectedBlock++; commitChain(); });
-  shorterBtn.addEventListener("click", () => { const block = canonical()[selectedBlock]; if (!block) return; ctx.checkpoint(); block.bars = Math.max(1, block.bars - 1); commitChain(); });
-  longerBtn.addEventListener("click", () => { const block = canonical()[selectedBlock]; if (!block) return; ctx.checkpoint(); block.bars = Math.min(128, block.bars + 1); commitChain(); });
-  deleteBtn.addEventListener("click", () => { if (selectedBlock < 0) return; ctx.checkpoint(); canonical().splice(selectedBlock, 1); selectedBlock = Math.min(selectedBlock, canonical().length - 1); commitChain(); paintAutomation(); });
+  addBtn.addEventListener("click", () => { ctx.checkpoint(); laneOf().push({ scene: clip.sel, bars: 1, startBar: 0, automation: [] }); selectedBlock = laneOf().length - 1; commitChain(); });
+  leftBtn.addEventListener("click", () => { if (selectedBlock <= 0) return; ctx.checkpoint(); [laneOf()[selectedBlock - 1], laneOf()[selectedBlock]] = [laneOf()[selectedBlock], laneOf()[selectedBlock - 1]]; selectedBlock--; commitChain(); });
+  rightBtn.addEventListener("click", () => { if (selectedBlock < 0 || selectedBlock >= laneOf().length - 1) return; ctx.checkpoint(); [laneOf()[selectedBlock + 1], laneOf()[selectedBlock]] = [laneOf()[selectedBlock], laneOf()[selectedBlock + 1]]; selectedBlock++; commitChain(); });
+  shorterBtn.addEventListener("click", () => { const block = laneOf()[selectedBlock]; if (!block) return; ctx.checkpoint(); block.bars = Math.max(1, block.bars - 1); commitChain(); });
+  longerBtn.addEventListener("click", () => { const block = laneOf()[selectedBlock]; if (!block) return; ctx.checkpoint(); block.bars = Math.min(128, block.bars + 1); commitChain(); });
+  deleteBtn.addEventListener("click", () => { if (selectedBlock < 0) return; ctx.checkpoint(); laneOf().splice(selectedBlock, 1); selectedBlock = Math.min(selectedBlock, laneOf().length - 1); commitChain(); paintAutomation(); });
   clearBtn.addEventListener("click", () => { ctx.checkpoint(); TRACKS.forEach((track) => { arrangement[track] = []; }); selectedBlock = -1; saveAll(); paintChain(); paintAutomation(); });
 
   const automation = el("div", "wa-automation-editor");
@@ -214,14 +242,14 @@ export function buildSession(): SessionView {
   [fromInput, toInput].forEach((input) => { input.type = "number"; input.min = "0"; input.max = "100"; input.value = input === fromInput ? "20" : "80"; input.setAttribute("aria-label", input === fromInput ? "Automation start percent" : "Automation end percent"); });
   const addRampBtn = btn("＋ Ramp", "wa-btn-sm"), ramps = el("div", "wa-ramp-list");
   const paintAutomation = () => {
-    ramps.replaceChildren(); const block = canonical()[selectedBlock];
+    ramps.replaceChildren(); const block = laneOf()[selectedBlock];
     block?.automation?.forEach((ramp, index) => {
       const row = el("div", "wa-ramp-row", `${ramp.lane} ${ramp.param} ${Math.round(ramp.from * 100)}→${Math.round(ramp.to * 100)}%`);
       const remove = btn("×", "wa-btn-sm"); remove.addEventListener("click", () => { ctx.checkpoint(); block.automation!.splice(index, 1); commitChain(); paintAutomation(); }); row.append(remove); ramps.append(row);
     });
   };
   addRampBtn.addEventListener("click", () => {
-    const block = canonical()[selectedBlock]; if (!block) return;
+    const block = laneOf()[selectedBlock]; if (!block) return;
     ctx.checkpoint();
     const ramp: AutomationRamp = { lane: laneSel.value as AutomationRamp["lane"], param: paramSel.value as AutomationRamp["param"], from: Number(fromInput.value) / 100, to: Number(toInput.value) / 100 };
     block.automation ??= []; block.automation.push(ramp); commitChain(); paintAutomation();
@@ -274,8 +302,16 @@ export function buildSession(): SessionView {
   refreshSongs();
   songLibrary.append(el("span", "wa-lbl", "SONGS"), songSel, loadSongBtn, saveSongBtn, deleteSongBtn, exportSongBtn, importSongBtn, songInput);
 
-  composerHead.append(el("span", "wa-fx-title", "ARRANGEMENT"), addBtn, leftBtn, rightBtn, shorterBtn, longerBtn, deleteBtn, clearBtn);
-  composer.append(composerHead, chain, automation, songLibrary); paintChain(); paintAutomation();
+  composerHead.append(composerTitle, addBtn, leftBtn, rightBtn, shorterBtn, longerBtn, deleteBtn, clearBtn);
+  // Declutter (S1): automation and the song library keep visible homes but
+  // fold shut — the opening screen is tracks + launcher + lanes, FLM-style.
+  const automationFold = el("details", "wa-fold") as HTMLDetailsElement;
+  const automationSummary = el("summary", "wa-fold-head", "AUTOMATION");
+  automationFold.append(automationSummary, automation);
+  const libraryFold = el("details", "wa-fold") as HTMLDetailsElement;
+  const librarySummary = el("summary", "wa-fold-head", "SONGS");
+  libraryFold.append(librarySummary, songLibrary);
+  composer.append(composerHead, chain, automationFold, libraryFold); paintChain(); paintAutomation();
   const arrangeLanePaints: Array<() => void> = [paintChain];
   help(sessionGrid, "Each column is a track, each row a scene — launch single clips or whole scenes; changes land on the next bar so transitions stay in time.");
   song.append(statusRow, sessionGrid, composer);

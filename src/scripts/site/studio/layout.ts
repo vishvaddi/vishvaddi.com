@@ -39,7 +39,7 @@ export interface Layout {
   modeBar: HTMLElement;
   workarea: HTMLElement;
   getActiveMode: () => ModeId;
-  selectMode: (mode: ModeId) => void;
+  selectMode: (mode: ModeId, workspace?: WorkspaceId) => void;
   /** tutorial nav proxies — see navButtons construction at the bottom */
   navButtons: HTMLElement[];
 }
@@ -351,5 +351,5 @@ export function buildLayout(p: LayoutPanels): Layout {
     nav(() => setMode("dj")),
   ];
 
-  return { modeBar, workarea, getActiveMode: () => activeMode, selectMode: (mode) => setMode(mode), navButtons };
+  return { modeBar, workarea, getActiveMode: () => activeMode, selectMode: (mode, workspace) => setMode(mode, workspace), navButtons };
 }

@@ -3358,7 +3358,9 @@
 .wa-arrange-main { min-width: 0; min-height: 0; overflow: hidden; }
 .wa-arrange-main > .wa-panel { height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .wa-arrange-main .wa-session { flex: 0 0 auto; }
-.wa-arrange-main .wa-composer { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Folds (S1) can extend the composer past the fixed panel — it scrolls
+   internally rather than clipping. Closed-fold default still fits. */
+.wa-arrange-main .wa-composer { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
 .wa-arrange-main .wa-chainstrip { flex: 1; min-height: 100px; }
 .wa-arrange-main .wa-chainstrip.wa-arrange-lanes {
   padding: 7px;
@@ -3380,6 +3382,24 @@
   font: 700 9px/1 var(--wa-mono);
   letter-spacing: .08em;
 }
+/* Lane names are buttons now (S1: lanes are independently editable). */
+button.wa-arrange-lane-name { cursor: pointer; }
+.wa-arrange-lane.sel-lane .wa-arrange-lane-name { color: var(--wa-accent); border-color: var(--wa-accent); }
+.wa-lane-add {
+  flex: 0 0 auto; min-width: 34px; padding: 7px 0;
+  color: #aeb7c1; background: transparent;
+  border: 1px dashed #303945; border-radius: 3px;
+  font: 700 13px/1 var(--wa-font); cursor: pointer;
+}
+.wa-lane-add:hover { color: var(--wa-accent); border-color: var(--wa-accent); }
+.wa-fold { border: 1px solid var(--wa-border-2); border-radius: 4px; margin-top: 8px; }
+.wa-fold-head {
+  cursor: pointer; padding: 8px 10px;
+  font: 700 10px/1 var(--wa-mono); letter-spacing: .08em; color: #aeb7c1;
+  list-style-position: inside;
+}
+.wa-fold[open] .wa-fold-head { border-bottom: 1px solid var(--wa-border-2); }
+.wa-fold > *:not(summary) { padding: 8px 10px; }
 .wa-arrange-lane-clips { min-width: 0; display: flex; gap: 4px; }
 .wa-arrange-lane-clips > * {
   flex: var(--block-bars) 0 calc(var(--block-bars) * 62px);

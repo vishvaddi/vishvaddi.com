@@ -307,6 +307,12 @@ export async function initStudio(): Promise<void> {
     onModeChange: (label) => { lcdMode.textContent = label; },
   });
   const tabBtns = layout.navButtons;
+  // FLM: the clip decides the editor — double-tapping a clip or lane block
+  // lands in the right editor with that scene selected. No "choose a view".
+  ctx.openTrackEditor = (track, scene) => {
+    selectScene(scene);
+    layout.selectMode(track, "edit");
+  };
   // Mode keys + transport stick together while the page scrolls (Cubase-style
   // fixed toolbars) — the un-squash (E) lets every panel take natural height.
   const stickyChrome = el("div", "wa-sticky-chrome");
@@ -395,7 +401,7 @@ export async function initStudio(): Promise<void> {
   songBtn.addEventListener("click", () => {
     // Nothing to play in Song mode until the arrangement has blocks — say so
     // instead of silently toggling into silence.
-    if (!transport.songMode && songEndBar() === 0) {
+    if (!transport.songMode && TRACKS.every((track) => arrangement[track].length === 0)) {
       const prior = lcdState.textContent;
       lcdState.textContent = "NO SONG";
       songBtn.classList.add("wa-warn-flash");

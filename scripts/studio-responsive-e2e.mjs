@@ -165,27 +165,39 @@ for (const [name, width, height] of viewports) {
     const blocksBefore = await page.locator('.wa-chain-block').count()
     await page.locator('.wa-composer-head button', { hasText: 'Scene' }).click()
     check(`${name}: arrangement block added`, await page.locator('.wa-chain-block').count() === blocksBefore + 1)
+    // automation folds shut by default since S1 — open it to interact
+    await page.evaluate(() => { document.querySelectorAll('.wa-fold').forEach((d) => { d.open = true } ) })
     const rampsBefore = await page.locator('.wa-ramp-row').count()
     await page.locator('.wa-automation-editor button', { hasText: 'Ramp' }).click()
     check(`${name}: automation ramp added`, await page.locator('.wa-ramp-row').count() === rampsBefore + 1)
+    // With folds open, the composer may scroll internally — overlap is checked
+    // open; fit/reachability are checked against the CLOSED default state.
+    const foldOverlap = await page.evaluate(() => {
+      const synth = document.querySelector('.wa-arrange-lane:last-child')?.getBoundingClientRect()
+      const automation = document.querySelector('.wa-automation-editor')?.getBoundingClientRect()
+      const composer = document.querySelector('.wa-composer')
+      const composerScrolls = composer ? ['auto', 'scroll'].includes(getComputedStyle(composer).overflowY) : false
+      return {
+        overlap: synth && automation ? Math.max(0, synth.bottom - automation.top) : 999,
+        composerScrolls,
+      }
+    })
+    check(`${name}: Arrange lanes clear automation`, foldOverlap.overlap <= 0 || foldOverlap.composerScrolls, `${Math.round(foldOverlap.overlap)}px overlap`)
+    await page.evaluate(() => { document.querySelectorAll('.wa-fold').forEach((d) => { d.open = false } ) })
     const arrangeLayout = await page.evaluate(() => {
       const page = document.querySelector('.wa-page-song')
       const panel = document.querySelector('.wa-arrange-main > .wa-panel')
-      const synth = document.querySelector('.wa-arrange-lane:last-child')?.getBoundingClientRect()
-      const automation = document.querySelector('.wa-automation-editor')?.getBoundingClientRect()
-      const library = document.querySelector('.wa-song-library')?.getBoundingClientRect()
+      const folds = document.querySelector('.wa-fold')?.getBoundingClientRect()
       const pageRect = page?.getBoundingClientRect()
       const overflow = page ? getComputedStyle(page).overflowY : 'hidden'
       return {
-        overlap: synth && automation ? Math.max(0, synth.bottom - automation.top) : 999,
         panelClip: panel ? panel.scrollHeight - panel.clientHeight : 999,
-        reachable: !!page && !!pageRect && !!library &&
-          library.bottom - pageRect.top <= page.scrollHeight + 1 &&
+        reachable: !!page && !!pageRect && !!folds &&
+          folds.bottom - pageRect.top <= page.scrollHeight + 1 &&
           (page.scrollHeight <= page.clientHeight + 1 || overflow === 'auto' || overflow === 'scroll'),
         pageScroll: page ? page.scrollHeight - page.clientHeight : 999,
       }
     })
-    check(`${name}: Arrange lanes clear automation`, arrangeLayout.overlap <= 0, `${Math.round(arrangeLayout.overlap)}px overlap`)
     check(`${name}: Arrange panel does not hide content`, arrangeLayout.panelClip <= 1, `${Math.round(arrangeLayout.panelClip)}px clipped`)
     check(`${name}: all Arrange controls are reachable`, arrangeLayout.reachable, `${Math.round(arrangeLayout.pageScroll)}px internal scroll`)
 
