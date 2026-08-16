@@ -7,7 +7,7 @@ import "../../../styles/studio.css";
 import {
   STEPS, SCENES, SCENE_LABELS, DRUMS, PAD_BANK_SIZE, ROLL_NOTES,
   TRACKS, TRACK_LABELS, clip, transport, stepDur, audible, song as songMeta,
-  allPats, allVels, synthNotes, padEvents, arrangement,
+  allPats, allVels, synthNotes, padEvents, arrangement, songEndBar,
   sampleParams, sampleBuffers, sampleData, dp, DP_DEF, DP_SPECS, mpc, rackState, fx, vsynthPatch, mute, solo, mixState,
 } from "./state";
 import type { ArrangeBlock, HistoryState, MpcState, PadEvent, SamplerP, TrackId, VNote } from "./state";
@@ -175,7 +175,8 @@ export async function initStudio(): Promise<void> {
   });
   gridSel.value = String(transport.quantizeGrid);
   help(gridSel, "Snap/grid for the editors. Off = free, unquantized placement in the piano roll (Cubase-style); 1/4–1/16 snap to the grid.");
-  const undoBtn = btn("Undo", "wa-btn-sm"), redoBtn = btn("Redo", "wa-btn-sm");
+  const undoBtn = btn("↶", "wa-btn-sm wa-history"), redoBtn = btn("↷", "wa-btn-sm wa-history");
+  undoBtn.setAttribute("aria-label", "Undo"); redoBtn.setAttribute("aria-label", "Redo");
   const tutorialBtn = btn("? Tutorial", "wa-btn-sm");
   help(playBtn, "Start playback from the beginning of the current clips or song.");
   help(stopBtn, "Stop playback and clear the playhead.");
@@ -186,18 +187,22 @@ export async function initStudio(): Promise<void> {
   help(redoBtn, "Reapply the last undone edit.");
   help(tutorialBtn, "Open the guided tour, or switch to Browse Help for a searchable reference and keyboard shortcuts.");
   songBtn.classList.toggle("active", transport.songMode);
-  // songBtn (Session/Arrange toggle) retired with the timeline (E) — the
-  // element survives detached because session.ts still pokes ctx.songBtn.
+  // Recording-target chip: which scene an armed recording lands in. The old
+  // behaviour recorded into the PLAYING clip while you looked at another —
+  // now recording follows the visible scene, and this chip says so.
+  const recChip = el("span", "wa-rec-chip");
+  recChip.hidden = true;
+  help(recChip, "Recording is armed — pad or key passes land in this scene (the one you're editing).");
   // EXPORT is a rare terminal action — a chassis key opening a modal, rather
   // than a panel holding permanent space on the MIX faceplate.
   const exportBtn = btn("EXPORT", "wa-btn-sm wa-export-key");
   help(exportBtn, "Render the track to WAV, MP3 or stems, or save and open project files.");
   const transportCore = el("div", "wa-transport-core");
-  transportCore.append(playBtn, stopBtn, el("span", "wa-lbl", "BPM"), bpmDown, bpmInput, bpmUp);
+  transportCore.append(playBtn, stopBtn, songBtn, recChip, el("span", "wa-lbl", "BPM"), bpmDown, bpmInput, bpmUp, undoBtn, redoBtn);
   const transportTiming = el("div", "wa-transport-timing");
-  transportTiming.append(swingWrap, el("span", "wa-lbl", "Grid"), gridSel, metroBtn, metroVolIn, countBtn);
+  transportTiming.append(swingWrap, metroBtn, metroVolIn, countBtn);
   const transportActions = el("div", "wa-transport-actions");
-  transportActions.append(undoBtn, redoBtn, exportBtn, tutorialBtn);
+  transportActions.append(exportBtn, tutorialBtn);
   const transportMore = btn("MORE", "wa-btn-sm wa-transport-more");
   transportMore.setAttribute("aria-expanded", "false");
   transportMore.addEventListener("click", () => {
@@ -250,6 +255,19 @@ export async function initStudio(): Promise<void> {
   // ── Synth: VV-1 wavetable ── (synthui.ts — Phase 0 split)
   const synth = buildSynth();
   const { synthPanel, synthKeys, liveKeys, rollPlayheadBar, paintRoll, renderPatchEditor, recordSynthOn, recordSynthOff, setOctaveShift, presetRow, pianoRoll } = synth;
+  // Grid/quantize lives with the editor it governs (the roll), not the global
+  // transport — the same relocation drum pattern-length already got (drumgrid).
+  const gridWrap = el("span", "wa-grid-wrap");
+  gridWrap.append(el("span", "wa-lbl", "Grid"), gridSel);
+  synth.keysHeader.append(gridWrap);
+  // Recording-target truth: armed recording always lands in the visible scene.
+  function updateRecChip(): void {
+    const armed = mpc.recording || synth.isSynthRec();
+    recChip.hidden = !armed;
+    recChip.textContent = `REC → ${SCENE_LABELS[clip.sel]}`;
+    recChip.classList.toggle("live", armed && playhead.playing);
+  }
+  ctx.updateRecChip = updateRecChip;
 
   // ── Session view ── (session.ts — Phase 0 split)
   const { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid } = buildSession();
@@ -324,6 +342,7 @@ export async function initStudio(): Promise<void> {
     // follow the scene, not just the Grid selector.
     gridRepainters.forEach((fn) => fn());
     arrangeLanePaints.forEach((fn) => fn());
+    updateRecChip();
   }
   function refreshVisibleState(): void {
     selectScene(clip.sel);
@@ -374,6 +393,15 @@ export async function initStudio(): Promise<void> {
     gridRepainters.forEach((fn) => fn());
   });
   songBtn.addEventListener("click", () => {
+    // Nothing to play in Song mode until the arrangement has blocks — say so
+    // instead of silently toggling into silence.
+    if (!transport.songMode && songEndBar() === 0) {
+      const prior = lcdState.textContent;
+      lcdState.textContent = "NO SONG";
+      songBtn.classList.add("wa-warn-flash");
+      setTimeout(() => { songBtn.classList.remove("wa-warn-flash"); if (lcdState.textContent === "NO SONG") lcdState.textContent = prior ?? "■ STOP"; }, 1600);
+      return;
+    }
     transport.songMode = !transport.songMode; songBtn.textContent = transport.songMode ? "Arrange" : "Session"; songBtn.classList.toggle("active", transport.songMode);
     renderSel.value = transport.songMode ? "song" : "pattern"; saveAll();
   });

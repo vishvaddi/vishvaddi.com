@@ -217,7 +217,10 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   }
   // Recording writes into the pads clip you can hear (the playing one), falling
   // back to the edit scene when the pads track is stopped.
-  function recordTarget(): number { return playhead.playing ? (clip.play.pads ?? clip.sel) : clip.sel; }
+  // Recording lands in the scene you're LOOKING at, not the playing clip —
+  // the old playing-clip target silently recorded into off-screen scenes.
+  // The transport's REC chip states the target.
+  function recordTarget(): number { return clip.sel; }
   function recordPadEvent(pad: number, velocity: number): void {
     if (!mpc.recording || !playhead.playing) return;
     const target = recordTarget();
@@ -312,6 +315,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
     mpc.recording = !mpc.recording;
     if (mpc.recording) { ctx.checkpoint(); recordSnapshot = padEvents[recordTarget()].map((event) => ({ ...event })); }
     recordBtn.classList.toggle("active", mpc.recording); performanceStatus.textContent = mpc.recording ? "Recording pad events" : "Ready"; saveAll();
+    ctx.updateRecChip();
   });
   overdubBtn.addEventListener("click", () => { mpc.overdub = !mpc.overdub; overdubBtn.classList.toggle("active", mpc.overdub); saveAll(); });
   undoPassBtn.addEventListener("click", () => {

@@ -507,7 +507,8 @@ export function buildSynth(): SynthUI {
     if (!playhead.playing || playhead.lastHi < 0) return -1;
     return playhead.lastHi + Math.min(1, (performance.now() - playhead.lastStepStartedMs) / (patternStepDur(synthRecTarget()) * 1000));
   }
-  function synthRecTarget(): number { return (playhead.playing ? clip.play.synth : null) ?? clip.sel; }
+  // Same ruling as the pads: recording lands in the visible scene, always.
+  function synthRecTarget(): number { return clip.sel; }
   // Unquantized capture (C3): notes land exactly where they were played;
   // set the transport Grid to quantize instead.
   // Expression captured at note-on rides through to the recorded note, so a
@@ -543,8 +544,9 @@ export function buildSynth(): SynthUI {
     synthRec = !synthRec;
     if (synthRec) ctx.checkpoint();
     keysRecBtn.classList.toggle("active", synthRec);
+    ctx.updateRecChip();
   });
-  help(keysRecBtn, "Capture key presses into the playing synth clip's piano roll while playback runs. Arm Count-in in the transport for a 1-bar lead-in.");
+  help(keysRecBtn, "Capture key presses into the selected scene's piano roll while playback runs (the transport's REC chip names the scene). Arm Count-in in the transport for a 1-bar lead-in.");
   const holdBtn = btn("Hold", "wa-toggle wa-btn-sm");
   help(holdBtn, "Latch mode — tap a key to hold its note, tap again to release. Drones on while you tweak the patch.");
   holdBtn.addEventListener("click", () => {

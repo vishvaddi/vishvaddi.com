@@ -49,4 +49,43 @@ export function initTooltips(): void {
     const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
     if (target) hideTooltip(target);
   });
+
+  // Touch has no hover, so the ~150 help strings were simply invisible on
+  // phones (the CSS hides .wa-tooltip under pointer:coarse). Long-press any
+  // [data-help] control to read its help as a dismissible bottom sheet.
+  if (window.matchMedia("(pointer: coarse)").matches) {
+    const sheet = el("div", "wa-help-sheet"); sheet.hidden = true;
+    const sheetText = el("div", "wa-help-sheet-text");
+    const sheetClose = document.createElement("button");
+    sheetClose.type = "button"; sheetClose.className = "wa-help-sheet-close"; sheetClose.textContent = "✕";
+    sheetClose.setAttribute("aria-label", "Dismiss help");
+    sheet.append(sheetText, sheetClose);
+    document.body.append(sheet);
+    const hideSheet = (): void => { sheet.hidden = true; };
+    sheetClose.addEventListener("click", hideSheet);
+
+    let pressTimer = 0;
+    let pressX = 0, pressY = 0;
+    const cancelPress = (): void => { window.clearTimeout(pressTimer); pressTimer = 0; };
+    document.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "mouse") return;
+      const target = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
+      if (!target?.dataset.help) return;
+      pressX = event.clientX; pressY = event.clientY;
+      cancelPress();
+      pressTimer = window.setTimeout(() => {
+        sheetText.textContent = target.dataset.help ?? "";
+        sheet.hidden = false;
+      }, 550);
+    }, { passive: true });
+    document.addEventListener("pointermove", (event) => {
+      if (pressTimer && Math.hypot(event.clientX - pressX, event.clientY - pressY) > 12) cancelPress();
+    }, { passive: true });
+    document.addEventListener("pointerup", cancelPress, { passive: true });
+    document.addEventListener("pointercancel", cancelPress, { passive: true });
+    // Any tap outside the sheet dismisses it — it must never trap a workflow.
+    document.addEventListener("pointerdown", (event) => {
+      if (!sheet.hidden && !sheet.contains(event.target as Node)) hideSheet();
+    }, { passive: true });
+  }
 }

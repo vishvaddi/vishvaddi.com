@@ -16,6 +16,8 @@ export interface StudioCtx {
   /** Repaint every editor from current state — lets a library load apply in
    *  place rather than restarting the page. */
   refreshVisibleState: () => void
+  /** Repaint the transport's recording-target chip (REC → scene). */
+  updateRecChip: () => void
 }
 
 export const ctx = {} as StudioCtx

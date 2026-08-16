@@ -92,7 +92,17 @@ export function buildSession(): SessionView {
   };
   sessionGrid.addEventListener("scroll", paintScenePosition, { passive: true });
   new ResizeObserver(paintScenePosition).observe(sessionGrid);
+  // Any manual launch is a statement of intent: you are session-jamming, not
+  // playing the arrangement. Exit Song mode VISIBLY (the transport toggle
+  // repaints) — the old behaviour left armed clips silently overridden by the
+  // arrangement on play.
+  function exitSongMode(): void {
+    if (!transport.songMode) return;
+    transport.songMode = false;
+    ctx.songBtn.textContent = "Session"; ctx.songBtn.classList.remove("active"); ctx.renderSel.value = "pattern";
+  }
   function launchClip(track: TrackId, scene: number | null): void {
+    exitSongMode();
     if (ctx.isPlaying()) {
       // Clicking an already-queued clip cancels the queue.
       clip.queued[track] = clip.queued[track] === scene ? undefined : scene;
@@ -111,7 +121,7 @@ export function buildSession(): SessionView {
       if (ctx.isPlaying()) clip.queued[track] = scene;
       else clip.play[track] = scene;
     });
-    transport.songMode = false; ctx.songBtn.textContent = "Session"; ctx.songBtn.classList.remove("active"); ctx.renderSel.value = "pattern";
+    exitSongMode();
     launchStatus.textContent = ctx.isPlaying() ? `Scene ${SCENE_LABELS[scene]} queued` : `Scene ${SCENE_LABELS[scene]} armed`;
     if (clip.sel !== scene) ctx.selectScene(scene);
     paintSession(); saveAll();

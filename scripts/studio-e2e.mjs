@@ -97,12 +97,36 @@ try {
   check('transport: stop returns LCD to STOP', /STOP/.test((await page.textContent('.wa-lcd')) ?? ''))
 
   // ── undo reverts the step ──
-  await page.click('.wa-transport button:has-text("Undo")')
+  await page.click('.wa-transport button[aria-label="Undo"]')
   await page.waitForTimeout(150)
   check('undo: step reverts', await cell.evaluate((n) => n.classList.contains('on')) === wasOn)
-  await page.click('.wa-transport button:has-text("Redo")')
+  await page.click('.wa-transport button[aria-label="Redo"]')
   await page.waitForTimeout(150)
   check('redo: step returns', await cell.evaluate((n) => n.classList.contains('on')) !== wasOn)
+
+  // ── S0: the arrangement is audible ──
+  const songBtn = page.locator('.wa-transport-core button.wa-toggle')
+  check('song: Session/Arrange toggle lives in the transport core', await songBtn.count() === 1)
+  check('song: starts in Session', (await songBtn.textContent()) === 'Session')
+  await songBtn.click()
+  check('song: toggle arms Arrange mode', (await songBtn.textContent()) === 'Arrange')
+  await page.click('.wa-transport button:has-text("▶")')
+  await page.waitForTimeout(1200)
+  check('song: arrangement plays (LCD playhead)', /▶/.test((await page.textContent('.wa-lcd')) ?? ''))
+  await page.click('.wa-transport button:has-text("■")')
+  await page.waitForTimeout(200)
+  await openMode(page, 'CLIPS')
+  await page.locator('.wa-clip').first().click()
+  check('song: launching a clip returns to Session, visibly', (await songBtn.textContent()) === 'Session')
+
+  // ── S0: recording targets the visible scene, and the transport says so ──
+  check('rec chip: hidden while nothing is armed', await page.locator('.wa-rec-chip:visible').count() === 0)
+  await openMode(page, 'SYNTH')
+  await page.locator('.wa-export button:has-text("● Rec")').click()
+  const chipText = await page.locator('.wa-rec-chip').textContent()
+  check('rec chip: names the visible scene when armed', /^REC → [A-P]$/.test(chipText ?? ''), String(chipText))
+  await page.locator('.wa-export button:has-text("● Rec")').click()
+  check('rec chip: disarms with the rec button', await page.locator('.wa-rec-chip:visible').count() === 0)
 
   // ── autosave round-trip ──
   await page.waitForTimeout(900) // autosave debounce
@@ -141,7 +165,7 @@ try {
   await page.locator('.wa-composer-head button', { hasText: 'Scene' }).click()
   await page.waitForTimeout(200)
   const chainAdded = await page.locator('.wa-chain-block').count()
-  await page.locator('.wa-transport button', { hasText: 'Undo' }).click({ timeout: 5000 })
+  await page.locator('.wa-transport button[aria-label="Undo"]').click({ timeout: 5000 })
   await page.waitForTimeout(300)
   check('workflow: arrangement edits undo', chainAdded === chainBefore + 1 && await page.locator('.wa-chain-block').count() === chainBefore)
 
@@ -186,7 +210,7 @@ try {
   const blank = await page.evaluate(() => ({ title: document.querySelector('.wa-project-name')?.value, steps: document.querySelectorAll('.wa-cell.on').length }))
   check('project: explicit blank project applies in place', blank.title === 'Untitled' && blank.steps === 0, JSON.stringify(blank))
   await page.locator('.wa-export-dialog-head button', { hasText: 'Close' }).click()
-  await page.locator('.wa-transport button', { hasText: 'Undo' }).click()
+  await page.locator('.wa-transport button[aria-label="Undo"]').click()
   await page.waitForTimeout(300)
   check('project: replacement can be undone', await page.locator('.wa-cell.on').count() > 0)
 
