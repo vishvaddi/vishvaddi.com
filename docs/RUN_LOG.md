@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-08-16 — Deep Swarm consistent creatures and contained text
+
+- Removed the critical-mode circle substitution that made distant creatures visibly pop between generic and authored anatomy. Performance pressure now lowers only the offscreen ordinary-contact quota; an isolated 4,200 m forced swarm holds 46 fps average with consistent creature rendering.
+- Fixed New Career writing a sparse fresh meta object into the live render frame before reload, which could open the flight-computer fault screen. The reset now writes the new envelope without mutating live state; E2E double-presses New Career and verifies a clean title reload.
+- Added measured-width wrapping and ellipsis across NEREID captions, PDA rows, upgrade/shop cards, event titles, title controls and death controls. Diagnostic FPS text no longer draws over modal headings, and onboarding hints clear the desktop XP bar.
+- Cavitation Wake now says how it works: it auto-arms, then SPACE/DASH spends the charge to cut a damaging trail. Desktop and touch dash controls visibly change to `WAKE` while armed.
+
 ## 2026-08-16 — Deep Swarm fast start, XP loop and durable careers
 
 - Reframed the viewport around XP and levels. Reserve now powers equipment and triggers a recoverable brownout rather than masquerading as oxygen or directly draining hull; actual hypoxia follows life-support condition.

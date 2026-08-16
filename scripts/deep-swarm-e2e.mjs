@@ -32,6 +32,14 @@ try {
     `${bootState.boot.inputReadyMs}/${bootState.boot.firstFrameMs}ms`)
   check('save: versioned local profile is active', bootState.save.version === 2 && !!bootState.save.profileId,
     `v${bootState.save.version}`)
+  await page.keyboard.press('n')
+  await page.keyboard.press('n')
+  await page.waitForFunction(previousStart => window.__deepSwarm?.getState().boot.scriptStartMs !== previousStart,
+    bootState.boot.scriptStartMs, { timeout: 15000 })
+  await page.waitForTimeout(120)
+  const resetState = await page.evaluate(() => window.__deepSwarm.getState())
+  check('save: New Career reloads without a flight-computer fault', resetState.phase === 'title' && !resetState.error,
+    resetState.error?.message || resetState.phase)
 
   await page.evaluate(() => window.__deepSwarm.startSeeded('boundary-soak'))
   await page.keyboard.down('s')
@@ -117,6 +125,12 @@ try {
   check('weapons: Cavitation Wake arms the next dash',
     wakeState.phase === 'playing' && wakeState.game.wakeArmed === 1 && wakeState.game.deployables === 0 && !wakeState.error,
     `${wakeState.phase} · armed ${wakeState.game.wakeArmed}`)
+  await page.keyboard.press('Space')
+  await page.waitForTimeout(80)
+  const wakeDashState = await page.evaluate(() => window.__deepSwarm.getState())
+  check('weapons: dashing spends the armed wake and starts its cutting trail',
+    wakeDashState.game.wakeArmed === 0 && wakeDashState.game.wakeActive > 0,
+    `armed ${wakeDashState.game.wakeArmed} · active ${wakeDashState.game.wakeActive.toFixed(2)}s`)
 
   const fieldState = await page.evaluate(() => window.__deepSwarm.testElectricField())
   check('weapons: Electric Field applies its full pulse damage',
@@ -148,6 +162,13 @@ try {
   check('NEREID: routine observations collapse to the latest useful line',
     cadenceState.game.nereidQueue === 1 && cadenceState.phase === 'playing',
     `${cadenceState.game.nereidQueue} queued`)
+  await page.evaluate(() => window.__deepSwarm.showNereidTest())
+  await page.waitForTimeout(80)
+  const nereidLayout = (await page.evaluate(() => window.__deepSwarm.getState())).game.nereidLayout
+  check('NEREID: live caption stays inside its glass panel',
+    nereidLayout && nereidLayout.widestText <= nereidLayout.maxTextWidth,
+    nereidLayout ? `${nereidLayout.widestText.toFixed(1)}/${nereidLayout.maxTextWidth.toFixed(1)}px` : 'no layout')
+  if (process.env.DEEP_SWARM_SCREENSHOTS) await page.screenshot({ path: '.tmp-deep-swarm-nereid.png' })
 
   await page.evaluate(() => {
     window.__deepSwarm.startSeeded('campaign-pda')

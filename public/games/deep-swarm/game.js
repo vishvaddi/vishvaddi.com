@@ -1820,11 +1820,13 @@ function exportCareer() {
 function resetCareer() {
     const fresh = defaultMeta();
     fresh._seenIntro = true;
-    meta = fresh;
+    fresh._saveRevision = (meta._saveRevision || 0) + 1;
     clearCheckpoint();
-    saveMeta();
-    game = null;
-    lastRunSetup = null;
+    const key = profileSaveKey();
+    localStorage.removeItem(`${key}_backup`);
+    localStorage.setItem(key, JSON.stringify({ saveVersion: SAVE_VERSION, profileId: profileIndex.activeProfileId,
+        revision: fresh._saveRevision, updatedAt: Date.now(), career: fresh }));
+    sessionStorage.setItem('deepswarm_sync_after_reset', '1');
     location.reload();
 }
 function checkpointKey() { return `deepswarm_checkpoint_${profileIndex.activeProfileId}`; }
@@ -1909,7 +1911,7 @@ function mulberry32(a) {
 }
 function seedFromString(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return h >>> 0; }
 function RND() { return dailyRng ? dailyRng() : Math.random(); }
-const DEEP_SWARM_BUILD = '2026.08.16-pressure-cockpit-xp-saves';
+const DEEP_SWARM_BUILD = '2026.08.16-pressure-cockpit-consistent-creatures';
 const RUN_TRACE_LIMIT = 30;
 let runTrace = [];
 let lastRuntimeError = null;
@@ -3340,7 +3342,7 @@ const WEAPON_DEFS = {
     cutter: { name: 'Cutting Torch', baseDmg: 32, baseCooldown: 1.4, baseArea: 105, desc: 'Brutal short-range salvage beam' },
     // Keep the historical id so old saves remain valid. The weapon itself is now
     // an aggressive movement tool: arm it, dash, and the water behind you cuts.
-    decoy_launcher: { name: 'Cavitation Wake', baseDmg: 18, baseCooldown: 3.8, baseArea: 58, desc: 'Arms the next dash with a cutting pressure wake' },
+    decoy_launcher: { name: 'Cavitation Wake', baseDmg: 18, baseCooldown: 3.8, baseArea: 58, desc: 'Auto-arms every 3.8s. Press SPACE or DASH to cut a damaging trail.' },
     arc_welder: { name: 'Arc Welder', baseDmg: 10, baseCooldown: 9, baseArea: 75, desc: 'Repairs the weakest system while arcing nearby' },
     pressure_lance: { name: 'Pressure Lance', baseDmg: 45, baseCooldown: 2.6, baseArea: 24, desc: 'Slow, heavy, armour-piercing bolt' },
     net_launcher: { name: 'Tangle Net', baseDmg: 4, baseCooldown: 6, baseArea: 130, desc: 'Roots a hunting group in place' },
@@ -4083,6 +4085,8 @@ function varyColor(hex, deg) {
 function enemyPopCap(g) {
     const d = g.depth || 0;
     let cap = d < 200 ? 34 : d < 1000 ? 52 : d < 2000 ? 68 : d < 4000 ? 82 : 92;
+    if (_perf.fx === 'critical') cap = Math.floor(cap * 0.72);
+    else if (_perf.fx === 'reduced') cap = Math.floor(cap * 0.88);
     if (g.ascending) cap = Math.floor(cap * 0.6);
     if (isTouchDevice && Math.min(canvas.width, canvas.height) < 620) cap = Math.floor(cap * 0.62);
     return cap;
@@ -6056,7 +6060,7 @@ function getTouchButtons(w, h) {
     if (!game) return [];
     const bs = [
         { id: 'ping',   x: w - 60,  y: h - 140, r: 30, label: 'PING', color: '#80FFE0' },
-        { id: 'dash',   x: w - 60,  y: h - 215, r: 26, label: 'DASH', color: '#FFD040' },
+        { id: 'dash',   x: w - 60,  y: h - 215, r: 26, label: game.player._wakeArmed > 0 ? 'WAKE' : 'DASH', color: game.player._wakeArmed > 0 ? '#FFB84A' : '#FFD040' },
         { id: 'silent', x: w - 60,  y: h - 285, r: 26, label: game.silent ? 'LOUD' : 'HUSH', color: '#80E0FF', active: game.silent },
         { id: 'light',  x: w - 122, y: h - 250, r: 22, label: 'LAMP', color: '#FFD040', active: game.lightOn !== false },
     ];
@@ -9464,14 +9468,6 @@ function draw() {
         // Feature 4: Aberrant enemies — jitter + color shift
         const aberrantJitter = e.aberrant ? (Math.random() - 0.5) * 3 : 0;
 
-        if (_perf.fx === 'critical' && !e.isBoss && !e.aberrant && dist2(e, g.player) > 170 * 170) {
-            ctx.globalAlpha = e.ghost ? 0.28 : 0.82;
-            ctx.fillStyle = col;
-            ctx.beginPath(); ctx.arc(sx, sy, Math.max(3, e.size * 0.62), 0, PI2); ctx.fill();
-            ctx.globalAlpha = 1;
-            continue;
-        }
-
         // Soft glow behind every enemy (cached sprite — no per-frame allocation)
         if (_perf.fx === 'full' || e.isBoss || e.aberrant) drawGlow(ctx, col, sx, sy, e.size * 3, 0.4);
 
@@ -10745,31 +10741,16 @@ function drawNereidSpeech(w, h, g, pal, vpCx, vpCy, vpR) {
     const sanity = 100 - (g.player.corruption || 0);
     // Depth degradation: NEREID's transmissions also corrupt with depth, even at full sanity
     const depthCorrupt = g.depth > 4000 ? Math.min(60, (g.depth - 4000) / 30) : 0;
-    const txt = corruptText(latest.text, Math.max(100 - sanity, depthCorrupt));
+    const txt = corruptText(latest.text, Math.max(100 - sanity, depthCorrupt)).replace(/^NEREID-II[\s:·—-]*/i, '');
     // The glass carries a transmission, not a transcript. Full lines remain in
     // NEREID's log; the live caption is deliberately brief enough to read in combat.
-    const maxChars = 54;
-    const maxLines = 2;
-    const words = txt.split(' ');
-    const lines = [];
-    let cur = '';
-    for (const word of words) {
-        const test = cur ? cur + ' ' + word : word;
-        if (test.length > maxChars) {
-            if (cur) lines.push(cur);
-            cur = word;
-        } else {
-            cur = test;
-        }
-    }
-    if (cur) lines.push(cur);
-    if (lines.length > maxLines) {
-        lines.length = maxLines;
-        lines[maxLines - 1] = lines[maxLines - 1].slice(0, maxChars - 3) + '...';
-    }
     const panelW = g._fullBleed ? Math.min(430, w * 0.5) : Math.min(520, vpR * 1.45);
     const lineH = 14;
-    const panelH = 22 + lines.length * lineH;
+    ctx.font = '12px monospace';
+    const lines = wrapCanvasText(txt, panelW - 64, 2);
+    const panelH = Math.max(50, 22 + lines.length * lineH);
+    g._nereidLayout = { panelW, maxTextWidth: panelW - 64,
+        widestText: Math.max(0, ...lines.map(line => ctx.measureText(line).width)), lines: lines.length };
     const panelX = vpCx - panelW / 2;
     const minY = g._fullBleed ? h - panelH - 8 : vpCy + vpR * 0.66;
     const maxY = h - panelH - 6;
@@ -11185,19 +11166,29 @@ function drawCockpitRailShell(panel, side, pal) {
     ctx.fillStyle = '#426C68'; ctx.beginPath(); ctx.arc(lampX, y + 20, 2.5, 0, PI2); ctx.fill();
 }
 
-function drawRailWrapped(text, x, y, width, maxLines, color) {
+function fitCanvasText(text, maxWidth) {
+    let fitted = String(text || '');
+    if (ctx.measureText(fitted).width <= maxWidth) return fitted;
+    while (fitted.length > 1 && ctx.measureText(`${fitted}…`).width > maxWidth) fitted = fitted.slice(0, -1).trimEnd();
+    return `${fitted}…`;
+}
+function wrapCanvasText(text, maxWidth, maxLines = Infinity) {
     const words = String(text || '').split(' '), lines = [];
     let line = '';
     for (const word of words) {
         const next = line ? `${line} ${word}` : word;
-        if (ctx.measureText(next).width > width && line) { lines.push(line); line = word; }
+        if (ctx.measureText(next).width > maxWidth && line) { lines.push(line); line = word; }
         else line = next;
     }
     if (line) lines.push(line);
     if (lines.length > maxLines) {
         lines.length = maxLines;
-        lines[maxLines - 1] = lines[maxLines - 1].replace(/[. ]*$/, '') + '…';
+        lines[maxLines - 1] = `${lines[maxLines - 1].replace(/[. ]*$/, '')}…`;
     }
+    return lines.map(lineText => fitCanvasText(lineText, maxWidth));
+}
+function drawRailWrapped(text, x, y, width, maxLines, color) {
+    const lines = wrapCanvasText(text, width, maxLines);
     ctx.fillStyle = color;
     for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], x, y + i * 14);
     return lines.length * 14;
@@ -11304,7 +11295,8 @@ function drawDesktopCockpitRails(w, h, g, pal, vpCx, vpR) {
         drawPanelDivider(actionX, right.y + 34, 250, pal);
         ctx.fillStyle = hexA(pal.accent, 0.7); ctx.font = 'bold 11px monospace';
         ctx.fillText('PILOT INPUT BUS', actionX, right.y + 58);
-        drawAbilityRow(actionX, right.y + 76, 250, 'SPACE', 'DASH', p.dashCooldown <= 0 ? 'READY' : `${p.dashCooldown.toFixed(1)}s`, p.dashCooldown <= 0, '#5ADFCF', pal);
+        const wakeReady = (p._wakeArmed || 0) > 0;
+        drawAbilityRow(actionX, right.y + 76, 250, 'SPACE', wakeReady ? 'WAKE DASH' : 'DASH', wakeReady ? 'ARMED · CUT' : p.dashCooldown <= 0 ? 'READY' : `${p.dashCooldown.toFixed(1)}s`, p.dashCooldown <= 0, wakeReady ? '#FFB84A' : '#5ADFCF', pal);
         drawAbilityRow(actionX, right.y + 104, 250, 'Q', 'SILENT', g.silent ? 'ACTIVE' : 'STANDBY', true, '#80E0FF', pal);
         drawAbilityRow(actionX, right.y + 132, 250, 'L', 'FLOODLIGHT', g.lightOn === false ? 'DARK' : 'ON', true, '#FFD040', pal);
         drawAbilityRow(actionX, right.y + 160, 250, 'TAB', 'SALVAGE', `${(g.inventory || []).length}/50`, true, '#DAA520', pal);
@@ -11371,7 +11363,7 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     if (g._hint) {
         ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center';
         const tw = ctx.measureText(g._hint.text).width;
-        const hy = 58;
+        const hy = g._fullBleed ? 58 : 86;
         ctx.globalAlpha = Math.min(1, g._hint.t / 0.5);
         drawPlate(w / 2 - tw / 2 - 14, hy - 15, tw + 28, 24);
         ctx.fillStyle = '#A8E8D8';
@@ -12771,22 +12763,14 @@ function drawLevelUp(w, h, g) {
         // Name
         ctx.fillStyle = '#FFF';
         ctx.font = 'bold 13px monospace';
-        const nameStr = ch.name.length > 22 ? ch.name.slice(0, 21) + '…' : ch.name;
+        const nameStr = fitCanvasText(ch.name, cardW - 16);
         ctx.fillText(nameStr, bx + cardW / 2, cardY + 130);
         // Description (wrap to 2 lines)
         if (ch.desc) {
             ctx.fillStyle = '#9AB0C0';
             ctx.font = '10px monospace';
-            const words = ch.desc.split(' ');
-            let line = '', y = cardY + 152;
-            for (const word of words) {
-                const test = line + word + ' ';
-                if (ctx.measureText(test).width > cardW - 16) {
-                    ctx.fillText(line, bx + cardW / 2, y);
-                    line = word + ' '; y += 12;
-                } else line = test;
-            }
-            if (line) ctx.fillText(line, bx + cardW / 2, y);
+            const lines = wrapCanvasText(ch.desc, cardW - 16, 3);
+            for (let li = 0; li < lines.length; li++) ctx.fillText(lines[li], bx + cardW / 2, cardY + 152 + li * 12);
         }
         // Key prompt at bottom
         ctx.fillStyle = '#0A1018';
@@ -12910,22 +12894,14 @@ function drawRunShop(w, h, g) {
         // Name
         ctx.fillStyle = o.bought ? '#5A6A7A' : '#FFF';
         ctx.font = 'bold 13px monospace';
-        const nameStr = o.name.length > 22 ? o.name.slice(0, 21) + '…' : o.name;
+        const nameStr = fitCanvasText(o.name, cardW - 16);
         ctx.fillText(nameStr, bx + cardW / 2, cardY + 142);
         // Description (wrap to 2 lines)
         if (o.desc) {
             ctx.fillStyle = o.bought ? '#3A4A5A' : '#9AB0C0';
             ctx.font = '10px monospace';
-            const words = o.desc.split(' ');
-            let line = '', y = cardY + 162;
-            for (const word of words) {
-                const test = line + word + ' ';
-                if (ctx.measureText(test).width > cardW - 16) {
-                    ctx.fillText(line, bx + cardW / 2, y);
-                    line = word + ' '; y += 12;
-                } else line = test;
-            }
-            if (line) ctx.fillText(line, bx + cardW / 2, y);
+            const lines = wrapCanvasText(o.desc, cardW - 16, 3);
+            for (let li = 0; li < lines.length; li++) ctx.fillText(lines[li], bx + cardW / 2, cardY + 162 + li * 12);
         }
         // Price + buy key
         if (o.bought) {
@@ -13127,7 +13103,8 @@ function drawDeathScreen(w, h, g) {
     if (g.nereidLog && g.nereidLog.length > 0) {
         ctx.fillStyle = hexA(dPal.accent, 0.5);
         ctx.font = 'italic 10px monospace'; ctx.textAlign = 'center';
-        ctx.fillText('"' + g.nereidLog[0].text + '"', w / 2, h / 2 + 38);
+        const finalLines = wrapCanvasText(`"${g.nereidLog[0].text}"`, Math.min(560, w - 40), 2);
+        for (let li = 0; li < finalLines.length; li++) ctx.fillText(finalLines[li], w / 2, h / 2 + 38 + li * 12);
     }
 
     // Near-miss hook — depth to next zone
@@ -13166,7 +13143,9 @@ function drawDeathScreen(w, h, g) {
         ctx.strokeStyle = '#DAA520';
         ctx.strokeRect(w / 2 - 100, h / 2 + 150, 200, 40);
         ctx.fillStyle = '#DAA520';
-        ctx.fillText('NEW EXPEDITION [R]  ·  MOORING [Esc]', w / 2, h / 2 + 175);
+        ctx.font = 'bold 12px monospace';
+        ctx.fillText('NEW EXPEDITION [R]', w / 2, h / 2 + 168);
+        ctx.fillText('MOORING [Esc]', w / 2, h / 2 + 183);
         addTapZone(w / 2 - 100, h / 2 + 100, 200, 40, 'Enter');
         addTapZone(w / 2 - 100, h / 2 + 150, 200, 40, 'r');
     }
@@ -15101,7 +15080,7 @@ function drawTitleMobile(w, h) {
         ctx.fillStyle = '#080F16'; ctx.beginPath(); ctx.roundRect(sx, btnY, secW, btnH, 8); ctx.fill();
         ctx.strokeStyle = b.color; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.roundRect(sx, btnY, secW, btnH, 8); ctx.stroke();
         ctx.fillStyle = b.color; ctx.font = 'bold 12px monospace';
-        ctx.fillText(b.label, sx + secW / 2, btnY + 28);
+        ctx.fillText(fitCanvasText(b.label, secW - 10), sx + secW / 2, btnY + 28);
         addTapZone(sx, btnY, secW, btnH, b.key);
         sx += secW + 10;
     }
@@ -15384,27 +15363,17 @@ function drawEventOverlay(w, h, g) {
     // Event box — text WRAPS and the box grows to hold it (long lore lines
     // were overrunning the fixed 420px box)
     const bw = Math.min(480, w - 40);
-    const wrap = (text, font, maxW) => {
-        ctx.font = font;
-        const words = String(text).split(' ');
-        const lines = []; let line = '';
-        for (const word of words) {
-            const tst = line + word + ' ';
-            if (ctx.measureText(tst).width > maxW && line) { lines.push(line.trim()); line = word + ' '; }
-            else line = tst;
-        }
-        if (line.trim()) lines.push(line.trim());
-        return lines;
-    };
-    const textLines = wrap(e.text, '11px monospace', bw - 36);
-    const choiceLines = e.choices.map(c => wrap(c.text, '12px monospace', bw - 36));
+    ctx.font = '11px monospace';
+    const textLines = wrapCanvasText(e.text, bw - 36);
+    ctx.font = '12px monospace';
+    const choiceLines = e.choices.map(c => wrapCanvasText(c.text, bw - 36));
     const choicesH = choiceLines.reduce((a, ls) => a + ls.length * 15 + 13, 0);
     const bh = 66 + textLines.length * 14 + 12 + choicesH + 26;
     const bx = (w - bw) / 2, by = (h - bh) / 2;
     ctx.fillStyle = '#0a1520'; ctx.fillRect(bx, by, bw, bh);
     ctx.strokeStyle = '#C47840'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, bh);
     ctx.fillStyle = '#C47840'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
-    ctx.fillText(e.title, w / 2, by + 28);
+    ctx.fillText(fitCanvasText(e.title, bw - 36), w / 2, by + 28);
     ctx.fillStyle = '#AAB8C2'; ctx.font = '11px monospace';
     let ty = by + 50;
     for (const ln of textLines) { ctx.fillText(ln, w / 2, ty); ty += 14; }
@@ -15446,15 +15415,7 @@ function pdaEntries() {
 }
 function drawPdaParagraph(text, x, y, maxW, lineH = 14, maxLines = 5, color = '#A9C1C8') {
     ctx.fillStyle = color; ctx.font = '10px monospace'; ctx.textAlign = 'left';
-    const words = String(text || '').split(/\s+/);
-    let line = '', lines = [];
-    for (const word of words) {
-        const next = line ? `${line} ${word}` : word;
-        if (ctx.measureText(next).width > maxW && line) { lines.push(line); line = word; }
-        else line = next;
-    }
-    if (line) lines.push(line);
-    lines = lines.slice(0, maxLines);
+    const lines = wrapCanvasText(String(text || '').replace(/\s+/g, ' '), maxW, maxLines);
     for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], x, y + i * lineH);
     return y + lines.length * lineH;
 }
@@ -15599,7 +15560,7 @@ function drawPDA(w, h) {
         ctx.fillStyle = i === pdaTab ? '#0F2A31' : '#07131A'; ctx.fillRect(x, 50, tabW - 4, 34);
         ctx.strokeStyle = i === pdaTab ? '#5ADFCF' : '#203844'; ctx.strokeRect(x, 50, tabW - 4, 34);
         ctx.fillStyle = i === pdaTab ? '#A5FFF0' : '#607984'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
-        ctx.fillText(`[${i + 1}] ${PDA_TABS[i]}`, x + (tabW - 4) / 2, 71);
+        ctx.fillText(fitCanvasText(`[${i + 1}] ${PDA_TABS[i]}`, tabW - 12), x + (tabW - 4) / 2, 71);
         addTapZone(x, 50, tabW - 4, 34, String(i + 1));
     }
     const top = 104, bottom = h - 38;
@@ -15629,9 +15590,9 @@ function drawPDA(w, h) {
             ctx.fillStyle = i === pdaSelection ? '#11303A' : '#07141B'; ctx.fillRect(28, y, 205, 46);
             ctx.strokeStyle = i === pdaSelection ? '#5ADFCF' : '#17303A'; ctx.strokeRect(28, y, 205, 46);
             ctx.fillStyle = tier ? '#B8DDE0' : '#354750'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'left';
-            ctx.fillText(tier ? def.name : 'UNIDENTIFIED CONTACT', 38, y + 18);
+            ctx.fillText(fitCanvasText(tier ? def.name : 'UNIDENTIFIED CONTACT', 185), 38, y + 18);
             ctx.fillStyle = tier ? '#628A92' : '#27373D'; ctx.font = '9px monospace';
-            ctx.fillText(`${'●'.repeat(tier)}${'○'.repeat(4 - tier)} · ${tier ? XENO_RECORDS[id].className : 'NO DATA'}`, 38, y + 35);
+            ctx.fillText(fitCanvasText(`${'●'.repeat(tier)}${'○'.repeat(4 - tier)} · ${tier ? XENO_RECORDS[id].className : 'NO DATA'}`, 185), 38, y + 35);
             addTapZone(28, y, 205, 46, `PDASEL:${i}`);
         }
         const id = ids[pdaSelection], rec = XENO_RECORDS[id], tier = researchTier(id), def = ENEMY_TYPES[id];
@@ -15642,11 +15603,12 @@ function drawPDA(w, h) {
             drawPdaSpecimen(id, dx + 4, 124, 210, 150, performance.now() * 0.001, def.color || '#5ADFCF');
         }
         ctx.textAlign = 'left'; ctx.fillStyle = tier ? '#A5FFF0' : '#40535B'; ctx.font = 'bold 14px monospace';
-        ctx.fillText(tier ? def.name.toUpperCase() : 'CONTACT UNRESOLVED', dx + 225, 150);
-        ctx.font = 'italic 11px monospace'; ctx.fillStyle = '#70919A'; ctx.fillText(tier ? rec.designation : 'Ping a living specimen to establish morphology.', dx + 225, 170);
+        const detailW = Math.max(80, w - dx - 253);
+        ctx.fillText(fitCanvasText(tier ? def.name.toUpperCase() : 'CONTACT UNRESOLVED', detailW), dx + 225, 150);
+        ctx.font = 'italic 11px monospace'; ctx.fillStyle = '#70919A'; ctx.fillText(fitCanvasText(tier ? rec.designation : 'Ping a living specimen to establish morphology.', detailW), dx + 225, 170);
         if (tier) {
             ctx.font = '9px monospace'; ctx.fillStyle = '#78949E';
-            ctx.fillText(`${rec.size} · ${rec.depth} · CONFIDENCE ${rec.confidence}`, dx + 225, 192);
+            ctx.fillText(fitCanvasText(`${rec.size} · ${rec.depth} · CONFIDENCE ${rec.confidence}`, detailW), dx + 225, 192);
             let y = 310;
             const fields = [
                 ['HABITAT', rec.habitat, 1], ['MORPHOLOGY', rec.morphology, 1],
@@ -15681,7 +15643,7 @@ function drawPDA(w, h) {
             ctx.fillStyle = i === pdaSelection ? '#11303A' : '#07141B'; ctx.fillRect(30, y, w - 60, 29);
             ctx.strokeStyle = i === pdaSelection ? '#5ADFCF' : '#17303A'; ctx.strokeRect(30, y, w - 60, 29);
             ctx.fillStyle = unlocked ? '#B9DDE2' : '#3A4B52'; ctx.font = '10px monospace'; ctx.textAlign = 'left';
-            ctx.fillText(`${component ? 'COMPONENT' : item.slot.toUpperCase()} · ${item.name}`, 42, y + 19);
+            ctx.fillText(fitCanvasText(`${component ? 'COMPONENT' : item.slot.toUpperCase()} · ${item.name}`, Math.max(120, w - 260)), 42, y + 19);
             ctx.textAlign = 'right'; ctx.fillText(component ? `OWNED ${owned}` : owned ? (meta.modulesEquipped.includes(item.id) ? 'EQUIPPED' : 'IN STORES') : unlocked ? 'FABRICATE' : 'LOCKED', w - 42, y + 19);
             addTapZone(30, y, w - 60, 29, `PDASEL:${i}`);
         }
@@ -15696,9 +15658,9 @@ function drawPDA(w, h) {
             ctx.fillStyle = i === pdaSelection ? '#241C32' : '#07141B'; ctx.fillRect(28, y, 220, 29);
             ctx.strokeStyle = i === pdaSelection ? '#B0A0E8' : '#20313A'; ctx.strokeRect(28, y, 220, 29);
             ctx.fillStyle = frag.dossier ? '#E8D8A0' : '#A99AC8'; ctx.font = '9px monospace';
-            ctx.fillText(frag.dossier
+            ctx.fillText(fitCanvasText(frag.dossier
                 ? `▣ ${frag.title}`
-                : `${meta.archivePlayed.includes(frag.id) ? '▶' : '○'} ${frag.id.toUpperCase()} · LAYER ${frag.layer}`, 38, y + 19);
+                : `${meta.archivePlayed.includes(frag.id) ? '▶' : '○'} ${frag.id.toUpperCase()} · LAYER ${frag.layer}`, 200), 38, y + 19);
             addTapZone(28, y, 220, 29, `PDASEL:${i}`);
         }
         // Threads still open — what is missing is as informative as what is held.
@@ -15719,7 +15681,7 @@ function drawPDA(w, h) {
         const frag = entries[pdaSelection];
         if (frag) {
             ctx.fillStyle = frag.dossier ? '#E8D8A0' : '#B0A0E8'; ctx.font = 'bold 12px monospace';
-            ctx.fillText(frag.dossier ? frag.title : 'ARCHIVE TRANSCRIPT', 278, 132);
+            ctx.fillText(fitCanvasText(frag.dossier ? frag.title : 'ARCHIVE TRANSCRIPT', w - 310), 278, 132);
             drawPdaParagraph(frag.text, 278, 160, w - 310, 16, 22, '#C5BCD9');
             ctx.fillStyle = '#7D7392'; ctx.font = '10px monospace'; ctx.fillText('[ENTER / P] PLAY AUDIO LOG', 278, h - 58);
         } else {
@@ -15735,10 +15697,10 @@ function drawPDA(w, h) {
         for (const id of installed) {
             const a = SUB_ASSEMBLY_DEFS[id]; if (!a) continue;
             ctx.fillStyle = a.color; ctx.fillRect(48, y - 9, 8, 8);
-            ctx.fillStyle = '#A8C2C8'; ctx.font = '10px monospace'; ctx.fillText(`${a.label} · SOCKET ${a.socket.toUpperCase()}${a.animation ? ' · ANIM ' + a.animation : ''}`, 66, y);
+            ctx.fillStyle = '#A8C2C8'; ctx.font = '10px monospace'; ctx.fillText(fitCanvasText(`${a.label} · SOCKET ${a.socket.toUpperCase()}${a.animation ? ' · ANIM ' + a.animation : ''}`, w - 100), 66, y);
             y += 22;
         }
-        ctx.fillStyle = '#647D86'; ctx.font = '9px monospace'; ctx.fillText('GLB SOCKET CONTRACT: hull_skin · hull_ring · aft_drive · sensor_mast · power_bay · weapon_mount · prow_tool', 48, h - 58);
+        ctx.fillStyle = '#647D86'; ctx.font = '9px monospace'; ctx.fillText(fitCanvasText('GLB SOCKET CONTRACT: hull_skin · hull_ring · aft_drive · sensor_mast · power_bay · weapon_mount · prow_tool', w - 96), 48, h - 58);
     }
     ctx.fillStyle = '#607984'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
     ctx.fillText('[1–6] SECTION · [↑/↓] SELECT · [ESC] CLOSE PDA', w / 2, h - 14);
@@ -16582,6 +16544,7 @@ function drawCRT() {
 }
 
 function drawFps() {
+    if (phase !== 'playing') return;
     const compact = touchUI() && Math.min(canvas.width, canvas.height) < 520;
     const fx = compact ? canvas.width / 2 - 28 : 6;
     ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left';
@@ -16645,7 +16608,8 @@ window.__deepSwarm = {
             xp: game.player.xp, level: game.player.level, openingGrace: game.openingGrace, brownout: !!game._brownout,
             systems: game.systems, inventory: game.inventory.length, zone: zoneFromDepth(game.depth),
             minedDeposits: game._minedDeposits || 0, deployables: (game.deployables || []).length,
-            wakeArmed: game.player._wakeArmed || 0,
+            wakeArmed: game.player._wakeArmed || 0, wakeActive: game.player._wakeActive || 0,
+            nereidLayout: game._nereidLayout ? { ...game._nereidLayout } : null,
             nereidQueue: (game.nereidQueue || []).length,
             // Perf soak surface — population is the thing that used to run away.
             enemies: game.enemies.length, popCap: enemyPopCap(game),
@@ -16993,6 +16957,12 @@ window.__deepSwarm = {
         addNereidLog(game, 'Routine survey observation three.');
         return this.getState();
     },
+    showNereidTest(text = 'A long NEREID transmission must remain inside its glass caption at every supported viewport width, even while the flight computer is under load.') {
+        if (!game) this.startSeeded('nereid-layout');
+        game.runTime = 2;
+        game.nereidLog = [{ text, time: 0 }];
+        return this.getState();
+    },
     testElectricField() {
         if (!game) this.startSeeded('electric-field');
         const target = {
@@ -17062,5 +17032,9 @@ window.__deepSwarm = {
         return this.getState();
     },
 };
+if (sessionStorage.getItem('deepswarm_sync_after_reset')) {
+    sessionStorage.removeItem('deepswarm_sync_after_reset');
+    saveMeta();
+}
 bootPerf.inputReady = performance.now();
 requestAnimationFrame(loop);
