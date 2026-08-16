@@ -72,18 +72,26 @@ try {
         // Metal only. Anything inside a scrollable container is glass and is
         // allowed to exceed the aperture — that is the whole doctrine.
         const inGlass = (e) => {
-          for (let n = e.parentElement; n && n !== page; n = n.parentElement) {
+          for (let n = e.parentElement; n; n = n.parentElement) {
             const oy = getComputedStyle(n).overflowY
             if (oy === 'auto' || oy === 'scroll') return true
+            if (n === page) break
           }
           return false
         }
         const boxes = [...page.querySelectorAll('*')].filter((e) => !inGlass(e))
           .map((e) => e.getBoundingClientRect()).filter((r) => r.height > 2)
         const deepest = boxes.length ? Math.max(...boxes.map((r) => r.bottom)) : 0
+        const pageOverflowY = getComputedStyle(page).overflowY
+        const pageIsGlass = pageOverflowY === 'auto' || pageOverflowY === 'scroll'
         // scrollers that are legitimately "glass" (overflow-y auto/scroll)
         const metalScroll = document.documentElement.scrollHeight - innerHeight
-        return { ink: +ink.toFixed(1), overflow: Math.round(deepest - VH), trailing: Math.round(VH - deepest), metalScroll: Math.round(metalScroll) }
+        return {
+          ink: +ink.toFixed(1),
+          overflow: Math.round(deepest - VH),
+          trailing: pageIsGlass ? 0 : Math.round(VH - deepest),
+          metalScroll: Math.round(metalScroll),
+        }
       })
       const tag = `${vp.name}/${mode}`
       const floor = INK_FLOOR[mode] ?? vp.minInk

@@ -263,6 +263,7 @@ export async function initStudio(): Promise<void> {
     if (mixState.power) engine.master!.gain.value = value;
     saveAll();
   });
+  masterKnob.root.classList.add("wa-master-knob");
   syncMixerMaster = mixer.setMasterLevel;
 
   // ── Modular device rack ── (fxrack.ts — Phase 0 split)

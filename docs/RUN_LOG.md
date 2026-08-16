@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-08-16 — Studio containment and density pass
+
+- Made Arrange the sole vertical scroll owner at short laptop, portrait and landscape heights. Track lanes now clear automation, every song control remains reachable, and the workspace no longer hides compressed content.
+- Tightened the constrained header and Edit context navigation, shortened arranger and synth labels while retaining full accessible names/help, and contained drum inspector sends and controls within their grids.
+- Removed the phone Mix dead band and spread the desktop device controls through the lower panel. Extended responsive and density regression coverage for label containment, header clearance, workspace scroll ownership, lane separation and dead-space limits.
+- Passed Studio core, responsive and density browser suites locally with clean consoles across desktop, laptop, tablet, Android portrait and Android landscape.
+
 ## 2026-08-16 — Deep Swarm contained message lane and sonar terrain
 
 - Moved contextual help from the clipped top banner into a measured lower message lane. Help wraps to three lines, NEREID wraps beneath it in a separate slot, and both remain inside desktop and Android-landscape viewports while clearing touch controls.

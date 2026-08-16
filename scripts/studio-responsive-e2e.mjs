@@ -91,6 +91,10 @@ for (const [name, width, height] of viewports) {
         const cell = await page.locator('.wa-grid .wa-cell').first().evaluate((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height }))
         check(`${name}: DRUMS cells remain usable`, cell.width >= 36 && cell.height >= 36, `${Math.round(cell.width)}×${Math.round(cell.height)}px`)
       }
+      if ((name === 'desktop' || name === 'laptop') && mode === 'DRUMS') {
+        const sends = await page.locator('.wa-lane-sends').evaluate((node) => ({ scroll: node.scrollWidth, client: node.clientWidth }))
+        check(`${name}: drum sends stay inside the inspector`, sends.scroll <= sends.client + 1, `${sends.scroll}/${sends.client}`)
+      }
       if ((name === 'phone' || name === 'landscape') && mode === 'PADS') {
         const pads = await page.locator('.wa-mpc-pad').evaluateAll((nodes) => nodes.map((node) => {
           const r = node.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height }
@@ -101,6 +105,16 @@ for (const [name, width, height] of viewports) {
       if ((name === 'phone' || name === 'landscape') && mode === 'MIX') {
         const widths = await page.locator('.wa-mixer .wa-ch').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().width))
         check(`${name}: MIX channels remain readable`, widths.every((width) => width >= 72), `${Math.round(Math.min(...widths))}px min`)
+        const mixGap = await page.evaluate(() => {
+          const panel = document.querySelector('.wa-mix-channels')?.getBoundingClientRect()
+          const mixer = document.querySelector('.wa-page-mix .wa-mixer')?.getBoundingClientRect()
+          return panel && mixer ? Math.round(panel.bottom - mixer.bottom) : 999
+        })
+        check(`${name}: MIX channel plate has no dead band`, mixGap <= 24, `${mixGap}px trailing space`)
+      }
+      if (mode === 'SYNTH') {
+        const hint = await page.locator('.wa-keys-hint').evaluate((node) => ({ scroll: node.scrollWidth, client: node.clientWidth }))
+        check(`${name}: synth key hint is contained`, hint.scroll <= hint.client + 1, `${hint.scroll}/${hint.client}`)
       }
       if (mode === 'DJ') {
         const djLayout = await page.evaluate(() => {
@@ -149,20 +163,57 @@ for (const [name, width, height] of viewports) {
     // the first-run demo seeds an arrangement, so these assert a DELTA rather
     // than assuming the chain starts empty
     const blocksBefore = await page.locator('.wa-chain-block').count()
-    await page.locator('.wa-composer-head button', { hasText: 'Add selected' }).click()
+    await page.locator('.wa-composer-head button', { hasText: 'Scene' }).click()
     check(`${name}: arrangement block added`, await page.locator('.wa-chain-block').count() === blocksBefore + 1)
     const rampsBefore = await page.locator('.wa-ramp-row').count()
     await page.locator('.wa-automation-editor button', { hasText: 'Ramp' }).click()
     check(`${name}: automation ramp added`, await page.locator('.wa-ramp-row').count() === rampsBefore + 1)
+    const arrangeLayout = await page.evaluate(() => {
+      const page = document.querySelector('.wa-page-song')
+      const panel = document.querySelector('.wa-arrange-main > .wa-panel')
+      const synth = document.querySelector('.wa-arrange-lane:last-child')?.getBoundingClientRect()
+      const automation = document.querySelector('.wa-automation-editor')?.getBoundingClientRect()
+      const library = document.querySelector('.wa-song-library')?.getBoundingClientRect()
+      const pageRect = page?.getBoundingClientRect()
+      const overflow = page ? getComputedStyle(page).overflowY : 'hidden'
+      return {
+        overlap: synth && automation ? Math.max(0, synth.bottom - automation.top) : 999,
+        panelClip: panel ? panel.scrollHeight - panel.clientHeight : 999,
+        reachable: !!page && !!pageRect && !!library &&
+          library.bottom - pageRect.top <= page.scrollHeight + 1 &&
+          (page.scrollHeight <= page.clientHeight + 1 || overflow === 'auto' || overflow === 'scroll'),
+        pageScroll: page ? page.scrollHeight - page.clientHeight : 999,
+      }
+    })
+    check(`${name}: Arrange lanes clear automation`, arrangeLayout.overlap <= 0, `${Math.round(arrangeLayout.overlap)}px overlap`)
+    check(`${name}: Arrange panel does not hide content`, arrangeLayout.panelClip <= 1, `${Math.round(arrangeLayout.panelClip)}px clipped`)
+    check(`${name}: all Arrange controls are reachable`, arrangeLayout.reachable, `${Math.round(arrangeLayout.pageScroll)}px internal scroll`)
 
     if (name === 'phone' || name === 'landscape') {
       const targets = await page.locator('.wa-primary-nav .wa-modekey').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height))
       check(`${name}: mode targets are touch-sized`, targets.every((size) => size >= 44), targets.join(','))
+      const headerCollisions = await page.evaluate(() => {
+        const lcd = document.querySelector('.wa-lcd')?.getBoundingClientRect()
+        if (!lcd) return ['missing LCD']
+        return [...document.querySelectorAll('.wa-title > *')].filter((node) => {
+          const style = getComputedStyle(node)
+          if (style.display === 'none' || style.visibility === 'hidden') return false
+          const r = node.getBoundingClientRect()
+          return r.width > 0 && r.height > 0 && r.left < lcd.right - 1 && r.right > lcd.left + 1 && r.top < lcd.bottom - 1 && r.bottom > lcd.top + 1
+        }).map((node) => node.className || node.tagName)
+      })
+      check(`${name}: header controls clear the status display`, headerCollisions.length === 0, headerCollisions.join(', ') || 'clear')
       const transport = await page.locator('.wa-transport').evaluate((node) => ({ scroll: node.scrollWidth, client: node.clientWidth }))
       check(`${name}: primary transport does not scroll`, transport.scroll <= transport.client + 1, `${transport.scroll}/${transport.client}`)
       await page.locator('.wa-transport-more').click()
       check(`${name}: secondary transport is disclosed`, await page.locator('.wa-transport-timing').isVisible() && await page.locator('.wa-transport-actions').isVisible())
       check(`${name}: CLIPS exposes scene range`, /Scenes \d+–\d+ of 16/.test((await page.locator('.wa-scene-position').textContent()) ?? ''))
+      await openMode(page, 'DRUMS')
+      const contextBounds = await page.locator('.wa-context-edit .wa-contextkey').evaluateAll((nodes) => nodes.map((node) => {
+        const r = node.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }
+      }))
+      check(`${name}: Edit tools stay inside the viewport`, contextBounds.length === 3 && contextBounds.every((r) => r.top >= 0 && r.left >= 0 && r.right <= width && r.bottom <= height), `${contextBounds.length} tools`)
+      await openMode(page, 'CLIPS')
       await page.locator('.wa-transport button', { hasText: '? Tutorial' }).click()
       const tutorialTop = await page.evaluate(() => {
         const card = document.querySelector('.wa-tutorial-card'); if (!card) return false

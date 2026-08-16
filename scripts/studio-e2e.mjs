@@ -138,7 +138,7 @@ try {
   await openMode(page, 'CLIPS')
   await page.waitForTimeout(250)
   const chainBefore = await page.locator('.wa-chain-block').count()
-  await page.locator('.wa-composer-head button', { hasText: 'Add selected' }).click()
+  await page.locator('.wa-composer-head button', { hasText: 'Scene' }).click()
   await page.waitForTimeout(200)
   const chainAdded = await page.locator('.wa-chain-block').count()
   await page.locator('.wa-transport button', { hasText: 'Undo' }).click({ timeout: 5000 })

@@ -156,7 +156,10 @@ export function buildSession(): SessionView {
   const composer = el("div", "wa-composer");
   const composerHead = el("div", "wa-composer-head");
   const chain = el("div", "wa-chainstrip wa-arrange-lanes");
-  const addBtn = btn("＋ Add selected", "wa-btn-sm"), leftBtn = btn("←", "wa-btn-sm"), rightBtn = btn("→", "wa-btn-sm"), shorterBtn = btn("− Repeat", "wa-btn-sm"), longerBtn = btn("＋ Repeat", "wa-btn-sm"), deleteBtn = btn("Delete", "wa-btn-sm"), clearBtn = btn("Clear", "wa-btn-sm");
+  const addBtn = btn("＋ Scene", "wa-btn-sm"), leftBtn = btn("←", "wa-btn-sm"), rightBtn = btn("→", "wa-btn-sm"), shorterBtn = btn("− Bar", "wa-btn-sm"), longerBtn = btn("＋ Bar", "wa-btn-sm"), deleteBtn = btn("Delete", "wa-btn-sm"), clearBtn = btn("Clear", "wa-btn-sm");
+  addBtn.setAttribute("aria-label", "Add selected scene");
+  shorterBtn.setAttribute("aria-label", "Remove one repeat bar");
+  longerBtn.setAttribute("aria-label", "Add one repeat bar");
   let selectedBlock = -1;
   const canonical = (): ArrangeBlock[] => arrangement.drums;
   const normaliseStarts = () => {
@@ -226,7 +229,7 @@ export function buildSession(): SessionView {
     Object.keys(songs).sort().forEach((name) => songSel.append(new Option(`★ ${name}`, `user:${name}`)));
     if (Array.from(songSel.options).some((option) => option.value === current)) songSel.value = current;
   };
-  const saveSongBtn = btn("Save song", "wa-btn-sm"), loadSongBtn = btn("Load", "wa-btn-sm"), deleteSongBtn = btn("Delete", "wa-btn-sm"), exportSongBtn = btn("↓ Song", "wa-btn-sm"), importSongBtn = btn("↑ Song", "wa-btn-sm");
+  const saveSongBtn = btn("Save", "wa-btn-sm"), loadSongBtn = btn("Load", "wa-btn-sm"), deleteSongBtn = btn("Delete", "wa-btn-sm"), exportSongBtn = btn("Export", "wa-btn-sm"), importSongBtn = btn("Import", "wa-btn-sm");
   const songInput = document.createElement("input"); songInput.type = "file"; songInput.accept = ".json,application/json"; songInput.hidden = true;
   saveSongBtn.addEventListener("click", async () => { const name = await askText("Save song", "Untitled song"); if (!name) return; songs[name] = projectState(false) as Record<string, unknown>; localStorage.setItem(songKey, JSON.stringify(songs)); refreshSongs(); songSel.value = `user:${name}`; });
   // Loading applies in place. It used to reload the page, which threw away

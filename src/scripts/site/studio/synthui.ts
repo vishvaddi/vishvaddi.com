@@ -581,7 +581,9 @@ export function buildSynth(): SynthUI {
   slideArm.addEventListener("click", () => { armedMods.slide = !armedMods.slide; slideArm.classList.toggle("active", armedMods.slide); slideArm.setAttribute("aria-pressed", String(armedMods.slide)); });
 
   const keysHeader = el("div", "wa-export");
-  keysHeader.append(el("span", "wa-lbl", "KEYS — click, or Z-row / Q-row on the keyboard (− / = shift octave)"), keysRecBtn, holdBtn, accentArm, slideArm, midiBtn, octaveLabel);
+  const keysHint = el("span", "wa-lbl wa-keys-hint", "KEYS · Z/Q · OCT −/+");
+  help(keysHint, "Click the keyboard or use the Z and Q rows; minus and equals shift octave.");
+  keysHeader.append(keysHint, keysRecBtn, holdBtn, accentArm, slideArm, midiBtn, octaveLabel);
   // Roll, keys and the keys header live on the KEYS page — layout.ts houses
   // them; appending them here too would just steal them back at boot.
   // Scope + chord player live in the side column beside the XY field (G/H) —

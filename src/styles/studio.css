@@ -3655,3 +3655,128 @@
   }
   .immersive-page .wa-dj-deck { flex: 0 0 100%; width: 100%; scroll-snap-align: start; }
 }
+
+/* ── Tightness pass: content must either fit its aperture or own the scroll. */
+.immersive-page .wa-title .wa-master-knob {
+  flex: 0 0 auto;
+  min-width: 66px;
+  height: 34px;
+  padding: 0;
+  flex-direction: row;
+  gap: 3px;
+}
+.immersive-page .wa-title .wa-master-knob .wa-knob { width: 30px; height: 30px; padding: 3px; }
+.immersive-page .wa-title .wa-master-knob .wa-knob-line { height: 9px; }
+.immersive-page .wa-title .wa-master-knob .wa-knob-val,
+.immersive-page .wa-title .wa-master-knob .wa-knob-lbl { font-size: 7px; }
+
+.immersive-page .wa-page-drums .wa-selected-sample {
+  align-content: start;
+  grid-auto-rows: max-content;
+}
+.immersive-page .wa-page-drums .wa-selected-sample > :is(
+  .wa-kit-library, .wa-lane-title-row, .wa-lane-wave, .wa-lane-wave-empty,
+  .wa-sample-name, .wa-pad-actions, .wa-lane-step, .wa-lane-sends,
+  .wa-lane-knobs, .wa-lane-sd
+) { grid-column: 1 / -1; }
+.immersive-page .wa-page-drums .wa-lane-sends {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 10px;
+}
+.immersive-page .wa-page-drums .wa-lane-knobs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
+}
+
+@media (min-width: 701px) and (min-height: 541px) {
+  .immersive-page .wa-page-mix {
+    grid-template-rows: minmax(360px, 1fr) minmax(140px, .26fr);
+  }
+  .immersive-page .wa-page-mix .wa-devdetail { align-content: start; }
+  .immersive-page .wa-page-mix .wa-devdetail .wa-device {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    align-content: start;
+  }
+}
+
+@media (max-width: 700px) {
+  .immersive-page .wa-page-song { padding-bottom: 8px; }
+  .immersive-page .wa-page-song .wa-arrange-shell {
+    height: auto;
+    min-height: 100%;
+    flex: 0 0 auto;
+  }
+  .immersive-page .wa-page-song .wa-arrange-main { flex: 0 0 auto; overflow: visible; }
+  .immersive-page .wa-page-song .wa-arrange-main > .wa-panel { height: auto; overflow: visible; }
+  .immersive-page .wa-page-song .wa-arrange-main .wa-composer { flex: 0 0 auto; }
+  .immersive-page .wa-page-song .wa-arrange-main .wa-chainstrip { flex: 0 0 auto; min-height: 164px; }
+  .immersive-page .wa-page-song .wa-automation-editor {
+    display: grid;
+    grid-template-columns: auto minmax(58px, 1fr) minmax(58px, 1fr) 44px 54px;
+    overflow: visible;
+  }
+  .immersive-page .wa-page-song .wa-automation-editor > :nth-child(1) { grid-column: 1; grid-row: 1; }
+  .immersive-page .wa-page-song .wa-automation-editor > :nth-child(2) { grid-column: 2; grid-row: 1; }
+  .immersive-page .wa-page-song .wa-automation-editor > :nth-child(3) { grid-column: 3 / 6; grid-row: 1; }
+  .immersive-page .wa-page-song .wa-automation-editor > :nth-child(4) { grid-column: 1; grid-row: 2; }
+  .immersive-page .wa-page-song .wa-automation-editor > :nth-child(5) { grid-column: 2; grid-row: 2; }
+  .immersive-page .wa-page-song .wa-automation-editor > :nth-child(6) { grid-column: 3; grid-row: 2; }
+  .immersive-page .wa-page-song .wa-automation-editor > :nth-child(7) { grid-column: 4; grid-row: 2; }
+  .immersive-page .wa-page-song .wa-automation-editor > :nth-child(8) { grid-column: 5; grid-row: 2; }
+  .immersive-page .wa-page-song .wa-automation-editor > .wa-ramp-list { grid-column: 1 / -1; grid-row: 3; }
+  .immersive-page .wa-page-song .wa-song-library {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    overflow: visible;
+  }
+  .immersive-page .wa-page-song .wa-song-library > .wa-lbl { grid-column: 1; grid-row: 1; }
+  .immersive-page .wa-page-song .wa-song-library > select { grid-column: 2 / -1; grid-row: 1; width: 100%; }
+  .immersive-page .wa-page-song .wa-song-library > button { min-width: 0; padding-inline: 3px; }
+  .immersive-page .wa-page-mix > .wa-mix-channels { flex-basis: 390px; }
+  .wa-keys-hint { flex: 0 0 104px; max-width: 104px; white-space: normal; line-height: 1.35; }
+}
+
+@media (max-height: 780px) {
+  .immersive-page .wa-page-song { overflow-y: auto; overscroll-behavior: contain; }
+  .immersive-page .wa-page-song .wa-arrange-shell { height: auto; min-height: 100%; align-items: start; }
+  .immersive-page .wa-page-song .wa-arrange-main,
+  .immersive-page .wa-page-song .wa-arrange-main > .wa-panel { height: auto; overflow: visible; }
+  .immersive-page .wa-page-song .wa-arrange-main .wa-composer { flex: 0 0 auto; }
+  .immersive-page .wa-page-song .wa-arrange-main .wa-chainstrip { flex: 0 0 auto; min-height: 164px; }
+}
+
+@media (max-height: 540px) and (pointer: coarse) {
+  .immersive-page .wa-title-text {
+    width: 70px;
+    flex-basis: 70px;
+    overflow: hidden;
+    font-size: 0;
+  }
+  .immersive-page .wa-title-text::after { content: "STUDIO"; font-size: 10px; letter-spacing: .12em; }
+  .immersive-page .wa-title-dots,
+  .immersive-page .wa-density-btn,
+  .immersive-page .wa-fs-btn,
+  .immersive-page .wa-power,
+  .immersive-page .wa-master-knob { display: none !important; }
+  .immersive-page .wa-project-name { flex: 0 1 180px; width: 180px; max-width: 180px; }
+  .wa-primary-nav { flex: 0 0 auto; gap: 3px; }
+  .immersive-page .wa-primary-nav .wa-modekey { flex: 0 0 47px; height: 47px; min-height: 47px; }
+  .wa-context-nav { margin-top: auto; }
+  .wa-context-group { gap: 2px; }
+  .wa-contextkey { flex: 0 0 28px; height: 28px; min-height: 28px; padding: 2px; }
+  .immersive-page .wa-page-song { overflow-y: auto; overscroll-behavior: contain; }
+  .immersive-page .wa-page-song .wa-arrange-shell {
+    height: auto;
+    min-height: 100%;
+    align-items: start;
+  }
+  .immersive-page .wa-page-song .wa-track-rail { position: sticky; top: 0; }
+  .immersive-page .wa-page-song .wa-arrange-main,
+  .immersive-page .wa-page-song .wa-arrange-main > .wa-panel { height: auto; overflow: visible; }
+  .immersive-page .wa-page-song .wa-arrange-main .wa-composer { flex: 0 0 auto; }
+  .immersive-page .wa-page-song .wa-arrange-main .wa-chainstrip { flex: 0 0 auto; min-height: 164px; }
+  .wa-keys-hint { flex: 0 0 auto; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
