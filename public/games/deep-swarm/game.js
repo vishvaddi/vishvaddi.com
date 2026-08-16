@@ -1911,7 +1911,7 @@ function mulberry32(a) {
 }
 function seedFromString(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return h >>> 0; }
 function RND() { return dailyRng ? dailyRng() : Math.random(); }
-const DEEP_SWARM_BUILD = '2026.08.16-pressure-cockpit-consistent-creatures';
+const DEEP_SWARM_BUILD = '2026.08.16-pressure-cockpit-message-lane';
 const RUN_TRACE_LIMIT = 30;
 let runTrace = [];
 let lastRuntimeError = null;
@@ -6313,6 +6313,10 @@ function updateApexPatrol(g, dt) {
     if (a.trail.length > 22) a.trail.pop();
 }
 
+function emitGhostSonarReturn(g, enemy) {
+    g.floatingTexts.push({ x: enemy.x, y: enemy.y - 12, text: 'PHANTOM ECHO', color: '#9C82B8', life: 0.9, vy: -22 });
+}
+
 function update(dt) {
     // Frozen phases — game does not advance
     if (isPortraitPhone()) return;   // rotate-to-landscape gate; soft pause
@@ -7979,14 +7983,14 @@ function update(dt) {
                 }
             }
             // Ghosts deliberately stay out of the combat grid. Sonar still returns
-            // them as a classified false contact instead of silently doing nothing.
+            // them as a phase echo instead of silently doing nothing.
             for (const e of g.enemies) {
                 if (!e.ghost || ef.hit.has(e)) continue;
                 const r = e.size || 8;
                 const d = dist(ef, e);
                 if (d + r < bandInner || d - r > bandOuter) continue;
                 ef.hit.add(e);
-                g.floatingTexts.push({ x: e.x, y: e.y - 12, text: 'FALSE RETURN', color: '#9C82B8', life: 0.9, vy: -22 });
+                emitGhostSonarReturn(g, e);
             }
             for (const ob of (g.obstacles || [])) {
                 if (!ob.deposit || ob.surveyed || ob.mined) continue;
@@ -8898,19 +8902,6 @@ function draw() {
         }
     }
 
-    // Grid (subtle)
-    ctx.strokeStyle = `rgba(20,45,60,${0.12 * (1 - darkProgress * 0.5)})`;
-    ctx.lineWidth = 1;
-    const gridSize = 100;
-    const startX = Math.floor(cx / gridSize) * gridSize;
-    const startY = Math.floor(cy / gridSize) * gridSize;
-    for (let gx = startX; gx < cx + w + gridSize; gx += gridSize) {
-        ctx.beginPath(); ctx.moveTo(gx - cx, 0); ctx.lineTo(gx - cx, h); ctx.stroke();
-    }
-    for (let gy = startY; gy < cy + h + gridSize; gy += gridSize) {
-        ctx.beginPath(); ctx.moveTo(0, gy - cy); ctx.lineTo(w, gy - cy); ctx.stroke();
-    }
-
     // --- DISTANT SILHOUETTES (thalassophobia — renders behind everything) ---
     // --- THE THING THAT FOLLOWS — never a full body. A darker patch of dark, and
     // two returns where eyes would be. Resolves slightly as it closes; still never
@@ -9102,15 +9093,16 @@ function draw() {
         const scaleK = 0.45 + proximity * 0.55;
         const sx = ob.x - cx, sy = ob.y - cy;
         if (sx < -ob.r * scaleK - 20 || sx > w + ob.r * scaleK + 20 || sy < -ob.r * scaleK - 20 || sy > h + ob.r * scaleK + 20) continue;
-        // TOPOGRAPHIC CONTOUR LINES — concentric rings around solid features (rocks, vents, organic, crystal)
-        // Rings tighten with proximity; faint while distant, sharp when close.
-        if (ob.kind === 'rock' || ob.kind === 'spire' || ob.kind === 'vent' || ob.kind === 'organic' || ob.kind === 'crystal' || ob.kind === 'bones' || ob.kind === 'chitin' || ob.kind === 'monolith' || ob.kind === 'debris') {
+        // Sonar briefly sketches partial terrain contours. Persistent complete rings
+        // read as cages and expose the procedural placement rather than the terrain.
+        if (g.sonarReveal > 0.08 && (ob.kind === 'rock' || ob.kind === 'spire' || ob.kind === 'vent' || ob.kind === 'organic' || ob.kind === 'crystal' || ob.kind === 'bones' || ob.kind === 'chitin' || ob.kind === 'monolith' || ob.kind === 'debris')) {
             const ringR = ob.r * scaleK;
-            ctx.strokeStyle = `rgba(120,160,180,${0.10 + proximity * 0.18})`;
+            ctx.strokeStyle = `rgba(120,160,180,${g.sonarReveal * (0.08 + proximity * 0.16)})`;
             ctx.lineWidth = 0.7;
-            for (let ri = 1; ri <= 3; ri++) {
+            const contourStart = ((ob.seed || ob.x * 0.01 + ob.y * 0.013) % PI2 + PI2) % PI2;
+            for (let ri = 1; ri <= 2; ri++) {
                 ctx.beginPath();
-                ctx.arc(sx, sy, ringR + ri * 8, 0, PI2);
+                ctx.arc(sx, sy, ringR + ri * 8, contourStart + ri * 0.35, contourStart + 4.2 + ri * 0.2);
                 ctx.stroke();
             }
         }
@@ -10728,33 +10720,50 @@ function draw() {
 }
 
 // =====================================================================
-// NEREID SPEECH PANEL — anchored below the viewport, centered, persistent
+// NEREID SPEECH PANEL — shares one lower message lane with contextual help
 // Shows the latest line in player's natural focus area, with portrait + typing
 // =====================================================================
+function hudMessageLane(w, h, g, vpCx, vpCy, vpR) {
+    if (g._fullBleed) {
+        return { left: 12, right: w - 12, bottom: h - (touchUI() ? 118 : 12) };
+    }
+    return {
+        left: Math.max(12, vpCx - vpR * 0.72),
+        right: Math.min(w - 12, vpCx + vpR * 0.72),
+        bottom: Math.min(h - 8, vpCy + vpR * 0.93),
+    };
+}
+
+function nereidCaptionVisible(g) {
+    if (!g.nereidLog || !g.nereidLog.length) return false;
+    const age = g.runTime - g.nereidLog[0].time;
+    return age >= 0 && age < 5;
+}
+
 function drawNereidSpeech(w, h, g, pal, vpCx, vpCy, vpR) {
-    if (!g.nereidLog || !g.nereidLog.length) return;
+    g._nereidLayout = null;
+    if (!nereidCaptionVisible(g)) return;
     const latest = g.nereidLog[0];
     const age = g.runTime - latest.time;
     const SHOW_TIME = 5.0;
     const FADE_TIME = 0.8;
-    if (age >= SHOW_TIME) return;
     const sanity = 100 - (g.player.corruption || 0);
     // Depth degradation: NEREID's transmissions also corrupt with depth, even at full sanity
     const depthCorrupt = g.depth > 4000 ? Math.min(60, (g.depth - 4000) / 30) : 0;
     const txt = corruptText(latest.text, Math.max(100 - sanity, depthCorrupt)).replace(/^NEREID-II[\s:·—-]*/i, '');
     // The glass carries a transmission, not a transcript. Full lines remain in
     // NEREID's log; the live caption is deliberately brief enough to read in combat.
-    const panelW = g._fullBleed ? Math.min(430, w * 0.5) : Math.min(520, vpR * 1.45);
+    const lane = hudMessageLane(w, h, g, vpCx, vpCy, vpR);
+    const panelW = Math.max(180, Math.min(g._fullBleed ? 440 : 520, lane.right - lane.left));
     const lineH = 14;
     ctx.font = '12px monospace';
     const lines = wrapCanvasText(txt, panelW - 64, 2);
     const panelH = Math.max(50, 22 + lines.length * lineH);
-    g._nereidLayout = { panelW, maxTextWidth: panelW - 64,
+    const panelX = Math.max(lane.left, Math.min(lane.right - panelW, vpCx - panelW / 2));
+    const panelY = Math.max(6, lane.bottom - panelH);
+    g._nereidLayout = { x: panelX, y: panelY, width: panelW, height: panelH,
+        panelW, maxTextWidth: panelW - 64,
         widestText: Math.max(0, ...lines.map(line => ctx.measureText(line).width)), lines: lines.length };
-    const panelX = vpCx - panelW / 2;
-    const minY = g._fullBleed ? h - panelH - 8 : vpCy + vpR * 0.66;
-    const maxY = h - panelH - 6;
-    const panelY = Math.max(6, Math.min(maxY, minY));
 
     // Fade
     let alpha = 1;
@@ -11360,14 +11369,26 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     } else if (g._streakBig) { g._streakBig = false; g._streakColor = null; }
 
     // ---- ONBOARDING HINT — one mechanic, in the moment it matters (Portal) ----
+    g._hintLayout = null;
     if (g._hint) {
-        ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center';
-        const tw = ctx.measureText(g._hint.text).width;
-        const hy = g._fullBleed ? 58 : 86;
+        const lane = hudMessageLane(w, h, g, vpCx, vpCy, vpR);
+        const panelW = Math.max(180, Math.min(560, lane.right - lane.left));
+        const lineH = 16;
+        ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center';
+        const lines = wrapCanvasText(g._hint.text, panelW - 28, 3);
+        const panelH = 16 + lines.length * lineH;
+        const reservedForNereid = nereidCaptionVisible(g) ? 58 : 0;
+        const panelX = Math.max(lane.left, Math.min(lane.right - panelW, vpCx - panelW / 2));
+        const panelY = Math.max(6, lane.bottom - reservedForNereid - panelH - (reservedForNereid ? 8 : 0));
+        g._hintLayout = { x: panelX, y: panelY, width: panelW, height: panelH,
+            maxTextWidth: panelW - 28,
+            widestText: Math.max(0, ...lines.map(line => ctx.measureText(line).width)), lines: lines.length };
         ctx.globalAlpha = Math.min(1, g._hint.t / 0.5);
-        drawPlate(w / 2 - tw / 2 - 14, hy - 15, tw + 28, 24);
+        drawPlate(panelX, panelY, panelW, panelH);
         ctx.fillStyle = '#A8E8D8';
-        ctx.fillText(g._hint.text, w / 2, hy + 2);
+        for (let li = 0; li < lines.length; li++) {
+            ctx.fillText(lines[li], panelX + panelW / 2, panelY + 14 + li * lineH);
+        }
         ctx.globalAlpha = 1;
     }
 
@@ -16610,7 +16631,9 @@ window.__deepSwarm = {
             minedDeposits: game._minedDeposits || 0, deployables: (game.deployables || []).length,
             wakeArmed: game.player._wakeArmed || 0, wakeActive: game.player._wakeActive || 0,
             nereidLayout: game._nereidLayout ? { ...game._nereidLayout } : null,
+            hintLayout: game._hintLayout ? { ...game._hintLayout } : null,
             nereidQueue: (game.nereidQueue || []).length,
+            floatingTexts: (game.floatingTexts || []).map(item => item.text),
             // Perf soak surface — population is the thing that used to run away.
             enemies: game.enemies.length, popCap: enemyPopCap(game),
             projectiles: game.projectiles.length, effects: game.effects.length,
@@ -16961,6 +16984,24 @@ window.__deepSwarm = {
         if (!game) this.startSeeded('nereid-layout');
         game.runTime = 2;
         game.nereidLog = [{ text, time: 0 }];
+        return this.getState();
+    },
+    showMessageLayoutTest() {
+        if (!game) this.startSeeded('message-layout');
+        phase = 'playing';
+        game.enemies = [];
+        game.openingGrace = 10;
+        game.player.hp = game.player.maxHp;
+        game.runTime = 2;
+        game.nereidLog = [{ text: 'Pressure is rising. Keep moving and use the terrain between sonar returns.', time: 0 }];
+        game._hint = { text: 'FIELD BAY — [3] patch hull · [4] overcharge 30s · [5] dump ballast. Ore spent here does not come home.', t: 8 };
+        draw();
+        return this.getState();
+    },
+    testGhostSonarReturn() {
+        if (!game) this.startSeeded('ghost-sonar');
+        game.floatingTexts = [];
+        emitGhostSonarReturn(game, { x: game.player.x + 30, y: game.player.y });
         return this.getState();
     },
     testElectricField() {

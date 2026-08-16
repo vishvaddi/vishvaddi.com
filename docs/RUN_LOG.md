@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-08-16 — Deep Swarm contained message lane and sonar terrain
+
+- Moved contextual help from the clipped top banner into a measured lower message lane. Help wraps to three lines, NEREID wraps beneath it in a separate slot, and both remain inside desktop and Android-landscape viewports while clearing touch controls.
+- Removed the always-on orthogonal world grid. Obstacle contours now appear only during sonar reveal, as two partial traces rather than persistent concentric cages.
+- Renamed the ghost sonar response from the bug-like `FALSE RETURN` to `PHANTOM ECHO` and added deterministic coverage for the contact wording, message containment and non-overlap.
+- Passed core E2E, desktop/ultrawide/Android responsive checks and a four-depth 6-second soak: 51–59 fps average, worst p95 12.8 ms, no runtime or console errors.
+
 ## 2026-08-16 — Studio arranger-led responsive workspace
 
 - Replaced the six equal full-screen mode keys with four task destinations: Arrange, Edit, Mix and Play. Edit and Play expose contextual Drums, Pads, Synth/Keys and DJ tools while preserving the existing engine, persistence and keyboard routing.

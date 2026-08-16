@@ -168,6 +168,21 @@ try {
   check('NEREID: live caption stays inside its glass panel',
     nereidLayout && nereidLayout.widestText <= nereidLayout.maxTextWidth,
     nereidLayout ? `${nereidLayout.widestText.toFixed(1)}/${nereidLayout.maxTextWidth.toFixed(1)}px` : 'no layout')
+  await page.evaluate(() => window.__deepSwarm.showMessageLayoutTest())
+  await page.waitForTimeout(80)
+  const messageState = await page.evaluate(() => window.__deepSwarm.getState())
+  const hintLayout = messageState.game.hintLayout
+  const pairedNereidLayout = messageState.game.nereidLayout
+  check('HUD messages: help wraps inside its panel',
+    hintLayout && hintLayout.widestText <= hintLayout.maxTextWidth,
+    hintLayout ? `${hintLayout.widestText.toFixed(1)}/${hintLayout.maxTextWidth.toFixed(1)}px` : 'no layout')
+  check('HUD messages: help and NEREID occupy separate slots',
+    hintLayout && pairedNereidLayout && hintLayout.y + hintLayout.height <= pairedNereidLayout.y,
+    hintLayout && pairedNereidLayout ? `${Math.round(hintLayout.y + hintLayout.height)}/${Math.round(pairedNereidLayout.y)}px` : 'no layout')
+  const ghostSonarState = await page.evaluate(() => window.__deepSwarm.testGhostSonarReturn())
+  check('sonar: ghost contact reads as an immersive phase echo',
+    ghostSonarState.game.floatingTexts.includes('PHANTOM ECHO') && !ghostSonarState.game.floatingTexts.some(text => /false|true/i.test(text)),
+    ghostSonarState.game.floatingTexts.join(', '))
   if (process.env.DEEP_SWARM_SCREENSHOTS) await page.screenshot({ path: '.tmp-deep-swarm-nereid.png' })
 
   await page.evaluate(() => {
@@ -266,6 +281,25 @@ for (const [name, width, height] of [
     await mobilePage.waitForTimeout(120)
     const runtimeState = await mobilePage.evaluate(() => window.__deepSwarm.getState())
     check(`${name}: dive remains live`, runtimeState.phase === 'playing' && !runtimeState.error, runtimeState.error || runtimeState.phase)
+
+    if (geometry.viewportWidth > geometry.viewportHeight) {
+      await mobilePage.evaluate(() => window.__deepSwarm.showMessageLayoutTest())
+      await mobilePage.waitForFunction(() => {
+        const game = window.__deepSwarm?.getState().game
+        return game?.hintLayout && game?.nereidLayout
+      }, null, { timeout: 3000 })
+      const mobileMessageState = await mobilePage.evaluate(() => window.__deepSwarm.getState())
+      const mobileHint = mobileMessageState.game.hintLayout
+      const mobileNereid = mobileMessageState.game.nereidLayout
+      check(`${name}: message lane stays inside the viewport`,
+        mobileHint && mobileNereid && mobileHint.x >= 0 && mobileNereid.x >= 0 &&
+          mobileHint.x + mobileHint.width <= geometry.viewportWidth && mobileNereid.x + mobileNereid.width <= geometry.viewportWidth &&
+          mobileHint.y >= 0 && mobileNereid.y + mobileNereid.height <= geometry.viewportHeight,
+        mobileHint && mobileNereid ? `${Math.round(mobileHint.width)}/${Math.round(mobileNereid.width)}px` : 'no layout')
+      check(`${name}: help does not cover NEREID`,
+        mobileHint && mobileNereid && mobileHint.y + mobileHint.height <= mobileNereid.y,
+        mobileHint && mobileNereid ? `${Math.round(mobileHint.y + mobileHint.height)}/${Math.round(mobileNereid.y)}px` : 'no layout')
+    }
 
     await mobilePage.evaluate(() => window.__deepSwarm.triggerSystemIncident('reactor', 45))
     await mobilePage.waitForTimeout(120)
