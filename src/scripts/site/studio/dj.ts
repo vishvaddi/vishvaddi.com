@@ -1,4 +1,6 @@
 import { ac, master } from "./engine";
+import { encodeWav } from "./helpers";
+import { transport as transportState } from "./state";
 import { btn, download, el, help, SCREEN_BG, SCREEN_FG, screenRgba } from "./helpers";
 
 type DeckId = "A" | "B";
@@ -154,7 +156,7 @@ function drawDeckWaveform(deck: Deck): void {
 
 const deckTimeForDraw = (deck: Deck): number => deck.loopSource ? deck.virtualTime : deck.root.classList.contains("scratching") ? deck.scratchPosition : deck.audio.currentTime;
 
-export function buildDj(): { root: HTMLElement } {
+export function buildDj(deps: { renderStudioMix?: (mode: "pattern" | "song") => Promise<AudioBuffer> } = {}): { root: HTMLElement } {
   const root = el("section", "wa-dj");
   const deckHost = el("div", "wa-dj-decks");
   const mixer = el("section", "wa-dj-mixer wa-panel");
@@ -315,6 +317,20 @@ export function buildDj(): { root: HTMLElement } {
     const input = document.createElement("input"); input.type = "file"; input.accept = "audio/*"; input.hidden = true; input.setAttribute("aria-label", `Load audio into deck ${id}`);
     load.addEventListener("click", () => input.click()); head.append(badge, title, load, input);
     help(load, `Load a local audio file into deck ${id}. The file stays on this device.`);
+    if (deps.renderStudioMix) {
+      const studioLoad = btn("STUDIO", "wa-btn-sm wa-dj-load wa-dj-studio-load");
+      help(studioLoad, `Render the studio's launched clips (or the arrangement, in Song mode) and load the mix onto deck ${id} — scratch and mix your own track.`);
+      studioLoad.addEventListener("click", async () => {
+        studioLoad.disabled = true; const prev = studioLoad.textContent; studioLoad.textContent = "…";
+        try {
+          const buffer = await deps.renderStudioMix!(transportState.songMode ? "song" : "pattern");
+          const wav = encodeWav(buffer);
+          await loadFile(deck, new File([wav], `studio-mix-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}.wav`, { type: "audio/wav" }));
+        } catch { title.textContent = "STUDIO RENDER FAILED"; }
+        studioLoad.disabled = false; studioLoad.textContent = prev;
+      });
+      head.append(studioLoad);
+    }
     const display = el("div", "wa-dj-display");
     const time = el("span", "wa-dj-time", "--:--.---"), bpmReadout = el("span", "wa-dj-bpm", "--- BPM"), pitchReadout = el("span", "wa-dj-pitch", "+0.00%");
     display.append(time, bpmReadout, pitchReadout);
@@ -338,7 +354,7 @@ export function buildDj(): { root: HTMLElement } {
     const speed = el("div", "wa-dj-speed"); speed.append(el("span", "active", "33"), el("span", "", "45"));
     const targetLight = el("span", "wa-dj-target-light"); targetLight.setAttribute("aria-hidden", "true");
     const pitchFader = labelledRange("PITCH ±16", -16, 16, 0, 0.05, (value) => setPitch(deck, value)); pitchFader.classList.add("wa-dj-pitch-fader");
-    turntable.append(jog, tonearm, startStop, speed, targetLight, pitchFader, el("span", "wa-dj-quartz", "QUARTZ · DIRECT DRIVE"));
+    turntable.append(jog, tonearm, startStop, speed, targetLight, pitchFader);
     const performancePanel = el("div", "wa-dj-performance");
     const loopBar = el("div", "wa-dj-loopbar");
     const loopIn = btn("IN", "wa-btn-sm"), loopOut = btn("OUT", "wa-btn-sm"), loop = btn("LOOP", "wa-btn-sm"), slip = btn("SLIP", "wa-btn-sm");

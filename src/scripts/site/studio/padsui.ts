@@ -273,6 +273,11 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   });
   for (let localPad = 0; localPad < PAD_BANK_SIZE; localPad++) {
     const pad = el("button", "wa-mpc-pad") as HTMLButtonElement; pad.type = "button";
+    // MPC orientation: pad 1 sits BOTTOM-left and numbers run right then up —
+    // the convention of every hardware pad controller. DOM/index order is
+    // unchanged; only the grid placement flips.
+    pad.style.gridRow = String(4 - Math.floor(localPad / 4));
+    pad.style.gridColumn = String((localPad % 4) + 1);
     const press = (event: PointerEvent) => {
       event.preventDefault(); pad.setPointerCapture?.(event.pointerId); pad.classList.add("down");
       const rect = pad.getBoundingClientRect();
@@ -394,7 +399,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   // contents out from under you, it just moves which row is highlighted.
   const eventLane = el("div", "wa-event-grid");
   eventLane.append(stepRuler());
-  let paintingEvents = false, paintEventsOn = true;
+  let paintingEvents = false, paintEventsOn = true, lanePointerType = "mouse";
   function paintEventLane(): void {
     eventRowLabels.forEach((label, localPad) => {
       const pad = selectedGlobalPad(localPad);
@@ -427,8 +432,21 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
         if (!paintEventsOn && existing >= 0) padEvents[clip.sel].splice(existing, 1);
         paintEventLane(); ctx.paintSession(); saveAll();
       };
+      // Touch: tap toggles, drag SCROLLS. The old preventDefault-on-pointerdown
+      // ate every scroll gesture that started on a cell — and the lane covers
+      // the whole panel on a phone, so the Steps view could not scroll at all.
+      // Mouse/pen keep the original drag-painting.
       cell.addEventListener("pointerdown", (event) => {
+        lanePointerType = event.pointerType;
+        if (event.pointerType === "touch") return; // tap arrives as click below
         event.preventDefault(); ctx.checkpoint(); paintingEvents = true;
+        const pad = selectedGlobalPad(localPad);
+        mpc.selectedPad = pad; paintMpcPads();
+        paintEventsOn = !padEvents[clip.sel].some((item) => item.pad === pad && item.step === step); paint();
+      });
+      cell.addEventListener("click", () => {
+        if (lanePointerType !== "touch") return; // mouse already painted on pointerdown
+        ctx.checkpoint();
         const pad = selectedGlobalPad(localPad);
         mpc.selectedPad = pad; paintMpcPads();
         paintEventsOn = !padEvents[clip.sel].some((item) => item.pad === pad && item.step === step); paint();

@@ -64,7 +64,7 @@ try {
   check('first run: tour does not block the UI', !cold.tourOpen)
   check('first run: non-modal hint is shown', cold.hint)
   check('first run: demo has its real title', cold.title === 'MIDNIGHT ACID', String(cold.title))
-  check('first run: arranger is the project home', await page.locator('.wa-page-song').isVisible())
+  check('first run: the MPC pads are the opening screen', await page.locator('.wa-page-pads').isVisible())
   await openMode(page, 'SYNTH')
   check('first run: controls are usable immediately', true)
 

@@ -52,7 +52,7 @@ for (const [name, width, height] of viewports) {
     }))
     check(`${name}: no document horizontal overflow`, geometry.docWidth <= geometry.clientWidth + 1, `${geometry.docWidth}/${geometry.clientWidth}`)
     check(`${name}: workstation fills viewport`, Math.abs(geometry.winHeight - geometry.viewportHeight) <= 2, `${geometry.winHeight}/${geometry.viewportHeight}`)
-    check(`${name}: Arrange is the project home`, await page.locator('.wa-page-song').isVisible())
+    check(`${name}: PADS is the opening screen`, await page.locator('.wa-page-pads').isVisible())
     check(`${name}: six flat mode keys, no context row`, await page.locator('.wa-primary-nav .wa-modekey').count() === 6 && await page.locator('.wa-context-nav').count() === 0)
 
     for (const mode of ['DRUMS', 'PADS', 'SYNTH', 'CLIPS', 'DJ', 'MIX']) {

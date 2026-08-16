@@ -28,7 +28,6 @@ export interface LayoutPanels {
   mixer: HTMLElement;
   devicePanel: HTMLElement;
   chop: HTMLElement;
-  scratchPanel: HTMLElement;
   inspector: HTMLElement;
   laneInspector: HTMLElement;
   onSynthVisible: () => void;       // canvases need a redraw once measurable
@@ -49,7 +48,7 @@ export interface Layout {
 
 const MODES: Array<{ id: ModeId; label: string; helpText: string }> = [
   { id: "drums", label: "DRUMS", helpText: "Program the eight drum lanes on the step grid." },
-  { id: "pads", label: "PADS", helpText: "Perform on the 16 pads, edit the selected pad, chop breaks and scratch." },
+  { id: "pads", label: "PADS", helpText: "Perform on the 16 pads, edit the selected pad and chop breaks — the MPC heart of the studio." },
   { id: "synth", label: "SYNTH", helpText: "The VV-1: piano roll or patch editor above always-playable keys." },
   { id: "song", label: "SONG", helpText: "The project home — launch clips, build the arrangement lanes, load and save songs." },
   { id: "dj", label: "DJ", helpText: "Mix local audio across two decks with cues, loops, EQ, sync and recording." },
@@ -99,12 +98,10 @@ export function buildLayout(p: LayoutPanels): Layout {
   const performBtn = btn("Perform", "wa-subtab active");
   const stepsBtn = btn("Steps", "wa-subtab");
   const chopBtn = btn("Chop", "wa-subtab");
-  const scratchBtn = btn("Scratch", "wa-subtab");
   const editPadBtn = btn("Edit pad", "wa-subtab wa-editpad-toggle");
   help(performBtn, "The 4×4 pad deck for playing and recording.");
   help(stepsBtn, "The per-pad step lane for drawing and editing events.");
   help(chopBtn, "Load or record a break and slice it across the pads.");
-  help(scratchBtn, "Drag the vinyl to scratch the selected pad's sample over the beat.");
   help(editPadBtn, "Show or hide the selected-pad editor.");
   let padsView: "perform" | "steps" = "perform";
   const paintPadsView = () => {
@@ -119,14 +116,14 @@ export function buildLayout(p: LayoutPanels): Layout {
     const open = padsPage.classList.toggle("show-inspector");
     editPadBtn.textContent = open ? "Close pad" : "Edit pad";
   });
-  padsBar.append(performBtn, stepsBtn, chopBtn, scratchBtn, editPadBtn);
+  padsBar.append(performBtn, stepsBtn, chopBtn, editPadBtn);
   padsMain.append(padsBar, p.mpcPanel, p.padSeqPanel);
   padsPage.append(padsMain, p.inspector);
   paintPadsView();
+  // Scratch retired (Vish, 2026-08-16): the DJ decks already scratch, and the
+  // studio master can now be rendered onto a deck — see dj.ts LOAD STUDIO MIX.
   const chopOverlay = makeOverlay("CHOP — SAMPLE CAPTURE", p.chop);
-  const scratchOverlay = makeOverlay("SCRATCH PAD", p.scratchPanel);
   chopBtn.addEventListener("click", chopOverlay.open);
-  scratchBtn.addEventListener("click", scratchOverlay.open);
 
   // Side toolbar: performance essentials up front, pattern tools behind ⋯
   // (queried rather than passed — padsui owns the column, layout only folds it)
@@ -270,10 +267,12 @@ export function buildLayout(p: LayoutPanels): Layout {
   const primaryNav = el("div", "wa-primary-nav wa-primary-nav-flat");
   modeBar.append(primaryNav);
 
-  let activeMode = (localStorage.getItem("vv_studio_mode") as ModeId) || "song";
-  if ((activeMode as string) === "keys") activeMode = "synth";   // pre-D1 saved mode
-  if (!MODES.some((m) => m.id === activeMode)) activeMode = "song";
+  // MPC focus (Vish, 2026-08-16): the studio always opens on the PADS deck —
+  // an instrument under your fingers, not a project manager. Mode is no
+  // longer persisted across visits.
+  let activeMode: ModeId = "pads";
   localStorage.removeItem("vv_studio_workspace");                // retired layer (S2)
+  localStorage.removeItem("vv_studio_mode");                     // retired (MPC boot)
   let lastEditMode: ModeId = (["drums", "pads", "synth"] as ModeId[]).includes(activeMode) ? activeMode : "drums";
   const modeButtons = new Map<ModeId, HTMLButtonElement>();
 
@@ -291,7 +290,6 @@ export function buildLayout(p: LayoutPanels): Layout {
     orb.setActive(next === "synth" && !orb.canvas.hidden);
     mixOrb.setActive(next === "mix");
     p.onModeChange(MODES.find((m) => m.id === next)!.label);
-    localStorage.setItem("vv_studio_mode", next);
   }
 
   ([

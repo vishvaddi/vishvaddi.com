@@ -32,7 +32,6 @@ import {
 import { initTooltips } from "./tooltip";
 import { buildKeys, highlightKey } from "./keys";
 import { buildProjectExport } from "./render";
-import { buildScratchpad } from "./scratch";
 import { buildLaneInspector } from "./laneui";
 import { buildSession, factorySong, blankProject } from "./session";
 import { buildMixer } from "./mixerui";
@@ -250,7 +249,7 @@ export async function initStudio(): Promise<void> {
   const { mpcPanel, padSeqPanel, padButtons, paintMpcPads, paintEventLane, triggerPerformancePad, padGrid, eventLane, selectedPadLabel, selectedSampleEditor } = buildPads({ renderBuffer });
 
   // ── Chop / sample capture ── (chopui.ts — Phase 0 split)
-  const { chop, getChopBuffer, waveform } = buildChop({ paintMpcPads, paintEventLane });
+  const { chop, waveform } = buildChop({ paintMpcPads, paintEventLane });
 
   // ── Synth: VV-1 wavetable ── (synthui.ts — Phase 0 split)
   const synth = buildSynth();
@@ -294,15 +293,13 @@ export async function initStudio(): Promise<void> {
   inspector.append(el("div", "wa-inspector-title", "SELECTED PAD"), selectedPadLabel, selectedSampleEditor);
   const laneInspector = el("aside", "wa-inspector wa-lane-aside");
   laneInspector.append(laneInsp.panel);
-  // ── Vinyl scratchpad ── (scratch.ts — Phase 0 split)
-  const scratchPanel = buildScratchpad(getChopBuffer);
-  const dj = buildDj();
+  const dj = buildDj({ renderStudioMix: (mode) => renderBuffer(mode) });
 
   const layout = buildLayout({
     beat, mpcPanel, padSeqPanel, padGrid, pianoRoll, synthKeys,
     keysHeader: synth.keysHeader, synthPanel, xyPanel: synth.xyPanel, scope: synth.scope, chordPanel: synth.chordPanel,
     sessionGrid, launchStatus, song, djPanel: dj.root, mixer: mixer.root, devicePanel,
-    chop, scratchPanel, inspector, laneInspector,
+    chop, inspector, laneInspector,
     onSynthVisible: () => synth.waveRedraws().forEach((fn) => fn()),
     onModeChange: (label) => { lcdMode.textContent = label; },
     overlayContext: () => `for ${selectedPadLabel.textContent || "the selected pad"} · scene ${SCENE_LABELS[clip.sel]}`,

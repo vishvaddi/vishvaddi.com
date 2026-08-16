@@ -393,6 +393,8 @@
 .wa-selected-sample .wa-slider-row,
 .wa-event-editor .wa-slider-row { margin: 7px 0; }
 .wa-event-grid { display: flex; flex-direction: column; gap: 4px; min-width: 680px; margin: 8px 0; }
+/* Touch scrolls the lane; taps toggle. Painting by drag stays mouse/pen-only. */
+.wa-event-cell { touch-action: pan-x pan-y; }
 .wa-event-cell { height: 26px; }
 .wa-event-row-label { width: 84px; flex: 0 0 84px; font-size: 10px; }
 .wa-row.selected .wa-event-row-label { color: var(--wa-accent); border-color: var(--wa-accent-dim); }
