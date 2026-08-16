@@ -18,6 +18,15 @@ const VIEWPORTS = [
 // than being padded with furniture it does not need.
 const INK_FLOOR = { MIX: 42 }
 const MAX_TRAILING = 40
+const modeRoute = {
+  DRUMS: ['edit', 'drums'], PADS: ['play', 'pads'], SYNTH: ['edit', 'synth'],
+  CLIPS: ['arrange', null], MIX: ['mix', null],
+}
+const openMode = async (page, mode) => {
+  const [workspace, tool] = modeRoute[mode]
+  await page.locator(`[data-workspace="${workspace}"].wa-modekey`).click()
+  if (tool) await page.locator(`[data-workspace="${workspace}"][data-mode="${tool}"]`).click()
+}
 
 const results = []
 let failed = 0
@@ -38,7 +47,7 @@ try {
     await page.waitForSelector('.wa-transport', { timeout: 20000 })
 
     for (const mode of MODES) {
-      await page.locator('.wa-modekey', { hasText: mode }).click()
+      await openMode(page, mode)
       await page.waitForTimeout(400)
       const m = await page.evaluate(() => {
         const VW = innerWidth, VH = innerHeight, G = 12

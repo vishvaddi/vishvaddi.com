@@ -10,6 +10,19 @@ const viewports = [
 ]
 let failures = 0
 const lines = []
+const modeRoute = {
+  DRUMS: ['edit', 'drums', '.wa-page-drums'],
+  PADS: ['play', 'pads', '.wa-page-pads'],
+  SYNTH: ['edit', 'synth', '.wa-page-synth'],
+  CLIPS: ['arrange', null, '.wa-page-song'],
+  DJ: ['play', 'dj', '.wa-page-dj'],
+  MIX: ['mix', null, '.wa-page-mix'],
+}
+const openMode = async (page, mode) => {
+  const [workspace, tool] = modeRoute[mode]
+  await page.locator(`[data-workspace="${workspace}"].wa-modekey`).click()
+  if (tool) await page.locator(`[data-workspace="${workspace}"][data-mode="${tool}"]`).click()
+}
 const check = (name, value, detail = '') => {
   lines.push(`  ${value ? '✓' : '✗'} ${name}${detail ? ` — ${detail}` : ''}`)
   if (!value) failures++
@@ -27,7 +40,8 @@ for (const [name, width, height] of viewports) {
     await page.evaluate(() => {
       localStorage.removeItem('vv_studio_v2')
       localStorage.setItem('vv_studio_tutorial_seen', '1')
-      localStorage.setItem('vv_studio_mode', 'drums')
+      localStorage.removeItem('vv_studio_mode')
+      localStorage.removeItem('vv_studio_workspace')
     })
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.waitForSelector('.wa-modebar', { timeout: 15000 })
@@ -39,10 +53,12 @@ for (const [name, width, height] of viewports) {
     }))
     check(`${name}: no document horizontal overflow`, geometry.docWidth <= geometry.clientWidth + 1, `${geometry.docWidth}/${geometry.clientWidth}`)
     check(`${name}: workstation fills viewport`, Math.abs(geometry.winHeight - geometry.viewportHeight) <= 2, `${geometry.winHeight}/${geometry.viewportHeight}`)
+    check(`${name}: Arrange is the project home`, await page.locator('.wa-page-song').isVisible())
+    check(`${name}: four primary workspaces`, await page.locator('.wa-primary-nav .wa-modekey').count() === 4)
 
     for (const mode of ['DRUMS', 'PADS', 'SYNTH', 'CLIPS', 'DJ', 'MIX']) {
-      await page.locator('.wa-modekey', { hasText: mode }).click()
-      check(`${name}: ${mode} opens`, await page.locator('.wa-modekey', { hasText: mode }).evaluate((node) => node.classList.contains('active')))
+      await openMode(page, mode)
+      check(`${name}: ${mode} opens`, await page.locator(modeRoute[mode][2]).isVisible())
       if ((name === 'desktop' || name === 'laptop') && mode === 'PADS') {
         const fill = await page.evaluate(() => {
           const active = document.querySelector('.wa-page:not([hidden])')?.getBoundingClientRect()
@@ -93,14 +109,15 @@ for (const [name, width, height] of viewports) {
           const platter = document.querySelector('.wa-dj-platter')?.getBoundingClientRect()
           const quartz = document.querySelector('.wa-dj-quartz')?.getBoundingClientRect()
           const pitch = document.querySelector('.wa-dj-pitch-fader input')?.getBoundingClientRect()
-          const host = document.querySelector('.wa-dj-decks')?.getBoundingClientRect()
+          const hostEl = document.querySelector('.wa-dj-decks')
+          const host = hostEl?.getBoundingClientRect()
           const library = document.querySelector('.wa-dj-library')?.getBoundingClientRect()
           const mixer = document.querySelector('.wa-dj-mixer')
           const mixerRect = mixer?.getBoundingClientRect()
           const recordStatus = document.querySelector('.wa-dj-record-status')?.getBoundingClientRect()
           const performanceButtons = [...document.querySelectorAll('.wa-dj-deck .wa-dj-performance .wa-btn')].map((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height, clipped: node.scrollWidth > node.clientWidth + 1 }))
           const quartzClear = !platter || !quartz || quartz.bottom <= platter.top || quartz.right <= platter.left || quartz.left >= platter.right
-          return { widths: decks.map((deck) => Math.round(deck.width)), tops: decks.map((deck) => Math.round(deck.top)), crossfader: crossfader?.width ?? 0, platter: platter?.width ?? 0, quartzClear, quartzGap: platter && quartz ? platter.top - quartz.bottom : 0, pitchWidth: pitch?.width ?? 0, pitchHeight: pitch?.height ?? 0, hostBottom: host?.bottom ?? 0, libraryTop: library?.top ?? 0, performanceButtons, mixerScroll: mixer ? mixer.scrollHeight - mixer.clientHeight : 999, mixerBottom: mixerRect?.bottom ?? 0, recordBottom: recordStatus?.bottom ?? 999 }
+          return { widths: decks.map((deck) => Math.round(deck.width)), tops: decks.map((deck) => Math.round(deck.top)), lefts: decks.map((deck) => Math.round(deck.left)), deckHostScroll: hostEl ? hostEl.scrollWidth - hostEl.clientWidth : 0, crossfader: crossfader?.width ?? 0, platter: platter?.width ?? 0, quartzClear, quartzGap: platter && quartz ? platter.top - quartz.bottom : 0, pitchWidth: pitch?.width ?? 0, pitchHeight: pitch?.height ?? 0, hostBottom: host?.bottom ?? 0, libraryTop: library?.top ?? 0, performanceButtons, mixerScroll: mixer ? mixer.scrollHeight - mixer.clientHeight : 999, mixerBottom: mixerRect?.bottom ?? 0, recordBottom: recordStatus?.bottom ?? 999 }
         })
         check(`${name}: DJ exposes two usable decks`, djLayout.widths.length === 2 && djLayout.widths.every((width) => width >= (name === 'desktop' || name === 'laptop' ? 260 : 320)), djLayout.widths.join('/'))
         check(`${name}: DJ crossfader is usable`, djLayout.crossfader >= 90, `${Math.round(djLayout.crossfader)}px`)
@@ -110,16 +127,16 @@ for (const [name, width, height] of viewports) {
         check(`${name}: DJ performance buttons do not squash`, djLayout.performanceButtons.every((button) => button.width >= 28 && button.height >= 30 && !button.clipped), `${Math.round(Math.min(...djLayout.performanceButtons.map((button) => button.width)))}×${Math.round(Math.min(...djLayout.performanceButtons.map((button) => button.height)))}px min`)
         check(`${name}: DJ mixer needs no internal scroll`, djLayout.mixerScroll <= 1 && djLayout.recordBottom <= djLayout.mixerBottom + 1, `${Math.round(djLayout.mixerScroll)}px overflow`)
         if (name === 'phone' || name === 'landscape') {
-          check(`${name}: DJ decks stack instead of squash`, djLayout.tops[1] > djLayout.tops[0] + 400, djLayout.tops.join('/'))
-          check(`${name}: DJ library follows the decks`, djLayout.libraryTop >= djLayout.hostBottom - 1, `${Math.round(djLayout.hostBottom)}/${Math.round(djLayout.libraryTop)}`)
+          check(`${name}: DJ decks swipe horizontally`, Math.abs(djLayout.tops[1] - djLayout.tops[0]) <= 2 && djLayout.lefts[1] > djLayout.lefts[0] + 250 && djLayout.deckHostScroll > 0, `${djLayout.lefts.join('/')} · scroll ${Math.round(djLayout.deckHostScroll)}px`)
         }
       }
     }
 
-    await page.locator('.wa-modekey', { hasText: 'SYNTH' }).click()
+    await openMode(page, 'SYNTH')
     check(`${name}: three synth lanes`, await page.locator('.wa-roll-lane').count() === 3)
     await page.locator('.wa-roll-lane', { hasText: 'Lead' }).click()
     check(`${name}: lead lane activates`, await page.locator('.wa-roll-lane', { hasText: 'Lead' }).evaluate((node) => node.classList.contains('active')))
+    if (name === 'phone' || name === 'landscape') await page.locator('.wa-page-synth .wa-subtab', { hasText: 'Tools' }).click()
     await page.locator('.wa-field-modes button', { hasText: 'Drift' }).click()
     const before = await page.locator('.wa-xy-readout').textContent()
     await page.keyboard.down('KeyD')
@@ -128,7 +145,7 @@ for (const [name, width, height] of viewports) {
     const after = await page.locator('.wa-xy-readout').textContent()
     check(`${name}: signal garden responds to keyboard`, before !== after, `${before} → ${after}`)
 
-    await page.locator('.wa-modekey', { hasText: 'CLIPS' }).click()
+    await openMode(page, 'CLIPS')
     // the first-run demo seeds an arrangement, so these assert a DELTA rather
     // than assuming the chain starts empty
     const blocksBefore = await page.locator('.wa-chain-block').count()
@@ -139,8 +156,12 @@ for (const [name, width, height] of viewports) {
     check(`${name}: automation ramp added`, await page.locator('.wa-ramp-row').count() === rampsBefore + 1)
 
     if (name === 'phone' || name === 'landscape') {
-      const targets = await page.locator('.wa-modekey').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height))
+      const targets = await page.locator('.wa-primary-nav .wa-modekey').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height))
       check(`${name}: mode targets are touch-sized`, targets.every((size) => size >= 44), targets.join(','))
+      const transport = await page.locator('.wa-transport').evaluate((node) => ({ scroll: node.scrollWidth, client: node.clientWidth }))
+      check(`${name}: primary transport does not scroll`, transport.scroll <= transport.client + 1, `${transport.scroll}/${transport.client}`)
+      await page.locator('.wa-transport-more').click()
+      check(`${name}: secondary transport is disclosed`, await page.locator('.wa-transport-timing').isVisible() && await page.locator('.wa-transport-actions').isVisible())
       check(`${name}: CLIPS exposes scene range`, /Scenes \d+–\d+ of 16/.test((await page.locator('.wa-scene-position').textContent()) ?? ''))
       await page.locator('.wa-transport button', { hasText: '? Tutorial' }).click()
       const tutorialTop = await page.evaluate(() => {
@@ -150,9 +171,10 @@ for (const [name, width, height] of viewports) {
       })
       check(`${name}: tutorial card stays above its target`, tutorialTop)
       await page.locator('.wa-tutorial-card button', { hasText: 'Close' }).click()
+      await page.locator('.wa-transport-more').click()
     }
     await page.screenshot({ path: `C:/tmp/studio-${name}.png`, fullPage: false })
-    await page.locator('.wa-modekey', { hasText: 'DJ' }).click()
+    await openMode(page, 'DJ')
     await page.screenshot({ path: `C:/tmp/studio-dj-${name}.png`, fullPage: false })
     check(`${name}: console clean`, errors.length === 0, errors.slice(0, 2).join(' | '))
   } catch (error) {

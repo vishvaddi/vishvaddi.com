@@ -7,6 +7,7 @@ import { el, btn, help } from "./helpers";
 import { buildOrb } from "./orb";
 
 export type ModeId = "drums" | "pads" | "synth" | "song" | "dj" | "mix";
+export type WorkspaceId = "arrange" | "edit" | "mix" | "play";
 
 export interface LayoutPanels {
   beat: HTMLElement;
@@ -38,9 +39,9 @@ export interface Layout {
   modeBar: HTMLElement;
   workarea: HTMLElement;
   getActiveMode: () => ModeId;
+  selectMode: (mode: ModeId) => void;
   /** tutorial nav proxies — see navButtons construction at the bottom */
   navButtons: HTMLElement[];
-  modeKeyBtns: HTMLElement[];
 }
 
 const MODES: Array<{ id: ModeId; label: string; helpText: string }> = [
@@ -79,7 +80,10 @@ export function buildLayout(p: LayoutPanels): Layout {
   const drumsBar = el("div", "wa-subtabs");
   const editLaneBtn = btn("Edit drum", "wa-subtab wa-editpad-toggle");
   help(editLaneBtn, "Show or hide the selected drum's sampler.");
-  editLaneBtn.addEventListener("click", () => drumsPage.classList.toggle("show-inspector"));
+  editLaneBtn.addEventListener("click", () => {
+    const open = drumsPage.classList.toggle("show-inspector");
+    editLaneBtn.textContent = open ? "Close drum" : "Edit drum";
+  });
   drumsBar.append(editLaneBtn);
   drumsMain.append(drumsBar, p.beat);
   drumsPage.append(drumsMain, p.laneInspector);
@@ -107,7 +111,10 @@ export function buildLayout(p: LayoutPanels): Layout {
   };
   performBtn.addEventListener("click", () => { padsView = "perform"; paintPadsView(); });
   stepsBtn.addEventListener("click", () => { padsView = "steps"; paintPadsView(); });
-  editPadBtn.addEventListener("click", () => padsPage.classList.toggle("show-inspector"));
+  editPadBtn.addEventListener("click", () => {
+    const open = padsPage.classList.toggle("show-inspector");
+    editPadBtn.textContent = open ? "Close pad" : "Edit pad";
+  });
   padsBar.append(performBtn, stepsBtn, chopBtn, scratchBtn, editPadBtn);
   padsMain.append(padsBar, p.mpcPanel, p.padSeqPanel);
   padsPage.append(padsMain, p.inspector);
@@ -140,9 +147,11 @@ export function buildLayout(p: LayoutPanels): Layout {
   const synthBar = el("div", "wa-subtabs");
   const rollTab = btn("Roll", "wa-subtab");
   const patchTab = btn("Patch", "wa-subtab");
+  const toolsTab = btn("Tools", "wa-subtab");
   help(rollTab, "The piano roll — sequence VV-1 notes over the keys.");
   help(patchTab, "The patch editor — oscillators, filter, envelopes, LFOs, mod matrix.");
-  synthBar.append(rollTab, patchTab);
+  help(toolsTab, "Performance tools — signal garden, scope and chord pads.");
+  synthBar.append(rollTab, patchTab, toolsTab);
   const soundHost = el("div", "wa-sound-host");
   soundHost.append(p.synthPanel);
   p.synthPanel.hidden = false;
@@ -173,22 +182,55 @@ export function buildLayout(p: LayoutPanels): Layout {
   synthSide.append(p.xyPanel, scopeWrap, p.chordPanel);
   synthMain.append(synthSide, synthViewHost);
   soundPage.append(synthBar, synthMain, p.keysHeader, p.synthKeys);
-  let synthView: "roll" | "patch" = localStorage.getItem("vv_studio_synthview") === "patch" ? "patch" : "roll";
+  let synthView: "roll" | "patch" | "tools" = localStorage.getItem("vv_studio_synthview") === "patch" ? "patch" : localStorage.getItem("vv_studio_synthview") === "tools" ? "tools" : "roll";
   const paintSynthView = () => {
     rollTab.classList.toggle("active", synthView === "roll");
     patchTab.classList.toggle("active", synthView === "patch");
+    toolsTab.classList.toggle("active", synthView === "tools");
     p.pianoRoll.style.display = synthView === "roll" ? "" : "none";
     soundHost.style.display = synthView === "patch" ? "" : "none";
+    soundPage.dataset.view = synthView;
     if (!soundPage.hidden) p.onSynthVisible();
     localStorage.setItem("vv_studio_synthview", synthView);
   };
   rollTab.addEventListener("click", () => { synthView = "roll"; paintSynthView(); });
   patchTab.addEventListener("click", () => { synthView = "patch"; paintSynthView(); });
+  toolsTab.addEventListener("click", () => { synthView = "tools"; paintSynthView(); });
   paintSynthView();
 
-  // ── ARRANGE ── session.ts owns the panel order (scenes fold + timeline)
+  // ── ARRANGE ── the project home keeps tracks visible beside the session
+  // and song tools. Selecting a track moves into its focused editor.
   const songPage = el("div", "wa-page wa-page-song");
-  songPage.append(p.song);
+  const arrangeShell = el("div", "wa-arrange-shell");
+  const trackRail = el("aside", "wa-track-rail");
+  trackRail.append(el("div", "wa-track-rail-title", "TRACKS"));
+  const trackButtons: HTMLButtonElement[] = [];
+  ([
+    ["drums", "DRUMS", "8 lanes", "#dd8746"],
+    ["pads", "PADS", "16 pads", "#53c8b5"],
+    ["synth", "SYNTH", "3 lanes", "#7297ef"],
+  ] as const).forEach(([mode, label, detail, colour]) => {
+    const button = btn("", "wa-track-button") as HTMLButtonElement;
+    button.classList.remove("wa-btn");
+    button.dataset.mode = mode;
+    button.style.setProperty("--track-colour", colour);
+    button.append(el("span", "wa-track-colour"), el("span", "wa-track-name", label), el("span", "wa-track-detail", detail));
+    button.addEventListener("click", () => setMode(mode, "edit"));
+    help(button, `Open the ${label.toLowerCase()} track editor.`);
+    trackButtons.push(button); trackRail.append(button);
+  });
+  const arrangeMain = el("div", "wa-arrange-main");
+  arrangeMain.append(p.song);
+  const arrangeInspector = el("aside", "wa-arrange-inspector");
+  arrangeInspector.append(
+    el("div", "wa-inspector-title", "PROJECT"),
+    el("p", "wa-arrange-copy", "Launch clips, build the song, then open a track to edit its notes or sound."),
+  );
+  const editSelected = btn("EDIT SELECTED", "wa-btn-sm wa-arrange-edit");
+  editSelected.addEventListener("click", () => setMode(lastEditMode, "edit"));
+  arrangeInspector.append(editSelected);
+  arrangeShell.append(trackRail, arrangeMain, arrangeInspector);
+  songPage.append(arrangeShell);
 
   // ── DJ ── two local-file decks. Provider embeds deliberately stay outside
   // this audio graph: their public APIs do not license extraction or mixing.
@@ -213,35 +255,82 @@ export function buildLayout(p: LayoutPanels): Layout {
   };
   workarea.append(drumsPage, padsPage, soundPage, songPage, djPage, mixPage);
 
-  // ── chassis mode keys ──
-  const modeBar = el("div", "wa-modebar");
-  const modeKeyBtns: HTMLElement[] = [];
-  let activeMode = (localStorage.getItem("vv_studio_mode") as ModeId) || "drums";
-  if ((activeMode as string) === "keys") activeMode = "synth";   // pre-D1 saved mode
-  if (!MODES.some((m) => m.id === activeMode)) activeMode = "drums";
+  // ── Cubasis-style workspace navigation ──
+  // Four stable destinations replace six equally weighted screens. Edit and
+  // Play then expose only the tools relevant to that task.
+  const modeBar = el("nav", "wa-modebar");
+  modeBar.setAttribute("aria-label", "Studio workspaces");
+  const primaryNav = el("div", "wa-primary-nav");
+  const contextNav = el("div", "wa-context-nav");
+  const editNav = el("div", "wa-context-group wa-context-edit");
+  const playNav = el("div", "wa-context-group wa-context-play");
+  contextNav.append(editNav, playNav);
+  modeBar.append(primaryNav, contextNav);
 
-  function setMode(next: ModeId): void {
+  let activeMode = (localStorage.getItem("vv_studio_mode") as ModeId) || "song";
+  if ((activeMode as string) === "keys") activeMode = "synth";   // pre-D1 saved mode
+  if (!MODES.some((m) => m.id === activeMode)) activeMode = "song";
+  let activeWorkspace = (localStorage.getItem("vv_studio_workspace") as WorkspaceId) ||
+    (activeMode === "song" ? "arrange" : activeMode === "mix" ? "mix" : activeMode === "dj" ? "play" : "edit");
+  let lastEditMode: ModeId = (["drums", "pads", "synth"] as ModeId[]).includes(activeMode) ? activeMode : "drums";
+  let lastPlayMode: ModeId = (["pads", "synth", "dj"] as ModeId[]).includes(activeMode) ? activeMode : "pads";
+  const primaryButtons = new Map<WorkspaceId, HTMLButtonElement>();
+  const contextualButtons: HTMLButtonElement[] = [];
+
+  function setMode(next: ModeId, workspace?: WorkspaceId): void {
     activeMode = next;
+    activeWorkspace = workspace || (next === "song" ? "arrange" : next === "mix" ? "mix" : next === "dj" ? "play" : "edit");
+    if (activeWorkspace === "edit" && (["drums", "pads", "synth"] as ModeId[]).includes(next)) lastEditMode = next;
+    if (activeWorkspace === "play" && (["pads", "synth", "dj"] as ModeId[]).includes(next)) lastPlayMode = next;
     closeOverlays();
-    modeKeyBtns.forEach((b, i) => b.classList.toggle("active", MODES[i].id === next));
+    primaryButtons.forEach((button, id) => button.classList.toggle("active", id === activeWorkspace));
+    contextualButtons.forEach((button) => button.classList.toggle("active", button.dataset.mode === next && button.dataset.workspace === activeWorkspace));
+    modeBar.dataset.workspace = activeWorkspace;
     (Object.keys(pages) as ModeId[]).forEach((id) => { pages[id].hidden = id !== next; });
+    trackButtons.forEach((button) => button.classList.toggle("active", button.dataset.mode === lastEditMode));
+    if (next === "pads" && activeWorkspace === "play") { padsView = "perform"; padsPage.classList.remove("show-inspector"); editPadBtn.textContent = "Edit pad"; paintPadsView(); }
+    if (next === "pads" && activeWorkspace === "edit") { padsView = "steps"; padsPage.classList.add("show-inspector"); editPadBtn.textContent = "Close pad"; paintPadsView(); }
     if (next === "synth") p.onSynthVisible();
     orb.setActive(next === "synth" && !orb.canvas.hidden);
     mixOrb.setActive(next === "mix");
-    p.onModeChange(MODES.find((m) => m.id === next)!.label);
+    const modeLabel = MODES.find((m) => m.id === next)!.label;
+    p.onModeChange(`${activeWorkspace.toUpperCase()} · ${modeLabel}`);
     localStorage.setItem("vv_studio_mode", next);
+    localStorage.setItem("vv_studio_workspace", activeWorkspace);
   }
 
-  MODES.forEach((m) => {
-    const b = btn("", "wa-modekey");
-    b.classList.remove("wa-btn");
-    b.append(el("span", "wa-modekey-led"), document.createTextNode(m.label));
-    help(b, m.helpText);
-    b.addEventListener("click", () => setMode(m.id));
-    modeKeyBtns.push(b);
-    modeBar.append(b);
+  ([
+    ["arrange", "ARRANGE", "▤"],
+    ["edit", "EDIT", "✎"],
+    ["mix", "MIX", "≡"],
+    ["play", "PLAY", "◆"],
+  ] as const).forEach(([id, label, icon]) => {
+    const button = btn("", "wa-modekey") as HTMLButtonElement;
+    button.classList.remove("wa-btn"); button.dataset.workspace = id;
+    button.append(el("span", "wa-mode-icon", icon), el("span", "wa-mode-label", label));
+    button.addEventListener("click", () => {
+      if (id === "arrange") setMode("song", id);
+      else if (id === "mix") setMode("mix", id);
+      else if (id === "edit") setMode(lastEditMode, id);
+      else setMode(lastPlayMode, id);
+    });
+    help(button, `${label[0]}${label.slice(1).toLowerCase()} workspace.`);
+    primaryButtons.set(id, button); primaryNav.append(button);
   });
-  setMode(activeMode);
+
+  const addContextButton = (host: HTMLElement, workspace: WorkspaceId, mode: ModeId, label: string) => {
+    const button = btn(label, "wa-contextkey") as HTMLButtonElement;
+    button.classList.remove("wa-btn"); button.dataset.workspace = workspace; button.dataset.mode = mode;
+    button.addEventListener("click", () => setMode(mode, workspace));
+    contextualButtons.push(button); host.append(button);
+  };
+  addContextButton(editNav, "edit", "drums", "DRUMS");
+  addContextButton(editNav, "edit", "pads", "PADS");
+  addContextButton(editNav, "edit", "synth", "SYNTH");
+  addContextButton(playNav, "play", "pads", "PADS");
+  addContextButton(playNav, "play", "synth", "KEYS");
+  addContextButton(playNav, "play", "dj", "DJ");
+  setMode(activeMode, activeWorkspace);
 
   // tutorial nav proxies — composite actions per tour stop:
   // 0 pads/perform+inspector · 1 pads/chop · 2 pads/steps · 3 synth/roll · 4 song · 5 mix · 6 synth/patch · 7 dj
@@ -262,5 +351,5 @@ export function buildLayout(p: LayoutPanels): Layout {
     nav(() => setMode("dj")),
   ];
 
-  return { modeBar, workarea, getActiveMode: () => activeMode, navButtons, modeKeyBtns };
+  return { modeBar, workarea, getActiveMode: () => activeMode, selectMode: (mode) => setMode(mode), navButtons };
 }

@@ -21,8 +21,8 @@ export interface KeyboardDeps {
   redoBtn: HTMLElement;
   /** transport EXPORT key — Ctrl+S opens its modal */
   exportBtn?: HTMLElement;
-  /** chassis mode keys, in order — 1-6 select them */
-  modeKeyBtns?: HTMLElement[];
+  /** legacy Alt+1–6 route directly to the corresponding focused tool */
+  selectMode?: (mode: ModeId) => void;
 }
 
 export function bindKeyboard(deps: KeyboardDeps): void {
@@ -43,8 +43,8 @@ export function bindKeyboard(deps: KeyboardDeps): void {
     // DRUMS/PADS and 2/3/5 are note keys in SYNTH, so Alt is what keeps mode
     // switching from stealing them.
     if (ev.altKey && !ev.shiftKey && /^[1-6]$/.test(ev.key)) {
-      const target = deps.modeKeyBtns?.[Number(ev.key) - 1];
-      if (target) { ev.preventDefault(); target.click(); }
+      const mode = (["drums", "pads", "synth", "song", "dj", "mix"] as ModeId[])[Number(ev.key) - 1];
+      if (mode && deps.selectMode) { ev.preventDefault(); deps.selectMode(mode); }
     }
   });
 

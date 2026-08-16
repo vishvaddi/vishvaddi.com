@@ -16,6 +16,16 @@ const testWav = (() => {
 })()
 const results = []
 let failed = 0
+const modeRoute = {
+  DRUMS: ['edit', 'drums'], PADS: ['play', 'pads'], SYNTH: ['edit', 'synth'],
+  CLIPS: ['arrange', null], DJ: ['play', 'dj'], MIX: ['mix', null],
+}
+
+async function openMode(page, mode) {
+  const [workspace, tool] = modeRoute[mode]
+  await page.locator(`[data-workspace="${workspace}"].wa-modekey`).click()
+  if (tool) await page.locator(`[data-workspace="${workspace}"][data-mode="${tool}"]`).click()
+}
 
 function check(name, ok, detail = '') {
   results.push(`${ok ? '  ✓' : '  ✗'} ${name}${detail ? ` — ${detail}` : ''}`)
@@ -56,7 +66,8 @@ try {
   check('first run: tour does not block the UI', !cold.tourOpen)
   check('first run: non-modal hint is shown', cold.hint)
   check('first run: demo has its real title', cold.title === 'MIDNIGHT ACID', String(cold.title))
-  await page.locator('.wa-modekey', { hasText: 'SYNTH' }).click({ timeout: 4000 })
+  check('first run: arranger is the project home', await page.locator('.wa-page-song').isVisible())
+  await openMode(page, 'SYNTH')
   check('first run: controls are usable immediately', true)
 
   await page.evaluate(() => {
@@ -70,7 +81,7 @@ try {
   check('boot: LCD shows BPM + STOP', /BPM/.test(lcd ?? '') && /STOP/.test(lcd ?? ''), (lcd ?? '').slice(0, 30))
 
   // ── toggle a drum step ──
-  await page.click('.wa-modekey:has-text("DRUMS")')
+  await openMode(page, 'DRUMS')
   const cell = page.locator('.wa-grid .wa-row .wa-cell').nth(0)
   const wasOn = await cell.evaluate((n) => n.classList.contains('on'))
   await cell.click()
@@ -115,16 +126,16 @@ try {
   await page.waitForTimeout(200)
 
   // ── workflow: pattern length is settable where the pattern is edited ──
-  await page.locator('.wa-modekey', { hasText: 'DRUMS' }).click()
+  await openMode(page, 'DRUMS')
   await page.waitForTimeout(200)
   check('workflow: pattern length lives on DRUMS', await page.locator('.wa-page-drums select[aria-label="Pattern length"]').count() === 1)
   await page.selectOption('.wa-page-drums select[aria-label="Pattern length"]', '8')
-  await page.locator('.wa-modekey', { hasText: 'SYNTH' }).click()
+  await openMode(page, 'SYNTH')
   await page.waitForTimeout(250)
   check('workflow: the roll agrees with it', await page.inputValue('.wa-page-synth select[aria-label="Pattern length"]') === '8')
 
   // ── workflow: the arrangement is undoable ──
-  await page.locator('.wa-modekey', { hasText: 'CLIPS' }).click()
+  await openMode(page, 'CLIPS')
   await page.waitForTimeout(250)
   const chainBefore = await page.locator('.wa-chain-block').count()
   await page.locator('.wa-composer-head button', { hasText: 'Add selected' }).click()
@@ -151,7 +162,7 @@ try {
   check('reach: drum cells and keys are named', !!named.cell && !!named.key, `${named.cell} / ${named.key}`)
 
   // ── mixer: one persisted master state drives both controls ──
-  await page.locator('.wa-modekey', { hasText: 'MIX' }).click()
+  await openMode(page, 'MIX')
   await page.locator('.wa-ch-master .wa-fader').evaluate((node) => {
     node.value = '0.37'; node.dispatchEvent(new Event('input', { bubbles: true }))
   })
@@ -164,7 +175,7 @@ try {
   check('mixer: controls stay synchronised and persist', masterSync.knob === '0.37' && masterSync.saved === 0.37 && masterSync.muted === true, JSON.stringify(masterSync))
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.wa-transport', { timeout: 15000 })
-  await page.locator('.wa-modekey', { hasText: 'MIX' }).click()
+  await openMode(page, 'MIX')
   check('mixer: master level survives reload', await page.inputValue('.wa-ch-master .wa-fader') === '0.37')
   check('mixer: mute state survives reload', await page.locator('.wa-mute').first().getAttribute('aria-pressed') === 'true')
 
@@ -180,7 +191,7 @@ try {
   check('project: replacement can be undone', await page.locator('.wa-cell.on').count() > 0)
 
   // ── DJ: local file enters a real deck and cue workflow ──
-  await page.locator('.wa-modekey', { hasText: 'DJ' }).click()
+  await openMode(page, 'DJ')
   await page.locator('.wa-dj-deck-a input[type="file"]').setInputFiles({ name: 'local-test.wav', mimeType: 'audio/wav', buffer: testWav })
   await page.waitForFunction(() => document.querySelector('.wa-dj-deck-a .wa-dj-bpm')?.textContent?.includes('BPM') && !document.querySelector('.wa-dj-deck-a .wa-dj-bpm')?.textContent?.includes('ERROR'))
   check('dj: local file loads and analyses', (await page.locator('.wa-dj-deck-a .wa-dj-track-title').textContent()) === 'local-test.wav')

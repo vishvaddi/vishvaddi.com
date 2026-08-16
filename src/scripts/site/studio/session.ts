@@ -155,7 +155,7 @@ export function buildSession(): SessionView {
   // second song format.
   const composer = el("div", "wa-composer");
   const composerHead = el("div", "wa-composer-head");
-  const chain = el("div", "wa-chainstrip");
+  const chain = el("div", "wa-chainstrip wa-arrange-lanes");
   const addBtn = btn("＋ Add selected", "wa-btn-sm"), leftBtn = btn("←", "wa-btn-sm"), rightBtn = btn("→", "wa-btn-sm"), shorterBtn = btn("− Repeat", "wa-btn-sm"), longerBtn = btn("＋ Repeat", "wa-btn-sm"), deleteBtn = btn("Delete", "wa-btn-sm"), clearBtn = btn("Clear", "wa-btn-sm");
   let selectedBlock = -1;
   const canonical = (): ArrangeBlock[] => arrangement.drums;
@@ -167,12 +167,22 @@ export function buildSession(): SessionView {
   const paintChain = () => {
     chain.replaceChildren();
     if (!canonical().length) chain.append(el("span", "wa-chain-empty", "Add scenes to build an arrangement"));
-    canonical().forEach((block, index) => {
-      const item = btn(`${SCENE_LABELS[block.scene]} ×${block.bars}`, "wa-chain-block") as HTMLButtonElement;
-      item.classList.remove("wa-btn"); item.classList.toggle("active", index === selectedBlock);
-      if (block.automation?.length) item.classList.add("automated");
-      item.addEventListener("click", () => { selectedBlock = index; paintChain(); paintAutomation(); });
-      chain.append(item);
+    TRACKS.forEach((track) => {
+      const row = el("div", "wa-arrange-lane");
+      row.append(el("span", "wa-arrange-lane-name", TRACK_LABELS[track]));
+      const clips = el("div", "wa-arrange-lane-clips");
+      arrangement[track].forEach((block, index) => {
+        const item = track === "drums"
+          ? btn(`${SCENE_LABELS[block.scene]} ×${block.bars}`, "wa-chain-block")
+          : el("span", "wa-track-block", `${SCENE_LABELS[block.scene]} ×${block.bars}`);
+        item.classList.remove("wa-btn"); item.classList.toggle("active", index === selectedBlock);
+        item.style.setProperty("--block-bars", String(block.bars));
+        item.style.setProperty("--scene-color", SCENE_COLORS[block.scene]);
+        if (block.automation?.length) item.classList.add("automated");
+        if (item instanceof HTMLButtonElement) item.addEventListener("click", () => { selectedBlock = index; paintChain(); paintAutomation(); });
+        clips.append(item);
+      });
+      row.append(clips); chain.append(row);
     });
   };
   const commitChain = () => { normaliseStarts(); saveAll(); paintChain(); };

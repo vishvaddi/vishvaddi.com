@@ -117,12 +117,15 @@ export async function initStudio(): Promise<void> {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void win.requestFullscreen();
   });
-  const densityBtn = btn("COMPACT", "wa-btn-sm wa-density-btn");
-  const densities = ["compact", "comfortable"] as const;
-  let density: (typeof densities)[number] = localStorage.getItem("vv_studio_density") === "comfortable" ? "comfortable" : "compact";
+  const densityBtn = btn("SCALE 100%", "wa-btn-sm wa-density-btn");
+  const densities = ["compact", "standard", "touch"] as const;
+  const savedDensity = localStorage.getItem("vv_studio_density");
+  let density: (typeof densities)[number] = savedDensity === "compact" || savedDensity === "standard" || savedDensity === "touch"
+    ? savedDensity
+    : matchMedia("(pointer: coarse)").matches || innerWidth <= 700 ? "touch" : "standard";
   const applyDensity = (): void => {
     win.dataset.density = density;
-    densityBtn.textContent = density.toUpperCase();
+    densityBtn.textContent = density === "compact" ? "SCALE 85%" : density === "touch" ? "SCALE 115%" : "SCALE 100%";
   };
   applyDensity();
   densityBtn.addEventListener("click", () => {
@@ -130,7 +133,7 @@ export async function initStudio(): Promise<void> {
     localStorage.setItem("vv_studio_density", density);
     applyDensity();
   });
-  help(densityBtn, "Switch between a space-efficient workstation and larger, more relaxed controls. This preference is remembered.");
+  help(densityBtn, "Cycle through compact, standard and large-touch interface scales. This preference is remembered.");
   titleBar.append(homeLink, projectName, el("span", "wa-title-dots"), densityBtn, fsBtn, powerBtn, masterKnob.root);
   const lcd = el("div", "wa-lcd");
   const lcdBpm = el("span", "wa-lcd-seg", `${transport.bpm} BPM`);
@@ -189,11 +192,21 @@ export async function initStudio(): Promise<void> {
   // than a panel holding permanent space on the MIX faceplate.
   const exportBtn = btn("EXPORT", "wa-btn-sm wa-export-key");
   help(exportBtn, "Render the track to WAV, MP3 or stems, or save and open project files.");
-  transportBar.append(
-    playBtn, stopBtn, el("span", "wa-sep"), el("span", "wa-lbl", "BPM"), bpmDown, bpmInput, bpmUp, el("span", "wa-sep"),
-    swingWrap, el("span", "wa-lbl", "Grid"), gridSel, metroBtn, metroVolIn, countBtn, el("span", "wa-sep"),
-    undoBtn, redoBtn, exportBtn, tutorialBtn,
-  );
+  const transportCore = el("div", "wa-transport-core");
+  transportCore.append(playBtn, stopBtn, el("span", "wa-lbl", "BPM"), bpmDown, bpmInput, bpmUp);
+  const transportTiming = el("div", "wa-transport-timing");
+  transportTiming.append(swingWrap, el("span", "wa-lbl", "Grid"), gridSel, metroBtn, metroVolIn, countBtn);
+  const transportActions = el("div", "wa-transport-actions");
+  transportActions.append(undoBtn, redoBtn, exportBtn, tutorialBtn);
+  const transportMore = btn("MORE", "wa-btn-sm wa-transport-more");
+  transportMore.setAttribute("aria-expanded", "false");
+  transportMore.addEventListener("click", () => {
+    const open = transportBar.classList.toggle("show-tools");
+    transportMore.setAttribute("aria-expanded", String(open));
+    transportMore.textContent = open ? "CLOSE" : "MORE";
+  });
+  help(transportMore, "Show timing, history, export and help controls.");
+  transportBar.append(transportCore, transportTiming, transportActions, transportMore);
   const undoStack: HistoryState[] = [], redoStack: HistoryState[] = [];
   function checkpoint(): void {
     undoStack.push(historyState());
@@ -369,7 +382,7 @@ export async function initStudio(): Promise<void> {
   buildPlayback({ cells, rollPlayheadBar, launchStatus, lcdState, playBtn, stopBtn, getCountIn: () => countIn, isSynthRec: synth.isSynthRec });
 
   // ── Keyboard ── (keymap.ts — Phase 0 split)
-  bindKeyboard({ getActiveMode: layout.getActiveMode, padButtons, triggerPerformancePad, synth, playBtn, stopBtn, undoBtn, redoBtn, exportBtn, modeKeyBtns: layout.modeKeyBtns });
+  bindKeyboard({ getActiveMode: layout.getActiveMode, padButtons, triggerPerformancePad, synth, playBtn, stopBtn, undoBtn, redoBtn, exportBtn, selectMode: layout.selectMode });
 
   // Initial paint reflects loaded project state (scene selection, session grid).
   selectScene(clip.sel);

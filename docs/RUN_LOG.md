@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-08-16 — Studio arranger-led responsive workspace
+
+- Replaced the six equal full-screen mode keys with four task destinations: Arrange, Edit, Mix and Play. Edit and Play expose contextual Drums, Pads, Synth/Keys and DJ tools while preserving the existing engine, persistence and keyboard routing.
+- Made Arrange the default project home with persistent track selection, three coloured arrangement lanes and a contextual project inspector. Mix remains full-screen; touch DJ decks now swipe horizontally instead of stacking into a multi-screen column.
+- Rebuilt the responsive shell around one desktop rail, a four-item Android bottom dock and a compact touch-landscape rail. Mobile transport keeps play/stop/BPM visible and discloses timing, history, export and help on demand; pad/drum inspectors use dismissible dense sheets.
+- Added compact, standard and large-touch UI scales and a mobile Tools tab for synth performance controls. Extended browser gates for arranger-first boot, workspace routing, transport containment/disclosure, touch targets and DJ swiping; core and density suites pass.
+
 ## 2026-08-16 — Deep Swarm consistent creatures and contained text
 
 - Removed the critical-mode circle substitution that made distant creatures visibly pop between generic and authored anatomy. Performance pressure now lowers only the offscreen ordinary-contact quota; an isolated 4,200 m forced swarm holds 46 fps average with consistent creature rendering.
