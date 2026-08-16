@@ -1,5 +1,13 @@
 # Run Log
 
+## 2026-08-16 — Deep Swarm foreign-body hunt and salvage loop
+
+- Cut the opening grace to three seconds, guaranteed an immediate shoal and tightened the hunt/crisis cadence. Hunt state now makes every mobile organism recognise the submarine as a foreign body while calm phases retain feeding, predation, scavenging and migration.
+- Added an Android-safe Armament and Sensor Proof screen with weapon trigger, target, noise, stats and activation evidence. Upgrade cards now explain their numeric effect; Density Discrimination marks wrecks, deposits and salvage; dash cooldown upgrades now work.
+- Made the built-in Core Sampler available from a new career and repositioned the Mining Laser as a faster rare-seam upgrade. Mined canisters now occupy shaped cargo, remain at risk until surfacing and can fund emergency Field Bay actions.
+- Unified workshop output with the component inventory, migrated old workshop saves and connected every processed recipe to a current module. Sector persistence now tracks prey biomass, scavenger pressure and apex pressure alongside disturbance and extraction.
+- Extended core/mining browser coverage for urgency, foreign-body targeting, cargo retention, weapon documentation, Density Discrimination and recipe reachability. Core and mining suites pass with clean desktop and Android consoles.
+
 ## 2026-08-16 — Studio containment and density pass
 
 - Made Arrange the sole vertical scroll owner at short laptop, portrait and landscape heights. Track lanes now clear automation, every song control remains reachable, and the workspace no longer hides compressed content.

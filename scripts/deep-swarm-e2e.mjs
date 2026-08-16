@@ -49,7 +49,13 @@ try {
   check('controls: holding S stays in the dive', movementState.phase === 'playing', movementState.phase)
   check('options: auto-ping defaults off', movementState.options.autoPing === false && movementState.game.autoPing === false)
   check('HUD: XP is the primary viewport metric', movementState.game.hud.primaryMetric === 'xp', movementState.game.hud.primaryMetric)
-  check('opening: first-career grace is ten seconds or less', movementState.game.openingGrace <= 10, `${movementState.game.openingGrace}s`)
+  check('opening: contact begins within three seconds', movementState.game.openingGrace <= 3, `${movementState.game.openingGrace}s`)
+  const urgencyState = await page.evaluate(() => window.__deepSwarm.debugAdvance(4))
+  check('opening: first shoal arrives immediately after grace', urgencyState.game.enemies >= 3,
+    `${urgencyState.game.enemies} contacts · ${urgencyState.game.tensionPhase}`)
+  const huntState = await page.evaluate(() => window.__deepSwarm.debugAdvance(7))
+  check('ecology: hunt phase makes the foreign vessel the target', huntState.game.hunted && huntState.game.huntLocked > 0,
+    `${huntState.game.tensionPhase} · ${huntState.game.huntLocked}/${huntState.game.enemies} hunting vessel · ${huntState.game.enemyRoles.join(',')}`)
   const checkpointState = await page.evaluate(() => window.__deepSwarm.checkpointRoundTrip())
   check('save: interrupted dive resumes from a safe checkpoint', checkpointState.resumed && checkpointState.phase === 'playing' && checkpointState.depth === 1234 && checkpointState.xp === 7,
     JSON.stringify(checkpointState))
@@ -120,6 +126,16 @@ try {
   const recoveredState = await page.evaluate(() => window.__deepSwarm.getState())
   check('runtime: resume returns to the interrupted dive', recoveredState.phase === 'playing' && !recoveredState.error, recoveredState.phase)
   errors.splice(expectedErrors)
+
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('a')
+  await page.waitForTimeout(80)
+  const armoryState = await page.evaluate(() => window.__deepSwarm.getState())
+  check('armament: proof screen fits Android landscape without a render fault', armoryState.phase === 'armory' && !armoryState.error,
+    armoryState.error?.message || armoryState.phase)
+  if (process.env.DEEP_SWARM_SCREENSHOTS) await page.screenshot({ path: '.tmp-deep-swarm-armory.png' })
+  await page.keyboard.press('a')
+  await page.keyboard.press('Escape')
 
   const wakeState = await page.evaluate(() => window.__deepSwarm.triggerDeployableWeapon('decoy_launcher'))
   check('weapons: Cavitation Wake arms the next dash',
@@ -220,7 +236,9 @@ try {
   await page.evaluate(() => window.__deepSwarm.giveTestCargo())
   await page.waitForTimeout(100)
   const cargoState = await page.evaluate(() => window.__deepSwarm.getState())
-  check('cargo: shaped test manifest opens', cargoState.phase === 'inventory' && cargoState.game.inventory === 3)
+  check('cargo: shaped test manifest opens without discarding mined cores', cargoState.phase === 'inventory' &&
+    ['cargo', 'repair_kit', 'belt_flare'].every(id => cargoState.game.cargo.some(item => item.id === id)) &&
+    cargoState.game.cargo.some(item => item.mined))
   await page.keyboard.press('r')
   await page.keyboard.press('ArrowRight')
   check('cargo: organisation controls keep console clean', errors.length === 0, errors.length ? [...errors, ...requestFailures].slice(0, 2).join(' | ') : '')

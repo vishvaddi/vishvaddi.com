@@ -18,6 +18,22 @@ try {
   await page.goto(`${BASE}/games/deep-swarm/index.html`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => window.__deepSwarm?.build, null, { timeout: 20000 })
   await page.evaluate(() => {
+    window.__deepSwarm.startSeeded('sampler')
+    window.__deepSwarm.spawnTestDeposit('basalt_nodule')
+  })
+  const samplerBefore = await page.evaluate(() => window.__deepSwarm.getState().game)
+  check('new careers carry a built-in core sampler', samplerBefore.mining.tool === 'core_sampler', samplerBefore.mining.tool)
+  await page.keyboard.down('e')
+  for (let waited = 0; waited < 6000; waited += 250) {
+    await page.waitForTimeout(250)
+    if ((await page.evaluate(() => window.__deepSwarm.getState().game.minedDeposits)) > 0) break
+  }
+  await page.keyboard.up('e')
+  const sampled = await page.evaluate(() => window.__deepSwarm.getState().game)
+  check('sampler extracts basalt into visible cargo', sampled.minedDeposits === 1 && sampled.cargo.some(item => item.mined),
+    `${sampled.minedDeposits} deposit · ${JSON.stringify(sampled.cargo)}`)
+
+  await page.evaluate(() => {
     window.__deepSwarm.startSeeded('mining')
     window.__deepSwarm.prepareCampaignTest()
     window.__deepSwarm.spawnTestDeposit('conductive_vein')
@@ -36,6 +52,13 @@ try {
   const mined = await page.evaluate(() => window.__deepSwarm.getState().game)
   check('holding E mines the surveyed formation', mined.minedDeposits > before.minedDeposits,
     `${before.minedDeposits} -> ${mined.minedDeposits} · ${JSON.stringify(mined.mining)}`)
+  check('laser output remains cargo until spent or surfaced', mined.cargo.some(item => item.mined), JSON.stringify(mined.cargo))
+
+  const audit = await page.evaluate(() => window.__deepSwarm.auditSystems())
+  check('every weapon explains its trigger, target and noise', audit.unexplainedWeapons.length === 0, audit.unexplainedWeapons.join(', '))
+  check('every refined recipe feeds a current module', audit.deadRecipes.length === 0, audit.deadRecipes.join(', '))
+  const density = await page.evaluate(() => window.__deepSwarm.proveDensityDiscrimination())
+  check('density discrimination marks wreck, salvage and deposit', density.wreck && density.salvage && density.deposit, JSON.stringify(density))
 
   await page.evaluate(() => window.__deepSwarm.debugSet({ hp: 40, attention: 80 }))
   const patch = await page.evaluate(() => window.__deepSwarm.debugFieldBay(3))

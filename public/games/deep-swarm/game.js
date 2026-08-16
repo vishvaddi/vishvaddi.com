@@ -607,15 +607,37 @@ const FIELD_BAY = {
     '4': { name: 'OVERCHARGE 30s',  cost: { corepl: 1, wiring: 1 },  need: g => !(g.player._overchargeT > 0) },
     '5': { name: 'BALLAST DUMP',    cost: { scrap: 2 },              need: g => (g.attention || 0) > 15 },
 };
+function carriedMaterialCount(g, id) {
+    return (g.inventory || []).filter(it => it.mined && it.materialId === id).reduce((sum, it) => sum + (it.quantity || 1), 0);
+}
+function fieldCanAfford(g, cost) {
+    return Object.entries(cost).every(([id, qty]) => carriedMaterialCount(g, id) + (meta.materials[id] || 0) >= qty);
+}
+function spendFieldCost(g, cost) {
+    for (const [id, required] of Object.entries(cost)) {
+        let left = required;
+        for (let i = g.inventory.length - 1; i >= 0 && left > 0; i--) {
+            const it = g.inventory[i];
+            if (!it.mined || it.materialId !== id) continue;
+            const take = Math.min(left, it.quantity || 1);
+            it.quantity = (it.quantity || 1) - take;
+            left -= take;
+            if (it.quantity <= 0) g.inventory.splice(i, 1);
+            else it.name = `${BASE_MATERIALS[id].name.toUpperCase()} CANISTER ×${it.quantity}`;
+        }
+        if (left > 0) meta.materials[id] = Math.max(0, (meta.materials[id] || 0) - left);
+    }
+    ensureCargoLayout(g);
+}
 function fieldBay(g, key) {
     const opt = FIELD_BAY[key];
     if (!opt) return;
     if (!opt.need(g)) { setModeMsg(g, `${opt.name} — not needed`, 1.4); return; }
-    if (!canAfford(opt.cost)) {
+    if (!fieldCanAfford(g, opt.cost)) {
         setModeMsg(g, `${opt.name} — need ${matsLabel(opt.cost)}`, 1.8);
         return;
     }
-    spendMaterials(opt.cost);
+    spendFieldCost(g, opt.cost);
     saveMeta();
     const p = g.player;
     if (key === '3') {
@@ -1911,7 +1933,7 @@ function mulberry32(a) {
 }
 function seedFromString(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return h >>> 0; }
 function RND() { return dailyRng ? dailyRng() : Math.random(); }
-const DEEP_SWARM_BUILD = '2026.08.16-pressure-cockpit-message-lane';
+const DEEP_SWARM_BUILD = '2026.08.16-foreign-body-hunt';
 const RUN_TRACE_LIMIT = 30;
 let runTrace = [];
 let lastRuntimeError = null;
@@ -1961,6 +1983,10 @@ if (!meta.research) {
 if (!meta.observeSec) meta.observeSec = {};
 if (!meta.geologyScans) meta.geologyScans = [];
 if (!meta.components) meta.components = {};
+if (meta.workshop) {
+    for (const [id, qty] of Object.entries(meta.workshop)) meta.components[id] = (meta.components[id] || 0) + (Number(qty) || 0);
+    delete meta.workshop;
+}
 if (!meta.sectorEcology) meta.sectorEcology = {};
 if (!meta.archivePlayed) meta.archivePlayed = [];
 if (!meta.campaign) meta.campaign = { act: 1, evidence: 0 };
@@ -2097,19 +2123,19 @@ if (!meta.modulesOwned) meta.modulesOwned = [];
 if (!meta.modulesEquipped) meta.modulesEquipped = [];
 const MODULE_SLOTS = { hull: 2, systems: 2, prow: 1, mount: 1 };
 const MODULE_DEFS = [
-    { id: 'anechoic',  slot: 'hull',    name: 'ANECHOIC COATING',  desc: 'Detection radius -30%. Peeled from the Vampyroteuthis playbook.', req: { type: 'vampyro', tier: 2 },   cost: { wiring: 3, crystal: 1 } },
-    { id: 'lattice',   slot: 'hull',    name: 'PRESSURE LATTICE',  desc: '+800m crush depth. Bone Coral rebar geometry.',                   req: { type: 'bonecoral', tier: 2 }, cost: { corepl: 2, scrap: 4 } },
-    { id: 'chitin',    slot: 'hull',    name: 'CHITIN CLADDING',   desc: '+20 max hull, +1 armor. Grown to the Gulper intake spec.',        req: { type: 'gulper', tier: 2 },    cost: { scrap: 6, biosamp: 2 } },
-    { id: 'silprops',  slot: 'systems', name: 'SILENT PROPS',      desc: 'Silent running at 75% speed (was 55%). The Pale Manta glide.',    req: { type: 'manta', tier: 2 },     cost: { wiring: 2, corecell: 1 } },
-    { id: 'passonar',  slot: 'systems', name: 'PASSIVE SONAR',     desc: 'Pings linger twice as long; wide minimap. Listener architecture.',req: { type: 'listener', tier: 2 },  cost: { crystal: 1, wiring: 2 } },
-    { id: 'capbank',   slot: 'systems', name: 'CAPACITOR BANK',    desc: '+25 battery. Reverse-fed from the Arc Lamprey.',                  req: { type: 'lamprey', tier: 2 },   cost: { corecell: 2, wiring: 1 } },
-    { id: 'grapnel',   slot: 'prow',    name: 'GRAPNEL PROW',      desc: 'Salvage from 170px, 40% faster. The Davit Wraith arm, tamed.',    req: { type: 'grappler', tier: 2 },  cost: { scrap: 4, corecell: 1 } },
-    { id: 'ram',       slot: 'prow',    name: 'RAM PROW',          desc: 'Dashing through creatures deals 30 damage. Hermit doctrine.',     req: { type: 'hermit', tier: 2 },    cost: { corepl: 1, scrap: 5 } },
+    { id: 'anechoic',  slot: 'hull',    name: 'ANECHOIC COATING',  desc: 'Detection radius -30%. Peeled from the Vampyroteuthis playbook.', req: { type: 'vampyro', tier: 2 },   components: { bioagent: 1, resonator: 1 }, cost: { wiring: 1 } },
+    { id: 'lattice',   slot: 'hull',    name: 'PRESSURE LATTICE',  desc: '+800m crush depth. Bone Coral rebar geometry.',                   req: { type: 'bonecoral', tier: 2 }, components: { hardened_plate: 1, hull_plate: 1 }, cost: { corepl: 1 } },
+    { id: 'chitin',    slot: 'hull',    name: 'CHITIN CLADDING',   desc: '+20 max hull, +1 armor. Grown to the Gulper intake spec.',        req: { type: 'gulper', tier: 2 },    components: { hull_plate: 2, bioagent: 1 }, cost: { biosamp: 1 } },
+    { id: 'silprops',  slot: 'systems', name: 'SILENT PROPS',      desc: 'Silent running at 75% speed (was 55%). The Pale Manta glide.',    req: { type: 'manta', tier: 2 },     components: { power_cell: 1 }, cost: { wiring: 1 } },
+    { id: 'passonar',  slot: 'systems', name: 'PASSIVE SONAR',     desc: 'Pings linger twice as long; wide minimap. Listener architecture.',req: { type: 'listener', tier: 2 },  components: { resonator: 1 }, cost: { crystal: 1 } },
+    { id: 'capbank',   slot: 'systems', name: 'CAPACITOR BANK',    desc: '+25 battery. Reverse-fed from the Arc Lamprey.',                  req: { type: 'lamprey', tier: 2 },   components: { power_cell: 2 }, cost: { corecell: 1 } },
+    { id: 'grapnel',   slot: 'prow',    name: 'GRAPNEL PROW',      desc: 'Salvage from 170px, 40% faster. The Davit Wraith arm, tamed.',    req: { type: 'grappler', tier: 2 },  components: { hull_plate: 1, power_cell: 1 }, cost: { scrap: 2 } },
+    { id: 'ram',       slot: 'prow',    name: 'RAM PROW',          desc: 'Dashing through creatures deals 30 damage. Hermit doctrine.',     req: { type: 'hermit', tier: 2 },    components: { hardened_plate: 1 }, cost: { scrap: 2 } },
     // WEAPON MOUNTS — the base armament is a build choice now, not just a hull
-    { id: 'mount_torp', slot: 'mount', name: 'TORPEDO RACK',  desc: 'Second weapon: homing torpedoes from wave 1.',        req: { type: 'hermit', tier: 2 },   cost: { scrap: 5, wiring: 2 } },
-    { id: 'mount_harp', slot: 'mount', name: 'HARPOON WINCH', desc: 'Second weapon: harpoon battery from wave 1.',         req: { type: 'grappler', tier: 2 }, cost: { scrap: 4, corecell: 1 } },
-    { id: 'mount_arc',  slot: 'mount', name: 'ARC PROJECTOR', desc: 'Second weapon: electric field from wave 1.',          req: { type: 'lamprey', tier: 2 },  cost: { wiring: 3, crystal: 1 } },
-    { id: 'mining_laser', slot: 'prow', name: 'MINING LASER Mk I', desc: 'Hold E near a surveyed deposit. Beam costs power and broadcasts noise.', req: { type: 'lamprey', tier: 3 }, geology: 'conductive_vein', components: { conductive_lens: 1, pressure_frame: 1, bio_capacitor: 1 }, cost: {} },
+    { id: 'mount_torp', slot: 'mount', name: 'TORPEDO RACK',  desc: 'Second weapon: homing torpedoes from wave 1.',        req: { type: 'hermit', tier: 2 },   components: { hull_plate: 1, power_cell: 1 }, cost: { wiring: 1 } },
+    { id: 'mount_harp', slot: 'mount', name: 'HARPOON WINCH', desc: 'Second weapon: harpoon battery from wave 1.',         req: { type: 'grappler', tier: 2 }, components: { hull_plate: 1 }, cost: { corecell: 1 } },
+    { id: 'mount_arc',  slot: 'mount', name: 'ARC PROJECTOR', desc: 'Second weapon: electric field from wave 1.',          req: { type: 'lamprey', tier: 2 },  components: { resonator: 1, power_cell: 1 }, cost: { wiring: 1 } },
+    { id: 'mining_laser', slot: 'prow', name: 'MINING LASER Mk I', desc: 'Cuts conductive and living deposits faster than the built-in sampler. Costs power and broadcasts noise.', req: { type: 'lamprey', tier: 3 }, geology: 'conductive_vein', components: { conductive_lens: 1, pressure_frame: 1, bio_capacitor: 1, catalyst: 1 }, cost: {} },
 ];
 // Every module has a printed COST as well as a gift — builds are trades.
 // weight: -speed% · draw: -battery · loud: +detection%
@@ -2254,7 +2280,6 @@ const LEVIATHAN_LORE = {
 if (meta.bestChain === undefined) meta.bestChain = 0;
 // Workshop — Tier-2 crafting (added Phase 1)
 if (!meta.materials) meta.materials = {};
-if (!meta.workshop) meta.workshop = {};
 
 // =====================================================================
 // NEREID-II COMPANION AI — wave-tiered dialogue
@@ -3333,19 +3358,19 @@ const ENEMY_TYPES = {
 
 // --- Weapon definitions ---
 const WEAPON_DEFS = {
-    sonar: { name: 'Sonar Pulse', baseDmg: 14, baseCooldown: 3.0, baseArea: 280, desc: 'Wide expanding pulse — pings reveal & damage' },
-    torpedo: { name: 'Torpedo', baseDmg: 25, baseCooldown: 1.8, baseArea: 40, desc: 'Homing explosive' },
-    field: { name: 'Electric Field', baseDmg: 3, baseCooldown: 0.5, baseArea: 60, desc: 'Passive aura' },
-    depthcharge: { name: 'Depth Charges', baseDmg: 35, baseCooldown: 3, baseArea: 50, desc: 'Trail bombs' },
-    harpoon: { name: 'Harpoon', baseDmg: 15, baseCooldown: 1.2, baseArea: 0, desc: 'Piercing line' },
-    lure: { name: 'Bio Lure', baseDmg: 50, baseCooldown: 6, baseArea: 70, desc: 'Attract + explode' },
-    cutter: { name: 'Cutting Torch', baseDmg: 32, baseCooldown: 1.4, baseArea: 105, desc: 'Brutal short-range salvage beam' },
+    sonar: { name: 'Sonar Pulse', baseDmg: 14, baseCooldown: 3.0, baseArea: 280, desc: 'Automatic expanding ring. Reveals contacts, collapses phased tissue and damages everything crossed.', target: '360° sweep', noise: 'EXTREME' },
+    torpedo: { name: 'Torpedo', baseDmg: 25, baseCooldown: 1.8, baseArea: 40, desc: 'Homes on the nearest hostile contact and explodes on impact.', target: 'nearest hostile', noise: 'HIGH' },
+    field: { name: 'Electric Field', baseDmg: 3, baseCooldown: 0.5, baseArea: 60, desc: 'Passive hull aura. Pulses every 0.5 seconds while contacts remain in range.', target: 'close contacts', noise: 'LOW' },
+    depthcharge: { name: 'Depth Charges', baseDmg: 35, baseCooldown: 3, baseArea: 50, desc: 'Drops timed explosives behind the submarine. Best while kiting a pursuing pack.', target: 'wake trail', noise: 'HIGH' },
+    harpoon: { name: 'Harpoon', baseDmg: 15, baseCooldown: 1.2, baseArea: 0, desc: 'Near-silent piercing shot aimed at the nearest hostile contact.', target: 'piercing line', noise: 'VERY LOW' },
+    lure: { name: 'Bio Lure', baseDmg: 50, baseCooldown: 6, baseArea: 70, desc: 'Throws bait that pulls nearby hunters together, then detonates.', target: 'crowd control', noise: 'MEDIUM' },
+    cutter: { name: 'Cutting Torch', baseDmg: 32, baseCooldown: 1.4, baseArea: 105, desc: 'Short-range salvage beam. High damage, but you must stay close.', target: 'forward arc', noise: 'MEDIUM' },
     // Keep the historical id so old saves remain valid. The weapon itself is now
     // an aggressive movement tool: arm it, dash, and the water behind you cuts.
-    decoy_launcher: { name: 'Cavitation Wake', baseDmg: 18, baseCooldown: 3.8, baseArea: 58, desc: 'Auto-arms every 3.8s. Press SPACE or DASH to cut a damaging trail.' },
-    arc_welder: { name: 'Arc Welder', baseDmg: 10, baseCooldown: 9, baseArea: 75, desc: 'Repairs the weakest system while arcing nearby' },
-    pressure_lance: { name: 'Pressure Lance', baseDmg: 45, baseCooldown: 2.6, baseArea: 24, desc: 'Slow, heavy, armour-piercing bolt' },
-    net_launcher: { name: 'Tangle Net', baseDmg: 4, baseCooldown: 6, baseArea: 130, desc: 'Roots a hunting group in place' },
+    decoy_launcher: { name: 'Cavitation Wake', baseDmg: 18, baseCooldown: 3.8, baseArea: 58, desc: 'Auto-arms every 3.8 seconds. SPACE/DASH spends the charge and cuts a damaging knockback trail.', target: 'dash trail', noise: 'HIGH' },
+    arc_welder: { name: 'Arc Welder', baseDmg: 10, baseCooldown: 9, baseArea: 75, desc: 'Repairs the weakest vessel system, then arcs current through nearby contacts.', target: 'weakest system + nearby', noise: 'MEDIUM' },
+    pressure_lance: { name: 'Pressure Lance', baseDmg: 45, baseCooldown: 2.6, baseArea: 24, desc: 'Slow armour-piercing bolt. Heavy single-target damage through plated creatures.', target: 'toughest contact', noise: 'HIGH' },
+    net_launcher: { name: 'Tangle Net', baseDmg: 4, baseCooldown: 6, baseArea: 130, desc: 'Roots one hunting group in place and exposes it to area weapons.', target: 'hunting group', noise: 'LOW' },
     // --- EVOLVED WEAPONS (Ball X Pit combinations — full 15-pair matrix) ---
     tsunami:         { name: 'TSUNAMI',          baseDmg: 30,  baseCooldown: 2.0, baseArea: 200, desc: 'Sonar + Field = screen-wide pulse', evolved: true },
     leviathan_lance: { name: 'LEVIATHAN LANCE',  baseDmg: 80,  baseCooldown: 1.5, baseArea: 60,  desc: 'Torpedo + Harpoon = piercing explosive', evolved: true },
@@ -3367,6 +3392,10 @@ const WEAPON_DEFS = {
     sirens_call:     { name: "SIREN'S CALL",     baseDmg: 140, baseCooldown: 3.0, baseArea: 220, desc: 'TSUNAMI + MINEFIELD = lure + obliterate', evolved: true, apex: true },
     wrath:           { name: 'WRATH OF THE DEEP',baseDmg: 180, baseCooldown: 1.8, baseArea: 90,  desc: 'LANCE + MINEFIELD = homing kill-mines', evolved: true, apex: true },
 };
+for (const def of Object.values(WEAPON_DEFS)) {
+    if (!def.target) def.target = def.apex ? 'entire hunting mass' : def.baseArea >= 140 ? 'wide contact group' : def.baseArea > 0 ? 'contact cluster' : 'piercing line';
+    if (!def.noise) def.noise = def.apex ? 'EXTREME' : 'HIGH';
+}
 
 // Loadout icons — every weapon reads at a glance (BioShock plasmid row)
 const WEAPON_GLYPHS = {
@@ -3458,22 +3487,22 @@ function rollLootDrop(e) {
 const RECIPE_DEFS = [
     { id: 'hull_plate',     name: 'Hull Plate',       tier: 2, glyph: '◫', color: '#9AB0C8',
       ingredients: { scrap: 2, wiring: 1 },
-      desc: 'Reinforced patch. Future use: +20 starting HP.' },
+      desc: 'Load-bearing plate used by hull, chitin and grapnel modules.' },
     { id: 'bioagent',       name: 'Bioagent',         tier: 2, glyph: '◉', color: '#5ADFCF',
       ingredients: { biosamp: 2 },
-      desc: 'Stabilised bio matter. Future use: starting regen.' },
+      desc: 'Stabilised tissue used by anechoic and chitin modules.' },
     { id: 'power_cell',     name: 'Power Cell',       tier: 2, glyph: '◇', color: '#FFB060',
       ingredients: { corecell: 1, wiring: 2 },
-      desc: 'Stable current source. Used in Tier-3 recipes.' },
+      desc: 'Stable current source for propulsion, weapons and capacitor modules.' },
     { id: 'resonator',      name: 'Resonator',        tier: 2, glyph: '◈', color: '#80E0FF',
       ingredients: { crystal: 1, corecell: 1 },
-      desc: 'Sonar amplifier. Used in Tier-3 recipes.' },
+      desc: 'Signal lens used by sonar and arc-projector modules.' },
     { id: 'hardened_plate', name: 'Hardened Plate',   tier: 2, glyph: '◰', color: '#80E0FF',
       ingredients: { corepl: 1, scrap: 3 },
-      desc: 'Pressure-rated armor. Future use: starting +1 armor.' },
+      desc: 'Pressure-rated armour used by lattice and ram modules.' },
     { id: 'catalyst',       name: 'Anomaly Catalyst', tier: 2, glyph: '✺', color: '#FFD040',
       ingredients: { artifact: 1 },
-      desc: 'Reactor fragment. Required for Tier-3 unlocks.' },
+      desc: 'Anomaly-stable interface required by the upgraded mining array.' },
 ];
 
 // Display data for raw salvage in the Workshop UI.
@@ -3489,12 +3518,14 @@ const MATERIAL_DISPLAY = {
 
 // Pull unsold salvage from a run into the persistent workshop stockpile.
 // Idempotent if g.inventory is cleared after.
-function stockpileSalvage(g) {
+function stockpileSalvage(g, recovered) {
     if (!meta.materials) meta.materials = {};
     if (!g || !g.inventory) return;
     for (const it of g.inventory) {
         if (!it || !it.id || it.id === 'repair_kit') continue;
-        meta.materials[it.id] = (meta.materials[it.id] || 0) + 1;
+        if (it.mined && !recovered) continue;
+        const id = it.materialId || it.id;
+        meta.materials[id] = (meta.materials[id] || 0) + (it.quantity || 1);
     }
 }
 
@@ -3502,14 +3533,14 @@ function craftRecipe(recipeId) {
     const recipe = RECIPE_DEFS.find(r => r.id === recipeId);
     if (!recipe) return false;
     if (!meta.materials) meta.materials = {};
-    if (!meta.workshop) meta.workshop = {};
+    if (!meta.components) meta.components = {};
     for (const [matId, qty] of Object.entries(recipe.ingredients)) {
         if ((meta.materials[matId] || 0) < qty) return false;
     }
     for (const [matId, qty] of Object.entries(recipe.ingredients)) {
         meta.materials[matId] -= qty;
     }
-    meta.workshop[recipeId] = (meta.workshop[recipeId] || 0) + 1;
+    meta.components[recipeId] = (meta.components[recipeId] || 0) + 1;
     saveMeta();
     return true;
 }
@@ -3518,18 +3549,18 @@ function craftRecipe(recipeId) {
 // power with corporate catches; NEREID SYSTEMS tunes the sub cleanly; THE COIL
 // (COIL_GIFTS) pays in corruption. Weapon/fusion cards default to NEREID.
 const UPGRADE_POOL = [
-    { id: 'dmg', name: 'DAMAGE +20%', giver: 'meridian', fn: g => { g.player.dmgMult *= 1.2; }, weight: 10 },
-    { id: 'speed', name: 'MOVE SPEED +10%', fn: g => { g.player.speed *= 1.1; }, weight: 8 },
-    { id: 'maxhp', name: 'MAX HP +25', giver: 'meridian', fn: g => { g.player.maxHp += 25; g.player.hp += 25; }, weight: 8 },
-    { id: 'magnet', name: 'MAGNET +30%', giver: 'meridian', fn: g => { g.player.magnetRange *= 1.3; }, weight: 7 },
-    { id: 'armor', name: 'ARMOR +1', fn: g => { g.player.armor += 1; }, weight: 6 },
-    { id: 'area', name: 'AREA +15%', fn: g => { g.player.areaMult *= 1.15; }, weight: 7 },
-    { id: 'cooldown', name: 'COOLDOWN -10%', fn: g => { g.player.cdMult *= 0.9; }, weight: 7 },
-    { id: 'xpgain', name: 'XP GAIN +15%', giver: 'meridian', fn: g => { g.player.xpMult *= 1.15; }, weight: 6 },
-    { id: 'heal', name: 'HEAL 30 HP', giver: 'meridian', fn: g => { g.player.hp = Math.min(g.player.maxHp, g.player.hp + 30); }, weight: 5 },
-    { id: 'regen', name: 'REGEN +0.5/s', fn: g => { g.player.regen += 0.5; }, weight: 4 },
-    { id: 'defiance', name: 'DEATH DEFIANCE +1', fn: g => { g.player.deathDefiance++; }, weight: 3 },
-    { id: 'dash_cd', name: 'DASH COOLDOWN -25%', fn: g => { /* handled in dash logic via cdMult */ }, weight: 4 },
+    { id: 'dmg', name: 'DAMAGE +20%', giver: 'meridian', desc: 'All weapons deal 20% more damage.', fn: g => { g.player.dmgMult *= 1.2; }, weight: 10 },
+    { id: 'speed', name: 'MOVE SPEED +10%', desc: 'Thrusters accelerate and travel 10% faster.', fn: g => { g.player.speed *= 1.1; }, weight: 8 },
+    { id: 'maxhp', name: 'MAX HP +25', giver: 'meridian', desc: 'Adds 25 maximum hull and repairs the same amount.', fn: g => { g.player.maxHp += 25; g.player.hp += 25; }, weight: 8 },
+    { id: 'magnet', name: 'MAGNET +30%', giver: 'meridian', desc: 'Pulls XP and loose salvage from 30% farther away.', fn: g => { g.player.magnetRange *= 1.3; }, weight: 7 },
+    { id: 'armor', name: 'ARMOR +1', desc: 'Reduces every incoming hit by one additional point.', fn: g => { g.player.armor += 1; }, weight: 6 },
+    { id: 'area', name: 'AREA +15%', desc: 'Expands weapon areas, rings, fields and explosions by 15%.', fn: g => { g.player.areaMult *= 1.15; }, weight: 7 },
+    { id: 'cooldown', name: 'COOLDOWN -10%', desc: 'Every automatic weapon triggers 10% sooner.', fn: g => { g.player.cdMult *= 0.9; }, weight: 7 },
+    { id: 'xpgain', name: 'XP GAIN +15%', giver: 'meridian', desc: 'Every collected XP organism is worth 15% more.', fn: g => { g.player.xpMult *= 1.15; }, weight: 6 },
+    { id: 'heal', name: 'HEAL 30 HP', giver: 'meridian', desc: 'Repairs 30 hull immediately; cannot exceed maximum hull.', fn: g => { g.player.hp = Math.min(g.player.maxHp, g.player.hp + 30); }, weight: 5 },
+    { id: 'regen', name: 'REGEN +0.5/s', desc: 'Continuously repairs half a hull point per second.', fn: g => { g.player.regen += 0.5; }, weight: 4 },
+    { id: 'defiance', name: 'DEATH DEFIANCE +1', desc: 'Once this dive, survive fatal damage and restore partial hull.', fn: g => { g.player.deathDefiance++; }, weight: 3 },
+    { id: 'dash_cd', name: 'DASH COOLDOWN -25%', desc: 'Dash and Cavitation Wake become available 25% sooner.', fn: g => { g.player._dashCdMult = (g.player._dashCdMult || 1) * 0.75; }, weight: 4 },
     // Tradeoff upgrades — Meridian surplus: every powerful effect carries a catch.
     { id: 'overdrive', name: 'OVERDRIVE', giver: 'meridian', desc: '+40% damage. +20% weapon cooldown.', fn: g => { g.player.dmgMult *= 1.4; g.player.cdMult *= 1.20; }, weight: 5 },
     { id: 'combat_stims', name: 'COMBAT STIMS', giver: 'meridian', desc: '+30% move speed. -30 max HP.', fn: g => { g.player.speed *= 1.30; g.player.maxHp = Math.max(20, g.player.maxHp - 30); g.player.hp = Math.min(g.player.hp, g.player.maxHp); }, weight: 5 },
@@ -3754,15 +3785,29 @@ function campaignAct() {
     meta.campaign.act = act.id;
     return act;
 }
+function sectorEcology(id) {
+    const eco = meta.sectorEcology[id] || {};
+    if (eco.survey == null) eco.survey = 0;
+    if (eco.extraction == null) eco.extraction = 0;
+    if (eco.disturbance == null) eco.disturbance = 0;
+    if (eco.preyBiomass == null) eco.preyBiomass = 100;
+    if (eco.scavengerPressure == null) eco.scavengerPressure = 0;
+    if (eco.apexPressure == null) eco.apexPressure = 0;
+    meta.sectorEcology[id] = eco;
+    return eco;
+}
 function recordSectorDive(g) {
     const reached = g.deepestDepth || 0;
     for (const sector of SURVEY_SECTORS) {
         if (reached < sector.gate) continue;
-        const eco = meta.sectorEcology[sector.id] || { survey: 0, extraction: 0, disturbance: 0 };
+        const eco = sectorEcology(sector.id);
         eco.survey = Math.min(100, (eco.survey || 0) + 8 + Math.floor(Math.min(20, (reached - sector.gate) / 100)));
         eco.disturbance = Math.max(0, Math.min(100, (eco.disturbance || 0) * 0.88 + (g.kills || 0) * 0.06));
+        const extractionShock = Math.min(12, (eco.extraction || 0) * 0.35);
+        eco.preyBiomass = Math.max(0, Math.min(100, eco.preyBiomass + 4 - extractionShock - (g.kills || 0) * 0.08));
+        eco.scavengerPressure = Math.max(0, Math.min(100, eco.scavengerPressure * 0.82 + eco.disturbance * 0.22 + (100 - eco.preyBiomass) * 0.08));
+        eco.apexPressure = Math.max(0, Math.min(100, eco.apexPressure * 0.9 + eco.scavengerPressure * 0.1 + eco.disturbance * 0.04));
         eco.lastDive = Date.now();
-        meta.sectorEcology[sector.id] = eco;
     }
     meta.campaign.evidence = (meta.campaign.evidence || 0) + Math.max(1, Math.floor(reached / 1000));
     campaignAct();
@@ -3832,9 +3877,9 @@ function createGame() {
         _lastTraceSecond: -1,
         enemies: [], gems: [], projectiles: [], effects: [], floatingTexts: [],
         depthCharges: [], lures: [], deployables: [],
-        wave: 1, waveTimer: 0, spawnTimer: 0, spawnRate: 2.4,
+        wave: 1, waveTimer: 0, spawnTimer: 0, spawnRate: 1.45,
         runTime: 0, kills: 0, gemsCollected: 0, comboTimer: 0, combo: 0, bestCombo: 0,
-        openingGrace: meta.totalRuns === 0 ? 10 : 4,
+        openingGrace: 3,
         streak: '', streakTimer: 0,
         shake: 0, flashTimer: 0,
         slowmo: 0,
@@ -3894,7 +3939,7 @@ function createGame() {
         // and after the taught ore fall — so the opening is a sequence rather than
         // three systems arriving at once.
         activeEvent: null, eventTimer: 0, eventCooldown: 55 + Math.random() * 12,
-        tension: { phase: 'approach', timer: 20, crisisHit: false, reliefs: 0 },
+        tension: { phase: 'approach', timer: 8, crisisHit: false, reliefs: 0 },
         selectedCards: [], activeSynergies: [],
         // Corruption (moved to player above but keep game-level too for compat)
         corruption: 0,
@@ -4123,9 +4168,15 @@ function cullOverflowEnemies(g, cap) {
 function spawnEnemy(g, forceType, forcePos) {
     const types = getSpawnableTypes(g.wave, g);
     if (!types.length && !forceType) return;   // forced spawns (bosses, carriers, events) must not starve
-    const eco = meta.sectorEcology[sectorForDepth(g.depth).id] || { disturbance: 0 };
+    const eco = sectorEcology(sectorForDepth(g.depth).id);
     let ecologicalPool = types;
-    if (!forceType && eco.disturbance > 35) {
+    if (!forceType && (eco.apexPressure > 45 || eco.scavengerPressure > 55)) {
+        const hunters = types.filter(t => ['apex', 'mid', 'pack', 'scavenger'].includes(enemyRole(t.id, t.ai)));
+        if (hunters.length && Math.random() < 0.72) ecologicalPool = hunters;
+    } else if (!forceType && eco.preyBiomass < 45) {
+        const leanWeb = types.filter(t => ['scavenger', 'pack', 'mid'].includes(enemyRole(t.id, t.ai)));
+        if (leanWeb.length && Math.random() < 0.62) ecologicalPool = leanWeb;
+    } else if (!forceType && eco.disturbance > 35) {
         const opportunists = types.filter(t => ['pack', 'scavenger', 'mid'].includes(enemyRole(t.id, t.ai)));
         if (opportunists.length && Math.random() < Math.min(0.75, eco.disturbance / 100)) ecologicalPool = opportunists;
     } else if (!forceType && eco.disturbance < 12) {
@@ -4241,6 +4292,12 @@ function spawnEnemy(g, forceType, forcePos) {
 }
 
 // --- Weapons ---
+function markHardReturns(g, area) {
+    for (const wr of (g.wrecks || [])) { if (dist2(wr, g.player) < area * area) wr._pinged = g.runTime; }
+    for (const it of (g.lootItems || [])) { if (dist2(it, g.player) < area * area) it._pinged = g.runTime; }
+    for (const ob of (g.obstacles || [])) { if (ob.deposit && !ob.mined && dist2(ob, g.player) < area * area) ob._pinged = g.runTime; }
+}
+
 function firePing(g) {
     const w = g.player.weapons.find(x => x.id === 'sonar');
     if (!w || w.cooldown > 0) return false;
@@ -4264,13 +4321,14 @@ function firePing(g) {
     let area = def.baseArea * g.player.areaMult * (1 + (w.level - 1) * 0.1);
     if (g.player._pingWide) area *= 1.45;
     w.cooldown = def.baseCooldown * g.player.cdMult;
+    w.triggers = (w.triggers || 0) + 1;
+    w.lastTriggered = g.runTime;
     g.effects.push({ type: 'sonar_ring', x: g.player.x, y: g.player.y, radius: 0, maxRadius: area, dmg, speed: 280, hit: new Set() });
     g.sonarReveal = 1.0;
     // DENSITY DISCRIMINATION — the sweep sorts hard returns from soft ones, so
     // wrecks and dropped salvage stay flagged after the ring has passed.
     if (g.player._pingMarks) {
-        for (const wr of (g.wrecks || [])) { if (dist2(wr, g.player) < area * area) wr._pinged = g.runTime; }
-        for (const it of (g.lootItems || [])) { if (dist2(it, g.player) < area * area) it._pinged = g.runTime; }
+        markHardReturns(g, area);
     }
     // SOMETHING ANSWERS — below 2000m the sweep occasionally comes back in our own
     // format, from a bearing, on our own interval. Nothing is ever there.
@@ -4307,6 +4365,8 @@ function fireWeapons(g, dt) {
         const def = WEAPON_DEFS[w.id];
         const cd = def.baseCooldown * g.player.cdMult;
         w.cooldown = cd;
+        w.triggers = (w.triggers || 0) + 1;
+        w.lastTriggered = g.runTime;
         // ECOLOGY: firing makes noise the deep can hear. Sonar loud, harpoon near-silent.
         if (g._modeCfg && g._modeCfg.ecology) {
             const weaponNoise = (WEAPON_NOISE[w.id] ?? 0.4) * (w.id === 'sonar' && g.player._ghostArray ? 0.55 : 1);
@@ -4322,6 +4382,7 @@ function fireWeapons(g, dt) {
             g.attention = Math.min(100, (g.attention || 0) + 3);
             g.effects.push({ type: 'sonar_ring', x: g.player.x, y: g.player.y, radius: 0, maxRadius: area, dmg, speed: 280, hit: new Set() });
             g.sonarReveal = 1.0;
+            if (g.player._pingMarks) markHardReturns(g, area);
             sfxSonar();
             if (g.player._sonarDouble) {
                 setTimeout(() => {
@@ -5668,6 +5729,24 @@ function updateWreckInteraction(g, dt) {
     }
 }
 
+function stowMinedMaterial(g, id, quantity) {
+    const existing = g.inventory.find(it => it.mined && it.materialId === id);
+    if (existing) {
+        existing.quantity = (existing.quantity || 1) + quantity;
+        existing.name = `${BASE_MATERIALS[id].name.toUpperCase()} CANISTER ×${existing.quantity}`;
+        return true;
+    }
+    const item = {
+        id: `ore_${id}`, materialId: id, mined: true, quantity,
+        name: `${BASE_MATERIALS[id].name.toUpperCase()} CANISTER ×${quantity}`,
+        rarity: id === 'artifact' ? 'legendary' : id === 'crystal' || id === 'corepl' ? 'rare' : 'common',
+        value: quantity * (id === 'artifact' ? 70 : id === 'crystal' || id === 'corepl' ? 18 : 7),
+        glyph: BASE_MATERIALS[id].glyph, color: BASE_MATERIALS[id].color,
+        cargoUse: 'Surface to bank it, or spend it from the Field Bay during this dive.',
+    };
+    return tryStowCargo(g, item);
+}
+
 function updateMiningInteraction(g, dt) {
     const p = g.player;
     g.nearestDeposit = null;
@@ -5685,8 +5764,9 @@ function updateMiningInteraction(g, dt) {
         maybeHint(g, 'geology', 'Unclassified mineral contact — ping it before attempting extraction.');
         return;
     }
-    if (!meta.modulesEquipped.includes('mining_laser')) {
-        maybeHint(g, 'mining_laser', 'Surveyed deposit. Fabricate and equip MINING LASER Mk I at the Mooring.');
+    const laserEquipped = meta.modulesEquipped.includes('mining_laser');
+    if (!laserEquipped && ob.deposit !== 'basalt_nodule') {
+        maybeHint(g, 'mining_laser', 'Rare seam. The built-in CORE SAMPLER cannot cut it — track MINING LASER Mk I in the Module Bay.');
         return;
     }
     if (!keys['e'] || g.nearestWreck) {
@@ -5694,24 +5774,35 @@ function updateMiningInteraction(g, dt) {
         return;
     }
     if ((p.battery || 0) <= 2) return;
-    p.battery = Math.max(0, p.battery - dt * 4.5);
-    g.noise = Math.max(g.noise || 0, 0.9);
-    ob.mineProgress = (ob.mineProgress || 0) + dt / (ob.deposit === 'living_substrate' ? 6 : 4);
+    const duration = laserEquipped ? (ob.deposit === 'living_substrate' ? 5 : 2.4) : 3.2;
+    p.battery = Math.max(0, p.battery - dt * (laserEquipped ? 4.5 : 1.8));
+    g.noise = Math.max(g.noise || 0, laserEquipped ? 1.05 : 0.72);
+    ob.mineProgress = (ob.mineProgress || 0) + dt / duration;
     g._miningBeam = { x: ob.x, y: ob.y, progress: Math.min(1, ob.mineProgress) };
     if (ob.mineProgress < 1) return;
     const yields = ob.deposit === 'basalt_nodule' ? { scrap: 3, corepl: 1 }
         : ob.deposit === 'conductive_vein' ? { wiring: 2, crystal: 2 }
         : { biosamp: 2, artifact: 1 };
-    addMaterials(yields);
+    const stored = [];
+    for (const [id, quantity] of Object.entries(yields)) {
+        if (stowMinedMaterial(g, id, quantity)) stored.push(`+${quantity} ${BASE_MATERIALS[id].name.toUpperCase()}`);
+    }
+    if (!stored.length) {
+        ob.mineProgress = 0.92;
+        setModeMsg(g, 'HOLD FULL — OPEN [TAB], REPACK OR JETTISON', 2);
+        return;
+    }
     ob.mined = true;
     g._minedDeposits = (g._minedDeposits || 0) + 1;
     const sector = sectorForDepth(g.depth);
-    const eco = meta.sectorEcology[sector.id] || { survey: 0, extraction: 0, disturbance: 0 };
+    const eco = sectorEcology(sector.id);
     eco.extraction += 1;
     eco.disturbance = Math.min(100, eco.disturbance + (ob.deposit === 'living_substrate' ? 12 : 4));
-    meta.sectorEcology[sector.id] = eco;
+    eco.preyBiomass = Math.max(0, eco.preyBiomass - (ob.deposit === 'living_substrate' ? 14 : 2));
+    eco.scavengerPressure = Math.min(100, eco.scavengerPressure + (ob.deposit === 'living_substrate' ? 8 : 2));
     saveMeta();
-    g.floatingTexts.push({ x: ob.x, y: ob.y - 24, text: Object.entries(yields).map(([id, n]) => `+${n} ${id.toUpperCase()}`).join(' · '), color: '#FFB84A', life: 2, vy: -22 });
+    g.floatingTexts.push({ x: ob.x, y: ob.y - 24, text: `CARGO: ${stored.join(' · ')}`, color: '#FFB84A', life: 2.5, vy: -22 });
+    addNereidLog(g, `Core recovered to the hold. ${stored.join(', ')}. Surface it, or spend it from the Field Bay if the hunt closes.`);
     playTone(220, 0.18, 'sawtooth', 0.08); playTone(660, 0.28, 'sine', 0.06);
     g.shake = 4;
 }
@@ -5786,22 +5877,30 @@ function scoreRank(score) {
 }
 
 function updateTensionDirector(g, dt) {
-    const d = g.tension || (g.tension = { phase: 'approach', timer: 20, crisisHit: false, reliefs: 0 });
+    const d = g.tension || (g.tension = { phase: 'approach', timer: 8, crisisHit: false, reliefs: 0 });
     d.timer -= dt;
     if (d.timer <= 0) {
-        if (d.phase === 'approach') { d.phase = 'hunt'; d.timer = 28 + Math.random() * 8; }
-        else if (d.phase === 'hunt') { d.phase = 'crisis'; d.timer = 12 + Math.random() * 6; d.crisisHit = false; }
+        if (d.phase === 'approach') {
+            d.phase = 'hunt'; d.timer = 18 + Math.random() * 4;
+            setModeMsg(g, '⚠ HUNTED — FOREIGN SIGNATURE ACQUIRED', 2.2);
+            addNereidLog(g, 'The food web has stopped behaving like one. Every mobile body is turning on the organism that does not belong here: us.');
+        }
+        else if (d.phase === 'hunt') {
+            d.phase = 'crisis'; d.timer = 10 + Math.random() * 3; d.crisisHit = false;
+            setModeMsg(g, 'CRISIS — BREAK THE HUNT OR KILL THROUGH IT', 2);
+        }
         else if (d.phase === 'crisis') {
-            d.phase = 'relief'; d.timer = 8 + Math.random() * 5; d.reliefs++;
+            d.phase = 'relief'; d.timer = 7 + Math.random() * 3; d.reliefs++;
             if (!d.crisisHit) {
                 const award = 300 + Math.floor(g.depth / 8);
                 g.score += award;
                 g.floatingTexts.push({ x: g.player.x, y: g.player.y - 34, text: `ESCAPE +${award}`, color: '#80FFE0', life: 1.5, vy: -25 });
             }
-        } else { d.phase = 'approach'; d.timer = 16 + Math.random() * 8; }
+        } else { d.phase = 'approach'; d.timer = 10 + Math.random() * 4; }
     }
     g._tensionNoSpawn = d.phase === 'relief';
-    g._tensionSpawnMult = d.phase === 'crisis' ? 0.55 : d.phase === 'hunt' ? 0.78 : d.phase === 'relief' ? 4 : 1.05;
+    g._tensionSpawnMult = d.phase === 'crisis' ? 0.48 : d.phase === 'hunt' ? 0.68 : d.phase === 'relief' ? 4 : 0.92;
+    g.hunted = d.phase === 'hunt' || d.phase === 'crisis' || (g.attention || 0) >= 70;
     if (d.phase === 'crisis') g.attention = Math.max(g.attention || 0, 30 + Math.min(25, g.depth / 140));
 }
 
@@ -5913,12 +6012,17 @@ function triggerLevelUp(g) {
     // Add "new weapon" option if available
     if (availableWeapons.length > 0 && g.player.weapons.length < 6) {
         const wId = availableWeapons[Math.floor(Math.random() * availableWeapons.length)];
-        pool.push({ id: 'new_' + wId, name: 'NEW: ' + WEAPON_DEFS[wId].name, fn: g2 => { g2.player.weapons.push({ id: wId, level: 1, cooldown: 0 }); }, weight: 12 });
+        const def = WEAPON_DEFS[wId];
+        pool.push({ id: 'new_' + wId, name: 'NEW: ' + def.name,
+            desc: `${def.desc} ${def.baseDmg} damage · ${def.baseCooldown}s · ${def.noise || 'variable'} noise.`,
+            fn: g2 => { g2.player.weapons.push({ id: wId, level: 1, cooldown: 0, triggers: 0 }); }, weight: 12 });
     }
     // Add weapon level-up options
     for (const w of g.player.weapons) {
         if (w.level < 8) {
-            pool.push({ id: 'lvl_' + w.id, name: WEAPON_DEFS[w.id].name + ' LV' + (w.level + 1), fn: g2 => { const ww = g2.player.weapons.find(ww2 => ww2.id === w.id); if (ww) ww.level++; }, weight: 9 });
+            pool.push({ id: 'lvl_' + w.id, name: WEAPON_DEFS[w.id].name + ' LV' + (w.level + 1),
+                desc: `Damage +25% of base; area +10% of base. Current: LV${w.level} → LV${w.level + 1}.`,
+                fn: g2 => { const ww = g2.player.weapons.find(ww2 => ww2.id === w.id); if (ww) ww.level++; }, weight: 9 });
         }
     }
     // The slot AUTO-PING used to occupy now carries a real sonar line — the ping
@@ -5929,6 +6033,7 @@ function triggerLevelUp(g) {
             pool.push({
                 id: 'ping_wide',
                 name: 'WIDE-APERTURE ARRAY',
+                desc: 'Every sonar ring travels 45% farther. Damage is unchanged.',
                 fn: g2 => { g2.player._pingWide = true; addNereidLog(g2, 'Aperture widened. The sweep reaches further than the hull can run.'); },
                 weight: 9,
             });
@@ -5937,6 +6042,7 @@ function triggerLevelUp(g) {
             pool.push({
                 id: 'ping_linger',
                 name: 'PERSISTENT RETURN',
+                desc: 'Contacts revealed by sonar remain visible twice as long. Damage is unchanged.',
                 fn: g2 => { g2.player._pingLinger = true; addNereidLog(g2, 'Return signal holds now. What the ping finds, it keeps lit.'); },
                 weight: 8,
             });
@@ -5945,6 +6051,7 @@ function triggerLevelUp(g) {
             pool.push({
                 id: 'ping_marks',
                 name: 'DENSITY DISCRIMINATION',
+                desc: 'Each ping brackets wrecks, deposits and loose salvage in orange for 9 seconds. No damage increase.',
                 fn: g2 => { g2.player._pingMarks = true; addNereidLog(g2, 'The array sorts metal from meat. Salvage will light up on the sweep.'); },
                 weight: 8,
             });
@@ -6084,7 +6191,7 @@ function pressTouchButton(b) {
             }
             const len = Math.hypot(ddx, ddy) || 1;
             p.dashVx = ddx / len * 600; p.dashVy = ddy / len * 600;
-            p.dashTimer = 0.15; p.dashCooldown = 0.8;
+            p.dashTimer = 0.15; p.dashCooldown = 0.8 * (p._dashCdMult || 1);
             sfxDash();
         }
     } else if (b.id === 'ping') {
@@ -6321,7 +6428,7 @@ function update(dt) {
     // Frozen phases — game does not advance
     if (isPortraitPhone()) return;   // rotate-to-landscape gate; soft pause
     if (phase === 'paused') return;
-    if (phase === 'inventory' || phase === 'systems' || phase === 'maintenance' || phase === 'rig') return;
+    if (phase === 'inventory' || phase === 'armory' || phase === 'systems' || phase === 'maintenance' || phase === 'rig') return;
     if (phase === 'runshop') return;
     // Event timer ticks even when paused for event
     if (phase === 'event' && game && game.activeEvent) {
@@ -6360,6 +6467,8 @@ function update(dt) {
         + (g.noise > 0.6 ? (g.noise - 0.6) * dt * 9 : 0)
         - dt * (g.silent ? 1.1 : 0.35)
         - (_lkpFar ? dt * 0.9 : 0)));
+    g.foreignSignature = Math.max(0, Math.min(100, g.attention + g.noise * 16
+        + (g.lightOn === false ? 0 : 6) + (g._miningBeam ? 18 : 0)));
     // THE HUNT — crossing thresholds has faces. Search parties sweep the
     // last-known position (evadable); at MARKED an apex commits.
     const attSt = g.attention >= 90 ? 3 : g.attention >= 70 ? 2 : g.attention >= 40 ? 1 : 0;
@@ -6720,13 +6829,10 @@ function update(dt) {
 
     // --- Waves ---
     g.waveTimer += dt;
-    // The first four waves run short so the opening actually moves — first level-up
-    // and first real decision land inside the first minute instead of the third.
-    // After that it settles back to the 45s breathing room the deep needs.
-    if (g.waveTimer >= (g.wave <= 4 ? 32 : 45)) {
+    if (g.waveTimer >= (g.wave <= 4 ? 26 : 38)) {
         g.waveTimer = 0;
         g.wave++;
-        g.spawnRate = Math.max(0.4, g.spawnRate * 0.93);   // gentler ramp, floor at 0.4s (was 0.15)
+        g.spawnRate = Math.max(0.32, g.spawnRate * 0.89);
         g.streakTimer = 2;
         g.streak = 'WAVE ' + g.wave;
         addNereidLog(g, getNereidLine('wave', g));
@@ -6799,15 +6905,25 @@ function update(dt) {
     // past 2000m accumulated contacts faster than the pilot could clear them and
     // the frame budget went with it. Contacts are now a standing quota.
     const _popCap = enemyPopCap(g);
-    // COLD OPEN — the first 18 seconds are empty water on purpose. Dread needs a
-    // baseline of quiet to deviate from; starting mid-swarm meant the trench never
-    // had a silence to break.
     const _coldOpen = g.runTime < g.openingGrace && !g.ascending;
+    if (!_coldOpen && !g._openingShoal && !g.ascending) {
+        g._openingShoal = true;
+        const openingTypes = getSpawnableTypes(g.wave, g).filter(t => !t.isBoss);
+        const openingType = openingTypes.find(t => enemyRole(t.id, t.ai) === 'pack') || openingTypes[0];
+        if (openingType) {
+            const start = g.enemies.length;
+            for (let i = 0; i < 3; i++) {
+                const a = -0.65 + i * 0.65;
+                spawnEnemy(g, openingType, { x: g.player.x + Math.cos(a) * 330, y: g.player.y + Math.sin(a) * 330 });
+            }
+            for (const e of g.enemies.slice(start)) e.awareness = Math.max(0.58, e.awareness || 0);
+            setModeMsg(g, 'CONTACT — THREE BODIES TURNING IN', 1.5);
+        }
+    }
     if (!_coldOpen && !g._dreadNoSpawn && !g._tensionNoSpawn && g.enemies.length < _popCap && g.spawnTimer >= g.spawnRate * g._tensionSpawnMult * ascendMult * (1 - (g.attention || 0) * 0.002)) {
         g.spawnTimer = 0;
-        const earlyMult = g.runTime < 90 ? 0.5 : 1;
         const ascendCountMult = g.ascending ? 0.5 : 1;
-        const count = Math.max(1, Math.floor((1 + Math.floor(g.wave / 4)) * earlyMult * ascendCountMult));
+        const count = Math.max(1, Math.floor((1 + Math.floor(g.wave / 3)) * ascendCountMult));
         const room = _popCap - g.enemies.length;
         for (let i = 0; i < Math.min(4, count, room); i++) spawnEnemy(g);
     }
@@ -6863,9 +6979,8 @@ function update(dt) {
         if (line) addNereidLog(g, line);
     }
 
-    // COLD OPEN beats — a pre-flight checklist over empty water, then one shape
-    // going past that is not a threat and does not become one. The point is that
-    // by the time the first contact arrives you have already learned the quiet.
+    // Opening beats run underneath live contact. Information arrives while the
+    // pilot is already moving, rather than holding combat behind a tutorial wall.
     if (!g._coldBeats) g._coldBeats = 0;
     if (g._coldBeats === 0 && g.runTime > 4) {
         g._coldBeats = 1;
@@ -6884,15 +6999,15 @@ function update(dt) {
             shape: 0,
         });
         addNereidLog(g, 'Contact bearing green four-zero. Biological. Larger than us. It is not interested.');
-    } else if (g._coldBeats === 2 && g.runTime > 15) {
+    } else if (g._coldBeats === 2 && g.runTime > 13) {
         g._coldBeats = 3;
-        addNereidLog(g, 'Array is live and sweeping on its own. Whatever finds us now, we will hear first.');
-    } else if (g._coldBeats === 3 && g.runTime > 26 && !g.ascending) {
+        addNereidLog(g, 'Manual sonar is live on [F]. Every ping maps the trench and advertises the foreign body making it.');
+    } else if (g._coldBeats === 3 && g.runTime > 18 && !g.ascending) {
         // A fixed formation teaches the actual mining loop: ping, inspect, commit.
         g._coldBeats = 4;
         g.obstacles.push({ x: p.x + 70, y: p.y - 300, r: 38, kind: 'rock', color: '#292A2C', seed: 17,
             zone: zoneFromDepth(g.depth), obDepth: g.depth + 4, deposit: 'basalt_nodule', surveyed: false, mineProgress: 0, mined: false });
-        addNereidLog(g, 'Dense return ahead. Ping to survey it; hold [E] at the marked formation to cut. The rock stays where the trench put it.');
+        addNereidLog(g, 'Dense return ahead. Ping it, then hold [E]. The built-in CORE SAMPLER can cut ordinary basalt; the Mining Laser reaches the living seams.');
     }
 
     // --- Fire weapons ---
@@ -6991,6 +7106,13 @@ function update(dt) {
                 if (meta.observeSec[e.typeId] >= 10) creditResearch(g, e.typeId, 2, 'covert observation');
             }
             e.awareness = Math.max(0, Math.min(1, (e.awareness || 0) + (stim - 0.18) * dt * 1.6));
+            if (g.hunted && !['sessile', 'support'].includes(e.role) && !e.ghost) {
+                e.awareness = 1;
+                e._prey = null;
+                e._huntLocked = true;
+            } else if (!g.hunted) {
+                e._huntLocked = false;
+            }
             // Run silent, slip away: outside close range, quiet actively SHEDS pursuit
             if (g.silent && dToPlayer > (e.detect || 300) * 0.8 && e.awareness > 0.2) e.awareness = Math.max(0.2, e.awareness - dt * 0.5);
             // Photophobic recoil — routed by a fresh floodlight burst
@@ -8391,7 +8513,7 @@ function update(dt) {
             const l3Owned = LORE_FRAGMENTS.filter(f => f.layer === 3 && meta.loreFragments.includes(f.id)).length;
             if (!meta.ending && l3Owned >= 3 && meta.p3Unlocked) g._theQuestion = true;
             // Workshop salvage research — log a sample of each item before cashing.
-            stockpileSalvage(g);
+            stockpileSalvage(g, true);
             // Cash in all inventory automatically
             let cashed = 0;
             for (const it of g.inventory) cashed += it.value;
@@ -8694,7 +8816,7 @@ function onDeath(g) {
     if (g.kills > meta.bestKills) meta.bestKills = g.kills;
     if (!meta.bestScore || g.score > meta.bestScore) meta.bestScore = g.score;
     // Workshop salvage research — log a sample of unsold loot. Survives DSV wipe (lives in meta.materials).
-    stockpileSalvage(g);
+    stockpileSalvage(g, false);
     // FULL LIFE WIPE — gold, paid upgrades, codex, hull all reset. Pilot starts fresh in new DSV.
     wipeDsvLife();
     // If a leviathan claimed us, increment its kill-count permanently
@@ -8739,7 +8861,7 @@ function draw() {
     // registered in virtual coordinates; hitTapZone divides by MENU_S.
     const MENU_DRAWS = {
         title: drawTitle, intro: drawIntro, shop: drawShop, workshop: drawWorkshop,
-        modules: drawModules, systems: drawSystems, maintenance: drawMaintenance, rig: drawRig, interaction: drawEventInteraction,
+        modules: drawModules, armory: drawArmory, systems: drawSystems, maintenance: drawMaintenance, rig: drawRig, interaction: drawEventInteraction,
         runtime_error: drawRuntimeFault,
         contracts: drawContracts, puzzle: drawPuzzle, patch: drawPatch,
         cards: drawCardDraft, codex: drawPDA, tutorial: drawTutorial,
@@ -11631,6 +11753,18 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
             ctx.strokeStyle = '#FFD040'; ctx.lineWidth = 3;
             ctx.beginPath(); ctx.arc(vpCx, promptY + 14, 10, -Math.PI / 2, -Math.PI / 2 + pct * PI2); ctx.stroke();
         }
+    } else if (g.nearestDeposit) {
+        const ob = g.nearestDeposit;
+        const promptY = vpCy + vpR + 18;
+        const laser = meta.modulesEquipped.includes('mining_laser');
+        const tool = laser ? 'MINING LASER Mk I' : 'CORE SAMPLER';
+        const locked = !laser && ob.deposit !== 'basalt_nodule';
+        const geology = GEOLOGY_RECORDS[ob.deposit];
+        ctx.textAlign = 'center'; ctx.font = 'bold 11px monospace';
+        ctx.fillStyle = locked ? '#FF8060' : '#FFB84A';
+        ctx.fillText(!ob.surveyed ? '[ F ] PING TO SURVEY MINERAL CONTACT'
+            : locked ? `${geology?.name || 'RARE SEAM'} · MINING LASER REQUIRED`
+            : `[ HOLD E ] ${tool} → ${geology?.name || ob.deposit.toUpperCase()}`, vpCx, promptY);
     }
 
     // ---- MINIMAP — always on. Sonar Array upgrade boosts range/detail.
@@ -13018,7 +13152,7 @@ function drawInventory(w, h, g) {
     ctx.textAlign = 'center'; ctx.fillStyle = '#FFD040'; ctx.font = 'bold 24px monospace';
     ctx.fillText('CARGO HOLD', w / 2, 46);
     ctx.fillStyle = '#9AB0C0'; ctx.font = '11px monospace';
-    ctx.fillText('[←↑↓→] move   [R] rotate   [Q/E] select   [J] jettison   [TAB/ESC] close', w / 2, 68);
+    ctx.fillText('[←↑↓→] move   [R] rotate   [Q/E] select   [B] strip salvage   [J] jettison   [TAB/ESC] close', w / 2, 68);
     const cell = Math.max(34, Math.min(58, (h - 150) / g.cargoGrid.rows));
     const gx = Math.max(24, w / 2 - cell * g.cargoGrid.cols / 2 - 120), gy = 96;
     for (let y = 0; y < g.cargoGrid.rows; y++) for (let x = 0; x < g.cargoGrid.cols; x++) {
@@ -13049,6 +13183,11 @@ function drawInventory(w, h, g) {
         const [sw, sh] = cargoDims(selected);
         ctx.fillStyle = '#7A8A9A'; ctx.font = '10px monospace';
         ctx.fillText(`${sw}×${sh} cells  ·  ${String(selected.rarity || 'utility').toUpperCase()}`, px, gy + 74);
+        if (selected.cargoUse) {
+            const useLines = wrapCanvasText(selected.cargoUse, Math.max(120, w - px - 24), 3);
+            ctx.fillStyle = '#9AB0C0';
+            for (let i = 0; i < useLines.length; i++) ctx.fillText(useLines[i], px, gy + 92 + i * 13);
+        }
     }
     const totalValue = g.inventory.reduce((sum, item) => sum + (item.value || 0), 0);
     const used = g.inventory.reduce((sum, item) => { const [iw, ih] = cargoDims(item); return sum + (item._cargoX == null ? 0 : iw * ih); }, 0);
@@ -13056,7 +13195,65 @@ function drawInventory(w, h, g) {
     ctx.fillStyle = overflow ? '#FF6040' : '#9AB0C0'; ctx.font = 'bold 11px monospace';
     ctx.fillText(`${used}/${g.cargoGrid.cols * g.cargoGrid.rows} cells  ·  surface ${totalValue}g${overflow ? `  ·  ${overflow} UNSTOWED` : ''}`, px, gy + 112);
     ctx.fillStyle = '#7A8A9A'; ctx.font = '10px monospace';
-    ctx.fillText('[B] break down entire hold', px, gy + 140);
+    ctx.fillText('[B] strip selected non-mineral salvage', px, gy + 150);
+}
+
+function drawArmory(w, h) {
+    const g = game;
+    ctx.fillStyle = '#020610'; ctx.fillRect(0, 0, w, h);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 25px monospace';
+    ctx.fillText('ARMAMENT & SENSOR PROOF', w / 2, 42);
+    ctx.fillStyle = '#7A8A9A'; ctx.font = '11px monospace';
+    ctx.fillText('What fires, what it targets, and evidence that it has triggered this dive.', w / 2, 62);
+    if (!g) return;
+    const weapons = g.player.weapons || [];
+    const compact = h < 600;
+    const columns = compact ? 2 : 1;
+    const rows = Math.max(1, Math.ceil(weapons.length / columns));
+    const rowH = compact ? Math.min(66, Math.max(56, (h - 188) / rows)) : Math.min(76, Math.max(58, (h - 230) / rows));
+    const gap = compact ? 10 : 0;
+    const cardW = compact ? (w - 54 - gap) / 2 : w - 68;
+    for (let i = 0; i < weapons.length; i++) {
+        const weapon = weapons[i], def = WEAPON_DEFS[weapon.id];
+        if (!def) continue;
+        const col = i % columns, row = Math.floor(i / columns);
+        const x = compact ? 22 + col * (cardW + gap) : 34;
+        const y = 82 + row * rowH, damage = def.baseDmg * g.player.dmgMult * (1 + (weapon.level - 1) * 0.25);
+        const area = def.baseArea * g.player.areaMult * (1 + (weapon.level - 1) * 0.1);
+        ctx.fillStyle = '#07141C'; ctx.fillRect(x, y, cardW, rowH - 7);
+        ctx.strokeStyle = weapon.id === 'sonar' ? '#80E0FF' : '#2B5660'; ctx.strokeRect(x, y, cardW, rowH - 7);
+        ctx.textAlign = 'left'; ctx.fillStyle = '#E6F4F2'; ctx.font = 'bold 12px monospace';
+        ctx.fillText(fitCanvasText(`${WEAPON_GLYPHS[weapon.id] || '◆'} ${def.name.toUpperCase()} · LV${weapon.level}`, compact ? cardW - 20 : cardW * 0.42), x + 14, y + (compact ? 16 : 20));
+        const stats = `${damage.toFixed(1)} DMG · ${def.baseCooldown.toFixed(1)}s · ${area ? Math.round(area) + ' AREA' : 'LINE'} · ${def.noise} NOISE`;
+        ctx.fillStyle = '#FFB84A'; ctx.font = '10px monospace';
+        if (compact) ctx.fillText(fitCanvasText(stats, cardW - 28), x + 14, y + 30);
+        else { ctx.textAlign = 'right'; ctx.fillText(stats, x + cardW - 14, y + 20); ctx.textAlign = 'left'; }
+        ctx.fillStyle = '#91AAB0';
+        ctx.fillText(fitCanvasText(def.desc, compact ? cardW - 28 : cardW - 262), x + 14, y + (compact ? 44 : 39));
+        ctx.fillStyle = '#5ADFCF';
+        const proof = `TARGET: ${def.target} · TRIGGERS: ${weapon.triggers || 0}${weapon.lastTriggered != null ? ` · LAST ${Math.max(0, g.runTime - weapon.lastTriggered).toFixed(1)}s` : ''}`;
+        ctx.fillText(fitCanvasText(proof, compact ? cardW - 28 : cardW - 28), x + 14, y + (compact ? 57 : 55));
+    }
+    const sy = Math.min(h - 108, 94 + rows * rowH);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#FFB84A'; ctx.font = 'bold 11px monospace';
+    ctx.fillText('SONAR PROCESSING', 42, sy);
+    const sensorRows = [
+        ['WIDE APERTURE', !!g.player._pingWide, '+45% sweep radius; no damage change'],
+        ['PERSISTENT RETURN', !!g.player._pingLinger, 'contacts remain visible twice as long'],
+        ['DENSITY DISCRIMINATION', !!g.player._pingMarks, 'orange brackets on wrecks, deposits and loose salvage for 9s; no damage change'],
+    ];
+    ctx.font = '10px monospace';
+    for (let i = 0; i < sensorRows.length; i++) {
+        const [name, active, effect] = sensorRows[i];
+        ctx.fillStyle = active ? '#80E0A0' : '#465A62';
+        ctx.fillText(`${active ? '●' : '○'} ${name} — ${effect}`, 42, sy + 19 + i * 17);
+    }
+    const laser = meta.modulesEquipped.includes('mining_laser');
+    ctx.fillStyle = '#C8A060';
+    ctx.fillText(`GEOLOGY TOOL — ${laser ? 'MINING LASER Mk I: rare seams enabled' : 'CORE SAMPLER: ordinary basalt enabled; Mining Laser tracked in Module Bay'}`, 42, sy + 76);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#7A8A9A';
+    ctx.fillText('[A / ESC] BACK TO PAUSE', w / 2, h - 18);
+    addTapZone(0, h - 48, w, 48, 'Escape');
 }
 
 function drawDeathScreen(w, h, g) {
@@ -13215,6 +13412,7 @@ function drawPauseOverlay(w, h, g) {
         { label: `[V] World zoom: ${meta.worldZoom ? Math.round(meta.worldZoom * 100) + '%' : 'auto'}`, key: 'v' },
         { label: `[T] HUD text: ${Math.round((meta.uiScale || 1) * 100)}%`, key: 't' },
         { label: `[F] Auto-ping: ${meta.autoPing ? 'ON' : 'off'}`, key: 'f' },
+        { label: '[A] Armament & sensor proof', key: 'a', color: '#FFB84A' },
         { label: `[C] Camera motion: ${meta.cameraMotion ? 'ON' : 'off'}`, key: 'c' },
         { label: `[H] High-contrast HUD: ${meta.hudContrast ? 'ON' : 'off'}`, key: 'h' },
         { label: '[Q] Quit to Title', key: 'q', color: '#C47840' },
@@ -13604,7 +13802,7 @@ function drawWorkshop(w, h) {
     ctx.fillText('WORKSHOP', w / 2, 50);
     ctx.fillStyle = '#8A9AAA';
     ctx.font = '11px monospace';
-    ctx.fillText('Combine salvaged materials into processed components. Tier-3 unlocks come next.', w / 2, 72);
+    ctx.fillText('Refine recovered salvage into parts used by current modules and tools.', w / 2, 72);
 
     // Salvage stockpile row
     ctx.fillStyle = '#5ADFCF';
@@ -13653,7 +13851,7 @@ function drawWorkshop(w, h) {
         ctx.textAlign = 'center';
         ctx.fillText(r.glyph, bx + 24, by + 36);
 
-        const owned = (meta.workshop || {})[r.id] || 0;
+        const owned = (meta.components || {})[r.id] || 0;
         ctx.fillStyle = canCraft ? '#FFF' : '#7A8A9A';
         ctx.font = 'bold 14px monospace';
         ctx.textAlign = 'left';
@@ -13875,7 +14073,7 @@ function drawModules(w, h) {
         if (unlocked) {
             ctx.fillStyle = '#7A8A9A';
             const dbl = drawbackLabel(m.id);
-            const partCost = Object.entries(m.components || {}).map(([id, qty]) => `${qty} ${id.replaceAll('_', ' ')}`).join(', ');
+            const partCost = Object.entries(m.components || {}).map(([id, qty]) => `${qty} ${id.replaceAll('_', ' ')} (${meta.components[id] || 0})`).join(', ');
             ctx.fillText(m.desc + (owned ? '' : '   —   ' + [matsLabel(m.cost), partCost].filter(Boolean).join(' · ')), bx + 12, by + 33);
             if (dbl && rowH >= 48) { ctx.fillStyle = '#9A6A5A'; ctx.fillText(dbl, bx + 12, by + 44); }
         } else {
@@ -15593,7 +15791,7 @@ function drawPDA(w, h) {
         drawPdaParagraph(act.truth, 34, 153, w - 68, 15, 3, '#C9D8DC');
         ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 11px monospace'; ctx.fillText('SURVEY PROVINCES', 34, 202);
         for (let i = 0; i < SURVEY_SECTORS.length; i++) {
-            const s = SURVEY_SECTORS[i], eco = meta.sectorEcology[s.id] || { survey: 0, extraction: 0, disturbance: 0 };
+            const s = SURVEY_SECTORS[i], eco = sectorEcology(s.id);
             const unlocked = (meta.deepestEver || 0) >= s.gate;
             const y = 224 + i * 82;
             ctx.fillStyle = unlocked ? '#071820' : '#050A0D'; ctx.fillRect(34, y, w - 68, 70);
@@ -15601,8 +15799,12 @@ function drawPDA(w, h) {
             ctx.fillStyle = unlocked ? '#A5D9DF' : '#354951'; ctx.font = 'bold 11px monospace';
             ctx.fillText(`${s.name} · ${s.range}`, 46, y + 18);
             ctx.fillStyle = unlocked ? '#78949E' : '#29383E'; ctx.font = '9px monospace';
-            ctx.fillText(s.question, 46, y + 36); ctx.fillText(s.signature, 46, y + 52);
-            ctx.textAlign = 'right'; ctx.fillText(`SURVEY ${eco.survey || 0}% · EXTRACTION ${eco.extraction || 0} · DISTURBANCE ${Math.round(eco.disturbance || 0)}%`, w - 46, y + 18); ctx.textAlign = 'left';
+            ctx.fillText(fitCanvasText(s.question, w - 94), 46, y + 36);
+            ctx.fillText(fitCanvasText(s.signature, (w - 100) * 0.52), 46, y + 54);
+            ctx.textAlign = 'right';
+            ctx.fillText(fitCanvasText(`SURVEY ${eco.survey || 0}% · EXTRACT ${eco.extraction || 0} · DISTURB ${Math.round(eco.disturbance || 0)}%`, (w - 100) * 0.56), w - 46, y + 18);
+            ctx.fillText(`BIOMASS ${Math.round(eco.preyBiomass)} · SCAV ${Math.round(eco.scavengerPressure)} · APEX ${Math.round(eco.apexPressure)}`, w - 46, y + 54);
+            ctx.textAlign = 'left';
         }
     } else if (pdaTab === 1) {
         const ids = Object.keys(XENO_RECORDS); pdaSelection = Math.max(0, Math.min(pdaSelection, ids.length - 1));
@@ -15630,6 +15832,9 @@ function drawPDA(w, h) {
         if (tier) {
             ctx.font = '9px monospace'; ctx.fillStyle = '#78949E';
             ctx.fillText(fitCanvasText(`${rec.size} · ${rec.depth} · CONFIDENCE ${rec.confidence}`, detailW), dx + 225, 192);
+            const method = tier < 2 ? 'OBSERVE WITHOUT FIRING' : tier < 3 ? 'RECOVER FIELD EVIDENCE' : tier < 4 ? 'ANALYSE AT THE MOORING' : 'RESEARCH COMPLETE';
+            ctx.fillStyle = tier < 4 ? '#FFB84A' : '#5ADFCF'; ctx.font = 'bold 9px monospace';
+            ctx.fillText(fitCanvasText(`NEXT METHOD · ${method}`, detailW), dx + 225, 214);
             let y = 310;
             const fields = [
                 ['HABITAT', rec.habitat, 1], ['MORPHOLOGY', rec.morphology, 1],
@@ -15895,6 +16100,10 @@ window.addEventListener('keydown', e => {
         phase = (phase === 'inventory') ? 'playing' : 'inventory';
         return;
     }
+    if (phase === 'armory') {
+        if (e.key === 'Escape' || e.key === 'a' || e.key === 'A') phase = 'paused';
+        return;
+    }
     if (phase === 'systems' && game) {
         if (e.key === 'Escape') { systemIncident = null; phase = systemsReturnPhase; return; }
         const sn = parseInt(e.key);
@@ -15940,14 +16149,18 @@ window.addEventListener('keydown', e => {
             game.cargoGrid.selected = Math.max(0, Math.min(game.inventory.length - 1, game.cargoGrid.selected));
             return;
         }
-        // BREAK DOWN — trade held salvage's gold value for crafting materials
+        // BREAK DOWN — mined cores remain physical cargo until surface or Field Bay use.
         if (e.key === 'b' || e.key === 'B') {
-            if (game.inventory.length) {
-                for (const it of game.inventory) breakdownItem(it);
+            const selected = game.inventory[game.cargoGrid.selected];
+            if (selected && !selected.mined && selected.id !== 'repair_kit') {
+                breakdownItem(selected);
                 saveMeta();
-                game.inventory.length = 0;
-                game.streak = 'SALVAGE BROKEN DOWN → materials'; game.streakTimer = 2.5;
+                game.inventory.splice(game.cargoGrid.selected, 1);
+                ensureCargoLayout(game);
+                game.streak = 'SALVAGE STRIPPED → WORKSHOP STOCK'; game.streakTimer = 2.5;
                 if (typeof sfxRevive === 'function') sfxRevive();
+            } else if (selected && selected.mined) {
+                setModeMsg(game, 'MINERAL CORE — SURFACE TO BANK OR SPEND IN FIELD BAY', 2);
             }
             return;
         }
@@ -16110,7 +16323,7 @@ window.addEventListener('keydown', e => {
             dx /= len; dy /= len;
             p.dashVx = dx * 900; p.dashVy = dy * 900;
             p.dashTimer = 0.18;
-            p.dashCooldown = 0.7;
+            p.dashCooldown = 0.7 * (p._dashCdMult || 1);
             sfxDash();
             // Dashing beside rock kicks up silt — concealment you can MAKE
             for (const ob of game.obstacles) {
@@ -16132,6 +16345,7 @@ window.addEventListener('keydown', e => {
     // Feature 1: Pause menu controls
     if (phase === 'paused') {
         if (e.key === 'Escape') { phase = 'playing'; return; }
+        if (e.key === 'a' || e.key === 'A') { phase = 'armory'; return; }
         if (e.key === 'm' || e.key === 'M') {
             meta.muted = !meta.muted;
             applyVolume();
@@ -16636,13 +16850,20 @@ window.__deepSwarm = {
             floatingTexts: (game.floatingTexts || []).map(item => item.text),
             // Perf soak surface — population is the thing that used to run away.
             enemies: game.enemies.length, popCap: enemyPopCap(game),
+            huntLocked: game.enemies.filter(enemy => enemy._huntLocked).length,
+            preyTargets: game.enemies.filter(enemy => enemy._prey).length,
+            enemyRoles: [...new Set(game.enemies.map(enemy => enemy.role))],
             projectiles: game.projectiles.length, effects: game.effects.length,
             obstacles: (game.obstacles || []).length, fps: _fps,
             perf: { p95: _perf.p95, p99: _perf.p99, updateP95: _perf.updateP95,
                 drawP95: _perf.drawP95, postP95: _perf.postP95, longFrames: _perf.longFrames, fx: _perf.fx },
             dmgMult: game.player.dmgMult, overcharge: game.player._overchargeT || 0,
             attention: Math.round(game.attention || 0), autoPing: game.player._sonarAuto,
-            mining: { equipped: meta.modulesEquipped.includes('mining_laser'), keyHeld: !!keys['e'],
+            foreignSignature: Math.round(game.foreignSignature || 0), hunted: !!game.hunted,
+            tensionPhase: game.tension?.phase || null,
+            weapons: game.player.weapons.map(w => ({ id: w.id, level: w.level, triggers: w.triggers || 0, lastTriggered: w.lastTriggered ?? null })),
+            cargo: game.inventory.map(item => ({ id: item.id, materialId: item.materialId || null, quantity: item.quantity || 1, mined: !!item.mined })),
+            mining: { equipped: meta.modulesEquipped.includes('mining_laser'), tool: meta.modulesEquipped.includes('mining_laser') ? 'mining_laser' : 'core_sampler', keyHeld: !!keys['e'],
                 nearest: !!game.nearestDeposit, blockedByWreck: !!game.nearestWreck,
                 progress: Math.round((game.nearestDeposit?.mineProgress || 0) * 100) / 100 },
             fallers: (game.fallers || []).length,
@@ -16665,6 +16886,7 @@ window.__deepSwarm = {
         campaign: {
             act: campaignAct().id, evidence: meta.campaign.evidence || 0,
             geology: [...meta.geologyScans], components: { ...meta.components },
+            materials: { ...meta.materials }, ecology: JSON.parse(JSON.stringify(meta.sectorEcology)),
             equipped: [...(meta.modulesEquipped || [])], pdaTab,
             musicStage: musicSlot(), musicGenre: (MUSIC[musicSlot()] || {}).genre || null,
         },
@@ -17033,12 +17255,44 @@ window.__deepSwarm = {
         meta.components.conductive_lens = 1;
         meta.components.pressure_frame = 1;
         meta.components.bio_capacitor = 1;
+        meta.components.catalyst = 1;
         for (const id of Object.keys(BASE_MATERIALS)) meta.materials[id] = Math.max(20, meta.materials[id] || 0);
         if (!meta.modulesOwned.includes('mining_laser')) meta.modulesOwned.push('mining_laser');
         meta.modulesEquipped = meta.modulesEquipped.filter(id => (MODULE_DEFS.find(m => m.id === id) || {}).slot !== 'prow');
         meta.modulesEquipped.push('mining_laser');
         saveMeta();
         return this.getState();
+    },
+    debugAdvance(seconds = 1) {
+        if (!game) this.startSeeded('advance');
+        const frames = Math.min(60 * 180, Math.max(1, Math.round((Number(seconds) || 0) * 60)));
+        game.player.maxHp = Math.max(game.player.maxHp, 1e9); game.player.hp = game.player.maxHp; game._godmode = true;
+        for (let i = 0; i < frames; i++) update(1 / 60);
+        return this.getState();
+    },
+    auditSystems() {
+        const consumed = new Set(MODULE_DEFS.flatMap(module => Object.keys(module.components || {})));
+        return {
+            unexplainedWeapons: Object.entries(WEAPON_DEFS).filter(([, def]) => !def.desc || !def.target || !def.noise).map(([id]) => id),
+            deadRecipes: RECIPE_DEFS.filter(recipe => !consumed.has(recipe.id)).map(recipe => recipe.id),
+            miningLaserComponents: Object.keys((MODULE_DEFS.find(module => module.id === 'mining_laser') || {}).components || {}),
+        };
+    },
+    proveDensityDiscrimination() {
+        if (!game) this.startSeeded('density-proof');
+        const point = { x: game.player.x + 30, y: game.player.y, r: 12 };
+        game.wrecks.push({ ...point, id: 'proof-wreck' });
+        game.lootItems.push({ ...point, id: 'proof-loot' });
+        game.obstacles.push({ ...point, deposit: 'basalt_nodule', mined: false, surveyed: true });
+        game.player._pingMarks = true;
+        markHardReturns(game, WEAPON_DEFS.sonar.baseArea);
+        const result = {
+            wreck: game.wrecks.at(-1)._pinged === game.runTime,
+            salvage: game.lootItems.at(-1)._pinged === game.runTime,
+            deposit: game.obstacles.at(-1)._pinged === game.runTime,
+        };
+        game.wrecks.pop(); game.lootItems.pop(); game.obstacles.pop();
+        return result;
     },
     spawnTestDeposit(id = 'conductive_vein') {
         if (!game) this.startSeeded('mining-test');
