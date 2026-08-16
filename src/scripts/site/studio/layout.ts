@@ -33,6 +33,9 @@ export interface LayoutPanels {
   laneInspector: HTMLElement;
   onSynthVisible: () => void;       // canvases need a redraw once measurable
   onModeChange: (label: string) => void;
+  /** "what am I editing for" line shown in overlay headers (chop/scratch) —
+   *  the overlays cover the page that gives them context. */
+  overlayContext: () => string;
 }
 
 export interface Layout {
@@ -62,15 +65,16 @@ export function buildLayout(p: LayoutPanels): Layout {
     const host = el("div", "wa-overlay");
     host.hidden = true;
     const head = el("div", "wa-overlay-head");
+    const contextChip = el("span", "wa-overlay-context");
     const closeBtn = btn("✕ Close", "wa-btn-sm");
     closeBtn.addEventListener("click", () => { host.hidden = true; });
-    head.append(el("span", "wa-fx-title", title), closeBtn);
+    head.append(el("span", "wa-fx-title", title), contextChip, closeBtn);
     const body = el("div", "wa-overlay-body");
     body.append(panel);
     host.append(head, body);
     workarea.append(host);
     overlays.push(host);
-    return { host, open: () => { closeOverlays(); host.hidden = false; } };
+    return { host, open: () => { closeOverlays(); contextChip.textContent = p.overlayContext(); host.hidden = false; } };
   };
   const closeOverlays = () => overlays.forEach((o) => { o.hidden = true; });
 

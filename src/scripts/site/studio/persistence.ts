@@ -3,8 +3,8 @@
 // pattern projects still load), undo history.
 
 import {
-  SCENES, STEPS, SONG_SLOTS, PAD_COUNT, PAD_LAYER_MAX, PIANO_NOTES, TRACKS, clip, transport, song,
-  allPats, allVels, synthNotes, padEvents, songChain, arrangement, songLoop, sampleParams, sampleData, sampleBuffers,
+  SCENES, STEPS, PAD_COUNT, PAD_LAYER_MAX, PIANO_NOTES, TRACKS, clip, transport, song,
+  allPats, allVels, synthNotes, padEvents, arrangement, songLoop, sampleParams, sampleData, sampleBuffers,
   padLayers, padLayerBuffers, padLayerMode,
   dp, mpc, rackState, fx, vsynthPatch, synthLaneNotes, synthPatches, patternLengths, patternDivisions, SYNTH_LANES,
   DRUMS, laneLengths, laneRates, laneVoices, laneSends, LANE_RATES, mixState, mute, solo,
@@ -41,7 +41,6 @@ export function historyState(): HistoryState {
     title: song.title,
     pats: allPats.map((pattern) => pattern.map((row) => [...row])),
     vels: allVels.map((pattern) => pattern.map((row) => [...row])),
-    synthNotes: synthNotes.map((notes) => notes.map((note) => ({ ...note }))),
     synthLaneNotes: Object.fromEntries(SYNTH_LANES.map((lane) => [lane, synthLaneNotes[lane].map((notes) => notes.map((note) => ({ ...note })))])) as Record<SynthLane, VNote[][]>,
     synthPatches: Object.fromEntries(SYNTH_LANES.map((lane) => [lane, JSON.parse(JSON.stringify(synthPatches[lane]))])) as Record<SynthLane, VPatch>,
     patternLengths: [...patternLengths],
@@ -51,7 +50,6 @@ export function historyState(): HistoryState {
     padEvents: padEvents.map((events) => events.map((event) => ({ ...event }))),
     sampleParams: sampleParams.map((params) => ({ ...params })),
     sampleData: [...sampleData],
-    songChain: [...songChain],
     arrangement: {
       drums: arrangement.drums.map((b) => ({ ...b })),
       pads: arrangement.pads.map((b) => ({ ...b })),
@@ -68,7 +66,6 @@ export function restoreHistory(state: HistoryState): void {
   if (typeof state.title === "string") song.title = state.title;
   state.pats.forEach((pattern, pi) => pattern.forEach((row, ri) => row.forEach((value, step) => { allPats[pi][ri][step] = value; })));
   state.vels.forEach((pattern, pi) => pattern.forEach((row, ri) => row.forEach((value, step) => { allVels[pi][ri][step] = value; })));
-  state.synthNotes.forEach((notes, i) => { synthNotes[i] = notes.map((note) => ({ ...note })); });
   if (state.synthLaneNotes) SYNTH_LANES.forEach((lane) => {
     state.synthLaneNotes![lane].forEach((notes, i) => { synthLaneNotes[lane][i] = notes.map((note) => ({ ...note })); });
   });
@@ -80,7 +77,6 @@ export function restoreHistory(state: HistoryState): void {
   state.padEvents.forEach((events, i) => { padEvents[i] = events.map((event) => ({ ...event })); });
   state.sampleParams.forEach((params, i) => Object.assign(sampleParams[i], params));
   state.sampleData.forEach((data, i) => { sampleData[i] = data; sampleBuffers[i] = null; if (data) void hydrateSample(i); });
-  state.songChain.forEach((pattern, i) => { songChain[i] = pattern; });
   TRACKS.forEach((track) => { arrangement[track] = state.arrangement[track].map((b) => ({ ...b })); });
   Object.assign(fx, state.fx);
   Object.assign(rackState, state.rackState);
@@ -103,7 +99,7 @@ export function projectState(includeSamples = true): object {
     return index;
   });
   return {
-    version: 14, // v14: persisted mixer levels, power, mute and solo
+    version: 15, // v15: retired synthNotes + songChain from saves (still READ for migration)
     title: song.title,
     pats: allPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
     vels: allVels,
@@ -111,7 +107,6 @@ export function projectState(includeSamples = true): object {
     bpm: transport.bpm,
     clipSel: clip.sel,
     clipPlay: clip.play,
-    synthNotes,
     synthLaneNotes,
     synthPatches,
     patternLengths,
@@ -122,7 +117,6 @@ export function projectState(includeSamples = true): object {
     laneSends,
     mix: mixState,
     vsynth: synthPatches.bass,
-    songChain, // kept read-only for one version so older saves aren't stranded
     arrangement,
     songLoop,
     songMode: transport.songMode,
@@ -246,9 +240,6 @@ export function applyProject(saved: Record<string, unknown>): void {
         }
       });
       if (saved.mix && typeof saved.mix === "object") applyMixState(saved.mix as Partial<typeof mixState>);
-      if (saved.songChain) (saved.songChain as number[]).forEach((v, i) => {
-        if (i < SONG_SLOTS) songChain[i] = Math.max(0, Math.min(SCENES - 1, Number(v) || 0));
-      });
       if (saved.arrangement && typeof saved.arrangement === "object") {
         const incoming = saved.arrangement as Partial<Record<TrackId, ArrangeBlock[]>>;
         TRACKS.forEach((track) => {

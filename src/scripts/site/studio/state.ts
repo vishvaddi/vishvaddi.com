@@ -80,7 +80,6 @@ export interface HistoryState {
   title?: string;
   pats: boolean[][][];
   vels: number[][][];
-  synthNotes: VNote[][];
   synthLaneNotes?: Record<SynthLane, VNote[][]>;
   synthPatches?: Record<SynthLane, VPatch>;
   patternLengths?: number[];
@@ -92,7 +91,6 @@ export interface HistoryState {
   sampleData: Array<string | null>;
   padLayers?: PadLayer[][];
   padLayerMode?: PadLayerMode[];
-  songChain: number[];
   arrangement: Record<TrackId, ArrangeBlock[]>;
   fx: FxState;
   rackState: RackState;
@@ -133,7 +131,6 @@ export const DEFAULT_STEPS = 16;
 // first eight — every restore path is bounded by `i < SCENES`.
 export const SCENES = 16;
 export const SCENE_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P"];
-export const SONG_SLOTS = 8;
 export const DRUMS = ["Kick", "Snare", "HH Cl", "HH Op", "Clap", "Tom", "Rim", "Crash"];
 export const PAD_COUNT = 64;
 export const PAD_BANK_SIZE = 16;
@@ -264,7 +261,6 @@ export type LaneVoice = "auto" | "glitch";
 export const laneVoices: LaneVoice[] = DRUMS.map(() => "auto");
 export const laneSends = DRUMS.map(() => ({ echo: 0, space: 0, pan: 0 }));
 export const glitchLane = { row: DRUMS.length - 1 };
-export const songChain = Array.from({ length: SONG_SLOTS }, (_, i) => i % 4);
 export const padEvents: PadEvent[][] = Array.from({ length: SCENES }, () => []);
 
 // ─── Sampler / MPC ───────────────────────────────────────────────────────────

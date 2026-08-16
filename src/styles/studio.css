@@ -538,8 +538,6 @@
 }
 
 @media (max-width: 900px) {
-  .immersive-page .wa-modebar .wa-modekey:nth-child(5)::before { content: "◎"; }
-  .immersive-page .wa-modebar .wa-modekey:nth-child(6)::before { content: "≡"; }
   .wa-page-dj { overflow: auto !important; overscroll-behavior: contain; }
   .wa-dj { height: auto; min-height: 100%; }
   .wa-dj-decks { display: flex; flex: 0 0 auto; flex-direction: column; overflow: visible; }
@@ -1743,7 +1741,9 @@
   padding: 12px;
 }
 .wa-overlay[hidden] { display: none; }
-.wa-overlay-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.wa-overlay-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+/* Overlays cover the page that gives them context — say what they edit for. */
+.wa-overlay-context { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 10px/1.2 var(--wa-mono); letter-spacing: .06em; color: #8a949f; }
 .wa-overlay-body { flex: 1; min-height: 0; overflow-y: auto; }
 
 .wa-transport { position: static; }
@@ -2383,17 +2383,6 @@
     font-size: 9px;
     letter-spacing: .08em;
   }
-
-  .immersive-page .wa-modekey::before {
-    display: block;
-    color: #9ca6af;
-    font: 600 18px/1 system-ui, sans-serif;
-  }
-  .immersive-page .wa-modekey:nth-child(1)::before { content: "▦"; }
-  .immersive-page .wa-modekey:nth-child(2)::before { content: "◆"; }
-  .immersive-page .wa-modekey:nth-child(3)::before { content: "〽"; }
-  .immersive-page .wa-modekey:nth-child(4)::before { content: "▤"; }
-  .immersive-page .wa-modekey:nth-child(5)::before { content: "≡"; }
 
   .immersive-page .wa-modekey-led { display: none; }
   .immersive-page .wa-modekey:hover { color: var(--wa-text); background: #171d23; }
@@ -3261,13 +3250,7 @@
   background: #0e1217;
   z-index: 100;
 }
-.wa-primary-nav,
-.wa-context-group { display: flex; flex-direction: column; gap: 5px; }
-.wa-primary-nav { width: 100%; }
-.wa-context-nav { margin-top: auto; padding-top: 10px; border-top: 1px solid #252b33; }
-.wa-context-group { display: none; }
-.wa-modebar[data-workspace="edit"] .wa-context-edit,
-.wa-modebar[data-workspace="play"] .wa-context-play { display: flex; }
+.wa-primary-nav { display: flex; flex-direction: column; gap: 5px; width: 100%; }
 .immersive-page .wa-modekey {
   width: 100%;
   min-width: 0;
@@ -3284,7 +3267,6 @@
   font: 700 9px/1 var(--wa-mono);
   letter-spacing: .1em;
 }
-.immersive-page .wa-modekey::before { content: none !important; }
 .wa-mode-icon { color: #a3afbb; font-size: 17px; line-height: 1; }
 .wa-mode-label { max-width: 100%; overflow: hidden; white-space: nowrap; font-size: 8px; letter-spacing: .05em; }
 .immersive-page .wa-modekey.active {
@@ -3294,18 +3276,6 @@
   background: linear-gradient(90deg, rgba(221,135,70,.17), #181e25 55%);
 }
 .immersive-page .wa-modekey.active .wa-mode-icon { color: var(--wa-accent); }
-.wa-contextkey {
-  min-height: 34px;
-  padding: 6px 3px;
-  border: 1px solid #29313a;
-  border-radius: 4px;
-  color: #89939e;
-  background: #12171d;
-  font: 700 8px/1 var(--wa-mono);
-  letter-spacing: .08em;
-}
-.wa-contextkey.active { color: #fff; border-color: var(--wa-accent); background: #25201d; }
-
 .immersive-page .wa-pagehost {
   grid-column: 2;
   grid-row: 3;
@@ -3537,25 +3507,6 @@ button.wa-arrange-lane-name { cursor: pointer; }
   .immersive-page .wa-modekey { min-height: 52px; padding: 4px 1px; flex-direction: column; gap: 2px; }
   .immersive-page .wa-modekey.active { border-left-width: 1px; border-bottom: 3px solid var(--wa-accent); background: #20262d; }
   .wa-mode-icon { font-size: 15px; }
-  .wa-context-nav {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 60px;
-    height: 46px;
-    padding: 4px 6px;
-    display: none;
-    margin: 0;
-    border: 0;
-    border-top: 1px solid #29313a;
-    background: rgba(19,24,30,.985);
-  }
-  .wa-modebar[data-workspace="edit"] .wa-context-nav,
-  .wa-modebar[data-workspace="play"] .wa-context-nav { display: block; }
-  .wa-modebar[data-workspace="edit"] ~ *,
-  .wa-modebar[data-workspace="play"] ~ * { --wa-mobile-context: 46px; }
-  .wa-context-group { height: 38px; flex-direction: row; gap: 5px; }
-  .wa-contextkey { flex: 1; min-height: 38px; font-size: 9px; }
   .immersive-page .wa-pagehost { flex: 1 1 auto; width: 100%; min-height: 0; padding: 5px; overflow: hidden; }
 
   .wa-arrange-shell { display: flex; flex-direction: column; gap: 5px; }
@@ -3682,9 +3633,6 @@ button.wa-arrange-lane-name { cursor: pointer; }
   }
   .wa-primary-nav { height: auto; display: flex; flex-direction: column; }
   .immersive-page .wa-modekey { min-height: 43px; flex-direction: row; padding: 3px; }
-  .wa-context-nav { position: static; width: auto; height: auto; padding: 4px 0 0; }
-  .wa-context-group { height: auto; flex-direction: column; }
-  .wa-contextkey { min-height: 30px; }
   .immersive-page .wa-pagehost { grid-column: 2; grid-row: 3; width: auto; padding: 4px; }
   .wa-transport-timing,
   .wa-transport-actions { left: 82px; bottom: 6px; }
@@ -3819,9 +3767,6 @@ button.wa-arrange-lane-name { cursor: pointer; }
   .immersive-page .wa-project-name { flex: 0 1 180px; width: 180px; max-width: 180px; }
   .wa-primary-nav { flex: 0 0 auto; gap: 3px; }
   .immersive-page .wa-primary-nav .wa-modekey { flex: 0 0 47px; height: 47px; min-height: 47px; }
-  .wa-context-nav { margin-top: auto; }
-  .wa-context-group { gap: 2px; }
-  .wa-contextkey { flex: 0 0 28px; height: 28px; min-height: 28px; padding: 2px; }
   .immersive-page .wa-page-song { overflow-y: auto; overscroll-behavior: contain; }
   .immersive-page .wa-page-song .wa-arrange-shell {
     height: auto;

@@ -7,7 +7,7 @@ import "../../../styles/studio.css";
 import {
   STEPS, SCENES, SCENE_LABELS, DRUMS, PAD_BANK_SIZE, ROLL_NOTES,
   TRACKS, TRACK_LABELS, clip, transport, stepDur, audible, song as songMeta,
-  allPats, allVels, synthNotes, padEvents, arrangement, songEndBar,
+  allPats, allVels, padEvents, arrangement, songEndBar,
   sampleParams, sampleBuffers, sampleData, dp, DP_DEF, DP_SPECS, mpc, rackState, fx, vsynthPatch, mute, solo, mixState,
 } from "./state";
 import type { ArrangeBlock, HistoryState, MpcState, PadEvent, SamplerP, TrackId, VNote } from "./state";
@@ -305,6 +305,7 @@ export async function initStudio(): Promise<void> {
     chop, scratchPanel, inspector, laneInspector,
     onSynthVisible: () => synth.waveRedraws().forEach((fn) => fn()),
     onModeChange: (label) => { lcdMode.textContent = label; },
+    overlayContext: () => `for ${selectedPadLabel.textContent || "the selected pad"} · scene ${SCENE_LABELS[clip.sel]}`,
   });
   const tabBtns = layout.navButtons;
   // FLM: the clip decides the editor — double-tapping a clip or lane block
