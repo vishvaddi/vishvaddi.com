@@ -8,6 +8,23 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const PI2 = Math.PI * 2;
 const keys = {};
+const BOOT_STARTED = performance.now();
+const bootPerf = {
+    scriptStart: BOOT_STARTED,
+    firstFrame: 0,
+    inputReady: 0,
+    runRequested: 0,
+    firstPlayableFrame: 0,
+    longTasks: [],
+};
+try {
+    new PerformanceObserver(list => {
+        for (const entry of list.getEntries()) {
+            bootPerf.longTasks.push({ start: Math.round(entry.startTime), duration: Math.round(entry.duration) });
+            if (bootPerf.longTasks.length > 20) bootPerf.longTasks.shift();
+        }
+    }).observe({ type: 'longtask', buffered: true });
+} catch {}
 
 // HUD TEXT SCALE — intercept every ctx.font assignment and scale the px size.
 // One knob (pause menu) instead of two hundred font-string edits.
@@ -26,6 +43,7 @@ function drawPlate(x, y, pw, ph, alpha) {
 }
 
 const _texturePatterns = {};
+const _overlayGradients = {};
 function texturePattern(key, spacing, color) {
     if (_texturePatterns[key]) return _texturePatterns[key];
     const tile = document.createElement('canvas');
@@ -35,6 +53,10 @@ function texturePattern(key, spacing, color) {
     tileCtx.fillRect(0, spacing - 1, tile.width, 1);
     _texturePatterns[key] = ctx.createPattern(tile, 'repeat');
     return _texturePatterns[key];
+}
+function overlayGradient(key, create) {
+    if (!_overlayGradients[key]) _overlayGradients[key] = create();
+    return _overlayGradients[key];
 }
 
 // =====================================================================
@@ -1555,7 +1577,7 @@ titleBgImg._ready = false;
 titleBgImg._failed = false;
 titleBgImg.onload = () => { titleBgImg._ready = true; };
 titleBgImg.onerror = () => { titleBgImg._failed = true; };
-titleBgImg.src = 'concept_art/02_cockpit_porthole_dread.png';
+titleBgImg.src = 'concept_art/02_cockpit_porthole_dread.webp';
 
 // --- MINE (classic naval mine — spiky sphere) ---
 const MINE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
@@ -1649,10 +1671,207 @@ canvas.addEventListener('mousemove', e => {
 });
 
 // --- Meta persistence ---
-function loadMeta() {
-    try { return JSON.parse(localStorage.getItem('deepswarm_meta')) || defaultMeta(); } catch { return defaultMeta(); }
+const SAVE_VERSION = 2;
+const SAVE_INDEX_KEY = 'deepswarm_profiles_v2';
+const LEGACY_SAVE_KEY = 'deepswarm_meta';
+function newProfileId() {
+    return globalThis.crypto?.randomUUID?.() || `pilot-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
-function saveMeta() { localStorage.setItem('deepswarm_meta', JSON.stringify(meta)); }
+function loadProfileIndex() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(SAVE_INDEX_KEY));
+        if (parsed && Array.isArray(parsed.profiles) && parsed.activeProfileId) return parsed;
+    } catch {}
+    const profileId = newProfileId();
+    const legacy = localStorage.getItem(LEGACY_SAVE_KEY);
+    const index = { version: SAVE_VERSION, activeProfileId: profileId, profiles: [{ id: profileId, name: 'PILOT 01', createdAt: Date.now() }] };
+    localStorage.setItem(SAVE_INDEX_KEY, JSON.stringify(index));
+    if (legacy) localStorage.setItem(`deepswarm_profile_${profileId}`, legacy);
+    return index;
+}
+let profileIndex = loadProfileIndex();
+let resetArmedUntil = 0;
+let accountStatus = '';
+let cloudSyncTimer = 0;
+function activeProfile() { return profileIndex.profiles.find(p => p.id === profileIndex.activeProfileId) || profileIndex.profiles[0]; }
+function profileSaveKey(id = profileIndex.activeProfileId) { return `deepswarm_profile_${id}`; }
+function cloudAccountKey() { return `deepswarm_cloud_${profileIndex.activeProfileId}`; }
+function loadCloudAccount() { try { return JSON.parse(localStorage.getItem(cloudAccountKey())) || null; } catch { return null; } }
+function loadMeta() {
+    try {
+        const raw = localStorage.getItem(profileSaveKey());
+        const parsed = raw && JSON.parse(raw);
+        if (parsed && parsed.saveVersion === SAVE_VERSION && parsed.career) return parsed.career;
+        if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+    return defaultMeta();
+}
+function saveMeta() {
+    const key = profileSaveKey();
+    const previous = localStorage.getItem(key);
+    if (previous) localStorage.setItem(`${key}_backup`, previous);
+    const envelope = { saveVersion: SAVE_VERSION, profileId: profileIndex.activeProfileId, revision: (meta._saveRevision || 0) + 1, updatedAt: Date.now(), career: meta };
+    meta._saveRevision = envelope.revision;
+    localStorage.setItem(key, JSON.stringify(envelope));
+    queueCloudSync();
+}
+function queueCloudSync() {
+    if (!loadCloudAccount()) return;
+    clearTimeout(cloudSyncTimer);
+    cloudSyncTimer = setTimeout(() => syncCloudSave().catch(() => { accountStatus = 'SYNC OFFLINE'; }), 1200);
+}
+async function createCloudAccount() {
+    accountStatus = 'CREATING SYNC ACCOUNT…';
+    saveMeta();
+    const save = JSON.parse(localStorage.getItem(profileSaveKey()) || 'null');
+    const res = await fetch('/api/deep-swarm/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ save }) });
+    if (!res.ok) throw new Error(`account ${res.status}`);
+    const data = await res.json();
+    localStorage.setItem(cloudAccountKey(), JSON.stringify({ accountId: data.accountId, secret: data.secret, revision: data.revision }));
+    accountStatus = 'SYNC ACCOUNT CREATED';
+    prompt('Copy this recovery code. It is the only way to connect another device.', `${data.accountId}.${data.secret}`);
+}
+async function connectCloudAccount() {
+    const code = prompt('Enter the Deep Swarm recovery code from your other device.');
+    if (!code) return;
+    const dot = code.indexOf('.');
+    if (dot < 1) throw new Error('invalid recovery code');
+    const account = { accountId: code.slice(0, dot), secret: code.slice(dot + 1), revision: 0 };
+    const res = await fetch('/api/deep-swarm/save', { headers: { Authorization: `Bearer ${account.accountId}.${account.secret}` } });
+    if (!res.ok) throw new Error(`connect ${res.status}`);
+    const remote = await res.json();
+    if (!confirm('Replace this local pilot with the cloud career? Export first if you need both.')) return;
+    account.revision = remote.revision;
+    localStorage.setItem(cloudAccountKey(), JSON.stringify(account));
+    localStorage.setItem(profileSaveKey(), JSON.stringify(remote.save));
+    location.reload();
+}
+async function syncCloudSave() {
+    const account = loadCloudAccount();
+    if (!account) return;
+    const save = JSON.parse(localStorage.getItem(profileSaveKey()) || 'null');
+    const res = await fetch('/api/deep-swarm/save', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${account.accountId}.${account.secret}` },
+        body: JSON.stringify({ revision: account.revision, save }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409) { accountStatus = 'SYNC CONFLICT — CONNECT TO REVIEW'; return; }
+    if (!res.ok) throw new Error(`sync ${res.status}`);
+    account.revision = data.revision;
+    localStorage.setItem(cloudAccountKey(), JSON.stringify(account));
+    accountStatus = 'SYNCED';
+}
+async function manageCloudAccount() {
+    const account = loadCloudAccount();
+    if (!account) {
+        const action = prompt('Cloud save: C = create a new account, L = link an existing recovery code.', 'C');
+        if (action?.toUpperCase() === 'C') await createCloudAccount();
+        if (action?.toUpperCase() === 'L') await connectCloudAccount();
+        return;
+    }
+    const action = prompt('Cloud save: S = sync, C = recovery code, D = disconnect, E = erase cloud account.', 'S');
+    if (!action) return;
+    if (action.toUpperCase() === 'S') await syncCloudSave();
+    if (action.toUpperCase() === 'C') prompt('Copy your recovery code.', `${account.accountId}.${account.secret}`);
+    if (action.toUpperCase() === 'D' && confirm('Disconnect cloud sync from this device? The cloud career is not deleted.')) {
+        localStorage.removeItem(cloudAccountKey()); accountStatus = 'SYNC DISCONNECTED';
+    }
+    if (action.toUpperCase() === 'E' && confirm('Permanently erase this cloud account and its save? Your local career remains.')) {
+        const res = await fetch('/api/deep-swarm/account', { method: 'DELETE', headers: { Authorization: `Bearer ${account.accountId}.${account.secret}` } });
+        if (!res.ok) throw new Error(`erase ${res.status}`);
+        localStorage.removeItem(cloudAccountKey()); accountStatus = 'CLOUD ACCOUNT ERASED';
+    }
+}
+function createLocalProfile() {
+    if (profileIndex.profiles.length >= 4) { accountStatus = 'LOCAL PROFILE LIMIT REACHED'; return; }
+    const name = (prompt('Pilot name', `PILOT ${String(profileIndex.profiles.length + 1).padStart(2, '0')}`) || '').trim().slice(0, 24);
+    if (!name) return;
+    saveMeta();
+    const id = newProfileId();
+    profileIndex.profiles.push({ id, name, createdAt: Date.now() });
+    profileIndex.activeProfileId = id;
+    localStorage.setItem(SAVE_INDEX_KEY, JSON.stringify(profileIndex));
+    location.reload();
+}
+function cycleLocalProfile() {
+    if (profileIndex.profiles.length < 2) return;
+    saveMeta();
+    const at = profileIndex.profiles.findIndex(p => p.id === profileIndex.activeProfileId);
+    profileIndex.activeProfileId = profileIndex.profiles[(at + 1) % profileIndex.profiles.length].id;
+    localStorage.setItem(SAVE_INDEX_KEY, JSON.stringify(profileIndex));
+    location.reload();
+}
+function manageLocalProfiles() {
+    const action = prompt(`Pilots: C = create, S = switch (${profileIndex.profiles.length}/4), A = cloud account, L = link recovery code.`, profileIndex.profiles.length > 1 ? 'S' : 'C');
+    if (action?.toUpperCase() === 'C') createLocalProfile();
+    if (action?.toUpperCase() === 'S') cycleLocalProfile();
+    if (action?.toUpperCase() === 'A') manageCloudAccount().catch(err => { accountStatus = `SYNC ERROR ${String(err.message || err).slice(0, 24)}`; });
+    if (action?.toUpperCase() === 'L') connectCloudAccount().catch(err => { accountStatus = `SYNC ERROR ${String(err.message || err).slice(0, 24)}`; });
+}
+function exportCareer() {
+    saveMeta();
+    const blob = new Blob([localStorage.getItem(profileSaveKey())], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `deep-swarm-${activeProfile().name.toLowerCase().replace(/\s+/g, '-')}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function resetCareer() {
+    const fresh = defaultMeta();
+    fresh._seenIntro = true;
+    meta = fresh;
+    clearCheckpoint();
+    saveMeta();
+    game = null;
+    lastRunSetup = null;
+    location.reload();
+}
+function checkpointKey() { return `deepswarm_checkpoint_${profileIndex.activeProfileId}`; }
+function saveCheckpoint(g = game) {
+    if (!g || phase !== 'playing') return;
+    try {
+        const checkpoint = {
+            version: 1, savedAt: Date.now(), setup: lastRunSetup,
+            run: {
+                player: g.player, systems: g.systems, depth: g.depth, deepestDepth: g.deepestDepth,
+                wave: g.wave, waveTimer: g.waveTimer, runTime: g.runTime, kills: g.kills,
+                score: g.score, scoreCombo: { ...g.scoreCombo, uniqueTypes: [...(g.scoreCombo?.uniqueTypes || [])] },
+                goldEarned: g.goldEarned, inventory: g.inventory, objectives: g.objectives,
+                selectedCards: (g.selectedCards || []).map(c => c.id), pickedUpgrades: g.pickedUpgrades || [],
+                attention: g.attention || 0, moon: g.moon, ascending: !!g.ascending,
+            },
+        };
+        localStorage.setItem(checkpointKey(), JSON.stringify(checkpoint));
+    } catch {}
+}
+function loadCheckpoint() {
+    try { return JSON.parse(localStorage.getItem(checkpointKey())) || null; } catch { return null; }
+}
+function clearCheckpoint() { localStorage.removeItem(checkpointKey()); }
+function resumeCheckpoint() {
+    const checkpoint = loadCheckpoint();
+    if (!checkpoint?.run) return false;
+    const run = checkpoint.run;
+    game = createGame();
+    Object.assign(game, {
+        depth: run.depth, deepestDepth: run.deepestDepth, wave: run.wave, waveTimer: run.waveTimer,
+        runTime: run.runTime, kills: run.kills, score: run.score, goldEarned: run.goldEarned,
+        inventory: run.inventory || [], objectives: run.objectives || [], systems: run.systems || createSubSystems(),
+        attention: run.attention || 0, moon: run.moon || 'p9', ascending: !!run.ascending,
+        pickedUpgrades: run.pickedUpgrades || [],
+    });
+    Object.assign(game.player, run.player || {});
+    game.scoreCombo = { ...game.scoreCombo, ...(run.scoreCombo || {}), uniqueTypes: new Set(run.scoreCombo?.uniqueTypes || []) };
+    game.selectedCards = (run.selectedCards || []).map(id => CARD_DEFS.find(c => c.id === id)).filter(Boolean);
+    lastRunSetup = checkpoint.setup || { cardIds: game.selectedCards.map(c => c.id), objectiveIds: game.objectives.map(o => o.id) };
+    updateWorldBounds(game);
+    phase = 'playing';
+    bootPerf.runRequested = performance.now();
+    startDrone();
+    return true;
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveCheckpoint(); });
 function defaultMeta() {
     return { totalRuns: 0, totalKills: 0, gold: 0, bestTime: 0, bestWave: 0, bestKills: 0,
         upgrades: { damage: 0, hp: 0, speed: 0, xpGain: 0 },
@@ -1690,7 +1909,7 @@ function mulberry32(a) {
 }
 function seedFromString(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return h >>> 0; }
 function RND() { return dailyRng ? dailyRng() : Math.random(); }
-const DEEP_SWARM_BUILD = '2026.08.12-pressure-cockpit';
+const DEEP_SWARM_BUILD = '2026.08.16-pressure-cockpit-xp-saves';
 const RUN_TRACE_LIMIT = 30;
 let runTrace = [];
 let lastRuntimeError = null;
@@ -2260,8 +2479,8 @@ const EVENT_DEFS = [
     { id: 'scrubber_saturated', weight: 2, minWave: 7, title: 'SCRUBBER SATURATED', text: 'CO₂ is climbing. The cartridges are spent and the spares are aft, and the walk aft is the kind of walk you do not want to make while thinking slowly. NEREID has started counting your breaths out loud, which she believes is helpful.',
         choices: [
             { text: '[1] SWAP THEM — against the clock', fn: g => { openRig('scrub', 'playing'); } },
-            { text: '[2] RUN RICH — burn reserve to scrub it (−30 battery)', fn: g => { g.player.battery = Math.max(0, (g.player.battery || 100) - 30); addNereidLog(g, 'Bleeding reserve through the scrubber. Inefficient, and it works.'); } },
-        ], noChoice: g => { g.player.battery = Math.max(0, (g.player.battery || 100) - 45); g.player.corruption += 5; } },
+            { text: '[2] RUN RICH — burn reserve to scrub it (−30 battery)', fn: g => { g.player.battery = Math.max(0, (g.player.battery ?? 100) - 30); addNereidLog(g, 'Bleeding reserve through the scrubber. Inefficient, and it works.'); } },
+        ], noChoice: g => { g.player.battery = Math.max(0, (g.player.battery ?? 100) - 45); g.player.corruption += 5; } },
     { id: 'shadow_closes', minWave: 11, minDepth: 2000, attn: 45, title: 'IT HAS CLOSED', text: 'The contact that has been matching your depth since the shelf is no longer matching it. It is two hundred metres nearer than the last plot and holding station there, exactly at the edge of the lamp, the way something waits when it has decided it has time.',
         choices: [
             { text: '[1] GO DARK AND DRIFT — let it lose interest', fn: g => { g.lightOn = false; g.silent = true; g.attention = Math.max(0, (g.attention || 0) * 0.4); g.player.corruption += 5; addNereidLog(g, 'All stop, lamps out. We wait. I do not know how long it waits.'); } },
@@ -2350,8 +2569,8 @@ const EVENT_DEFS = [
     { id: 'junction_fault', weight: 2, minWave: 3, title: 'ELECTRICAL FAULT', text: 'Junction box four is fouled — something organic got into the cable run and died there, and the relays are arcing through it. Weapons are browning out mid-cycle. LANTERN-3\'s maintenance log ended with this exact fault signature. Its next entry was never written.',
         choices: [
             { text: '[1] OPEN DAMAGE BLUEPRINT — reroute the live bus', fn: g => { openSystemIncident('reactor', 'junction box four arcing', 38); } },
-            { text: '[2] BYPASS — quick splice, -15 battery', fn: g => { g.player.battery = Math.max(10, (g.player.battery || 100) - 15); addNereidLog(g, 'Bypassed. The splice will hold. Probably.'); } },
-        ], noChoice: g => { g.player.battery = Math.max(10, (g.player.battery || 100) - 15); } },
+            { text: '[2] BYPASS — quick splice, -15 battery', fn: g => { g.player.battery = Math.max(10, (g.player.battery ?? 100) - 15); addNereidLog(g, 'Bypassed. The splice will hold. Probably.'); } },
+        ], noChoice: g => { g.player.battery = Math.max(10, (g.player.battery ?? 100) - 15); } },
     { id: 'pressure_spike', minWave: 4, title: 'PRESSURE SPIKE', text: 'The trench floor is moving — a slow-motion shrug the seismographs upstairs will file as a "minor event." Down here the pressure wave arrives as a fist. The hull is singing in a key NEREID says she has heard only once before, on a recording she is not supposed to have.',
         choices: [
             { text: '[1] BRACE — Spend HP for damage boost', fn: g => { g.player.hp -= 10; g.player.dmgMult *= 1.15; g.streak = '+15% DAMAGE'; g.streakTimer = 2; } },
@@ -2380,7 +2599,7 @@ const EVENT_DEFS = [
     { id: 'scrubber_clog', weight: 2, minWave: 6, title: 'CO₂ SCRUBBER CLOG', text: 'The air is going stale — CO2 creeping, the first copper taste at the back of the throat. The scrubber bed is fouled with something organic that came through the intake screens, and whatever it is, it is still faintly warm. The manual gives you nineteen minutes of margin. The manual has been wrong before.',
         choices: [
             { text: '[1] OPEN DAMAGE BLUEPRINT — clear life support', fn: g => { openSystemIncident('ballast', 'scrubber bed fouled', 34); } },
-            { text: '[2] CRACK A SPARE CELL — breathe easy, -20 battery', fn: g => { g.player.battery = Math.max(10, (g.player.battery || 100) - 20); } },
+            { text: '[2] CRACK A SPARE CELL — breathe easy, -20 battery', fn: g => { g.player.battery = Math.max(10, (g.player.battery ?? 100) - 20); } },
         ], noChoice: g => { g.player.hp -= 12; addNereidLog(g, 'You waited. The air noticed.'); } },
     { id: 'microfracture', weight: 2, minWave: 10, title: 'HULL MICROFRACTURE', text: 'A hairline crack in the pressure hull, too fine to see, singing at the edge of hearing — a wet-glass note that rises as you descend. NEREID is tracking it by ear. At this depth a hairline does not stay a hairline; it matures, like everything else down here, into something with appetite.',
         choices: [
@@ -3547,6 +3766,43 @@ function recordSectorDive(g) {
     campaignAct();
 }
 let gameMode = 'descent'; // the deep is always alive — ecology/horror is the whole game now
+let lastRunSetup = null;
+
+function launchRun(selected, objectives = pendingObjectives) {
+    bootPerf.runRequested = performance.now();
+    game = createGame();
+    if (dailyRng) { game.daily = dayKeyUTC(); dailyRng = null; dailyArmed = false; }
+    game.selectedCards = selected;
+    game.objectives = objectives || [];
+    for (const c of selected) c.fn(game);
+    const tagCounts = {};
+    for (const c of selected) for (const t of c.tags) tagCounts[t] = (tagCounts[t] || 0) + 1;
+    for (const syn of SYNERGIES) {
+        if ((tagCounts[syn.tag] || 0) >= syn.count) {
+            syn.fn(game);
+            game.activeSynergies.push(syn.name);
+            game.streak = 'SYNERGY: ' + syn.name; game.streakTimer = 2;
+        }
+    }
+    lastRunSetup = { cardIds: selected.map(c => c.id), objectiveIds: (objectives || []).map(o => o.id) };
+    clearCheckpoint();
+    phase = 'playing';
+    startDrone();
+}
+
+function retryLastRun() {
+    if (!lastRunSetup) return false;
+    const selected = lastRunSetup.cardIds.map(id => CARD_DEFS.find(c => c.id === id)).filter(Boolean);
+    const objectives = lastRunSetup.objectiveIds.map(id => {
+        const o = OBJECTIVE_POOL.find(candidate => candidate.id === id);
+        if (!o) return null;
+        const risk = contractRisk(o);
+        return { ...o, progress: 0, complete: false, failed: false, claimed: false, risk, _mats: contractMats(risk) };
+    }).filter(Boolean);
+    if (!selected.length) return false;
+    launchRun(selected, objectives);
+    return true;
+}
 
 function createGame() {
     const char = CHARACTERS[meta.selectedChar] || CHARACTERS.sub_basic;
@@ -3576,6 +3832,7 @@ function createGame() {
         depthCharges: [], lures: [], deployables: [],
         wave: 1, waveTimer: 0, spawnTimer: 0, spawnRate: 2.4,
         runTime: 0, kills: 0, gemsCollected: 0, comboTimer: 0, combo: 0, bestCombo: 0,
+        openingGrace: meta.totalRuns === 0 ? 10 : 4,
         streak: '', streakTimer: 0,
         shake: 0, flashTimer: 0,
         slowmo: 0,
@@ -3986,7 +4243,7 @@ function firePing(g) {
     g._lastListenerSound = g.runTime;   // sonar wakes Listeners
     // A sweep is information bought with reserve and exposure. AUTO remains useful,
     // but leaving it on is no longer a safe way to coast through the trench.
-    g.player.battery = Math.max(0, (g.player.battery || 100) - 0.45);
+    g.player.battery = Math.max(0, (g.player.battery ?? 100) - 0.45);
     g.attention = Math.min(100, (g.attention || 0) + 3);
     // HEMOBRINE — Red Layer eats sonar 40% of pings, Abyssal transition 15%. Cooldown still consumes.
     const _zone = zoneFromDepth(g.depth);
@@ -4028,7 +4285,7 @@ function firePing(g) {
 }
 
 function fireWeapons(g, dt) {
-    if ((g.player.battery || 100) <= 1) return;
+    if ((g.player.battery ?? 100) <= 1) return;
     if (!g.deployables) g.deployables = [];
     // SILENT RUNNING — weapons hold fire; cooldowns still recover, ready the moment you go loud
     if (g.silent) {
@@ -4057,7 +4314,7 @@ function fireWeapons(g, dt) {
         const area = def.baseArea * g.player.areaMult * (1 + (w.level - 1) * 0.1);
 
         if (w.id === 'sonar') {
-            g.player.battery = Math.max(0, (g.player.battery || 100) - 0.45);
+            g.player.battery = Math.max(0, (g.player.battery ?? 100) - 0.45);
             g.attention = Math.min(100, (g.attention || 0) + 3);
             g.effects.push({ type: 'sonar_ring', x: g.player.x, y: g.player.y, radius: 0, maxRadius: area, dmg, speed: 280, hit: new Set() });
             g.sonarReveal = 1.0;
@@ -5043,9 +5300,9 @@ function updateDread(g, dt, p) {
 
     // --- HYPOXIA (tension) — failing life support or a failing MIND narrows the
     // world to a tube and puts your own breathing in the mix. ---
-    const bat = p.battery == null ? 100 : p.battery;
+    const lifeSupport = g.systems?.ballast?.condition ?? 100;
     g._hypoxia = Math.min(1, Math.max(
-        bat < 32 ? (32 - bat) / 32 : 0,
+        lifeSupport < 55 ? (55 - lifeSupport) / 45 : 0,
         corr > 72 ? (corr - 72) / 28 : 0,
     ));
     if (g._hypoxia > 0.2) {
@@ -6080,6 +6337,7 @@ function update(dt) {
     if (traceSecond !== g._lastTraceSecond) {
         g._lastTraceSecond = traceSecond;
         traceRun(g);
+        if (traceSecond > 0 && traceSecond % 20 === 0) saveCheckpoint(g);
     }
 
     // --- ECOLOGY (Phase 1): mode + stimulus bookkeeping ---
@@ -6536,7 +6794,7 @@ function update(dt) {
     // COLD OPEN — the first 18 seconds are empty water on purpose. Dread needs a
     // baseline of quiet to deviate from; starting mid-swarm meant the trench never
     // had a silence to break.
-    const _coldOpen = g.runTime < 18 && !g.ascending;
+    const _coldOpen = g.runTime < g.openingGrace && !g.ascending;
     if (!_coldOpen && !g._dreadNoSpawn && !g._tensionNoSpawn && g.enemies.length < _popCap && g.spawnTimer >= g.spawnRate * g._tensionSpawnMult * ascendMult * (1 - (g.attention || 0) * 0.002)) {
         g.spawnTimer = 0;
         const earlyMult = g.runTime < 90 ? 0.5 : 1;
@@ -7139,7 +7397,7 @@ function update(dt) {
                 } else {
                     e.x = p.x + Math.cos(e._latchA) * (16 + e.size);
                     e.y = p.y + Math.sin(e._latchA) * (16 + e.size);
-                    p.battery = Math.max(0, (p.battery || 100) - 1.3 * dt);
+                    p.battery = Math.max(0, (p.battery ?? 100) - 1.3 * dt);
                     p.hp -= 0.4 * dt;
                     if (Math.random() < dt * 0.5) g.floatingTexts.push({ x: p.x, y: p.y - 26, text: 'POWER DRAIN — DASH', color: '#FFD040', life: 0.9, vy: -20 });
                 }
@@ -7277,7 +7535,7 @@ function update(dt) {
                 sfxEnemyDeath(e.typeId);
                 // Battery recharge — kinetic scavenge from kills (more for big enemies)
                 const charge = 1 + Math.min(8, (e.maxHp || 1) / 30);
-                g.player.battery = Math.min(100, (g.player.battery || 100) + charge);
+                g.player.battery = Math.min(100, (g.player.battery ?? 100) + charge);
                 // Objective counters
                 if (e.aberrant) g._aberrantKills = (g._aberrantKills || 0) + 1;
                 if (e.isBoss || (e.maxHp || 0) >= 500) {
@@ -7535,7 +7793,7 @@ function update(dt) {
             if (dist(pr, p) < 14 + 6 && p.iFrames <= 0) {
                 // ARC LAMPREY — the bite empties the battery, not the hull
                 if (pr.emp) {
-                    p.battery = Math.max(0, (p.battery || 100) - 9);
+                    p.battery = Math.max(0, (p.battery ?? 100) - 9);
                     p.iFrames = 0.3; g.shake = 3;
                     g.floatingTexts.push({ x: p.x, y: p.y - 20, text: 'POWER DRAIN', color: '#80E0FF', life: 0.9, vy: -28 });
                     playTone(70, 0.25, 'square', 0.06);
@@ -7987,16 +8245,18 @@ function update(dt) {
     const depthFactor = 1 + Math.min(2, (g.depth || 0) / 3000);
     const reactorPenalty = 1 / systemEfficiency(g, 'reactor');
     const lifeSupportPenalty = 1 / systemEfficiency(g, 'ballast');
-    g.player.battery = Math.max(0, (g.player.battery || 100) - 0.35 * depthFactor * reactorPenalty * lifeSupportPenalty * dt);
-    // O2/POWER as the dive clock (Dave-style): low = warning, empty = the deep takes the hull.
-    if (g.player.battery <= 0.5) {
-        g.player.hp -= 4 * dt; // power out — life support failing; surface or die
-        g._lastDamageCause = 'POWER FAILURE';
-        if (!g._o2Crit) { g._o2Crit = true; addNereidLog(g, 'Power gone. Life support failing — SURFACE, Pilot. Now.'); g.shake = Math.min(8, (g.shake || 0) + 3); }
+    g.player.battery = Math.max(0, (g.player.battery ?? 100) - 0.35 * depthFactor * reactorPenalty * lifeSupportPenalty * dt);
+    // Reserve is a recoverable tactical budget. A brownout is frightening and
+    // inconvenient, but never a hidden second health bar.
+    if (g._brownout || g.player.battery <= 0.5) {
+        g._brownout = true;
+        g.lightOn = false;
+        if ((g.noise || 0) < 0.35) g.player.battery = Math.min(14, g.player.battery + 1.4 * dt);
+        if (!g._reserveCrit) { g._reserveCrit = true; addNereidLog(g, 'Reserve empty. Non-critical buses shed. Hold quiet while the emergency cell wakes.'); g.shake = Math.min(8, (g.shake || 0) + 3); }
+        if (g.player.battery >= 12) { g._brownout = false; g._reserveCrit = false; addNereidLog(g, 'Emergency bus stable. Reserve twelve percent. Choose what you wake.'); }
     } else {
-        g._o2Crit = false;
-        if (g.player.battery <= 25 && !g._o2Warn) { g._o2Warn = true; addNereidLog(g, 'Reserve power under 25%. Scavenge charge from a kill — or start the climb (Z).'); }
-        if (g.player.battery > 30) g._o2Warn = false;
+        if (g.player.battery <= 25 && !g._reserveWarn) { g._reserveWarn = true; addNereidLog(g, 'Reserve under 25%. Find a capacitor, work a junction, or start the climb (Z).'); }
+        if (g.player.battery > 30) g._reserveWarn = false;
     }
     // Hold-full pressure: salvage is left behind once the hold caps. Bank it by ascending.
     if (!cargoHasSpace(g)) { if (!g._holdFullWarned) { g._holdFullWarned = true; addNereidLog(g, 'Hold packed. Reorganise [TAB], jettison cargo, or ascend [Z].'); } }
@@ -8108,6 +8368,7 @@ function update(dt) {
         g.depth = Math.max(0, g.depth - 12 * dt);
         if (g.depth <= 0 && phase === 'playing') {
             // SURFACED — bank everything, end run with full reward
+            clearCheckpoint();
             phase = 'mooring'; // surfaced alive — go to the Mooring hub (was: death screen)
             g._surfaced = true;
             if ((g.deepestDepth || 0) > 4000) meta.nereidDrift = (meta.nereidDrift || 0) + 1;   // the hadal leaves marks
@@ -8401,12 +8662,12 @@ function update(dt) {
 function onDeath(g) {
     if (!g._deathCause) {
         if (g._runtimeError) g._deathCause = 'SYSTEM ERROR';
-        else if ((g.player.battery || 0) <= 0.5) g._deathCause = 'POWER FAILURE';
         else if (g.depth > (g.player._crushDepth || 3000)) g._deathCause = 'CRUSH DEPTH';
         else if (g._lastAttackerTypeId) g._deathCause = 'CREATURE ATTACK';
         else g._deathCause = g._lastDamageCause || 'HULL FAILURE';
     }
     traceRun(g, 'death:' + g._deathCause);
+    clearCheckpoint();
     sfxDeath();
     phase = 'death';
     // Stats that survive across DSVs (achievement-style)
@@ -9203,11 +9464,19 @@ function draw() {
         // Feature 4: Aberrant enemies — jitter + color shift
         const aberrantJitter = e.aberrant ? (Math.random() - 0.5) * 3 : 0;
 
+        if (_perf.fx === 'critical' && !e.isBoss && !e.aberrant && dist2(e, g.player) > 170 * 170) {
+            ctx.globalAlpha = e.ghost ? 0.28 : 0.82;
+            ctx.fillStyle = col;
+            ctx.beginPath(); ctx.arc(sx, sy, Math.max(3, e.size * 0.62), 0, PI2); ctx.fill();
+            ctx.globalAlpha = 1;
+            continue;
+        }
+
         // Soft glow behind every enemy (cached sprite — no per-frame allocation)
-        if (_perf.fx !== 'reduced' || e.isBoss || e.aberrant) drawGlow(ctx, col, sx, sy, e.size * 3, 0.4);
+        if (_perf.fx === 'full' || e.isBoss || e.aberrant) drawGlow(ctx, col, sx, sy, e.size * 3, 0.4);
 
         // UNKNOWN CONTACT tag — first encounter (per run), tag fades when scanned
-        if (_perf.fx !== 'reduced' && e.typeId && g._scannedThisRun && !g._scannedThisRun.has(e.typeId) && !e.isBoss && !isGhost) {
+        if (_perf.fx === 'full' && e.typeId && g._scannedThisRun && !g._scannedThisRun.has(e.typeId) && !e.isBoss && !isGhost) {
             const pulse = 0.5 + Math.sin(t * 3 + e.x * 0.05) * 0.3;
             ctx.fillStyle = `rgba(180,200,220,${pulse})`;
             ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center';
@@ -10305,7 +10574,7 @@ function draw() {
         const caustAlpha = 0.04 * (1 - g.depth / 500);
         ctx.globalAlpha = caustAlpha;
         ctx.fillStyle = '#5ADFCF';
-        const caustics = _perf.fx === 'reduced' ? 5 : 12;
+        const caustics = _perf.fx === 'full' ? 12 : 5;
         for (let ci = 0; ci < caustics; ci++) {
             const cx2 = (Math.sin(t * 0.3 + ci * 2.1) * 0.5 + 0.5) * w;
             const cy2 = (Math.cos(t * 0.25 + ci * 1.7) * 0.5 + 0.5) * h;
@@ -10319,11 +10588,14 @@ function draw() {
     // --- VENT GLOW (deep zones — distant red/orange thermal vents glow upward from below) ---
     if (g.depth > 2200 && g.depth < 5500) {
         const ventPow = Math.min(1, (g.depth - 2200) / 1800);
-        const ventGrad = ctx.createLinearGradient(0, h * 0.6, 0, h);
-        ventGrad.addColorStop(0, 'rgba(0,0,0,0)');
-        ventGrad.addColorStop(1, `rgba(180,60,40,${0.06 * ventPow * (0.7 + Math.sin(t * 0.4) * 0.3)})`);
+        const ventGrad = overlayGradient(`vent:${w}:${h}`, () => {
+            const grad = ctx.createLinearGradient(0, h * 0.6, 0, h);
+            grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(180,60,40,0.06)'); return grad;
+        });
+        ctx.globalAlpha = ventPow * (0.7 + Math.sin(t * 0.4) * 0.3);
         ctx.fillStyle = ventGrad;
         ctx.fillRect(0, h * 0.6, w, h * 0.4);
+        ctx.globalAlpha = 1;
     }
 
     // --- UNDERWATER COLOR GRADE (teal tint — everything feels submerged) ---
@@ -10331,15 +10603,16 @@ function draw() {
     ctx.fillRect(0, 0, w, h);
 
     // --- SOFT SCANLINES (barely there — texture, not obstruction) ---
-    if (_perf.fx !== 'reduced') {
+    if (_perf.fx === 'full') {
         ctx.fillStyle = texturePattern('water-scanline', 4, 'rgba(0,0,0,0.025)');
         ctx.fillRect(0, 0, w, h);
     }
 
     // --- GENTLE VIGNETTE (cinematic, not claustrophobic) ---
-    const vigGrad2 = ctx.createRadialGradient(w / 2, h / 2, h * 0.4, w / 2, h / 2, h * 0.85);
-    vigGrad2.addColorStop(0, 'rgba(0,0,0,0)');
-    vigGrad2.addColorStop(1, 'rgba(0,0,0,0.25)');
+    const vigGrad2 = overlayGradient(`world-vig:${w}:${h}`, () => {
+        const grad = ctx.createRadialGradient(w / 2, h / 2, h * 0.4, w / 2, h / 2, h * 0.85);
+        grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,0.25)'); return grad;
+    });
     ctx.fillStyle = vigGrad2;
     ctx.fillRect(0, 0, w, h);
 
@@ -10347,10 +10620,10 @@ function draw() {
     drawWorldBoundsWalls(g, cx, cy, w, h);
 
     // --- Glass reflection on viewport (subtle top-left highlight) ---
-    const reflGrad = ctx.createRadialGradient(vpCx - vpRadius * 0.3, vpCy - vpRadius * 0.3, 0, vpCx, vpCy, vpRadius);
-    reflGrad.addColorStop(0, 'rgba(180,220,240,0.04)');
-    reflGrad.addColorStop(0.5, 'rgba(180,220,240,0)');
-    reflGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    const reflGrad = overlayGradient(`glass:${Math.round(vpCx)}:${Math.round(vpCy)}:${Math.round(vpRadius)}`, () => {
+        const grad = ctx.createRadialGradient(vpCx - vpRadius * 0.3, vpCy - vpRadius * 0.3, 0, vpCx, vpCy, vpRadius);
+        grad.addColorStop(0, 'rgba(180,220,240,0.04)'); grad.addColorStop(0.5, 'rgba(180,220,240,0)'); grad.addColorStop(1, 'rgba(0,0,0,0)'); return grad;
+    });
     ctx.fillStyle = reflGrad;
     ctx.fillRect(0, 0, w, h);
 
@@ -11050,7 +11323,7 @@ function drawCompactTelemetry(w, h, g, pal) {
         lines.push({ text: faults.length ? faults.slice(0, 2).map(s => `${s.short} ${Math.round(g.systems[s.id].condition)}%`).join('  ') : 'ALL SYSTEMS NOMINAL', color: faults.length ? '#FF8060' : pal.textDim, size: 9 });
     }
     const bat = p.battery == null ? 100 : p.battery;
-    if (bat < 90) lines.push({ text: `PWR ${Math.floor(bat)}%`, color: bat > 50 ? '#FFD040' : '#FF8040', size: 10 });
+    if (bat < 90) lines.push({ text: `${g._brownout ? 'BROWNOUT' : 'RESERVE'} ${Math.floor(bat)}%`, color: bat > 50 ? '#FFD040' : '#FF8040', size: 10 });
     if (!g.ascending && g.depth > 200) lines.push({ text: '[Z] ASCEND', color: pal.textDim, size: 9 });
     if (g.dread) {
         const clearance = Math.max(0, Math.round(((g.worldBounds && g.worldBounds.radius) || 1000) - dist(g.player, { x: g.worldBounds.cx || 0, y: g.worldBounds.cy || 0 })));
@@ -11297,7 +11570,7 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
         ctx.fillStyle = MIND_COLOR; ctx.fillText(`MIND ${Math.floor(sanity)}%`, 154, 29);
         ctx.fillStyle = XP_COLOR;   ctx.fillText(`LV ${p.level}`, 230, 15);
     } else {
-        drawArc(-Math.PI / 2,  powerPct, POWER_COLOR, 'O₂ / POWER', `${Math.floor(powerPct * 100)}%`);
+        drawArc(-Math.PI / 2, xpPct, XP_COLOR, `LV ${p.level} · XP`, `${Math.floor(p.xp)}/${xpForLevel(p.level)}`);
         drawArc(Math.PI / 6,   sanity / 100, MIND_COLOR, 'MIND', `${Math.floor(sanity)}%`);
         drawArc(5 * Math.PI / 6, hpPct, HULL_COLOR, 'HULL', `${Math.max(0, Math.floor(p.hp))}/${p.maxHp}`);
     }
@@ -11305,13 +11578,13 @@ function drawMinimalHUD(w, h, g, pal, vpCx, vpCy, vpR) {
     // (MIND eye removed 12/07 — at low corruption it read as a stray purple
     // glitch by the MIND arc, and the arc already tells the number.)
 
-    // BATTERY (small inline indicator below depth, not an arc)
+    // RESERVE is a cockpit instrument, not the promise at the top of the view.
     const bat = p.battery != null ? p.battery : 100;
     if (!hasRails && !g._compactTelemetry && bat < 90) {
         const batColor = bat > 50 ? '#FFD040' : bat > 20 ? '#FF8040' : '#DA4060';
         ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left';
         ctx.fillStyle = batColor;
-        ctx.fillText(`PWR ${Math.floor(bat)}%`, 16, h - 50);
+        ctx.fillText(`${g._brownout ? 'BROWNOUT' : 'RESERVE'} ${Math.floor(bat)}%`, 16, h - 50);
     }
     if (!hasRails && !g._compactTelemetry && g.systems) {
         const faults = SYSTEM_DEFS.filter(s => g.systems[s.id].condition < 70);
@@ -12873,12 +13146,12 @@ function drawDeathScreen(w, h, g) {
         ctx.font = 'bold 16px monospace';
         ctx.fillStyle = '#1a2a3a'; ctx.fillRect(w / 2 - bw2 - 8, byM, bw2, bh2);
         ctx.strokeStyle = '#5ADFCF'; ctx.lineWidth = 2; ctx.strokeRect(w / 2 - bw2 - 8, byM, bw2, bh2);
-        ctx.fillStyle = '#FFF'; ctx.fillText('RETURN TO BASE', w / 2 - bw2 / 2 - 8, byM + 33);
+        ctx.fillStyle = '#FFF'; ctx.fillText('RETRY', w / 2 - bw2 / 2 - 8, byM + 33);
         ctx.fillStyle = '#1a2a3a'; ctx.fillRect(w / 2 + 8, byM, bw2, bh2);
         ctx.strokeStyle = '#DAA520'; ctx.strokeRect(w / 2 + 8, byM, bw2, bh2);
-        ctx.fillStyle = '#DAA520'; ctx.fillText('UPGRADES', w / 2 + bw2 / 2 + 8, byM + 33);
+        ctx.fillStyle = '#DAA520'; ctx.fillText('NEW BRIEF', w / 2 + bw2 / 2 + 8, byM + 33);
         addTapZone(w / 2 - bw2 - 8, byM, bw2, bh2, 'Enter');
-        addTapZone(w / 2 + 8, byM, bw2, bh2, 'u');
+        addTapZone(w / 2 + 8, byM, bw2, bh2, 'r');
     } else {
         ctx.fillStyle = '#1a2a3a';
         ctx.fillRect(w / 2 - 100, h / 2 + 100, 200, 40);
@@ -12887,15 +13160,15 @@ function drawDeathScreen(w, h, g) {
         ctx.strokeRect(w / 2 - 100, h / 2 + 100, 200, 40);
         ctx.fillStyle = '#FFF';
         ctx.font = 'bold 14px monospace';
-        ctx.fillText('RETURN TO BASE [Enter]', w / 2, h / 2 + 125);
+        ctx.fillText('RETRY LOADOUT [Enter]', w / 2, h / 2 + 125);
         ctx.fillStyle = '#1a2a3a';
         ctx.fillRect(w / 2 - 100, h / 2 + 150, 200, 40);
         ctx.strokeStyle = '#DAA520';
         ctx.strokeRect(w / 2 - 100, h / 2 + 150, 200, 40);
         ctx.fillStyle = '#DAA520';
-        ctx.fillText('UPGRADES [U]', w / 2, h / 2 + 175);
+        ctx.fillText('NEW EXPEDITION [R]  ·  MOORING [Esc]', w / 2, h / 2 + 175);
         addTapZone(w / 2 - 100, h / 2 + 100, 200, 40, 'Enter');
-        addTapZone(w / 2 - 100, h / 2 + 150, 200, 40, 'u');
+        addTapZone(w / 2 - 100, h / 2 + 150, 200, 40, 'r');
     }
 }
 
@@ -13040,6 +13313,17 @@ function drawTitle(w, h) {
     ctx.fillStyle = `rgba(90,160,170,${subAlpha})`;
     ctx.font = '11px monospace';
     ctx.fillText(meta.totalRuns === 0 ? '"The ocean remembers everything you forget."' : `"${meta.totalRuns} dives. ${meta.totalKills} dead. The swarm grows."`, w / 2, SUBTITLE_Y);
+    ctx.textAlign = 'left'; ctx.font = 'bold 10px monospace'; ctx.fillStyle = '#607A78';
+    ctx.fillText(`${activeProfile().name} · SAVE r${meta._saveRevision || 0}${loadCloudAccount() ? ' · CLOUD' : ''}`, 14, 18);
+    ctx.fillStyle = resetArmedUntil > performance.now() ? '#FF7060' : '#405A60';
+    ctx.fillText(resetArmedUntil > performance.now() ? '[N] AGAIN TO ERASE CAREER' : '[X] BACKUP  ·  [N] NEW CAREER', 14, 34);
+    if (loadCheckpoint()) {
+        ctx.fillStyle = '#80E0A0';
+        ctx.fillText('[R] RESUME INTERRUPTED DIVE', 14, 50);
+    }
+    ctx.fillStyle = '#405A60';
+    ctx.fillText('[J] NEW PILOT  ·  [K] SWITCH  ·  [A] CLOUD  ·  [SHIFT+A] CONNECT', 14, loadCheckpoint() ? 66 : 50);
+    if (accountStatus) { ctx.fillStyle = '#80E0A0'; ctx.fillText(accountStatus, 14, loadCheckpoint() ? 82 : 66); }
 
     // === Character select ===
     const chars = Object.entries(CHARACTERS);
@@ -13917,7 +14201,7 @@ function failRig() {
         if (st.kind === 'trim') { game.player._trimFault = 26; damageSystem(game, 'ballast', 12, 'trim fault'); }
         else if (st.kind === 'bearing') { game.attention = Math.min(100, (game.attention || 0) + 22); damageSystem(game, 'sonar', 10, 'array misaligned'); }
         else if (st.kind === 'purge') { game.player.hp -= 10; damageSystem(game, 'hull', 12, 'lock flooded'); }
-        else if (st.kind === 'scrub') { game.player.battery = Math.max(0, (game.player.battery || 100) - 34); damageSystem(game, 'ballast', 10, 'scrubber fouled'); }
+        else if (st.kind === 'scrub') { game.player.battery = Math.max(0, (game.player.battery ?? 100) - 34); damageSystem(game, 'ballast', 10, 'scrubber fouled'); }
         addNereidLog(game, def.fail);
         if (audioCtx) noiseBurst(0.35, 0.06, 700);
     }
@@ -14306,7 +14590,7 @@ function junctionWin() {
         game.streak = 'BAY UNSEALED — bonus cargo'; game.streakTimer = 2.5;
     } else if (game && game._puzzleReward === 'battery') {
         game._puzzleReward = null;
-        game.player.battery = Math.min(125, (game.player.battery || 100) + 25);
+        game.player.battery = Math.min(125, (game.player.battery ?? 100) + 25);
         addNereidLog(game, 'Junction rebuilt properly. Power restored. Good hands, Pilot.');
         game.streak = 'JUNCTION ONLINE — +25 battery'; game.streakTimer = 2.5;
     } else if (game && game._puzzleReward === 'system' && game._puzzleSystem) {
@@ -14330,7 +14614,7 @@ function junctionLose(msg) {
     if (!jx || jx.over) return;
     jx.over = true; jx.won = false; jx.failMsg = msg;
     if (game) {
-        game.player.battery = Math.max(0, (game.player.battery || 100) - 10);
+        game.player.battery = Math.max(0, (game.player.battery ?? 100) - 10);
         game.attention = Math.min(100, (game.attention || 0) + 15);
         game._puzzleReward = null; game._puzzleWreck = null; game._puzzleSystem = null;
         addNereidLog(game, 'Bus dumped to ground. We keep the boat, we lose the circuit. Move on, Pilot.');
@@ -14800,12 +15084,15 @@ function drawTitleMobile(w, h) {
     ctx.fillStyle = '#0A2A28'; ctx.beginPath(); ctx.roundRect(dive.x, btnY, dive.w, btnH, 8); ctx.fill();
     ctx.strokeStyle = '#5ADFCF'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(dive.x, btnY, dive.w, btnH, 8); ctx.stroke();
     ctx.fillStyle = '#5ADFCF'; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center';
-    ctx.fillText('DIVE ▼', dive.x + dive.w / 2, btnY + 29);
-    addTapZone(dive.x, btnY, dive.w, btnH, 'Enter');
+    const hasCheckpoint = !!loadCheckpoint();
+    ctx.fillText(hasCheckpoint ? 'RESUME ▼' : 'DIVE ▼', dive.x + dive.w / 2, btnY + 29);
+    addTapZone(dive.x, btnY, dive.w, btnH, hasCheckpoint ? 'r' : 'Enter');
     const secondary = [
+        ...(hasCheckpoint ? [{ label: 'NEW DIVE', key: 'Enter', color: '#80E0A0' }] : []),
         { label: 'UPGRADES', key: 'u', color: '#DAA520' },
         { label: `FIELD PDA · ACT ${campaignAct().id}`, key: 'c', color: '#5AAFDA' },
         { label: dailyArmed ? '◈ DAILY ON' : 'DAILY', key: 'd', color: '#E8D080' },
+        { label: 'PILOTS', key: 'j', color: '#B0C8D8' },
     ];
     if (meta.p3Unlocked) secondary.push({ label: meta.destination === 'p3' ? '→ P3 SCAR' : '→ P9', key: 'p', color: meta.destination === 'p3' ? '#C87840' : '#4A8ADA' });
     let sx = dive.x + dive.w + 10;
@@ -16006,22 +16293,7 @@ window.addEventListener('keydown', e => {
         if (e.key === 'Enter' && cardSelected.size === 3) {
             initAudio();
             const selected = [...cardSelected].map(i => cardHand[i]);
-            game = createGame();
-            if (dailyRng) { game.daily = dayKeyUTC(); dailyRng = null; dailyArmed = false; }   // brief is set; the run itself is live
-            game.selectedCards = selected;
-            for (const c of selected) c.fn(game);
-            // Check synergies
-            const tagCounts = {};
-            for (const c of selected) for (const t of c.tags) tagCounts[t] = (tagCounts[t] || 0) + 1;
-            for (const syn of SYNERGIES) {
-                if ((tagCounts[syn.tag] || 0) >= syn.count) {
-                    syn.fn(game);
-                    game.activeSynergies.push(syn.name);
-                    game.streak = 'SYNERGY: ' + syn.name; game.streakTimer = 2;
-                }
-            }
-            phase = 'playing';
-            startDrone();
+            launchRun(selected);
         }
     }
     // Codex
@@ -16091,6 +16363,19 @@ window.addEventListener('keydown', e => {
             if (audioCtx) playTone(dailyArmed ? 520 : 260, 0.08, 'sine', 0.05);
         }
         if (e.key === 'u' || e.key === 'U') phase = 'shop';
+        if (e.key === 'x' || e.key === 'X') { exportCareer(); return; }
+        if ((e.key === 'r' || e.key === 'R') && resumeCheckpoint()) return;
+        if (e.key === 'j' || e.key === 'J') { manageLocalProfiles(); return; }
+        if (e.key === 'k' || e.key === 'K') { cycleLocalProfile(); return; }
+        if (e.key === 'a' || e.key === 'A') {
+            (e.shiftKey ? connectCloudAccount() : manageCloudAccount()).catch(err => { accountStatus = `SYNC ERROR ${String(err.message || err).slice(0, 24)}`; });
+            return;
+        }
+        if (e.key === 'n' || e.key === 'N') {
+            if (resetArmedUntil > performance.now()) resetCareer();
+            else resetArmedUntil = performance.now() + 5000;
+            return;
+        }
         if (e.key === 'c' || e.key === 'C') openPDA('title');
         if (e.key === 't' || e.key === 'T') phase = 'tutorial';
         if (e.key === 'w' || e.key === 'W') phase = 'workshop';
@@ -16168,11 +16453,15 @@ window.addEventListener('keydown', e => {
         }
     }
     if (phase === 'death') {
-        if (e.key === 'Enter') {
-            // Return to TITLE so the player can shop, repair, swap subs before next dive
+        if (e.key === 'Enter' && retryLastRun()) return;
+        if (e.key === 'r' || e.key === 'R') {
             game = null;
-            phase = 'title';
+            cardHand = dealCards(meta.totalRuns);
+            cardSelected = new Set();
+            rollContractBoard();
+            phase = 'contracts';
         }
+        if (e.key === 'Escape') { game = null; phase = 'title'; }
         if (e.key === 'u' || e.key === 'U') phase = 'shop';
         if (e.key === 'w' || e.key === 'W') phase = 'workshop';
     }
@@ -16241,7 +16530,8 @@ function _recordPerf(frame, updateMs, drawMs, postMs) {
     _perf.drawP95 = _percentile(_perf.draw, 0.95);
     _perf.postP95 = _percentile(_perf.post, 0.95);
     const now = performance.now();
-    if (_perf.p95 > 18) { _perf.fx = 'reduced'; _perf.lowUntil = now + 6000; }
+    if (_perf.p95 > 24 || _fps < 48) { _perf.fx = 'critical'; _perf.lowUntil = now + 8000; }
+    else if (_perf.p95 > 18 || _fps < 55) { _perf.fx = 'reduced'; _perf.lowUntil = now + 6000; }
     else if (now > _perf.lowUntil && _perf.p95 < 13) _perf.fx = 'full';
 }
 function _tickFps(ts) {
@@ -16283,9 +16573,10 @@ function drawCRT() {
     // Vignette
     const cx = w / 2, cy = h / 2;
     const maxR = Math.sqrt(cx * cx + cy * cy);
-    const grad = ctx.createRadialGradient(cx, cy, maxR * 0.55, cx, cy, maxR);
-    grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.55)');
+    const grad = overlayGradient(`crt:${w}:${h}`, () => {
+        const cached = ctx.createRadialGradient(cx, cy, maxR * 0.55, cx, cy, maxR);
+        cached.addColorStop(0, 'rgba(0,0,0,0)'); cached.addColorStop(1, 'rgba(0,0,0,0.55)'); return cached;
+    });
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 }
@@ -16311,6 +16602,7 @@ let lastTime = 0;
 function loop(ts) {
     try {
         const frameStart = performance.now();
+        if (!bootPerf.firstFrame) bootPerf.firstFrame = frameStart;
         _tickFps(ts);
         const dt = lastTime ? Math.min((ts - lastTime) / 1000, 0.05) : 0.016;
         lastTime = ts;
@@ -16318,11 +16610,17 @@ function loop(ts) {
         updateMusic(dt);
         const updateEnd = performance.now();
         draw();
-        if (!POSTFX.on && !(isTouchDevice && Math.min(canvas.width, canvas.height) < 520)) drawCRT(); // phones skip the overdraw
+        if (_perf.fx !== 'critical' && !POSTFX.on && !(isTouchDevice && Math.min(canvas.width, canvas.height) < 520)) drawCRT(); // phones skip the overdraw
         drawFps();
         const drawEnd = performance.now();
-        postFX(ts);
+        if (_perf.fx === 'critical') {
+            if (POSTFX.canvas) POSTFX.canvas.style.display = 'none';
+        } else {
+            if (POSTFX.canvas && POSTFX.on) POSTFX.canvas.style.display = 'block';
+            postFX(ts);
+        }
         const postEnd = performance.now();
+        if (phase === 'playing' && bootPerf.runRequested && !bootPerf.firstPlayableFrame) bootPerf.firstPlayableFrame = postEnd;
         _recordPerf(postEnd - frameStart, updateEnd - frameStart, drawEnd - updateEnd, postEnd - drawEnd);
     } catch(err) {
         captureRuntimeError(err, 'animation-loop');
@@ -16338,9 +16636,13 @@ window.__deepSwarm = {
     build: DEEP_SWARM_BUILD,
     getState: () => ({
         phase, error: lastRuntimeError, trace: [...runTrace],
+        boot: { ...bootPerf, scriptStartMs: Math.round(bootPerf.scriptStart), firstFrameMs: Math.round(bootPerf.firstFrame),
+            inputReadyMs: Math.round(bootPerf.inputReady), startToPlayableMs: bootPerf.firstPlayableFrame && bootPerf.runRequested ? Math.round(bootPerf.firstPlayableFrame - bootPerf.runRequested) : 0 },
+        save: { version: SAVE_VERSION, profileId: profileIndex.activeProfileId, revision: meta._saveRevision || 0 },
         options: { autoPing: meta.autoPing, cameraMotion: meta.cameraMotion },
         game: game ? {
             depth: game.depth, wave: game.wave, hp: game.player.hp, battery: game.player.battery,
+            xp: game.player.xp, level: game.player.level, openingGrace: game.openingGrace, brownout: !!game._brownout,
             systems: game.systems, inventory: game.inventory.length, zone: zoneFromDepth(game.depth),
             minedDeposits: game._minedDeposits || 0, deployables: (game.deployables || []).length,
             wakeArmed: game.player._wakeArmed || 0,
@@ -16353,11 +16655,15 @@ window.__deepSwarm = {
                 drawP95: _perf.drawP95, postP95: _perf.postP95, longFrames: _perf.longFrames, fx: _perf.fx },
             dmgMult: game.player.dmgMult, overcharge: game.player._overchargeT || 0,
             attention: Math.round(game.attention || 0), autoPing: game.player._sonarAuto,
+            mining: { equipped: meta.modulesEquipped.includes('mining_laser'), keyHeld: !!keys['e'],
+                nearest: !!game.nearestDeposit, blockedByWreck: !!game.nearestWreck,
+                progress: Math.round((game.nearestDeposit?.mineProgress || 0) * 100) / 100 },
             fallers: (game.fallers || []).length,
             ore: (game.fallers || []).map(f => ({ x: Math.round(f.x - game.player.x), y: Math.round(f.y - game.player.y),
                 vx: Math.round(f.vx), vy: Math.round(f.vy), cracks: f.cracks, need: f.need, engaged: Math.round((f.engaged || 0) * 10) / 10 })),
-            hud: game._cockpitRails ? { rails: true, left: { ...game._cockpitRails.left }, right: { ...game._cockpitRails.right },
+            hud: game._cockpitRails ? { rails: true, primaryMetric: 'xp', left: { ...game._cockpitRails.left }, right: { ...game._cockpitRails.right },
                 porthole: { x: game._vpCx, y: game._vpCy, r: game._vpR } } : { rails: false,
+                primaryMetric: 'xp',
                 porthole: { x: game._vpCx, y: game._vpCy, r: game._vpR } },
             dread: game.dread ? {
                 open: game.dread.openT > 0, openDone: game.dread.openDone,
@@ -16403,6 +16709,23 @@ window.__deepSwarm = {
         if (invuln) { game.player.maxHp = 1e9; game.player.hp = 1e9; game._godmode = true; }
         return this.getState();
     },
+    checkpointRoundTrip() {
+        this.startSeeded('checkpoint');
+        game.depth = 1234; game.deepestDepth = 1234; game.runTime = 42; game.player.xp = 7;
+        lastRunSetup = { cardIds: [], objectiveIds: [] };
+        saveCheckpoint(game);
+        game = null; phase = 'title';
+        const resumed = resumeCheckpoint();
+        const state = this.getState();
+        clearCheckpoint();
+        return { resumed, phase: state.phase, depth: state.game?.depth, runTime: game?.runTime, xp: state.game?.xp };
+    },
+    brownoutRecovery() {
+        this.startSeeded('brownout');
+        game.player.battery = 0; game.player.hp = 90; game.openingGrace = 999; game.noise = 0; game._godmode = true;
+        for (let i = 0; i < 14 * 60; i++) update(1 / 60);
+        return { battery: game.player.battery, hp: game.player.hp, brownout: !!game._brownout };
+    },
     // Dread beats fire on long random timers by design, so they need forcing to be
     // testable at all — otherwise a regression in THE OPEN could sit unnoticed for
     // weeks of playtests.
@@ -16413,7 +16736,7 @@ window.__deepSwarm = {
         if (kind === 'open') { D.openDone = false; D.openT = Number(arg) || 20; D.openSaid = false; D.openShape = false; }
         else if (kind === 'silence') { D.silenceT = Number(arg) || 25; D.teeth = true; }
         else if (kind === 'stalker') { D.stalker = null; game.depth = Math.max(game.depth, 800); }
-        else if (kind === 'hypoxia') { game.player.battery = Number(arg) ?? 8; }
+        else if (kind === 'hypoxia') { game.systems.ballast.condition = Number(arg) ?? 15; }
         else if (kind === 'phantoms') { game.player.corruption = Number(arg) || 80; D.nextPhantom = 0; }
         else if (kind === 'echo') { D.echoT = 0.05; D.echoAng = 1.2; }
         return this.getState();
@@ -16708,8 +17031,10 @@ window.__deepSwarm = {
     },
     spawnTestDeposit(id = 'conductive_vein') {
         if (!game) this.startSeeded('mining-test');
+        game.obstacles = game.obstacles.filter(ob => !ob.deposit || dist(game.player, ob) >= 125);
+        game.wrecks = game.wrecks.filter(wreck => dist(game.player, wreck) >= 170);
         game.obstacles.push({
-            x: game.player.x + 70, y: game.player.y, r: 24, kind: id === 'conductive_vein' ? 'crystal' : 'rock',
+            x: game.player.x + 35, y: game.player.y, r: 24, kind: id === 'conductive_vein' ? 'crystal' : 'rock',
             color: id === 'conductive_vein' ? '#A06ACC' : '#59616A', seed: 7, zone: zoneFromDepth(game.depth),
             obDepth: game.depth, deposit: id, surveyed: true, mineProgress: 0, mined: false, trackDepth: true,
         });
@@ -16737,4 +17062,5 @@ window.__deepSwarm = {
         return this.getState();
     },
 };
+bootPerf.inputReady = performance.now();
 requestAnimationFrame(loop);

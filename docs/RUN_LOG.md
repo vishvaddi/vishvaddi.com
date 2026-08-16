@@ -1,5 +1,13 @@
 # Run Log
 
+## 2026-08-16 — Deep Swarm fast start, XP loop and durable careers
+
+- Reframed the viewport around XP and levels. Reserve now powers equipment and triggers a recoverable brownout rather than masquerading as oxygen or directly draining hull; actual hypoxia follows life-support condition.
+- Shortened opening protection to ten seconds for a first career and four thereafter. Added same-loadout retry on death, explicit fresh expeditions and a double-confirmed New Career reset.
+- Added versioned local pilot profiles, rotating save backups, JSON export and twenty-second/visibility checkpoints with resume-or-new-dive title and Android controls.
+- Added optional recovery-code cloud saves on Cloudflare D1 with hashed secrets, optimistic revision conflicts, disconnect and account deletion. Added a throwaway-account smoke harness covering the full API lifecycle and updated the privacy page.
+- Cached large gradients, converted the title plate to WebP and added reduced/critical effect tiers with simplified distant normal contacts. The isolated forced 4,200 m late-wave soak rose from 31 to 43 fps average; core E2E covers boot readiness, XP HUD, opening grace, checkpoint round trips, brownout recovery and Android layouts.
+
 ## 2026-08-12 — Deep Swarm pressure cockpit and pursuit loop
 
 - Centred compact desktop rails in the side bays, removed the duplicate desktop score/objective overlays and put detailed instruments behind `[I]`.

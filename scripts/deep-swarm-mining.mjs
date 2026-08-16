@@ -28,11 +28,14 @@ try {
   check('surveyed deposit is fixed in the world', before.fallers === 0 && before.obstacles > 0,
     `${before.obstacles} formations · ${before.fallers} loose rocks`)
   await page.keyboard.down('e')
-  await page.waitForTimeout(4500)
+  for (let waited = 0; waited < 8000; waited += 250) {
+    await page.waitForTimeout(250)
+    if ((await page.evaluate(() => window.__deepSwarm.getState().game.minedDeposits)) > before.minedDeposits) break
+  }
   await page.keyboard.up('e')
   const mined = await page.evaluate(() => window.__deepSwarm.getState().game)
   check('holding E mines the surveyed formation', mined.minedDeposits > before.minedDeposits,
-    `${before.minedDeposits} -> ${mined.minedDeposits}`)
+    `${before.minedDeposits} -> ${mined.minedDeposits} · ${JSON.stringify(mined.mining)}`)
 
   await page.evaluate(() => window.__deepSwarm.debugSet({ hp: 40, attention: 80 }))
   const patch = await page.evaluate(() => window.__deepSwarm.debugFieldBay(3))

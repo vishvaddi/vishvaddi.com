@@ -10,5 +10,13 @@
   "durable_objects": {
     "bindings": [{ "name": "RL_DO", "class_name": "RateLimiter" }]
   },
+  "d1_databases": [
+    {
+      "binding": "DEEP_SWARM_DB",
+      "database_name": "deep-swarm-saves",
+      "database_id": "6ff4adb7-cdde-43cc-ac71-221e09389100",
+      "migrations_dir": "migrations"
+    }
+  ],
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RateLimiter"] }]
 }

@@ -27,6 +27,11 @@ try {
   await page.waitForFunction(() => window.__deepSwarm?.build, null, { timeout: 15000 })
   const build = await page.evaluate(() => window.__deepSwarm.build)
   check('boot: cockpit build exposed', /cockpit/.test(build), build)
+  const bootState = await page.evaluate(() => window.__deepSwarm.getState())
+  check('boot: input becomes ready on the first title frame', bootState.boot.inputReadyMs > 0 && bootState.boot.firstFrameMs > 0,
+    `${bootState.boot.inputReadyMs}/${bootState.boot.firstFrameMs}ms`)
+  check('save: versioned local profile is active', bootState.save.version === 2 && !!bootState.save.profileId,
+    `v${bootState.save.version}`)
 
   await page.evaluate(() => window.__deepSwarm.startSeeded('boundary-soak'))
   await page.keyboard.down('s')
@@ -35,6 +40,14 @@ try {
   await page.keyboard.up('s')
   check('controls: holding S stays in the dive', movementState.phase === 'playing', movementState.phase)
   check('options: auto-ping defaults off', movementState.options.autoPing === false && movementState.game.autoPing === false)
+  check('HUD: XP is the primary viewport metric', movementState.game.hud.primaryMetric === 'xp', movementState.game.hud.primaryMetric)
+  check('opening: first-career grace is ten seconds or less', movementState.game.openingGrace <= 10, `${movementState.game.openingGrace}s`)
+  const checkpointState = await page.evaluate(() => window.__deepSwarm.checkpointRoundTrip())
+  check('save: interrupted dive resumes from a safe checkpoint', checkpointState.resumed && checkpointState.phase === 'playing' && checkpointState.depth === 1234 && checkpointState.xp === 7,
+    JSON.stringify(checkpointState))
+  const brownoutState = await page.evaluate(() => window.__deepSwarm.brownoutRecovery())
+  check('reserve: brownout recovers without draining hull', !brownoutState.brownout && brownoutState.battery >= 11 && brownoutState.hp === 90,
+    `${brownoutState.battery.toFixed(1)}% · hull ${brownoutState.hp}`)
   await page.keyboard.press('Escape')
   await page.keyboard.press('f')
   await page.keyboard.press('c')

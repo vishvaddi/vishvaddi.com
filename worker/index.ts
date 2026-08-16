@@ -8,12 +8,52 @@ interface DurableObjectState {
 }
 interface DurableStub { fetch(url: string): Promise<Response> }
 interface DurableNamespace { idFromName(name: string): unknown; get(id: unknown): DurableStub }
+interface D1Result<T = unknown> { results?: T[]; success: boolean; meta?: { changes?: number } }
+interface D1PreparedStatement {
+  bind(...values: unknown[]): D1PreparedStatement;
+  first<T = unknown>(): Promise<T | null>;
+  run<T = unknown>(): Promise<D1Result<T>>;
+}
+interface D1Database { prepare(query: string): D1PreparedStatement }
 interface Env {
   ASSETS: { fetch: (request: Request) => Promise<Response> };
   // Durable Object rate limiter — one instance per IP, so the count is globally
   // consistent (a plain in-memory Map can't be: Cloudflare spreads requests
   // across many isolates). See wrangler.jsonc.
   RL_DO?: DurableNamespace;
+  DEEP_SWARM_DB?: D1Database;
+}
+
+const DEEP_SWARM_SAVE_LIMIT = 1_000_000;
+function base64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+async function sha256(value: string): Promise<string> {
+  return base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))));
+}
+function randomSecret(): string { const bytes = new Uint8Array(32); crypto.getRandomValues(bytes); return base64Url(bytes); }
+function deepSwarmBearer(request: Request): { accountId: string; secret: string } | null {
+  const raw = request.headers.get("Authorization")?.match(/^Bearer\s+([^\s]+)$/i)?.[1] || "";
+  const dot = raw.indexOf(".");
+  if (dot < 1) return null;
+  const accountId = raw.slice(0, dot), secret = raw.slice(dot + 1);
+  if (!/^[0-9a-f-]{36}$/i.test(accountId) || secret.length < 40) return null;
+  return { accountId, secret };
+}
+async function authorisedDeepSwarmAccount(request: Request, db: D1Database) {
+  const bearer = deepSwarmBearer(request);
+  if (!bearer) return null;
+  const row = await db.prepare("SELECT account_id, secret_hash, revision, save_json, updated_at FROM deep_swarm_accounts WHERE account_id = ?")
+    .bind(bearer.accountId).first<{ account_id: string; secret_hash: string; revision: number; save_json: string; updated_at: number }>();
+  if (!row || row.secret_hash !== await sha256(bearer.secret)) return null;
+  return row;
+}
+function validDeepSwarmSave(save: unknown): boolean {
+  if (!save || typeof save !== "object") return false;
+  const candidate = save as { saveVersion?: unknown; career?: unknown };
+  return candidate.saveVersion === 2 && !!candidate.career && typeof candidate.career === "object";
 }
 
 // One Durable Object instance per IP holds a fixed-window counter. Fast-path
@@ -291,6 +331,60 @@ export default {
           headers: { "Retry-After": "60", "Content-Type": "text/plain", "Cache-Control": "no-store" },
         });
       }
+    }
+
+    if (path.startsWith("/api/deep-swarm/")) {
+      if (!env.DEEP_SWARM_DB) return Response.json({ error: "cloud save unavailable" }, { status: 503 });
+      const origin = request.headers.get("Origin");
+      if (origin && origin !== url.origin) return Response.json({ error: "origin rejected" }, { status: 403 });
+      const headers = { "Cache-Control": "no-store", "Content-Type": "application/json" };
+
+      if (path === "/api/deep-swarm/account" && request.method === "POST") {
+        const raw = await request.text();
+        if (raw.length > DEEP_SWARM_SAVE_LIMIT) return Response.json({ error: "save too large" }, { status: 413, headers });
+        let save: unknown;
+        try { save = (JSON.parse(raw) as { save?: unknown }).save; } catch { return Response.json({ error: "invalid json" }, { status: 400, headers }); }
+        if (!validDeepSwarmSave(save)) return Response.json({ error: "invalid save" }, { status: 400, headers });
+        const accountId = crypto.randomUUID(), secret = randomSecret(), now = Date.now();
+        await env.DEEP_SWARM_DB.prepare(
+          "INSERT INTO deep_swarm_accounts (account_id, secret_hash, revision, save_json, created_at, updated_at) VALUES (?, ?, 1, ?, ?, ?)",
+        ).bind(accountId, await sha256(secret), JSON.stringify(save), now, now).run();
+        return Response.json({ accountId, secret, revision: 1 }, { status: 201, headers });
+      }
+
+      if (path === "/api/deep-swarm/save" && request.method === "GET") {
+        const account = await authorisedDeepSwarmAccount(request, env.DEEP_SWARM_DB);
+        if (!account) return Response.json({ error: "unauthorised" }, { status: 401, headers });
+        return Response.json({ revision: account.revision, updatedAt: account.updated_at, save: JSON.parse(account.save_json) }, { headers });
+      }
+
+      if (path === "/api/deep-swarm/save" && request.method === "PUT") {
+        const account = await authorisedDeepSwarmAccount(request, env.DEEP_SWARM_DB);
+        if (!account) return Response.json({ error: "unauthorised" }, { status: 401, headers });
+        const raw = await request.text();
+        if (raw.length > DEEP_SWARM_SAVE_LIMIT) return Response.json({ error: "save too large" }, { status: 413, headers });
+        let body: { revision?: number; save?: unknown };
+        try { body = JSON.parse(raw) as { revision?: number; save?: unknown }; } catch { return Response.json({ error: "invalid json" }, { status: 400, headers }); }
+        if (!validDeepSwarmSave(body.save)) return Response.json({ error: "invalid save" }, { status: 400, headers });
+        if (body.revision !== account.revision) {
+          return Response.json({ error: "conflict", revision: account.revision, updatedAt: account.updated_at }, { status: 409, headers });
+        }
+        const revision = account.revision + 1, now = Date.now();
+        const result = await env.DEEP_SWARM_DB.prepare(
+          "UPDATE deep_swarm_accounts SET revision = ?, save_json = ?, updated_at = ? WHERE account_id = ? AND revision = ?",
+        ).bind(revision, JSON.stringify(body.save), now, account.account_id, account.revision).run();
+        if (!result.success || result.meta?.changes !== 1) return Response.json({ error: "conflict" }, { status: 409, headers });
+        return Response.json({ revision, updatedAt: now }, { headers });
+      }
+
+      if (path === "/api/deep-swarm/account" && request.method === "DELETE") {
+        const account = await authorisedDeepSwarmAccount(request, env.DEEP_SWARM_DB);
+        if (!account) return Response.json({ error: "unauthorised" }, { status: 401, headers });
+        await env.DEEP_SWARM_DB.prepare("DELETE FROM deep_swarm_accounts WHERE account_id = ?").bind(account.account_id).run();
+        return new Response(null, { status: 204, headers });
+      }
+
+      return Response.json({ error: "not found" }, { status: 404, headers });
     }
 
     // Overpass POI lookup proxy. overpass-api.de is the fastest instance that

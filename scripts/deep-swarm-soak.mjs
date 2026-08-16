@@ -4,6 +4,12 @@ import { chromium } from 'playwright-core'
 const BASE = process.argv[2] ?? 'http://localhost:4321'
 const DEPTHS = process.argv[3] ? process.argv[3].split(',').map(Number) : [300, 1200, 2500, 4200]
 const SOAK_MS = Number(process.argv[4] ?? 12000)
+const HARD_TIMEOUT_MS = Math.max(30000, SOAK_MS * DEPTHS.length + 20000)
+const hardTimeout = setTimeout(() => {
+  console.error(`perf soak exceeded ${HARD_TIMEOUT_MS}ms hard timeout`)
+  process.exit(2)
+}, HARD_TIMEOUT_MS)
+hardTimeout.unref()
 
 const browser = await chromium.launch({
   channel: 'chrome',
@@ -60,6 +66,7 @@ try {
   const final = await page.evaluate(() => window.__deepSwarm.getState())
   console.log('phase:', final.phase, '| runtime error:', final.error ?? 'none')
 } finally {
+  clearTimeout(hardTimeout)
   console.log(errors.length ? `\nCONSOLE ERRORS (${errors.length}):\n` + errors.slice(0, 10).join('\n') : '\nno console errors')
   await browser.close()
 }
