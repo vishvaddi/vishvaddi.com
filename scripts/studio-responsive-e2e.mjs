@@ -11,17 +11,16 @@ const viewports = [
 let failures = 0
 const lines = []
 const modeRoute = {
-  DRUMS: ['edit', 'drums', '.wa-page-drums'],
-  PADS: ['play', 'pads', '.wa-page-pads'],
-  SYNTH: ['edit', 'synth', '.wa-page-synth'],
-  CLIPS: ['arrange', null, '.wa-page-song'],
-  DJ: ['play', 'dj', '.wa-page-dj'],
-  MIX: ['mix', null, '.wa-page-mix'],
+  DRUMS: ['drums', '.wa-page-drums'],
+  PADS: ['pads', '.wa-page-pads'],
+  SYNTH: ['synth', '.wa-page-synth'],
+  CLIPS: ['song', '.wa-page-song'],
+  DJ: ['dj', '.wa-page-dj'],
+  MIX: ['mix', '.wa-page-mix'],
 }
 const openMode = async (page, mode) => {
-  const [workspace, tool] = modeRoute[mode]
-  await page.locator(`[data-workspace="${workspace}"].wa-modekey`).click()
-  if (tool) await page.locator(`[data-workspace="${workspace}"][data-mode="${tool}"]`).click()
+  const [key] = modeRoute[mode]
+  await page.locator(`.wa-modekey[data-mode="${key}"]`).click()
 }
 const check = (name, value, detail = '') => {
   lines.push(`  ${value ? '✓' : '✗'} ${name}${detail ? ` — ${detail}` : ''}`)
@@ -54,11 +53,11 @@ for (const [name, width, height] of viewports) {
     check(`${name}: no document horizontal overflow`, geometry.docWidth <= geometry.clientWidth + 1, `${geometry.docWidth}/${geometry.clientWidth}`)
     check(`${name}: workstation fills viewport`, Math.abs(geometry.winHeight - geometry.viewportHeight) <= 2, `${geometry.winHeight}/${geometry.viewportHeight}`)
     check(`${name}: Arrange is the project home`, await page.locator('.wa-page-song').isVisible())
-    check(`${name}: four primary workspaces`, await page.locator('.wa-primary-nav .wa-modekey').count() === 4)
+    check(`${name}: six flat mode keys, no context row`, await page.locator('.wa-primary-nav .wa-modekey').count() === 6 && await page.locator('.wa-context-nav').count() === 0)
 
     for (const mode of ['DRUMS', 'PADS', 'SYNTH', 'CLIPS', 'DJ', 'MIX']) {
       await openMode(page, mode)
-      check(`${name}: ${mode} opens`, await page.locator(modeRoute[mode][2]).isVisible())
+      check(`${name}: ${mode} opens`, await page.locator(modeRoute[mode][1]).isVisible())
       if ((name === 'desktop' || name === 'laptop') && mode === 'PADS') {
         const fill = await page.evaluate(() => {
           const active = document.querySelector('.wa-page:not([hidden])')?.getBoundingClientRect()
@@ -221,10 +220,11 @@ for (const [name, width, height] of viewports) {
       check(`${name}: secondary transport is disclosed`, await page.locator('.wa-transport-timing').isVisible() && await page.locator('.wa-transport-actions').isVisible())
       check(`${name}: CLIPS exposes scene range`, /Scenes \d+–\d+ of 16/.test((await page.locator('.wa-scene-position').textContent()) ?? ''))
       await openMode(page, 'DRUMS')
-      const contextBounds = await page.locator('.wa-context-edit .wa-contextkey').evaluateAll((nodes) => nodes.map((node) => {
+      // Flat nav (S2): all six keys must sit inside the viewport on the dock.
+      const keyBounds = await page.locator('.wa-primary-nav .wa-modekey').evaluateAll((nodes) => nodes.map((node) => {
         const r = node.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }
       }))
-      check(`${name}: Edit tools stay inside the viewport`, contextBounds.length === 3 && contextBounds.every((r) => r.top >= 0 && r.left >= 0 && r.right <= width && r.bottom <= height), `${contextBounds.length} tools`)
+      check(`${name}: mode keys stay inside the viewport`, keyBounds.length === 6 && keyBounds.every((r) => r.top >= 0 && r.left >= 0 && r.right <= width + 1 && r.bottom <= height + 1), `${keyBounds.length} keys`)
       await openMode(page, 'CLIPS')
       await page.locator('.wa-transport button', { hasText: '? Tutorial' }).click()
       const tutorialTop = await page.evaluate(() => {

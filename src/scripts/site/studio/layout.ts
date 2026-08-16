@@ -48,7 +48,7 @@ const MODES: Array<{ id: ModeId; label: string; helpText: string }> = [
   { id: "drums", label: "DRUMS", helpText: "Program the eight drum lanes on the step grid." },
   { id: "pads", label: "PADS", helpText: "Perform on the 16 pads, edit the selected pad, chop breaks and scratch." },
   { id: "synth", label: "SYNTH", helpText: "The VV-1: piano roll or patch editor above always-playable keys." },
-  { id: "song", label: "CLIPS", helpText: "The clip launcher — every track's clips across the eight scenes." },
+  { id: "song", label: "SONG", helpText: "The project home — launch clips, build the arrangement lanes, load and save songs." },
   { id: "dj", label: "DJ", helpText: "Mix local audio across two decks with cues, loops, EQ, sync and recording." },
   { id: "mix", label: "MIX", helpText: "Mixer, master devices, project save and export." },
 ];
@@ -255,82 +255,57 @@ export function buildLayout(p: LayoutPanels): Layout {
   };
   workarea.append(drumsPage, padsPage, soundPage, songPage, djPage, mixPage);
 
-  // ── Cubasis-style workspace navigation ──
-  // Four stable destinations replace six equally weighted screens. Edit and
-  // Play then expose only the tools relevant to that task.
+  // ── Flat FLM navigation (S2) ──
+  // Six stable keys, no workspace layer: SONG is home, every surface is one
+  // tap away, and the dock never changes height. The old workspace concept
+  // survives only as an optional intent hint to setMode ("edit" opens pads on
+  // Steps with the inspector; "play" opens Perform) — used by the track rail
+  // and clip double-taps, never by the nav keys themselves.
   const modeBar = el("nav", "wa-modebar");
-  modeBar.setAttribute("aria-label", "Studio workspaces");
-  const primaryNav = el("div", "wa-primary-nav");
-  const contextNav = el("div", "wa-context-nav");
-  const editNav = el("div", "wa-context-group wa-context-edit");
-  const playNav = el("div", "wa-context-group wa-context-play");
-  contextNav.append(editNav, playNav);
-  modeBar.append(primaryNav, contextNav);
+  modeBar.setAttribute("aria-label", "Studio screens");
+  const primaryNav = el("div", "wa-primary-nav wa-primary-nav-flat");
+  modeBar.append(primaryNav);
 
   let activeMode = (localStorage.getItem("vv_studio_mode") as ModeId) || "song";
   if ((activeMode as string) === "keys") activeMode = "synth";   // pre-D1 saved mode
   if (!MODES.some((m) => m.id === activeMode)) activeMode = "song";
-  let activeWorkspace = (localStorage.getItem("vv_studio_workspace") as WorkspaceId) ||
-    (activeMode === "song" ? "arrange" : activeMode === "mix" ? "mix" : activeMode === "dj" ? "play" : "edit");
+  localStorage.removeItem("vv_studio_workspace");                // retired layer (S2)
   let lastEditMode: ModeId = (["drums", "pads", "synth"] as ModeId[]).includes(activeMode) ? activeMode : "drums";
-  let lastPlayMode: ModeId = (["pads", "synth", "dj"] as ModeId[]).includes(activeMode) ? activeMode : "pads";
-  const primaryButtons = new Map<WorkspaceId, HTMLButtonElement>();
-  const contextualButtons: HTMLButtonElement[] = [];
+  const modeButtons = new Map<ModeId, HTMLButtonElement>();
 
   function setMode(next: ModeId, workspace?: WorkspaceId): void {
     activeMode = next;
-    activeWorkspace = workspace || (next === "song" ? "arrange" : next === "mix" ? "mix" : next === "dj" ? "play" : "edit");
-    if (activeWorkspace === "edit" && (["drums", "pads", "synth"] as ModeId[]).includes(next)) lastEditMode = next;
-    if (activeWorkspace === "play" && (["pads", "synth", "dj"] as ModeId[]).includes(next)) lastPlayMode = next;
+    if ((["drums", "pads", "synth"] as ModeId[]).includes(next)) lastEditMode = next;
     closeOverlays();
-    primaryButtons.forEach((button, id) => button.classList.toggle("active", id === activeWorkspace));
-    contextualButtons.forEach((button) => button.classList.toggle("active", button.dataset.mode === next && button.dataset.workspace === activeWorkspace));
-    modeBar.dataset.workspace = activeWorkspace;
+    modeButtons.forEach((button, id) => button.classList.toggle("active", id === next));
     (Object.keys(pages) as ModeId[]).forEach((id) => { pages[id].hidden = id !== next; });
     trackButtons.forEach((button) => button.classList.toggle("active", button.dataset.mode === lastEditMode));
-    if (next === "pads" && activeWorkspace === "play") { padsView = "perform"; padsPage.classList.remove("show-inspector"); editPadBtn.textContent = "Edit pad"; paintPadsView(); }
-    if (next === "pads" && activeWorkspace === "edit") { padsView = "steps"; padsPage.classList.add("show-inspector"); editPadBtn.textContent = "Close pad"; paintPadsView(); }
+    // Intent hints: an explicit edit/play ask still shapes the pads page.
+    if (next === "pads" && workspace === "play") { padsView = "perform"; padsPage.classList.remove("show-inspector"); editPadBtn.textContent = "Edit pad"; paintPadsView(); }
+    if (next === "pads" && workspace === "edit") { padsView = "steps"; padsPage.classList.add("show-inspector"); editPadBtn.textContent = "Close pad"; paintPadsView(); }
     if (next === "synth") p.onSynthVisible();
     orb.setActive(next === "synth" && !orb.canvas.hidden);
     mixOrb.setActive(next === "mix");
-    const modeLabel = MODES.find((m) => m.id === next)!.label;
-    p.onModeChange(`${activeWorkspace.toUpperCase()} · ${modeLabel}`);
+    p.onModeChange(MODES.find((m) => m.id === next)!.label);
     localStorage.setItem("vv_studio_mode", next);
-    localStorage.setItem("vv_studio_workspace", activeWorkspace);
   }
 
   ([
-    ["arrange", "ARRANGE", "▤"],
-    ["edit", "EDIT", "✎"],
+    ["song", "SONG", "▤"],
+    ["drums", "DRUMS", "▦"],
+    ["pads", "PADS", "◆"],
+    ["synth", "SYNTH", "♪"],
     ["mix", "MIX", "≡"],
-    ["play", "PLAY", "◆"],
+    ["dj", "DJ", "◉"],
   ] as const).forEach(([id, label, icon]) => {
     const button = btn("", "wa-modekey") as HTMLButtonElement;
-    button.classList.remove("wa-btn"); button.dataset.workspace = id;
+    button.classList.remove("wa-btn"); button.dataset.mode = id;
     button.append(el("span", "wa-mode-icon", icon), el("span", "wa-mode-label", label));
-    button.addEventListener("click", () => {
-      if (id === "arrange") setMode("song", id);
-      else if (id === "mix") setMode("mix", id);
-      else if (id === "edit") setMode(lastEditMode, id);
-      else setMode(lastPlayMode, id);
-    });
-    help(button, `${label[0]}${label.slice(1).toLowerCase()} workspace.`);
-    primaryButtons.set(id, button); primaryNav.append(button);
+    button.addEventListener("click", () => setMode(id));
+    help(button, MODES.find((m) => m.id === id)!.helpText);
+    modeButtons.set(id, button); primaryNav.append(button);
   });
-
-  const addContextButton = (host: HTMLElement, workspace: WorkspaceId, mode: ModeId, label: string) => {
-    const button = btn(label, "wa-contextkey") as HTMLButtonElement;
-    button.classList.remove("wa-btn"); button.dataset.workspace = workspace; button.dataset.mode = mode;
-    button.addEventListener("click", () => setMode(mode, workspace));
-    contextualButtons.push(button); host.append(button);
-  };
-  addContextButton(editNav, "edit", "drums", "DRUMS");
-  addContextButton(editNav, "edit", "pads", "PADS");
-  addContextButton(editNav, "edit", "synth", "SYNTH");
-  addContextButton(playNav, "play", "pads", "PADS");
-  addContextButton(playNav, "play", "synth", "KEYS");
-  addContextButton(playNav, "play", "dj", "DJ");
-  setMode(activeMode, activeWorkspace);
+  setMode(activeMode);
 
   // tutorial nav proxies — composite actions per tour stop:
   // 0 pads/perform+inspector · 1 pads/chop · 2 pads/steps · 3 synth/roll · 4 song · 5 mix · 6 synth/patch · 7 dj

@@ -3531,8 +3531,10 @@ button.wa-arrange-lane-name { cursor: pointer; }
     background: rgba(13,17,22,.985);
     z-index: 180;
   }
-  .wa-primary-nav { height: 52px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
-  .immersive-page .wa-modekey { min-height: 52px; padding: 5px 2px; flex-direction: row; gap: 6px; }
+  /* Six flat keys (S2): icon above label, constant dock height — no context
+     band ever appears, so the content viewport no longer resizes on nav. */
+  .wa-primary-nav { height: 52px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; }
+  .immersive-page .wa-modekey { min-height: 52px; padding: 4px 1px; flex-direction: column; gap: 2px; }
   .immersive-page .wa-modekey.active { border-left-width: 1px; border-bottom: 3px solid var(--wa-accent); background: #20262d; }
   .wa-mode-icon { font-size: 15px; }
   .wa-context-nav {

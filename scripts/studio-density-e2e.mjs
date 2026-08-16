@@ -19,13 +19,11 @@ const VIEWPORTS = [
 const INK_FLOOR = { MIX: 42 }
 const MAX_TRAILING = 40
 const modeRoute = {
-  DRUMS: ['edit', 'drums'], PADS: ['play', 'pads'], SYNTH: ['edit', 'synth'],
-  CLIPS: ['arrange', null], MIX: ['mix', null],
+  DRUMS: 'drums', PADS: 'pads', SYNTH: 'synth',
+  CLIPS: 'song', MIX: 'mix',
 }
 const openMode = async (page, mode) => {
-  const [workspace, tool] = modeRoute[mode]
-  await page.locator(`[data-workspace="${workspace}"].wa-modekey`).click()
-  if (tool) await page.locator(`[data-workspace="${workspace}"][data-mode="${tool}"]`).click()
+  await page.locator(`.wa-modekey[data-mode="${modeRoute[mode]}"]`).click()
 }
 
 const results = []

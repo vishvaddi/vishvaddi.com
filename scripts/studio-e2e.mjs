@@ -17,14 +17,12 @@ const testWav = (() => {
 const results = []
 let failed = 0
 const modeRoute = {
-  DRUMS: ['edit', 'drums'], PADS: ['play', 'pads'], SYNTH: ['edit', 'synth'],
-  CLIPS: ['arrange', null], DJ: ['play', 'dj'], MIX: ['mix', null],
+  DRUMS: 'drums', PADS: 'pads', SYNTH: 'synth',
+  CLIPS: 'song', DJ: 'dj', MIX: 'mix',
 }
 
 async function openMode(page, mode) {
-  const [workspace, tool] = modeRoute[mode]
-  await page.locator(`[data-workspace="${workspace}"].wa-modekey`).click()
-  if (tool) await page.locator(`[data-workspace="${workspace}"][data-mode="${tool}"]`).click()
+  await page.locator(`.wa-modekey[data-mode="${modeRoute[mode]}"]`).click()
 }
 
 function check(name, ok, detail = '') {
