@@ -220,6 +220,7 @@ try {
     node.value = '0.37'; node.dispatchEvent(new Event('input', { bubbles: true }))
   })
   await page.locator('.wa-mute').first().click()
+  await page.waitForTimeout(600) // autosave is a 400ms trailing debounce (S4)
   const masterSync = await page.evaluate(() => ({
     knob: document.querySelector('.wa-title .wa-knob[aria-label="Master"]')?.getAttribute('aria-valuenow'),
     saved: JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').mix?.masterLevel,

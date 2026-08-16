@@ -29,11 +29,30 @@ function applyMixState(saved: Partial<typeof mixState>): void {
   if (Array.isArray(saved.solo)) saved.solo.forEach((value, index) => { if (index < solo.length) solo[index] = !!value; });
 }
 
-export function saveAll(): void {
+// saveAll fires on essentially every mutation, and a synchronous full-project
+// stringify per knob-tick is measurable jank on big projects. Trailing
+// debounce, with a flush when the page hides so closing the tab mid-debounce
+// cannot lose the last edit. (The undo stack was audited for the same hazard
+// and cleared: historyState copies sampleData as an ARRAY of string
+// references — JS strings are immutable and shared, not duplicated.)
+let saveTimer = 0;
+function writeNow(): void {
   try {
     localStorage.setItem("vv_studio_v2", JSON.stringify(projectState(false)));
     window.dispatchEvent(new CustomEvent("vv-studio-saved"));
   } catch { /* ignore */ }
+}
+function flushPendingSave(): void {
+  if (!saveTimer) return;
+  window.clearTimeout(saveTimer); saveTimer = 0; writeNow();
+}
+export function saveAll(): void {
+  window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(() => { saveTimer = 0; writeNow(); }, 400);
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flushPendingSave);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushPendingSave(); });
 }
 export function historyState(): HistoryState {
   return {
