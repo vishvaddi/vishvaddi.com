@@ -26,7 +26,7 @@ try {
   await page.goto(`${BASE}/games/deep-swarm/index.html`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => window.__deepSwarm?.build, null, { timeout: 15000 })
   const build = await page.evaluate(() => window.__deepSwarm.build)
-  check('boot: cockpit build exposed', /cockpit/.test(build), build)
+  check('boot: current Deep Swarm build exposed', /foreign-body-hunt/.test(build), build)
   const bootState = await page.evaluate(() => window.__deepSwarm.getState())
   check('boot: input becomes ready on the first title frame', bootState.boot.inputReadyMs > 0 && bootState.boot.firstFrameMs > 0,
     `${bootState.boot.inputReadyMs}/${bootState.boot.firstFrameMs}ms`)
