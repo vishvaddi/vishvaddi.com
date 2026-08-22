@@ -114,6 +114,7 @@ try {
   await page.click('.wa-transport button:has-text("■")')
   await page.waitForTimeout(200)
   await openMode(page, 'CLIPS')
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Session' }).click()
   await page.locator('.wa-clip').first().click()
   check('song: launching a clip returns to Session, visibly', (await songBtn.textContent()) === 'Session')
 
@@ -158,16 +159,17 @@ try {
 
   // ── workflow: the arrangement is undoable ──
   await openMode(page, 'CLIPS')
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Arrange' }).click()
   await page.waitForTimeout(250)
   const chainBefore = await page.locator('.wa-chain-block').count()
-  await page.locator('.wa-composer-head button', { hasText: 'Scene' }).click()
+  await page.locator('.wa-composer-head button', { hasText: 'Clip' }).click()
   await page.waitForTimeout(200)
   const chainAdded = await page.locator('.wa-chain-block').count()
   await page.locator('.wa-transport button[aria-label="Undo"]').click({ timeout: 5000 })
   await page.waitForTimeout(300)
   check('workflow: arrangement edits undo', chainAdded === chainBefore + 1 && await page.locator('.wa-chain-block').count() === chainBefore)
 
-  // ── S1: lanes are independent — adding to pads leaves drums/synth alone ──
+  // ── v16: five timeline lanes are independent ──
   const laneCounts = () => page.evaluate(() =>
     [...document.querySelectorAll('.wa-arrange-lane')].map((row) => row.querySelectorAll('.wa-chain-block').length))
   const lanesBefore = await laneCounts()
@@ -180,11 +182,28 @@ try {
   await page.locator('.wa-transport button[aria-label="Undo"]').click({ timeout: 5000 })
   await page.waitForTimeout(300)
 
+  // ── v16: clips occupy real timeline positions and can leave gaps ──
+  const movable = page.locator('.wa-arrange-lane').first().locator('.wa-chain-block').first()
+  const beforeMove = await movable.evaluate((node) => parseFloat(node.style.left))
+  const box = await movable.boundingBox()
+  if (box) {
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + 112, box.y + box.height / 2, { steps: 8 })
+    await page.mouse.up()
+  }
+  const afterMove = await page.locator('.wa-arrange-lane').first().locator('.wa-chain-block').first().evaluate((node) => parseFloat(node.style.left))
+  check('timeline: clip drag preserves a free start position', afterMove >= beforeMove + 50, `${beforeMove}→${afterMove}px`)
+  await page.locator('.wa-transport button[aria-label="Undo"]').click({ timeout: 5000 })
+  await page.waitForTimeout(300)
+
   // ── S1: the clip decides the editor (double-tap → drum grid, scene selected) ──
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Session' }).click()
   await page.locator('.wa-session-row').nth(1).locator('.wa-clip').nth(2).dblclick()
   await page.waitForTimeout(300)
   check('clips: double-tap opens the drum editor', await page.locator('.wa-page-drums').isVisible())
   await openMode(page, 'CLIPS')
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Session' }).click()
   await page.waitForTimeout(200)
   const selScene = await page.evaluate(() => {
     const firstTrackRow = [...document.querySelectorAll('.wa-session-row')][1]
@@ -193,6 +212,7 @@ try {
   check('clips: double-tap selected the tapped scene', selScene === 2, `scene idx ${selScene}`)
 
   // ── S1: automation + song library fold shut by default ──
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Arrange' }).click()
   check('song page: automation and library are folded',
     await page.locator('.wa-fold').count() === 2
     && await page.evaluate(() => [...document.querySelectorAll('.wa-fold')].every((d) => !d.open)))
@@ -235,7 +255,7 @@ try {
 
   // ── project transitions: blank is explicit, in-place and undoable ──
   await page.locator('.wa-export-key').click()
-  await page.locator('.wa-export-dialog button', { hasText: 'New blank' }).click()
+  await page.locator('.wa-export-dialog button', { hasText: 'New song' }).click()
   await page.waitForTimeout(350)
   const blank = await page.evaluate(() => ({ title: document.querySelector('.wa-project-name')?.value, steps: document.querySelectorAll('.wa-cell.on').length }))
   check('project: explicit blank project applies in place', blank.title === 'Untitled' && blank.steps === 0, JSON.stringify(blank))
@@ -243,6 +263,26 @@ try {
   await page.locator('.wa-transport button[aria-label="Undo"]').click()
   await page.waitForTimeout(300)
   check('project: replacement can be undone', await page.locator('.wa-cell.on').count() > 0)
+
+  // ── v16: v15 projects migrate the shared synth lane without data loss ──
+  await page.waitForTimeout(600)
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('vv_studio_v2'))
+    const legacySynth = saved.arrangement.bass.map(({ id, offset, loop, ...block }) => block)
+    saved.version = 15
+    saved.arrangement = { drums: saved.arrangement.drums, pads: saved.arrangement.pads, synth: legacySynth }
+    localStorage.setItem('vv_studio_v2', JSON.stringify(saved))
+  })
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.wa-transport', { timeout: 15000 })
+  await openMode(page, 'CLIPS')
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Arrange' }).click()
+  const migrated = await page.evaluate(() => ({
+    lanes: document.querySelectorAll('.wa-arrange-lane').length,
+    synthCounts: [...document.querySelectorAll('.wa-arrange-lane')].slice(2).map((lane) => lane.querySelectorAll('.wa-chain-block').length),
+    ids: [...document.querySelectorAll('.wa-chain-block')].every((clip) => !!clip.dataset.clipId),
+  }))
+  check('migration: v15 synth arrangement becomes three stable lanes', migrated.lanes === 5 && migrated.synthCounts.every((count) => count > 0) && migrated.ids, JSON.stringify(migrated))
 
   // ── DJ: local file enters a real deck and cue workflow ──
   await openMode(page, 'DJ')

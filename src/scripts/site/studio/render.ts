@@ -2,11 +2,11 @@
 // Extracted verbatim from index.ts (Phase 0 split). The offline graph must
 // mirror the live engine chain so exports match what you hear.
 import {
-  STEPS, PAD_BANK_SIZE, TRACKS, clip, transport,
+  PAD_BANK_SIZE, TRACKS, ARRANGE_TRACKS, clip, transport,
   allPats, allVels, synthLaneNotes, synthPatches, SYNTH_LANES, patternLengths, patternDivisions, laneLength, laneRate, padEvents, blockAt, songEndBar,
   rackState, audible, mixState,
 } from "./state";
-import type { TrackId } from "./state";
+import type { ArrangeTrackId, TrackId } from "./state";
 import { ensureNodes, trackGain, playDrum, playPad, metroClick, buildMasterChain, buildTracks } from "./engine";
 import * as engine from "./engine";
 import { playNote } from "./vsynth";
@@ -21,7 +21,7 @@ export interface ProjectExport {
   renderBuffer: (mode: "pattern" | "song", onlyTrack?: TrackId | null) => Promise<AudioBuffer>;
 }
 
-export function buildProjectExport(projects: { blank: () => Record<string, unknown>; demo: () => Record<string, unknown> }): ProjectExport {
+export function buildProjectExport(projects: { blank: () => Record<string, unknown>; quick: () => Record<string, unknown>; demo: () => Record<string, unknown> }): ProjectExport {
   const exp = el("div", "wa-panel");
   const expRow = el("div", "wa-export");
   const renderSel = document.createElement("select");
@@ -36,13 +36,13 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
   expRow.append(el("span", "wa-lbl", "Render"), renderSel, wavBtn, mp3Btn, stemsBtn, expStatus);
   const projectRow = el("div", "wa-export");
   const saveProjectBtn = btn("Save project"), loadProjectBtn = btn("Open project");
-  const newProjectBtn = btn("New blank", "wa-btn-sm"), demoProjectBtn = btn("Reload demo", "wa-btn-sm");
+  const quickProjectBtn = btn("Quick beat", "wa-btn-sm"), newProjectBtn = btn("New song", "wa-btn-sm"), demoProjectBtn = btn("Starter song", "wa-btn-sm");
   help(saveProjectBtn, "Download an editable project containing patterns, settings and embedded samples.");
   help(loadProjectBtn, "Open a previously saved editable Studio project.");
   const projectInput = document.createElement("input"); projectInput.type = "file"; projectInput.accept = ".json,application/json"; projectInput.hidden = true;
   help(newProjectBtn, "Replace the current project with a clean blank studio.");
   help(demoProjectBtn, "Reload the editable MIDNIGHT ACID starter project.");
-  projectRow.append(newProjectBtn, demoProjectBtn, saveProjectBtn, loadProjectBtn, projectInput);
+  projectRow.append(quickProjectBtn, newProjectBtn, demoProjectBtn, saveProjectBtn, loadProjectBtn, projectInput);
   exp.append(
     el("p", "wa-help", "Audio export includes drums and sequenced synth. Project files preserve editable patterns, song order, sounds and tempo."),
     expRow,
@@ -57,12 +57,11 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
     // block covering the bar, gaps are silence; clip mode renders the
     // launched per-track clips once.
     const bars = mode === "song" ? songEndBar() : 1;
-    const sceneAt = (track: TrackId, bar: number): number | null => {
-      if (mode !== "song") return clip.play[track];
-      return blockAt(track, bar)?.scene ?? null;
-    };
-    const barDurations = Array.from({ length: bars }, (_, bar) => Math.max(beat * 4, ...TRACKS.map((track) => {
-      const scene = sceneAt(track, bar); return scene === null ? 0 : patternLengths[scene] * beat / (patternDivisions[scene] || 4);
+    const arrangeSceneAt = (track: ArrangeTrackId, bar: number): number | null => mode === "song"
+      ? blockAt(track, bar)?.scene ?? null
+      : track === "drums" || track === "pads" ? clip.play[track] : clip.play.synth;
+    const barDurations = Array.from({ length: bars }, (_, bar) => Math.max(beat * 4, ...ARRANGE_TRACKS.map((track) => {
+      const scene = arrangeSceneAt(track, bar); return scene === null ? 0 : patternLengths[scene] * beat / (patternDivisions[scene] || 4);
     })));
     const barStarts: number[] = []; let renderDuration = 0;
     barDurations.forEach((duration) => { barStarts.push(renderDuration); renderDuration += duration; });
@@ -77,10 +76,10 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
     const ot = built.tracks;
     const osg = built.synth; osg.gain.value = engine.synthGain!.gain.value;
     for (let bar = 0; bar < bars; bar++) {
-      const drumClip = sceneAt("drums", bar), padClip = sceneAt("pads", bar), synthClip = sceneAt("synth", bar);
-      const arrangementBlock = mode === "song" ? blockAt("synth", bar) : null;
+      const drumClip = arrangeSceneAt("drums", bar), padClip = arrangeSceneAt("pads", bar);
+      const automationBlocks = mode === "song" ? ARRANGE_TRACKS.map((track) => blockAt(track, bar)).filter((block): block is NonNullable<typeof block> => block !== null) : [];
       const automated = (lane: string, param: string, progress: number): number | null => {
-        const ramp = arrangementBlock?.automation?.find((item) => item.lane === lane && item.param === param);
+        const ramp = automationBlocks.flatMap((block) => block.automation ?? []).find((item) => item.lane === lane && item.param === param);
         return ramp ? ramp.from + (ramp.to - ramp.from) * progress : null;
       };
       if ((!onlyTrack || onlyTrack === "drums") && drumClip !== null) {
@@ -111,9 +110,13 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
           for (let i = 0; i < ratchets; i++) playPad(off, event.pad, event.velocity, Math.max(base, when + event.offset / 1000 + i * spacing), event.pad % PAD_BANK_SIZE, ot[event.pad % ot.length]);
         });
       }
-      if ((!onlyTrack || onlyTrack === "synth") && synthClip !== null) {
-        const laneSd = beat / (patternDivisions[synthClip] || 4);
-        SYNTH_LANES.forEach((lane) => synthLaneNotes[lane][synthClip].filter((note) => note.step < patternLengths[synthClip]).forEach((n) => {
+      if (!onlyTrack || onlyTrack === "synth") {
+        SYNTH_LANES.forEach((lane) => {
+          const synthClip = arrangeSceneAt(lane, bar);
+          if (synthClip === null) return;
+          const laneSd = beat / (patternDivisions[synthClip] || 4);
+          const arrangementBlock = mode === "song" ? blockAt(lane, bar) : null;
+          synthLaneNotes[lane][synthClip].filter((note) => note.step < patternLengths[synthClip]).forEach((n) => {
           const when = barStarts[bar] + n.step * laneSd;
           const progress = arrangementBlock ? Math.max(0, Math.min(1, (bar - arrangementBlock.startBar + n.step / patternLengths[synthClip]) / arrangementBlock.bars)) : 0;
           const patch = { ...synthPatches[lane], filter: { ...synthPatches[lane].filter } };
@@ -124,7 +127,8 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
           playNote(off, osg, patch, n.note, Math.min(127, n.accent ? Math.round(n.vel * 1.22) : n.vel), when, laneSd * n.len * 0.98);
           const masterVolume = automated("master", "volume", progress); if (masterVolume !== null) om.gain.setValueAtTime(masterVolume, when);
           const masterReverb = automated("master", "reverb", progress); if (masterReverb !== null && reverbWet) reverbWet.gain.setValueAtTime(masterReverb, when);
-        }));
+          });
+        });
       }
       if (transport.metro) for (let b = 0; b < 4; b++) metroClick(off, om, barStarts[bar] + b * beat, b === 0);
     }
@@ -162,7 +166,8 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
     ctx.checkpoint(); applyProject(JSON.parse(JSON.stringify(state)) as Record<string, unknown>);
     ctx.refreshVisibleState(); saveAll(); expStatus.textContent = `${label} loaded`;
   };
-  newProjectBtn.addEventListener("click", () => replaceProject(projects.blank(), "Start a blank project"));
+  quickProjectBtn.addEventListener("click", () => replaceProject(projects.quick(), "Start a quick beat"));
+  newProjectBtn.addEventListener("click", () => replaceProject(projects.blank(), "Start a new song"));
   demoProjectBtn.addEventListener("click", () => replaceProject(projects.demo(), "Reload MIDNIGHT ACID"));
   loadProjectBtn.addEventListener("click", () => projectInput.click());
   projectInput.addEventListener("change", async () => {

@@ -50,7 +50,7 @@ const MODES: Array<{ id: ModeId; label: string; helpText: string }> = [
   { id: "drums", label: "DRUMS", helpText: "Program the eight drum lanes on the step grid." },
   { id: "pads", label: "PADS", helpText: "Perform on the 16 pads, edit the selected pad and chop breaks — the MPC heart of the studio." },
   { id: "synth", label: "SYNTH", helpText: "The VV-1: piano roll or patch editor above always-playable keys." },
-  { id: "song", label: "SONG", helpText: "The project home — launch clips, build the arrangement lanes, load and save songs." },
+  { id: "song", label: "ARRANGE", helpText: "Build the song on a free timeline or switch to the clip launcher." },
   { id: "dj", label: "DJ", helpText: "Mix local audio across two decks with cues, loops, EQ, sync and recording." },
   { id: "mix", label: "MIX", helpText: "Mixer, master devices, project save and export." },
 ];
@@ -267,12 +267,16 @@ export function buildLayout(p: LayoutPanels): Layout {
   const primaryNav = el("div", "wa-primary-nav wa-primary-nav-flat");
   modeBar.append(primaryNav);
 
-  // MPC focus (Vish, 2026-08-16): the studio always opens on the PADS deck —
-  // an instrument under your fingers, not a project manager. Mode is no
-  // longer persisted across visits.
-  let activeMode: ModeId = "pads";
+  // New visitors meet an instrument immediately; existing projects resume
+  // where their owner left off, defaulting to the arranger when no view was
+  // previously persisted.
+  const savedMode = localStorage.getItem("vv_studio_last_mode") as ModeId | null;
+  const validModes: ModeId[] = ["drums", "pads", "synth", "song", "dj", "mix"];
+  let activeMode: ModeId = localStorage.getItem("vv_studio_v2")
+    ? savedMode && validModes.includes(savedMode) ? savedMode : "song"
+    : "pads";
   localStorage.removeItem("vv_studio_workspace");                // retired layer (S2)
-  localStorage.removeItem("vv_studio_mode");                     // retired (MPC boot)
+  localStorage.removeItem("vv_studio_mode");                     // retired legacy key
   let lastEditMode: ModeId = (["drums", "pads", "synth"] as ModeId[]).includes(activeMode) ? activeMode : "drums";
   const modeButtons = new Map<ModeId, HTMLButtonElement>();
 
@@ -289,11 +293,12 @@ export function buildLayout(p: LayoutPanels): Layout {
     if (next === "synth") p.onSynthVisible();
     orb.setActive(next === "synth" && !orb.canvas.hidden);
     mixOrb.setActive(next === "mix");
+    localStorage.setItem("vv_studio_last_mode", next);
     p.onModeChange(MODES.find((m) => m.id === next)!.label);
   }
 
   ([
-    ["song", "SONG", "▤"],
+    ["song", "ARRANGE", "▤"],
     ["drums", "DRUMS", "▦"],
     ["pads", "PADS", "◆"],
     ["synth", "SYNTH", "♪"],

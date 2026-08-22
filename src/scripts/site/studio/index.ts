@@ -6,7 +6,7 @@ import "../../../styles/studio.css";
 
 import {
   STEPS, SCENES, SCENE_LABELS, DRUMS, PAD_BANK_SIZE, ROLL_NOTES,
-  TRACKS, TRACK_LABELS, clip, transport, stepDur, audible, song as songMeta,
+  TRACKS, TRACK_LABELS, ARRANGE_TRACKS, clip, transport, stepDur, audible, song as songMeta,
   allPats, allVels, padEvents, arrangement, songEndBar,
   sampleParams, sampleBuffers, sampleData, dp, DP_DEF, DP_SPECS, mpc, rackState, fx, vsynthPatch, mute, solo, mixState,
 } from "./state";
@@ -33,7 +33,7 @@ import { initTooltips } from "./tooltip";
 import { buildKeys, highlightKey } from "./keys";
 import { buildProjectExport } from "./render";
 import { buildLaneInspector } from "./laneui";
-import { buildSession, factorySong, blankProject } from "./session";
+import { buildSession, factorySong, blankProject, quickBeatProject } from "./session";
 import { buildMixer } from "./mixerui";
 import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
 import { setCellOpacity, showVelPopup, showVelocityPopup } from "./velpopup";
@@ -232,6 +232,7 @@ export async function initStudio(): Promise<void> {
   // the resample feature can take renderBuffer directly)
   const { panel: exp, renderSel, renderBuffer } = buildProjectExport({
     blank: blankProject,
+    quick: quickBeatProject,
     demo: () => factorySong("MIDNIGHT ACID"),
   });
   ctx.renderSel = renderSel;
@@ -399,7 +400,7 @@ export async function initStudio(): Promise<void> {
   songBtn.addEventListener("click", () => {
     // Nothing to play in Song mode until the arrangement has blocks — say so
     // instead of silently toggling into silence.
-    if (!transport.songMode && TRACKS.every((track) => arrangement[track].length === 0)) {
+    if (!transport.songMode && ARRANGE_TRACKS.every((track) => arrangement[track].length === 0)) {
       const prior = lcdState.textContent;
       lcdState.textContent = "NO SONG";
       songBtn.classList.add("wa-warn-flash");

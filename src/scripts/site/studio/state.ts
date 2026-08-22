@@ -91,7 +91,7 @@ export interface HistoryState {
   sampleData: Array<string | null>;
   padLayers?: PadLayer[][];
   padLayerMode?: PadLayerMode[];
-  arrangement: Record<TrackId, ArrangeBlock[]>;
+  arrangement: Record<ArrangeTrackId, ArrangeBlock[]>;
   fx: FxState;
   rackState: RackState;
   vsynth: VPatch;
@@ -214,15 +214,39 @@ export const clip = {
 // position replaces the old per-track sequential walk.
 export type AutomationParam = "cutoff" | "volume" | "reverb";
 export interface AutomationRamp { lane: SynthLane | "master"; param: AutomationParam; from: number; to: number; }
-export interface ArrangeBlock { scene: number; bars: number; startBar: number; automation?: AutomationRamp[]; }
-export const arrangement: Record<TrackId, ArrangeBlock[]> = { drums: [], pads: [], synth: [] };
+export type ArrangeTrackId = "drums" | "pads" | SynthLane;
+export const ARRANGE_TRACKS: ArrangeTrackId[] = ["drums", "pads", "bass", "lead", "harmony"];
+export const ARRANGE_TRACK_LABELS: Record<ArrangeTrackId, string> = {
+  drums: "Drums", pads: "Pads", bass: "Bass", lead: "Lead", harmony: "Harmony",
+};
+export interface ArrangeBlock {
+  id: string;
+  scene: number;
+  bars: number;
+  startBar: number;
+  offset?: number;
+  loop?: boolean;
+  automation?: AutomationRamp[];
+}
+let arrangeId = 0;
+export function createArrangeBlock(scene: number, startBar: number, bars = 1): ArrangeBlock {
+  arrangeId++;
+  return { id: `clip-${Date.now().toString(36)}-${arrangeId.toString(36)}`, scene, bars, startBar, offset: 0, loop: true, automation: [] };
+}
+export const arrangement: Record<ArrangeTrackId, ArrangeBlock[]> = { drums: [], pads: [], bass: [], lead: [], harmony: [] };
 export const songPos = { bar: 0 };
 export const songLoop = { on: false, startBar: 0, endBar: 8 };
-export function blockAt(track: TrackId, bar: number): ArrangeBlock | null {
-  return arrangement[track].find((b) => bar >= b.startBar && bar < b.startBar + b.bars) ?? null;
+export function blockAt(track: ArrangeTrackId, bar: number): ArrangeBlock | null {
+  let active: ArrangeBlock | null = null;
+  arrangement[track].forEach((block) => {
+    const withinClip = bar >= block.startBar && bar < block.startBar + block.bars;
+    const withinPlayback = block.loop !== false || bar < block.startBar + 1;
+    if (withinClip && withinPlayback && (!active || block.startBar >= active.startBar)) active = block;
+  });
+  return active;
 }
 export function songEndBar(): number {
-  return Math.max(1, ...TRACKS.map((t) => arrangement[t].reduce((m, b) => Math.max(m, b.startBar + b.bars), 0)));
+  return Math.max(1, ...ARRANGE_TRACKS.map((t) => arrangement[t].reduce((m, b) => Math.max(m, b.startBar + b.bars), 0)));
 }
 
 // ─── Pattern data ────────────────────────────────────────────────────────────

@@ -3,13 +3,13 @@
 // pattern projects still load), undo history.
 
 import {
-  SCENES, STEPS, PAD_COUNT, PAD_LAYER_MAX, PIANO_NOTES, TRACKS, clip, transport, song,
+  SCENES, STEPS, PAD_COUNT, PAD_LAYER_MAX, PIANO_NOTES, TRACKS, ARRANGE_TRACKS, clip, transport, song,
   allPats, allVels, synthNotes, padEvents, arrangement, songLoop, sampleParams, sampleData, sampleBuffers,
   padLayers, padLayerBuffers, padLayerMode,
   dp, mpc, rackState, fx, vsynthPatch, synthLaneNotes, synthPatches, patternLengths, patternDivisions, SYNTH_LANES,
-  DRUMS, laneLengths, laneRates, laneVoices, laneSends, LANE_RATES, mixState, mute, solo,
+  DRUMS, laneLengths, laneRates, laneVoices, laneSends, LANE_RATES, mixState, mute, solo, createArrangeBlock,
 } from "./state";
-import type { ArrangeBlock, HistoryState, PadEvent, PadLayer, PadLayerMode, SamplerP, DrumP, RackState, TrackId, VNote, SynthLane } from "./state";
+import type { ArrangeBlock, ArrangeTrackId, HistoryState, PadEvent, PadLayer, PadLayerMode, SamplerP, DrumP, RackState, TrackId, VNote, SynthLane } from "./state";
 import type { VPatch } from "./vsynth";
 import { applyFxState, hydrateSample, hydratePadLayer } from "./engine";
 
@@ -72,7 +72,9 @@ export function historyState(): HistoryState {
     arrangement: {
       drums: arrangement.drums.map((b) => ({ ...b })),
       pads: arrangement.pads.map((b) => ({ ...b })),
-      synth: arrangement.synth.map((b) => ({ ...b })),
+      bass: arrangement.bass.map((b) => ({ ...b })),
+      lead: arrangement.lead.map((b) => ({ ...b })),
+      harmony: arrangement.harmony.map((b) => ({ ...b })),
     },
     fx: { ...fx },
     rackState: { ...rackState, macros: [...rackState.macros], devices: { ...rackState.devices } },
@@ -96,7 +98,7 @@ export function restoreHistory(state: HistoryState): void {
   state.padEvents.forEach((events, i) => { padEvents[i] = events.map((event) => ({ ...event })); });
   state.sampleParams.forEach((params, i) => Object.assign(sampleParams[i], params));
   state.sampleData.forEach((data, i) => { sampleData[i] = data; sampleBuffers[i] = null; if (data) void hydrateSample(i); });
-  TRACKS.forEach((track) => { arrangement[track] = state.arrangement[track].map((b) => ({ ...b })); });
+  ARRANGE_TRACKS.forEach((track) => { arrangement[track] = state.arrangement[track].map((b) => ({ ...b })); });
   Object.assign(fx, state.fx);
   Object.assign(rackState, state.rackState);
   rackState.macros = [...state.rackState.macros]; rackState.devices = { ...state.rackState.devices };
@@ -118,7 +120,7 @@ export function projectState(includeSamples = true): object {
     return index;
   });
   return {
-    version: 15, // v15: retired synthNotes + songChain from saves (still READ for migration)
+    version: 16, // v16: stable clip IDs, free timeline placement and independent synth lanes
     title: song.title,
     pats: allPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
     vels: allVels,
@@ -260,9 +262,10 @@ export function applyProject(saved: Record<string, unknown>): void {
       });
       if (saved.mix && typeof saved.mix === "object") applyMixState(saved.mix as Partial<typeof mixState>);
       if (saved.arrangement && typeof saved.arrangement === "object") {
-        const incoming = saved.arrangement as Partial<Record<TrackId, ArrangeBlock[]>>;
-        TRACKS.forEach((track) => {
-          const blocks = incoming[track];
+        const incoming = saved.arrangement as Partial<Record<ArrangeTrackId | "synth", ArrangeBlock[]>>;
+        ARRANGE_TRACKS.forEach((track) => {
+          const legacySynth = track === "bass" || track === "lead" || track === "harmony" ? incoming.synth : undefined;
+          const blocks = incoming[track] ?? legacySynth;
           if (Array.isArray(blocks)) {
             // pre-v9 blocks were sequential (no startBar) — migrate to
             // cumulative positions on the shared timeline
@@ -274,7 +277,9 @@ export function applyProject(saved: Record<string, unknown>): void {
                 const startBar = typeof b.startBar === "number" ? Math.max(0, b.startBar) : cursor;
                 cursor = startBar + bars;
                 return {
+                  id: typeof b.id === "string" && b.id ? b.id : createArrangeBlock(0, 0).id,
                   scene: Math.max(0, Math.min(SCENES - 1, b.scene)), bars, startBar,
+                  offset: Math.max(0, Number(b.offset) || 0), loop: b.loop !== false,
                   automation: Array.isArray(b.automation) ? b.automation.filter((r) => r && typeof r.from === "number" && typeof r.to === "number").map((r) => ({ ...r })) : [],
                 };
               });
@@ -285,8 +290,8 @@ export function applyProject(saved: Record<string, unknown>): void {
         // Give each track its own equivalent 1-bar-per-slot arrangement so
         // old songs still play back the same way until edited further.
         const chain = saved.songChain as number[];
-        TRACKS.forEach((track) => {
-          arrangement[track] = chain.map((scene, i) => ({ scene: Math.max(0, Math.min(SCENES - 1, Number(scene) || 0)), bars: 1, startBar: i }));
+        ARRANGE_TRACKS.forEach((track) => {
+          arrangement[track] = chain.map((scene, i) => createArrangeBlock(Math.max(0, Math.min(SCENES - 1, Number(scene) || 0)), i));
         });
       }
       if (saved.songLoop && typeof saved.songLoop === "object") {

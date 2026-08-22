@@ -1,8 +1,7 @@
 // Transport scheduler — the 25ms lookahead loop, per-track arrangement
 // playback, queued-clip application, step highlighting, play/stop wiring.
 // Extracted verbatim from index.ts (Phase 0 split). Owns ctx.playhead writes.
-import { STEPS, PAD_BANK_SIZE, TRACKS, clip, transport, stepDur, patternStepDur, audible, mpc, rackState, allPats, allVels, synthLaneNotes, synthPatches, SYNTH_LANES, patternLengths, laneLength, laneRate, glitchLane, padEvents, blockAt, songPos, songLoop, songEndBar } from "./state";
-import type { TrackId } from "./state";
+import { STEPS, PAD_BANK_SIZE, TRACKS, ARRANGE_TRACKS, clip, transport, stepDur, patternStepDur, audible, mpc, rackState, allPats, allVels, synthLaneNotes, synthPatches, SYNTH_LANES, patternLengths, laneLength, laneRate, glitchLane, padEvents, blockAt, songPos, songLoop, songEndBar } from "./state";
 import { ac, ensureNodes, trackGain, playDrum, playPad, metroClick } from "./engine";
 import * as engine from "./engine";
 import { playNote } from "./vsynth";
@@ -25,7 +24,9 @@ export function buildPlayback(deps: PlaybackDeps): void {
   // plays whichever block covers the bar — no block means silence. The loop
   // brace wraps within its region; otherwise the song wraps at its end.
   function applySongBar(): void {
-    TRACKS.forEach((track) => { clip.play[track] = blockAt(track, songPos.bar)?.scene ?? null; });
+    clip.play.drums = blockAt("drums", songPos.bar)?.scene ?? null;
+    clip.play.pads = blockAt("pads", songPos.bar)?.scene ?? null;
+    clip.play.synth = blockAt("bass", songPos.bar)?.scene ?? blockAt("lead", songPos.bar)?.scene ?? blockAt("harmony", songPos.bar)?.scene ?? null;
   }
   function advanceSongBar(): void {
     songPos.bar++;
@@ -33,24 +34,32 @@ export function buildPlayback(deps: PlaybackDeps): void {
     else if (songPos.bar >= songEndBar()) songPos.bar = songLoop.on ? songLoop.startBar : 0;
     applySongBar();
   }
-  function highlight(s: number): void {
+  function highlight(s: number, arrangedBar: number | null, arrangedCycleLength: number): void {
     if (playhead.lastHi >= 0) for (let r = 0; r < 8; r++) deps.cells[r][playhead.lastHi].classList.remove("play");
     if (clip.play.drums === clip.sel && s < STEPS) for (let r = 0; r < 8; r++) deps.cells[r][s].classList.add("play");
     deps.rollPlayheadBar.classList.toggle("on", clip.play.synth === clip.sel);
     deps.rollPlayheadBar.style.left = `${(s / Math.max(1, patternLengths[clip.play.synth ?? clip.sel])) * 100}%`;
+    if (arrangedBar !== null) {
+      window.dispatchEvent(new CustomEvent("vv-studio-arrange-playhead", { detail: { bar: arrangedBar + s / arrangedCycleLength } }));
+    }
     playhead.lastStepStartedMs = performance.now();
     playhead.lastHi = s; deps.lcdState.textContent = `▶ ${String(s + 1).padStart(2, "0")}`;
   }
   function scheduleStep(s: number, baseWhen: number): void {
+    const arrangedBar = transport.songMode ? songPos.bar : null;
+    const arrangedCycleLength = transport.songMode
+      ? Math.max(1, ...ARRANGE_TRACKS.map((track) => blockAt(track, songPos.bar)?.scene ?? null).filter((scene): scene is number => scene !== null).map((scene) => patternLengths[scene]))
+      : 1;
     const a = ac();
     const groove = rackState.devices.player && s % 2 === 1 ? rackState.grooveTiming * stepDur() * 0.5 : 0;
     const random = rackState.devices.player ? (Math.random() * 2 - 1) * rackState.grooveRandom / 1000 : 0;
     const when = baseWhen + (s % 2 === 1 ? transport.swing * stepDur() : 0) + groove + random;
     const drumClip = clip.play.drums, padClip = clip.play.pads, synthClip = clip.play.synth;
+    const synthClips = Object.fromEntries(SYNTH_LANES.map((lane) => [lane, transport.songMode ? blockAt(lane, songPos.bar)?.scene ?? null : synthClip])) as Record<(typeof SYNTH_LANES)[number], number | null>;
     // Lanes are independent now (S1): a ramp lives on whichever lane's block
     // the user attached it to, so search every track's block at this bar.
     const automationBlocks = transport.songMode
-      ? TRACKS.map((track) => blockAt(track, songPos.bar)).filter((block): block is NonNullable<typeof block> => block !== null)
+      ? ARRANGE_TRACKS.map((track) => blockAt(track, songPos.bar)).filter((block): block is NonNullable<typeof block> => block !== null)
       : [];
     const blockProgress = (block: NonNullable<ReturnType<typeof blockAt>>): number =>
       Math.max(0, Math.min(1, (songPos.bar - block.startBar + s / Math.max(1, patternLengths[block.scene])) / block.bars));
@@ -121,9 +130,11 @@ export function buildPlayback(deps: PlaybackDeps): void {
         }
       });
     }
-    if (synthClip !== null) {
-      const localStep = s % patternLengths[synthClip];
-      SYNTH_LANES.forEach((lane) => synthLaneNotes[lane][synthClip].forEach((n) => {
+    SYNTH_LANES.forEach((lane) => {
+      const laneClip = synthClips[lane];
+      if (laneClip === null) return;
+      const localStep = s % patternLengths[laneClip];
+      synthLaneNotes[lane][laneClip].forEach((n) => {
         if (n.step < localStep || n.step >= localStep + 1) return;
         const cutoff = automatedValue(lane, "cutoff"), volume = automatedValue(lane, "volume");
         const patch = { ...synthPatches[lane], filter: { ...synthPatches[lane].filter } };
@@ -131,11 +142,11 @@ export function buildPlayback(deps: PlaybackDeps): void {
         if (cutoff !== null) patch.filter.cutoff = 60 * Math.pow(16000 / 60, Math.max(0, Math.min(1, cutoff)));
         if (volume !== null) patch.volume = Math.max(0, Math.min(1, volume));
         const velocity = Math.min(127, n.accent ? Math.round(n.vel * 1.22) : n.vel);
-        playNote(a, engine.synthGain!, patch, n.note, velocity, when + (n.step - localStep) * patternStepDur(synthClip), patternStepDur(synthClip) * n.len * 0.98);
-      }));
-    }
+        playNote(a, engine.synthGain!, patch, n.note, velocity, when + (n.step - localStep) * patternStepDur(laneClip), patternStepDur(laneClip) * n.len * 0.98);
+      });
+    });
     if (transport.metro && s % 4 === 0) metroClick(a, engine.master!, baseWhen, s === 0);
-    window.setTimeout(() => { if (playhead.playing) highlight(s); }, Math.max(0, (baseWhen - a.currentTime) * 1000));
+    window.setTimeout(() => { if (playhead.playing) highlight(s, arrangedBar, arrangedCycleLength); }, Math.max(0, (baseWhen - a.currentTime) * 1000));
   }
   function applyQueued(): boolean {
     let changed = false;
@@ -155,7 +166,10 @@ export function buildPlayback(deps: PlaybackDeps): void {
       const clockScene = clip.play.drums ?? clip.play.pads ?? clip.play.synth ?? clip.sel;
       nextTime += patternStepDur(clockScene);
       playhead.schStep++; playhead.absStep++;
-      const cycleLength = Math.max(1, ...[clip.play.drums, clip.play.pads, clip.play.synth].filter((v): v is number => v !== null).map((scene) => patternLengths[scene]));
+      const activeScenes = transport.songMode
+        ? ARRANGE_TRACKS.map((track) => blockAt(track, songPos.bar)?.scene ?? null)
+        : [clip.play.drums, clip.play.pads, clip.play.synth];
+      const cycleLength = Math.max(1, ...activeScenes.filter((v): v is number => v !== null).map((scene) => patternLengths[scene]));
       if (playhead.schStep >= cycleLength) {
         playhead.schStep = 0;
         const launched = applyQueued();

@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-08-22 — Studio timeline-first arrangement
+
+- Replaced the scene-chain composer with a bar ruler, moving playhead, loop region and five independent Drums, Pads, Bass, Lead and Harmony lanes. Clips now keep stable IDs and free positions, including gaps, with drag, edge-trim, split, duplicate, delete and keyboard operations.
+- Added integrated Session/Arrange views, one-action Session capture, Quick beat/New song/Starter song entry paths and adaptive startup: new users land on PADS while saved projects resume their last workspace. Selecting a clip opens a desktop floating inspector or Android bottom sheet and routes directly to its editor.
+- Migrated Studio persistence to schema v16 and updated live playback, automation and offline render/export for independent arrangement lanes, deterministic overlaps and per-clip loop state.
+- Passed Astro checks and production build plus Studio core, responsive and density browser suites locally. Coverage includes legacy migration, free timeline placement and five desktop/Android viewport sizes with clean consoles.
+
 ## 2026-08-16 — Deep Swarm foreign-body hunt and salvage loop
 
 - Cut the opening grace to three seconds, guaranteed an immediate shoal and tightened the hunt/crisis cadence. Hunt state now makes every mobile organism recognise the submarine as a foreign body while calm phases retain feeding, predation, scavenging and migration.

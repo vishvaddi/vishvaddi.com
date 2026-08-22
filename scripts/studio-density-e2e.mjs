@@ -16,7 +16,9 @@ const VIEWPORTS = [
 // A console is legitimately sparser than an editor: long faders need vertical
 // room and strips are narrow by nature, so MIX carries its own floor rather
 // than being padded with furniture it does not need.
-const INK_FLOOR = { MIX: 42 }
+// The arranger's unpainted grid is usable time, not dead case: padding it to
+// satisfy the generic ink score would destroy the timeline's working area.
+const INK_FLOOR = { MIX: 42, CLIPS: 25 }
 const MAX_TRAILING = 40
 const modeRoute = {
   DRUMS: 'drums', PADS: 'pads', SYNTH: 'synth',

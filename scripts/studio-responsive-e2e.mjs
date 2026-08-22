@@ -162,13 +162,15 @@ for (const [name, width, height] of viewports) {
     // the first-run demo seeds an arrangement, so these assert a DELTA rather
     // than assuming the chain starts empty
     const blocksBefore = await page.locator('.wa-chain-block').count()
-    await page.locator('.wa-composer-head button', { hasText: 'Scene' }).click()
+    await page.locator('.wa-composer-head button', { hasText: 'Clip' }).click()
     check(`${name}: arrangement block added`, await page.locator('.wa-chain-block').count() === blocksBefore + 1)
+    if (await page.locator('.wa-arrange-selection').isVisible()) await page.locator('.wa-arrange-selection button[aria-label="Close clip inspector"]').click()
     // automation folds shut by default since S1 — open it to interact
     await page.evaluate(() => { document.querySelectorAll('.wa-fold').forEach((d) => { d.open = true } ) })
     const rampsBefore = await page.locator('.wa-ramp-row').count()
     await page.locator('.wa-automation-editor button', { hasText: 'Ramp' }).click()
     check(`${name}: automation ramp added`, await page.locator('.wa-ramp-row').count() === rampsBefore + 1)
+    if (await page.locator('.wa-arrange-selection').isVisible()) await page.locator('.wa-arrange-selection button[aria-label="Close clip inspector"]').click()
     // With folds open, the composer may scroll internally — overlap is checked
     // open; fit/reachability are checked against the CLOSED default state.
     const foldOverlap = await page.evaluate(() => {
@@ -199,6 +201,7 @@ for (const [name, width, height] of viewports) {
     })
     check(`${name}: Arrange panel does not hide content`, arrangeLayout.panelClip <= 1, `${Math.round(arrangeLayout.panelClip)}px clipped`)
     check(`${name}: all Arrange controls are reachable`, arrangeLayout.reachable, `${Math.round(arrangeLayout.pageScroll)}px internal scroll`)
+    await page.screenshot({ path: `C:/tmp/studio-arrange-${name}.png`, fullPage: false })
 
     if (name === 'phone' || name === 'landscape') {
       const targets = await page.locator('.wa-primary-nav .wa-modekey').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height))
