@@ -155,7 +155,7 @@ export async function initStudio(): Promise<void> {
   const swingIn = document.createElement("input");
   swingIn.type = "range"; swingIn.min = "0"; swingIn.max = "0.6"; swingIn.step = "0.02"; swingIn.value = "0"; swingIn.className = "wa-swing-in";
   const swingWrap = el("span", "wa-swing"); swingWrap.append(el("span", "wa-lbl", "Swing"), swingIn);
-  const metroBtn = btn("Metro", "wa-toggle"), songBtn = btn(transport.songMode ? "Arrange" : "Session", "wa-toggle");
+  const metroBtn = btn("Metro", "wa-toggle"), songBtn = btn(transport.songMode ? "Song" : "Clips", "wa-toggle");
   const countBtn = btn("Count-in", "wa-toggle");
   let countIn = localStorage.getItem("vv_studio_countin") === "1";
   countBtn.classList.toggle("active", countIn);
@@ -271,6 +271,7 @@ export async function initStudio(): Promise<void> {
   ctx.updateRecChip = updateRecChip;
 
   // ── Session view ── (session.ts — Phase 0 split)
+  ctx.isPlaying = () => playhead.playing;
   const { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid, addCurrentToSong } = buildSession();
   ctx.paintSession = paintSession;
 
@@ -363,7 +364,7 @@ export async function initStudio(): Promise<void> {
     lcdBpm.textContent = `${transport.bpm} BPM`;
     projectName.value = songMeta.title;
     swingIn.value = String(transport.swing);
-    songBtn.textContent = transport.songMode ? "Arrange" : "Session";
+    songBtn.textContent = transport.songMode ? "Song" : "Clips";
     songBtn.classList.toggle("active", transport.songMode);
     masterKnob.set(mixState.masterLevel);
     powerBtn.classList.toggle("on", mixState.power);
@@ -410,12 +411,11 @@ export async function initStudio(): Promise<void> {
       setTimeout(() => { songBtn.classList.remove("wa-warn-flash"); if (lcdState.textContent === "NO SONG") lcdState.textContent = prior ?? "■ STOP"; }, 1600);
       return;
     }
-    transport.songMode = !transport.songMode; songBtn.textContent = transport.songMode ? "Arrange" : "Session"; songBtn.classList.toggle("active", transport.songMode);
+    transport.songMode = !transport.songMode; songBtn.textContent = transport.songMode ? "Song" : "Clips"; songBtn.classList.toggle("active", transport.songMode);
     renderSel.value = transport.songMode ? "song" : "pattern"; saveAll();
   });
   // ── Transport / scheduler ── (playback.ts — Phase 0 split)
   ctx.selectScene = selectScene;
-  ctx.isPlaying = () => playhead.playing;
   buildPlayback({ cells, rollPlayheadBar, launchStatus, lcdState, playBtn, stopBtn, getCountIn: () => countIn, isSynthRec: synth.isSynthRec });
 
   // ── Keyboard ── (keymap.ts — Phase 0 split)

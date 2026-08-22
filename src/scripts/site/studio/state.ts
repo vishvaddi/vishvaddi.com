@@ -72,9 +72,11 @@ export interface VNote {
   accent?: boolean;
   slide?: boolean;
 }
-export type SynthLane = "bass" | "lead" | "harmony";
+export type SynthLane = string;
 export const SYNTH_LANES: SynthLane[] = ["bass", "lead", "harmony"];
 export const SYNTH_LANE_LABELS: Record<SynthLane, string> = { bass: "Bass", lead: "Lead", harmony: "Harmony" };
+export interface AudioArrangeClip { id: string; name: string; data: string; startBar: number; bars: number; duration: number; offset: number; gain: number; }
+export interface AudioArrangeTrack { id: string; name: string; clips: AudioArrangeClip[]; }
 export interface HistoryState {
   bpm?: number;
   title?: string;
@@ -82,6 +84,7 @@ export interface HistoryState {
   vels: number[][][];
   synthLaneNotes?: Record<SynthLane, VNote[][]>;
   synthPatches?: Record<SynthLane, VPatch>;
+  synthTracks?: Array<{ id: SynthLane; name: string }>;
   patternLengths?: number[];
   patternDivisions?: number[];
   laneLengths?: number[][];
@@ -92,6 +95,7 @@ export interface HistoryState {
   padLayers?: PadLayer[][];
   padLayerMode?: PadLayerMode[];
   arrangement: Record<ArrangeTrackId, ArrangeBlock[]>;
+  audioTracks?: AudioArrangeTrack[];
   fx: FxState;
   rackState: RackState;
   vsynth: VPatch;
@@ -199,13 +203,13 @@ export const patternStepDur = (scene: number): number => 60 / transport.bpm / (p
 // Ableton-style: each track (drums grid / MPC pads / synth) plays its own clip,
 // chosen from the 8 scenes. `play` null = track stopped. `queued` undefined =
 // no change pending; a number or null applies at the next pattern boundary.
-export type TrackId = "drums" | "pads" | "synth";
-export const TRACKS: TrackId[] = ["drums", "pads", "synth"];
-export const TRACK_LABELS: Record<TrackId, string> = { drums: "Drums", pads: "Pads", synth: "Synth" };
+export type TrackId = "drums" | "pads" | SynthLane;
+export const TRACKS: TrackId[] = ["drums", "pads", "bass", "lead", "harmony"];
+export const TRACK_LABELS: Record<TrackId, string> = { drums: "Drum Rack", pads: "Pads", bass: "Bass", lead: "Lead", harmony: "Harmony" };
 export const clip = {
   sel: 0,
-  play: { drums: 0, pads: 0, synth: 0 } as Record<TrackId, number | null>,
-  queued: { drums: undefined, pads: undefined, synth: undefined } as Record<TrackId, number | null | undefined>,
+  play: { drums: 0, pads: 0, bass: 0, lead: 0, harmony: 0 } as Record<TrackId, number | null>,
+  queued: { drums: undefined, pads: undefined, bass: undefined, lead: undefined, harmony: undefined } as Record<TrackId, number | null | undefined>,
 };
 
 // ─── Arrangement ─────────────────────────────────────────────────────────────
@@ -217,7 +221,7 @@ export interface AutomationRamp { lane: SynthLane | "master"; param: AutomationP
 export type ArrangeTrackId = "drums" | "pads" | SynthLane;
 export const ARRANGE_TRACKS: ArrangeTrackId[] = ["drums", "pads", "bass", "lead", "harmony"];
 export const ARRANGE_TRACK_LABELS: Record<ArrangeTrackId, string> = {
-  drums: "Drums", pads: "Pads", bass: "Bass", lead: "Lead", harmony: "Harmony",
+  drums: "Drum Rack", pads: "Pads", bass: "Bass", lead: "Lead", harmony: "Harmony",
 };
 export interface ArrangeBlock {
   id: string;
@@ -234,6 +238,7 @@ export function createArrangeBlock(scene: number, startBar: number, bars = 1): A
   return { id: `clip-${Date.now().toString(36)}-${arrangeId.toString(36)}`, scene, bars, startBar, offset: 0, loop: true, automation: [] };
 }
 export const arrangement: Record<ArrangeTrackId, ArrangeBlock[]> = { drums: [], pads: [], bass: [], lead: [], harmony: [] };
+export const audioTracks: AudioArrangeTrack[] = [];
 export const songPos = { bar: 0 };
 export const songLoop = { on: false, startBar: 0, endBar: 8 };
 export function blockAt(track: ArrangeTrackId, bar: number): ArrangeBlock | null {
@@ -246,7 +251,7 @@ export function blockAt(track: ArrangeTrackId, bar: number): ArrangeBlock | null
   return active;
 }
 export function songEndBar(): number {
-  return Math.max(1, ...ARRANGE_TRACKS.map((t) => arrangement[t].reduce((m, b) => Math.max(m, b.startBar + b.bars), 0)));
+  return Math.max(1, ...ARRANGE_TRACKS.map((t) => arrangement[t].reduce((m, b) => Math.max(m, b.startBar + b.bars), 0)), ...audioTracks.flatMap((track) => track.clips.map((clip) => clip.startBar + clip.bars)));
 }
 
 // ─── Pattern data ────────────────────────────────────────────────────────────
@@ -331,6 +336,33 @@ export const fx: FxState = {
 export const synthPatches: Record<SynthLane, VPatch> = {
   bass: initPatch(), lead: initPatch(), harmony: initPatch(),
 };
+let userLaneId = 0;
+export function addSynthLane(name?: string, restoredId?: string): SynthLane {
+  userLaneId++;
+  const lane = restoredId || `midi-${Date.now().toString(36)}-${userLaneId.toString(36)}`;
+  if (SYNTH_LANES.includes(lane)) return lane;
+  SYNTH_LANES.push(lane); SYNTH_LANE_LABELS[lane] = name?.trim() || `MIDI ${SYNTH_LANES.length}`; TRACK_LABELS[lane] = SYNTH_LANE_LABELS[lane];
+  TRACKS.push(lane); clip.play[lane] = clip.sel; clip.queued[lane] = undefined;
+  ARRANGE_TRACKS.push(lane); ARRANGE_TRACK_LABELS[lane] = SYNTH_LANE_LABELS[lane]; arrangement[lane] = [];
+  synthLaneNotes[lane] = Array.from({ length: SCENES }, () => []);
+  synthPatches[lane] = JSON.parse(JSON.stringify(synthPatches[activeSynth.lane] ?? initPatch())) as VPatch;
+  window.dispatchEvent(new CustomEvent("vv-studio-tracks-change"));
+  return lane;
+}
+export function addAudioTrack(name?: string): AudioArrangeTrack {
+  const track = { id: `audio-${Date.now().toString(36)}-${audioTracks.length.toString(36)}`, name: name?.trim() || `Audio ${audioTracks.length + 1}`, clips: [] };
+  audioTracks.push(track); window.dispatchEvent(new CustomEvent("vv-studio-tracks-change")); return track;
+}
+export function resetUserTracks(): void {
+  SYNTH_LANES.slice(3).forEach((lane) => {
+    delete SYNTH_LANE_LABELS[lane]; delete TRACK_LABELS[lane]; delete ARRANGE_TRACK_LABELS[lane]; delete synthLaneNotes[lane]; delete synthPatches[lane]; delete arrangement[lane];
+    const trackIndex = TRACKS.indexOf(lane); if (trackIndex >= 0) TRACKS.splice(trackIndex, 1);
+    const arrangeIndex = ARRANGE_TRACKS.indexOf(lane); if (arrangeIndex >= 0) ARRANGE_TRACKS.splice(arrangeIndex, 1);
+    delete clip.play[lane]; delete clip.queued[lane];
+  });
+  SYNTH_LANES.splice(3); audioTracks.splice(0); activeSynth.lane = "bass";
+  window.dispatchEvent(new CustomEvent("vv-studio-tracks-change"));
+}
 export const vsynthPatch = new Proxy({} as VPatch, {
   get: (_target, key) => synthPatches[activeSynth.lane][key as keyof VPatch],
   set: (_target, key, value) => { (synthPatches[activeSynth.lane] as unknown as Record<PropertyKey, unknown>)[key] = value; return true; },

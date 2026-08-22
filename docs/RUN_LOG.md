@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-08-22 — Studio multitrack Clips and Song workflow
+
+- Separated Drum Rack sequencing from Pads sampling/chopping. Clips now gives Drum Rack, Pads and every MIDI instrument an independent Ableton-style row and launch state instead of collapsing all synth parts into one clip.
+- Added user-created MIDI tracks with their own notes, patch, clips, arrangement lane, playback, persistence and stem export. Added local audio tracks and timeline clips with import, move, split, duplicate, delete, playback and offline render support.
+- Added piano-roll marquee and multi-note selection, select all, copy/paste, keyboard deletion and chord drops into the active MIDI clip. Renamed the global Session/Arrange control to Clips/Song and advanced persistence to schema v18 with legacy migration.
+- Added a self-contained production-build server to the Studio browser gates. Astro check/build, the full core suite, responsive coverage across five viewports and desktop/laptop density coverage pass with clean consoles.
+
 ## 2026-08-22 — Studio fixed-frame workflow
 
 - Reworked Beat around one fixed aperture: Play remains immediate, performance controls become an Android drawer, and One-shot/Chop are mutually exclusive local sample pages instead of a scrolling stack.

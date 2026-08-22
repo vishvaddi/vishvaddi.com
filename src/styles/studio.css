@@ -2790,6 +2790,36 @@
   .immersive-page .wa-page-mix > .wa-mix-flex { overflow: hidden; }
 }
 
+/* v20: track-based writing workflow. */
+.wa-roll-toolbar { flex-wrap: wrap; }
+.wa-roll-lanes { display: flex; min-width: 0; max-width: 100%; gap: 3px; overflow-x: auto; }
+.wa-roll-toolbar > .wa-btn-sm { flex: 0 0 auto; }
+.wa-chainstrip.wa-arrange-lanes { overflow: auto; overscroll-behavior: contain; }
+.wa-audio-lane .wa-arrange-lane-name { color: #8bd6ff; }
+.wa-audio-block {
+  color: #d9f2ff;
+  border-color: #387799;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 5px, rgba(139,214,255,.14) 5px 7px),
+    linear-gradient(180deg, #20465a, #142b38);
+}
+.wa-audio-block::after {
+  content: "AUDIO";
+  position: absolute;
+  right: 6px;
+  bottom: 3px;
+  color: rgba(217,242,255,.65);
+  font-size: 8px;
+  letter-spacing: .12em;
+}
+.wa-session-row { min-width: max-content; }
+@media (max-width: 760px), (max-height: 540px) and (pointer: coarse) {
+  .wa-roll-toolbar { max-height: 96px; overflow-y: auto; }
+  .wa-roll-lanes { flex-basis: 100%; }
+  .wa-composer-head { flex-wrap: nowrap; overflow-x: auto; }
+  .wa-composer-head > * { flex: 0 0 auto; }
+}
+
 @media (max-height: 540px) and (pointer: coarse) {
   .immersive-page .wa-page-pads.show-controls .wa-mpc-side { left: 82px; bottom: 8px; max-height: calc(100dvh - 92px); }
 }
@@ -4522,4 +4552,25 @@ button.wa-arrange-lane-name { cursor: pointer; }
   .immersive-page .wa-page-mix .wa-ch { height: 100%; min-height: 0; }
   .immersive-page .wa-page-mix > .wa-mix-scope { padding: 8px; }
   .immersive-page .wa-page-mix > .wa-mix-scope .wa-orb { width: 100%; height: calc(100% - 24px); }
+}
+
+/* v20 final overrides: dense track workflow, after the legacy layers. */
+.wa-roll-toolbar { flex-wrap: wrap; min-width: 0; }
+.wa-roll-lanes { display: flex; min-width: 0; max-width: 100%; gap: 3px; overflow-x: auto; scrollbar-width: thin; }
+.wa-roll-toolbar > .wa-btn-sm { flex: 0 0 auto; }
+.wa-chainstrip.wa-arrange-lanes { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.wa-session-grid { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.wa-session-row { min-width: max-content; }
+.wa-audio-lane .wa-arrange-lane-name { color: #8bd6ff; }
+.wa-audio-block {
+  color: #d9f2ff;
+  border-color: #387799;
+  background: repeating-linear-gradient(90deg, transparent 0 5px, rgba(139,214,255,.14) 5px 7px), linear-gradient(180deg, #20465a, #142b38);
+}
+.wa-audio-block::after { content: "AUDIO"; position: absolute; right: 6px; bottom: 3px; color: rgba(217,242,255,.65); font-size: 8px; letter-spacing: .12em; }
+@media (max-width: 760px), (max-height: 540px) and (pointer: coarse) {
+  .wa-roll-toolbar { max-height: 96px; overflow-y: auto; }
+  .wa-roll-lanes { flex-basis: 100%; }
+  .wa-composer-head { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+  .wa-composer-head > * { flex: 0 0 auto; }
 }

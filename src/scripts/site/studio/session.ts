@@ -3,10 +3,11 @@
 import {
   TRACKS, TRACK_LABELS, ARRANGE_TRACKS, ARRANGE_TRACK_LABELS, SCENE_LABELS, SCENES, STEPS, clip, transport, song as songState,
   allPats, synthLaneNotes, SYNTH_LANES, activeSynth, padEvents, arrangement, createArrangeBlock, songLoop, songPos, songEndBar,
+  audioTracks, addSynthLane, addAudioTrack,
 } from "./state";
-import type { TrackId, ArrangeTrackId, ArrangeBlock, AutomationRamp } from "./state";
+import type { TrackId, ArrangeTrackId, ArrangeBlock, AutomationRamp, SynthLane } from "./state";
 import { saveAll, projectState, applyProject } from "./persistence";
-import { el, btn, help, download, askText } from "./helpers";
+import { el, btn, help, download, askText, readAsDataUrl } from "./helpers";
 import { ctx, SCENE_COLORS } from "./ctx";
 
 export interface SessionView {
@@ -81,12 +82,12 @@ export function buildSession(): SessionView {
   function clipHasContent(track: TrackId, scene: number): boolean {
     if (track === "drums") return allPats[scene].some((row) => row.some(Boolean));
     if (track === "pads") return padEvents[scene].length > 0;
-    return SYNTH_LANES.some((lane) => synthLaneNotes[lane][scene].length > 0);
+    return synthLaneNotes[track][scene].length > 0;
   }
   function clipActivity(track: TrackId, scene: number): number {
     if (track === "drums") return allPats[scene].reduce((total, row) => total + row.filter(Boolean).length, 0);
     if (track === "pads") return padEvents[scene].length;
-    return SYNTH_LANES.reduce((total, lane) => total + synthLaneNotes[lane][scene].length, 0);
+    return synthLaneNotes[track][scene].length;
   }
   function paintSession(): void {
     sessionCells.forEach((row, scene) => row.forEach((cell, ti) => {
@@ -115,7 +116,7 @@ export function buildSession(): SessionView {
   function exitSongMode(): void {
     if (!transport.songMode) return;
     transport.songMode = false;
-    ctx.songBtn.textContent = "Session"; ctx.songBtn.classList.remove("active"); ctx.renderSel.value = "pattern";
+    ctx.songBtn.textContent = "Clips"; ctx.songBtn.classList.remove("active"); ctx.renderSel.value = "pattern";
   }
   function launchClip(track: TrackId, scene: number | null): void {
     exitSongMode();
@@ -146,44 +147,43 @@ export function buildSession(): SessionView {
   // rows cannot fit the aperture; as columns they do, and time then runs
   // left-to-right on the same axis as the chain composer below. Cells are
   // still addressed [scene][track] so paintSession is untouched.
-  SCENE_LABELS.forEach(() => sessionCells.push([]));
-  const headRow = el("div", "wa-session-row wa-session-head");
-  headRow.append(el("span", "wa-session-scene", "Scene"));
-  SCENE_LABELS.forEach((label, scene) => {
-    const launch = btn(label, "wa-scene-launch");
-    launch.classList.remove("wa-btn");
-    help(launch, `Launch every track's clip ${label} together (a scene).`);
-    launch.addEventListener("click", () => launchScene(scene));
-    sceneLaunchBtns.push(launch);
-    headRow.append(launch);
-  });
-  sessionGrid.append(headRow);
-  TRACKS.forEach((track) => {
-    const row = el("div", "wa-session-row");
-    const stop = btn(`${TRACK_LABELS[track]} ■`, "wa-clip-stop");
-    stop.classList.remove("wa-btn");
-    help(stop, `Stop the ${TRACK_LABELS[track].toLowerCase()} track at the next bar.`);
-    stop.addEventListener("click", () => launchClip(track, null));
-    row.append(stop);
+  const buildSessionGrid = (): void => {
+    sessionGrid.replaceChildren(); sessionCells.splice(0); sceneLaunchBtns.splice(0);
+    SCENE_LABELS.forEach(() => sessionCells.push([]));
+    const headRow = el("div", "wa-session-row wa-session-head");
+    headRow.append(el("span", "wa-session-scene", "Track / Scene"));
     SCENE_LABELS.forEach((label, scene) => {
-      const cell = btn("", "wa-clip");
-      cell.classList.remove("wa-btn");
-      cell.style.setProperty("--scene-color", SCENE_COLORS[scene]);
-      help(cell, `Launch ${TRACK_LABELS[track].toLowerCase()} clip ${label} — double-tap to edit it. Tracks can play clips from different scenes.`);
-      cell.addEventListener("click", () => launchClip(track, scene));
-      // FLM: the clip decides the editor — double-tap opens the right one.
-      cell.addEventListener("dblclick", () => ctx.openTrackEditor(track, scene));
-      sessionCells[scene].push(cell);
-      row.append(cell);
+      const launch = btn(label, "wa-scene-launch"); launch.classList.remove("wa-btn");
+      help(launch, `Launch every track's clip ${label} together.`); launch.addEventListener("click", () => launchScene(scene));
+      sceneLaunchBtns.push(launch); headRow.append(launch);
     });
-    sessionGrid.append(row);
-  });
+    sessionGrid.append(headRow);
+    TRACKS.forEach((track) => {
+      const row = el("div", "wa-session-row"); row.dataset.track = track;
+      const stop = btn(`${TRACK_LABELS[track]} ■`, "wa-clip-stop"); stop.classList.remove("wa-btn");
+      help(stop, `Stop the ${TRACK_LABELS[track].toLowerCase()} track at the next bar.`); stop.addEventListener("click", () => launchClip(track, null)); row.append(stop);
+      SCENE_LABELS.forEach((label, scene) => {
+        const cell = btn("", "wa-clip"); cell.classList.remove("wa-btn"); cell.style.setProperty("--scene-color", SCENE_COLORS[scene]);
+        help(cell, `Launch ${TRACK_LABELS[track].toLowerCase()} clip ${label} — double-tap to edit it.`); cell.addEventListener("click", () => launchClip(track, scene));
+        cell.addEventListener("dblclick", () => {
+          if (track !== "drums" && track !== "pads") { activeSynth.lane = track; ctx.openTrackEditor("synth", scene); }
+          else ctx.openTrackEditor(track, scene);
+        });
+        sessionCells[scene].push(cell); row.append(cell);
+      });
+      sessionGrid.append(row);
+    });
+    paintSession(); requestAnimationFrame(paintScenePosition);
+  };
+  buildSessionGrid();
   // Arrangement timeline. Session clips and arranger blocks reference the
   // same scene data; only their playback context differs.
   const composer = el("div", "wa-composer");
   const composerHead = el("div", "wa-composer-head");
   const chain = el("div", "wa-chainstrip wa-arrange-lanes");
   const addBtn = btn("＋ Clip", "wa-btn-sm"), duplicateBtn = btn("Duplicate", "wa-btn-sm"), splitBtn = btn("Split", "wa-btn-sm"), deleteBtn = btn("Delete", "wa-btn-sm"), zoomOutBtn = btn("−", "wa-btn-sm"), zoomInBtn = btn("＋", "wa-btn-sm");
+  const addMidiTrackBtn = btn("＋ MIDI track", "wa-btn-sm"), addAudioTrackBtn = btn("＋ Audio track", "wa-btn-sm");
+  const audioInput = document.createElement("input"); audioInput.type = "file"; audioInput.accept = "audio/*"; audioInput.hidden = true;
   const composerTitle = el("span", "wa-fx-title", "ARRANGER");
   const zoomReadout = el("span", "wa-timeline-zoom", "56 px/bar");
   const loopToggle = btn("Loop", "wa-btn-sm wa-toggle");
@@ -194,8 +194,27 @@ export function buildSession(): SessionView {
   loopToggle.classList.toggle("active", songLoop.on);
   let selLane: ArrangeTrackId = "drums";
   let selectedId: string | null = null;
+  let selectedAudioId: string | null = null;
   let pixelsPerBar = Number(localStorage.getItem("vv_studio_timeline_zoom")) || 56;
+  let audioTargetId: string | null = null;
+  const importAudio = async (file: File, targetId?: string | null): Promise<void> => {
+    const track = audioTracks.find((item) => item.id === targetId) ?? addAudioTrack(file.name.replace(/\.[^.]+$/, ""));
+    const context = new AudioContext();
+    try {
+      const buffer = await context.decodeAudioData(await file.arrayBuffer());
+      const bars = Math.max(1, Math.ceil(buffer.duration / (60 / transport.bpm * 4)));
+      track.clips.push({ id: `audio-clip-${Date.now().toString(36)}`, name: file.name, data: await readAsDataUrl(file), startBar: track.clips.reduce((end, item) => Math.max(end, item.startBar + item.bars), 0), bars, duration: buffer.duration, offset: 0, gain: 1 });
+      window.dispatchEvent(new CustomEvent("vv-studio-tracks-change")); saveAll(); paintChain(); launchStatus.textContent = `${file.name} added to ${track.name}`;
+    } finally { void context.close(); }
+  };
+  addMidiTrackBtn.addEventListener("click", async () => {
+    const name = await askText("New MIDI track", `MIDI ${SYNTH_LANES.length + 1}`); if (!name) return;
+    ctx.checkpoint(); const lane = addSynthLane(name); activeSynth.lane = lane; buildSessionGrid(); saveAll(); paintChain();
+  });
+  addAudioTrackBtn.addEventListener("click", () => { audioTargetId = null; audioInput.click(); });
+  audioInput.addEventListener("change", async () => { const file = audioInput.files?.[0]; if (file) await importAudio(file, audioTargetId); audioInput.value = ""; audioTargetId = null; });
   const selected = (): ArrangeBlock | null => arrangement[selLane].find((block) => block.id === selectedId) ?? null;
+  const selectedAudio = () => audioTracks.flatMap((track) => track.clips.map((audioClip) => ({ track, audioClip }))).find(({ audioClip }) => audioClip.id === selectedAudioId) ?? null;
   const clipInspector = el("aside", "wa-arrange-selection"); clipInspector.hidden = true;
   const inspectorTitle = el("span", "wa-inspector-title", "CLIP");
   const closeInspector = btn("×", "wa-btn-sm"); closeInspector.setAttribute("aria-label", "Close clip inspector");
@@ -213,8 +232,8 @@ export function buildSession(): SessionView {
   clipInspector.append(inspectorHead, inspectorGrid, editClipBtn);
   const nextFreeBar = (track: ArrangeTrackId): number => arrangement[track].reduce((end, block) => Math.max(end, block.startBar + block.bars), 0);
   const openArrangeEditor = (track: ArrangeTrackId, scene: number): void => {
-    if (track === "bass" || track === "lead" || track === "harmony") {
-      activeSynth.lane = track; ctx.openTrackEditor("synth", scene);
+    if (track !== "drums" && track !== "pads") {
+      activeSynth.lane = track as SynthLane; ctx.openTrackEditor("synth", scene);
       return;
     }
     ctx.openTrackEditor(track, scene);
@@ -340,6 +359,28 @@ export function buildSession(): SessionView {
       clips.append(laneAdd);
       row.append(clips); chain.append(row);
     });
+    audioTracks.forEach((track) => {
+      const row = el("div", "wa-arrange-lane wa-audio-lane");
+      const name = btn(track.name, "wa-arrange-lane-name"); name.classList.remove("wa-btn"); row.append(name);
+      const clips = el("div", "wa-arrange-lane-clips"); clips.style.width = `${width}px`; clips.style.setProperty("--bar-width", `${pixelsPerBar}px`);
+      const playhead = el("span", "wa-arrange-playhead"); playhead.style.left = `${songPos.bar * pixelsPerBar}px`; clips.append(playhead);
+      track.clips.forEach((audioClip) => {
+        const item = btn(audioClip.name, "wa-chain-block wa-audio-block"); item.classList.remove("wa-btn");
+        item.classList.toggle("active", audioClip.id === selectedAudioId); item.style.left = `${audioClip.startBar * pixelsPerBar}px`; item.style.width = `${Math.max(pixelsPerBar, audioClip.bars * pixelsPerBar - 3)}px`;
+        item.dataset.audioClipId = audioClip.id; item.title = `${audioClip.name} · ${audioClip.duration.toFixed(1)} s · drag to move`;
+        item.addEventListener("click", () => { selectedAudioId = audioClip.id; selectedId = null; paintChain(); });
+        item.addEventListener("pointerdown", (event) => {
+          if (event.button !== 0) return; selectedAudioId = audioClip.id; selectedId = null; item.classList.add("active"); const startX = event.clientX, original = audioClip.startBar; item.setPointerCapture(event.pointerId);
+          const move = (moveEvent: PointerEvent) => { item.style.left = `${Math.max(0, original + Math.round((moveEvent.clientX - startX) / pixelsPerBar)) * pixelsPerBar}px`; };
+          const up = (upEvent: PointerEvent) => { item.removeEventListener("pointermove", move); item.removeEventListener("pointerup", up); audioClip.startBar = Math.max(0, original + Math.round((upEvent.clientX - startX) / pixelsPerBar)); saveAll(); paintChain(); };
+          item.addEventListener("pointermove", move); item.addEventListener("pointerup", up);
+        });
+        clips.append(item);
+      });
+      const laneAdd = btn("＋ Audio", "wa-lane-add"); laneAdd.classList.remove("wa-btn"); laneAdd.style.left = `${track.clips.reduce((end, item) => Math.max(end, item.startBar + item.bars), 0) * pixelsPerBar}px`;
+      laneAdd.addEventListener("click", () => { audioTargetId = track.id; audioInput.click(); }); clips.append(laneAdd);
+      row.append(clips); chain.append(row);
+    });
   };
   window.addEventListener("vv-studio-arrange-playhead", (event) => {
     const bar = (event as CustomEvent<{ bar: number }>).detail?.bar;
@@ -347,9 +388,21 @@ export function buildSession(): SessionView {
     chain.querySelectorAll<HTMLElement>(".wa-arrange-playhead").forEach((node) => { node.style.left = `${bar * pixelsPerBar}px`; });
   });
   const addSelected = () => { ctx.checkpoint(); const block = createArrangeBlock(clip.sel, nextFreeBar(selLane)); arrangement[selLane].push(block); selectedId = block.id; commitChain(); paintAutomation(); };
-  const duplicateSelected = () => { const block = selected(); if (!block) return; ctx.checkpoint(); const copy = { ...block, id: createArrangeBlock(block.scene, 0).id, startBar: block.startBar + block.bars, automation: block.automation?.map((ramp) => ({ ...ramp })) }; arrangement[selLane].push(copy); selectedId = copy.id; commitChain(); };
-  const splitSelected = () => { const block = selected(); if (!block || block.bars < 2) return; ctx.checkpoint(); const leftBars = Math.floor(block.bars / 2), right = { ...block, id: createArrangeBlock(block.scene, 0).id, startBar: block.startBar + leftBars, bars: block.bars - leftBars, automation: block.automation?.map((ramp) => ({ ...ramp })) }; block.bars = leftBars; arrangement[selLane].push(right); selectedId = right.id; commitChain(); };
-  const deleteSelected = () => { if (!selectedId) return; ctx.checkpoint(); arrangement[selLane] = arrangement[selLane].filter((block) => block.id !== selectedId); selectedId = null; commitChain(); paintAutomation(); };
+  const duplicateSelected = () => {
+    const audio = selectedAudio();
+    if (audio) { ctx.checkpoint(); const copy = { ...audio.audioClip, id: `audio-clip-${Date.now().toString(36)}`, startBar: audio.audioClip.startBar + audio.audioClip.bars }; audio.track.clips.push(copy); selectedAudioId = copy.id; saveAll(); paintChain(); return; }
+    const block = selected(); if (!block) return; ctx.checkpoint(); const copy = { ...block, id: createArrangeBlock(block.scene, 0).id, startBar: block.startBar + block.bars, automation: block.automation?.map((ramp) => ({ ...ramp })) }; arrangement[selLane].push(copy); selectedId = copy.id; commitChain();
+  };
+  const splitSelected = () => {
+    const audio = selectedAudio();
+    if (audio && audio.audioClip.bars >= 2) { ctx.checkpoint(); const leftBars = Math.floor(audio.audioClip.bars / 2), secondsPerBar = 60 / transport.bpm * 4; const right = { ...audio.audioClip, id: `audio-clip-${Date.now().toString(36)}`, startBar: audio.audioClip.startBar + leftBars, bars: audio.audioClip.bars - leftBars, offset: audio.audioClip.offset + leftBars * secondsPerBar }; audio.audioClip.bars = leftBars; audio.track.clips.push(right); selectedAudioId = right.id; saveAll(); paintChain(); return; }
+    const block = selected(); if (!block || block.bars < 2) return; ctx.checkpoint(); const leftBars = Math.floor(block.bars / 2), right = { ...block, id: createArrangeBlock(block.scene, 0).id, startBar: block.startBar + leftBars, bars: block.bars - leftBars, automation: block.automation?.map((ramp) => ({ ...ramp })) }; block.bars = leftBars; arrangement[selLane].push(right); selectedId = right.id; commitChain();
+  };
+  const deleteSelected = () => {
+    const audio = selectedAudio();
+    if (audio) { ctx.checkpoint(); audio.track.clips = audio.track.clips.filter((item) => item.id !== audio.audioClip.id); selectedAudioId = null; saveAll(); paintChain(); return; }
+    if (!selectedId) return; ctx.checkpoint(); arrangement[selLane] = arrangement[selLane].filter((block) => block.id !== selectedId); selectedId = null; commitChain(); paintAutomation();
+  };
   addBtn.addEventListener("click", addSelected); duplicateBtn.addEventListener("click", duplicateSelected); splitBtn.addEventListener("click", splitSelected); deleteBtn.addEventListener("click", deleteSelected);
   const setZoom = (value: number) => { pixelsPerBar = Math.max(32, Math.min(112, value)); localStorage.setItem("vv_studio_timeline_zoom", String(pixelsPerBar)); paintChain(); };
   zoomOutBtn.addEventListener("click", () => setZoom(pixelsPerBar - 8)); zoomInBtn.addEventListener("click", () => setZoom(pixelsPerBar + 8));
@@ -430,7 +483,7 @@ export function buildSession(): SessionView {
   refreshSongs();
   songLibrary.append(el("span", "wa-lbl", "SONGS"), songSel, loadSongBtn, saveSongBtn, deleteSongBtn, exportSongBtn, importSongBtn, songInput);
 
-  composerHead.append(composerTitle, addBtn, duplicateBtn, splitBtn, deleteBtn, el("span", "wa-toolbar-spacer"), loopToggle, loopStart, el("span", "wa-loop-arrow", "→"), loopEnd, zoomOutBtn, zoomReadout, zoomInBtn);
+  composerHead.append(composerTitle, addMidiTrackBtn, addAudioTrackBtn, audioInput, addBtn, duplicateBtn, splitBtn, deleteBtn, el("span", "wa-toolbar-spacer"), loopToggle, loopStart, el("span", "wa-loop-arrow", "→"), loopEnd, zoomOutBtn, zoomReadout, zoomInBtn);
   const automationFold = el("details", "wa-fold") as HTMLDetailsElement;
   const automationSummary = el("summary", "wa-fold-head", "AUTOMATION");
   automationFold.append(automationSummary, automation);
@@ -438,10 +491,11 @@ export function buildSession(): SessionView {
   const librarySummary = el("summary", "wa-fold-head", "SONGS");
   libraryFold.append(librarySummary, songLibrary);
   composer.append(composerHead, chain, automationFold, libraryFold); paintChain(); paintAutomation();
+  window.addEventListener("vv-studio-tracks-change", () => { buildSessionGrid(); paintChain(); });
   const arrangeLanePaints: Array<() => void> = [paintChain];
   help(sessionGrid, "Each column is a track, each row a scene — launch single clips or whole scenes; changes land on the next bar so transitions stay in time.");
   const viewBar = el("div", "wa-song-viewbar");
-  const arrangeViewBtn = btn("Arrange", "wa-subtab active"), sessionViewBtn = btn("Session", "wa-subtab"), captureBtn = btn("Capture session", "wa-btn-sm");
+  const arrangeViewBtn = btn("Song", "wa-subtab active"), sessionViewBtn = btn("Clips", "wa-subtab"), captureBtn = btn("Capture clips", "wa-btn-sm");
   const showView = (view: "arrange" | "session") => {
     composer.hidden = view !== "arrange"; sessionGrid.hidden = view !== "session";
     arrangeViewBtn.classList.toggle("active", view === "arrange"); sessionViewBtn.classList.toggle("active", view === "session");
@@ -453,7 +507,7 @@ export function buildSession(): SessionView {
     const start = Math.max(...ARRANGE_TRACKS.map((track) => nextFreeBar(track)), 0);
     const capture = (track: ArrangeTrackId, scene: number | null) => { if (scene === null) return; arrangement[track].push(createArrangeBlock(scene, start)); };
     capture("drums", clip.play.drums); capture("pads", clip.play.pads);
-    SYNTH_LANES.forEach((lane) => capture(lane, clip.play.synth));
+    SYNTH_LANES.forEach((lane) => capture(lane, clip.play[lane]));
     launchStatus.textContent = `Captured at bar ${start + 1}`; showView("arrange"); commitChain();
   });
   viewBar.append(arrangeViewBtn, sessionViewBtn, el("span", "wa-toolbar-spacer"), captureBtn, statusRow);

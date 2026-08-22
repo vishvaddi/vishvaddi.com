@@ -6,10 +6,11 @@ import {
   SCENES, STEPS, PAD_COUNT, PAD_LAYER_MAX, PIANO_NOTES, TRACKS, ARRANGE_TRACKS, clip, transport, song,
   allPats, allVels, synthNotes, padEvents, arrangement, songLoop, sampleParams, sampleData, sampleBuffers,
   padLayers, padLayerBuffers, padLayerMode,
-  dp, mpc, rackState, fx, vsynthPatch, synthLaneNotes, synthPatches, patternLengths, patternDivisions, SYNTH_LANES,
+  dp, mpc, rackState, fx, vsynthPatch, synthLaneNotes, synthPatches, patternLengths, patternDivisions, SYNTH_LANES, SYNTH_LANE_LABELS,
   DRUMS, laneLengths, laneRates, laneVoices, laneSends, LANE_RATES, mixState, mute, solo, createArrangeBlock,
+  audioTracks, addSynthLane, resetUserTracks,
 } from "./state";
-import type { ArrangeBlock, ArrangeTrackId, HistoryState, PadEvent, PadLayer, PadLayerMode, SamplerP, DrumP, RackState, TrackId, VNote, SynthLane } from "./state";
+import type { ArrangeBlock, ArrangeTrackId, HistoryState, PadEvent, PadLayer, PadLayerMode, SamplerP, DrumP, RackState, VNote, SynthLane } from "./state";
 import type { VPatch } from "./vsynth";
 import { applyFxState, hydrateSample, hydratePadLayer } from "./engine";
 
@@ -62,6 +63,7 @@ export function historyState(): HistoryState {
     vels: allVels.map((pattern) => pattern.map((row) => [...row])),
     synthLaneNotes: Object.fromEntries(SYNTH_LANES.map((lane) => [lane, synthLaneNotes[lane].map((notes) => notes.map((note) => ({ ...note })))])) as Record<SynthLane, VNote[][]>,
     synthPatches: Object.fromEntries(SYNTH_LANES.map((lane) => [lane, JSON.parse(JSON.stringify(synthPatches[lane]))])) as Record<SynthLane, VPatch>,
+    synthTracks: SYNTH_LANES.map((id) => ({ id, name: SYNTH_LANE_LABELS[id] })),
     patternLengths: [...patternLengths],
     patternDivisions: [...patternDivisions],
     laneLengths: laneLengths.map((row) => [...row]),
@@ -69,13 +71,8 @@ export function historyState(): HistoryState {
     padEvents: padEvents.map((events) => events.map((event) => ({ ...event }))),
     sampleParams: sampleParams.map((params) => ({ ...params })),
     sampleData: [...sampleData],
-    arrangement: {
-      drums: arrangement.drums.map((b) => ({ ...b })),
-      pads: arrangement.pads.map((b) => ({ ...b })),
-      bass: arrangement.bass.map((b) => ({ ...b })),
-      lead: arrangement.lead.map((b) => ({ ...b })),
-      harmony: arrangement.harmony.map((b) => ({ ...b })),
-    },
+    arrangement: Object.fromEntries(ARRANGE_TRACKS.map((track) => [track, arrangement[track].map((block) => ({ ...block }))])),
+    audioTracks: audioTracks.map((track) => ({ ...track, clips: track.clips.map((clip) => ({ ...clip })) })),
     fx: { ...fx },
     rackState: { ...rackState, macros: [...rackState.macros], devices: { ...rackState.devices } },
     vsynth: JSON.parse(JSON.stringify(vsynthPatch)) as VPatch,
@@ -83,14 +80,17 @@ export function historyState(): HistoryState {
   };
 }
 export function restoreHistory(state: HistoryState): void {
+  if (state.synthTracks) {
+    resetUserTracks(); state.synthTracks.slice(3).forEach((track) => addSynthLane(track.name, track.id));
+  }
   if (typeof state.bpm === "number") transport.bpm = state.bpm;
   if (typeof state.title === "string") song.title = state.title;
   state.pats.forEach((pattern, pi) => pattern.forEach((row, ri) => row.forEach((value, step) => { allPats[pi][ri][step] = value; })));
   state.vels.forEach((pattern, pi) => pattern.forEach((row, ri) => row.forEach((value, step) => { allVels[pi][ri][step] = value; })));
   if (state.synthLaneNotes) SYNTH_LANES.forEach((lane) => {
-    state.synthLaneNotes![lane].forEach((notes, i) => { synthLaneNotes[lane][i] = notes.map((note) => ({ ...note })); });
+    state.synthLaneNotes![lane]?.forEach((notes, i) => { synthLaneNotes[lane][i] = notes.map((note) => ({ ...note })); });
   });
-  if (state.synthPatches) SYNTH_LANES.forEach((lane) => Object.assign(synthPatches[lane], JSON.parse(JSON.stringify(state.synthPatches![lane]))));
+  if (state.synthPatches) SYNTH_LANES.forEach((lane) => { if (state.synthPatches![lane]) Object.assign(synthPatches[lane], JSON.parse(JSON.stringify(state.synthPatches![lane]))); });
   state.patternLengths?.forEach((value, i) => { if (i < SCENES) patternLengths[i] = value; });
   state.patternDivisions?.forEach((value, i) => { if (i < SCENES) patternDivisions[i] = value; });
   state.laneLengths?.forEach((row, i) => { if (i < SCENES) row.forEach((v, r) => { laneLengths[i][r] = v; }); });
@@ -98,7 +98,8 @@ export function restoreHistory(state: HistoryState): void {
   state.padEvents.forEach((events, i) => { padEvents[i] = events.map((event) => ({ ...event })); });
   state.sampleParams.forEach((params, i) => Object.assign(sampleParams[i], params));
   state.sampleData.forEach((data, i) => { sampleData[i] = data; sampleBuffers[i] = null; if (data) void hydrateSample(i); });
-  ARRANGE_TRACKS.forEach((track) => { arrangement[track] = state.arrangement[track].map((b) => ({ ...b })); });
+  ARRANGE_TRACKS.forEach((track) => { arrangement[track] = (state.arrangement[track] ?? []).map((b) => ({ ...b })); });
+  audioTracks.splice(0, audioTracks.length, ...(state.audioTracks ?? []).map((track) => ({ ...track, clips: track.clips.map((clip) => ({ ...clip })) })));
   Object.assign(fx, state.fx);
   Object.assign(rackState, state.rackState);
   rackState.macros = [...state.rackState.macros]; rackState.devices = { ...state.rackState.devices };
@@ -120,7 +121,7 @@ export function projectState(includeSamples = true): object {
     return index;
   });
   return {
-    version: 16, // v16: stable clip IDs, free timeline placement and independent synth lanes
+    version: 18, // v18: addable MIDI/audio tracks and independent clip launching
     title: song.title,
     pats: allPats.map((p) => p.map((r) => r.map((b) => (b ? 1 : 0)))),
     vels: allVels,
@@ -130,6 +131,7 @@ export function projectState(includeSamples = true): object {
     clipPlay: clip.play,
     synthLaneNotes,
     synthPatches,
+    synthTracks: SYNTH_LANES.map((id) => ({ id, name: SYNTH_LANE_LABELS[id] })),
     patternLengths,
     patternDivisions,
     laneLengths,
@@ -139,6 +141,7 @@ export function projectState(includeSamples = true): object {
     mix: mixState,
     vsynth: synthPatches.bass,
     arrangement,
+    audioTracks,
     songLoop,
     songMode: transport.songMode,
     quantizeGrid: transport.quantizeGrid,
@@ -165,6 +168,10 @@ export function loadAll(): void {
 export function applyProject(saved: Record<string, unknown>): void {
   try {
     if (saved.pats) {
+      resetUserTracks();
+      if (Array.isArray(saved.synthTracks)) (saved.synthTracks as Array<{ id?: string; name?: string }>).slice(3).forEach((track) => {
+        if (typeof track.id === "string") addSynthLane(track.name, track.id);
+      });
       (saved.pats as number[][][]).forEach((pp, pi) => {
         if (pi >= SCENES) return;
         pp.forEach((row, ri) => { if (ri < 8) row.forEach((v, ci) => { if (ci < STEPS) allPats[pi][ri][ci] = !!v; }); });
@@ -185,9 +192,9 @@ export function applyProject(saved: Record<string, unknown>): void {
         TRACKS.forEach((t) => { clip.play[t] = clip.sel; });
       }
       if (saved.clipPlay && typeof saved.clipPlay === "object") {
-        const incoming = saved.clipPlay as Record<TrackId, number | null>;
+        const incoming = saved.clipPlay as Record<string, number | null>;
         TRACKS.forEach((t) => {
-          const v = incoming[t];
+          const v = incoming[t] ?? (t === "bass" || t === "lead" || t === "harmony" ? incoming.synth : undefined);
           if (v === null) clip.play[t] = null;
           else if (typeof v === "number") clip.play[t] = Math.max(0, Math.min(SCENES - 1, v));
         });
@@ -293,6 +300,9 @@ export function applyProject(saved: Record<string, unknown>): void {
         ARRANGE_TRACKS.forEach((track) => {
           arrangement[track] = chain.map((scene, i) => createArrangeBlock(Math.max(0, Math.min(SCENES - 1, Number(scene) || 0)), i));
         });
+      }
+      if (Array.isArray(saved.audioTracks)) {
+        audioTracks.splice(0, audioTracks.length, ...(saved.audioTracks as typeof audioTracks).map((track) => ({ ...track, clips: Array.isArray(track.clips) ? track.clips.map((item) => ({ ...item })) : [] })));
       }
       if (saved.songLoop && typeof saved.songLoop === "object") {
         const incoming = saved.songLoop as Partial<typeof songLoop>;

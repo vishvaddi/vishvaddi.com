@@ -1,6 +1,8 @@
 import { chromium } from 'playwright-core'
+import { serveBuiltSite } from './serve-built-site.mjs'
 
-const BASE = process.argv[2] ?? 'http://localhost:4321'
+const builtSite = process.argv[2] === 'dist' ? await serveBuiltSite(4400) : null
+const BASE = builtSite?.base ?? process.argv[2] ?? 'http://localhost:4321'
 const viewportFilter = process.argv[3]
 const viewports = [
   ['desktop', 1440, 900],
@@ -316,6 +318,7 @@ for (const [name, width, height] of viewports) {
   }
 }
 await browser.close()
+if (builtSite) await builtSite.close()
 
 console.log(`\nVishAmp responsive E2E\n${lines.join('\n')}\n`)
 if (failures) process.exit(1)

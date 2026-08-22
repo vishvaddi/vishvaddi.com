@@ -34,6 +34,7 @@ type Drag =
   | { kind: "move"; note: VNote; origStep: number; origRow: number; grabOffset: number }
   | { kind: "resize-l"; note: VNote; origStep: number; origLen: number }
   | { kind: "resize-r"; note: VNote; origLen: number }
+  | { kind: "marquee"; startStep: number; startRow: number; step: number; row: number }
   | null;
 
 export function buildRoll(deps: RollDeps): Roll {
@@ -41,16 +42,20 @@ export function buildRoll(deps: RollDeps): Roll {
   const toolbar = el("div", "wa-roll-toolbar");
   const laneGroup = el("div", "wa-roll-lanes");
   const laneButtons = new Map<SynthLane, HTMLButtonElement>();
-  SYNTH_LANES.forEach((lane) => {
-    const button = btn(SYNTH_LANE_LABELS[lane], "wa-btn-sm wa-roll-lane") as HTMLButtonElement;
-    button.addEventListener("click", () => {
-      activeSynth.lane = lane; selected = null;
-      laneButtons.forEach((item, id) => item.classList.toggle("active", id === lane));
-      window.dispatchEvent(new CustomEvent("vv-synth-lane-change", { detail: lane }));
-      paintRoll();
+  const buildLaneButtons = (): void => {
+    laneButtons.clear(); laneGroup.replaceChildren();
+    SYNTH_LANES.forEach((lane) => {
+      const button = btn(SYNTH_LANE_LABELS[lane], "wa-btn-sm wa-roll-lane") as HTMLButtonElement;
+      button.addEventListener("click", () => {
+        activeSynth.lane = lane; selected = null; selection.clear();
+        laneButtons.forEach((item, id) => item.classList.toggle("active", id === lane));
+        window.dispatchEvent(new CustomEvent("vv-synth-lane-change", { detail: lane })); paintRoll();
+      });
+      laneButtons.set(lane, button); laneGroup.append(button);
     });
-    laneButtons.set(lane, button); laneGroup.append(button);
-  });
+  };
+  buildLaneButtons();
+  window.addEventListener("vv-studio-tracks-change", () => { buildLaneButtons(); paintRoll(); });
   const patternBar = buildPatternBar({ compact: true, onChange: () => paintRoll() });
   // Roll range (CV-80 RANGE + octave keys): the canvas shows three octaves;
   // these shift which three, so notes outside C3–B5 are reachable.
@@ -70,11 +75,17 @@ export function buildRoll(deps: RollDeps): Roll {
   octUp.addEventListener("click", () => setRollOct(rollOct + 1));
   const accentBtn = btn("Note Accent", "wa-btn-sm wa-note-expression") as HTMLButtonElement;
   const slideBtn = btn("Note Slide", "wa-btn-sm wa-note-expression") as HTMLButtonElement;
+  const selectBtn = btn("Select", "wa-btn-sm wa-toggle") as HTMLButtonElement;
+  const selectAllBtn = btn("All", "wa-btn-sm") as HTMLButtonElement;
+  const copyBtn = btn("Copy", "wa-btn-sm") as HTMLButtonElement;
+  const pasteBtn = btn("Paste", "wa-btn-sm") as HTMLButtonElement;
+  let selectMode = false;
   help(accentBtn, "Toggle an accented note. Accents play louder and brighter.");
   help(slideBtn, "Glide into this note from the previous note in the lane.");
-  accentBtn.addEventListener("click", () => { if (selected) { selected.accent = !selected.accent; deps.saveAll(); paintRoll(); } });
-  slideBtn.addEventListener("click", () => { if (selected) { selected.slide = !selected.slide; deps.saveAll(); paintRoll(); } });
-  toolbar.append(laneGroup, el("span", "wa-roll-spacer"), patternBar.root, octDown, rangeLabel, octUp, accentBtn, slideBtn);
+  accentBtn.addEventListener("click", () => { if (selection.size) { const on = !Array.from(selection).every((note) => note.accent); selection.forEach((note) => { note.accent = on; }); deps.saveAll(); paintRoll(); } });
+  slideBtn.addEventListener("click", () => { if (selection.size) { const on = !Array.from(selection).every((note) => note.slide); selection.forEach((note) => { note.slide = on; }); deps.saveAll(); paintRoll(); } });
+  selectBtn.addEventListener("click", () => { selectMode = !selectMode; selectBtn.classList.toggle("active", selectMode); canvas.style.cursor = selectMode ? "crosshair" : "cell"; });
+  toolbar.append(laneGroup, el("span", "wa-roll-spacer"), patternBar.root, octDown, rangeLabel, octUp, selectBtn, selectAllBtn, copyBtn, pasteBtn, accentBtn, slideBtn);
   const scrollWrap = el("div", "wa-roll2-scroll");
   const canvas = document.createElement("canvas");
   canvas.className = "wa-roll2-canvas";
@@ -87,6 +98,8 @@ export function buildRoll(deps: RollDeps): Roll {
   pianoRoll.append(toolbar, scrollWrap, velCanvas);
 
   let selected: VNote | null = null;
+  const selection = new Set<VNote>();
+  let noteClipboard: VNote[] = [];
   let drag: Drag = null;
   let lastLen = 1;
 
@@ -135,7 +148,7 @@ export function buildRoll(deps: RollDeps): Roll {
       const r = rowOf(n); if (r < 0) return;
       const x = GUTTER + n.step * stepW, y = r * ROW_H + 1.5;
       const nw = Math.max(3, n.len * stepW - 1), nh = ROW_H - 3;
-      const sel = n === selected;
+      const sel = selection.has(n);
       g.shadowBlur = sel ? 8 : 0; g.shadowColor = SCREEN_FG;
       g.fillStyle = screenRgba(0.35 + 0.55 * (n.vel / 127));
       g.beginPath(); g.roundRect(x, y, nw, nh, 3); g.fill();
@@ -148,6 +161,14 @@ export function buildRoll(deps: RollDeps): Roll {
       g.lineWidth = sel ? 1.4 : 1;
       g.beginPath(); g.roundRect(x, y, nw, nh, 3); g.stroke();
     });
+    if (drag?.kind === "marquee") {
+      const left = GUTTER + Math.min(drag.startStep, drag.step) * stepW;
+      const top = Math.min(drag.startRow, drag.row) * ROW_H;
+      const width = Math.abs(drag.step - drag.startStep) * stepW;
+      const height = (Math.abs(drag.row - drag.startRow) + 1) * ROW_H;
+      g.fillStyle = "rgba(95,217,217,.12)"; g.fillRect(left, top, width, height);
+      g.strokeStyle = "rgba(95,217,217,.9)"; g.strokeRect(left + .5, top + .5, width, height);
+    }
     // key gutter on top
     g.fillStyle = "#0a0f13"; g.fillRect(0, 0, GUTTER, h);
     rollNotes.forEach((note, r) => {
@@ -163,8 +184,9 @@ export function buildRoll(deps: RollDeps): Roll {
     paintVel();
     laneButtons.forEach((item, id) => item.classList.toggle("active", id === activeSynth.lane));
     patternBar.sync();
-    accentBtn.classList.toggle("active", !!selected?.accent); slideBtn.classList.toggle("active", !!selected?.slide);
-    accentBtn.disabled = !selected; slideBtn.disabled = !selected;
+    accentBtn.classList.toggle("active", selection.size > 0 && Array.from(selection).every((note) => note.accent));
+    slideBtn.classList.toggle("active", selection.size > 0 && Array.from(selection).every((note) => note.slide));
+    accentBtn.disabled = selection.size === 0; slideBtn.disabled = selection.size === 0; copyBtn.disabled = selection.size === 0; pasteBtn.disabled = noteClipboard.length === 0;
     rangeLabel.textContent = `${rollNotes[rollNotes.length - 1]}–${rollNotes[0]}`;
   }
 
@@ -185,7 +207,7 @@ export function buildRoll(deps: RollDeps): Roll {
     notes().forEach((n) => {
       const x = GUTTER + n.step * stepW;
       const bh = Math.max(2, (n.vel / 127) * (VEL_H - 6));
-      const sel = n === selected;
+      const sel = selection.has(n);
       g.fillStyle = sel ? "#ffffff" : screenRgba(0.4 + 0.5 * (n.vel / 127));
       g.fillRect(x, VEL_H - 3 - bh, 5, bh);
     });
@@ -222,6 +244,7 @@ export function buildRoll(deps: RollDeps): Roll {
 
   canvas.addEventListener("pointermove", (ev) => {
     if (drag) return;
+    if (selectMode) { canvas.style.cursor = "crosshair"; return; }
     const found = hit(ev);
     canvas.style.cursor = !found ? "cell" : found.zone === "body" ? "move" : "ew-resize";
   });
@@ -233,17 +256,28 @@ export function buildRoll(deps: RollDeps): Roll {
     const { step, row } = pos(ev);
     if (found) {
       selected = found.note;
+      if (ev.shiftKey || ev.ctrlKey || ev.metaKey) {
+        if (selection.has(found.note)) selection.delete(found.note); else selection.add(found.note);
+      } else if (!selection.has(found.note)) {
+        selection.clear(); selection.add(found.note);
+      }
       ctx.checkpoint();
       if (found.zone === "body") drag = { kind: "move", note: found.note, origStep: found.note.step, origRow: rowOf(found.note), grabOffset: step - found.note.step };
       else if (found.zone === "l") drag = { kind: "resize-l", note: found.note, origStep: found.note.step, origLen: found.note.len };
       else drag = { kind: "resize-r", note: found.note, origLen: found.note.len };
     } else {
       if (row < 0 || row >= rollNotes.length || step < 0 || step >= steps()) return;
+      if (selectMode) {
+        if (!ev.shiftKey) selection.clear();
+        selected = null;
+        drag = { kind: "marquee", startStep: step, startRow: row, step, row };
+        canvas.setPointerCapture(ev.pointerId); paintRoll(); return;
+      }
       ctx.checkpoint();
       const start = Math.max(0, Math.min(steps() - minLen(), snap(step)));
       const fresh: VNote = { note: rollNotes[row], step: start, len: Math.min(lastLen, steps() - start), vel: 100 };
       notes().push(fresh);
-      selected = fresh;
+      selected = fresh; selection.clear(); selection.add(fresh);
       drag = { kind: "create", note: fresh };
       deps.audition(fresh.note, 100, 1);
     }
@@ -254,6 +288,14 @@ export function buildRoll(deps: RollDeps): Roll {
   canvas.addEventListener("pointermove", (ev) => {
     if (!drag) return;
     const { step, row } = pos(ev);
+    if (drag.kind === "marquee") {
+      drag.step = Math.max(0, Math.min(steps(), step)); drag.row = Math.max(0, Math.min(rollNotes.length - 1, row));
+      const minStep = Math.min(drag.startStep, drag.step), maxStep = Math.max(drag.startStep, drag.step);
+      const minRow = Math.min(drag.startRow, drag.row), maxRow = Math.max(drag.startRow, drag.row);
+      selection.clear();
+      notes().forEach((note) => { const noteRow = rowOf(note); if (note.step + note.len >= minStep && note.step <= maxStep && noteRow >= minRow && noteRow <= maxRow) selection.add(note); });
+      selected = selection.values().next().value ?? null; paintRoll(); return;
+    }
     const n = drag.note;
     if (drag.kind === "create" || drag.kind === "resize-r") {
       n.len = Math.max(minLen(), Math.min(steps() - n.step, (grid() ? snap(step) : step) - n.step));
@@ -273,6 +315,7 @@ export function buildRoll(deps: RollDeps): Roll {
 
   const endDrag = () => {
     if (!drag) return;
+    if (drag.kind === "marquee") { drag = null; paintRoll(); return; }
     if (drag.kind === "create") lastLen = drag.note.len;
     drag = null;
     ctx.paintSession(); deps.saveAll(); paintRoll();
@@ -285,7 +328,7 @@ export function buildRoll(deps: RollDeps): Roll {
     if (!found) return;
     ctx.checkpoint();
     synthLaneNotes[activeSynth.lane][clip.sel] = notes().filter((n) => n !== found.note);
-    if (selected === found.note) selected = null;
+    selection.delete(found.note); if (selected === found.note) selected = null;
     paintRoll(); ctx.paintSession(); deps.saveAll();
   });
 
@@ -293,21 +336,53 @@ export function buildRoll(deps: RollDeps): Roll {
     ev.preventDefault();
     const found = hit(ev);
     if (!found) return;
-    selected = found.note;
+    selected = found.note; selection.clear(); selection.add(found.note);
     showVelocityPopup(found.note.vel, ev.clientX, ev.clientY, (v) => {
       found.note.vel = v; deps.saveAll(); paintRoll();
     });
   });
 
+  const selectAll = (): void => { selection.clear(); notes().forEach((note) => selection.add(note)); selected = notes()[0] ?? null; paintRoll(); };
+  const copySelection = (): void => {
+    if (!selection.size) return;
+    const first = Math.min(...Array.from(selection, (note) => note.step));
+    noteClipboard = Array.from(selection, (note) => ({ ...note, step: note.step - first }));
+    pasteBtn.disabled = false;
+  };
+  const pasteSelection = (): void => {
+    if (!noteClipboard.length) return;
+    const span = Math.max(...noteClipboard.map((note) => note.step + note.len));
+    const after = selection.size ? Math.max(...Array.from(selection, (note) => note.step + note.len)) : 0;
+    const start = Math.max(0, Math.min(steps() - span, snap(after)));
+    ctx.checkpoint(); selection.clear();
+    noteClipboard.forEach((source) => { const note = { ...source, step: start + source.step }; notes().push(note); selection.add(note); });
+    selected = selection.values().next().value ?? null; deps.saveAll(); ctx.paintSession(); paintRoll();
+  };
+  selectAllBtn.addEventListener("click", selectAll); copyBtn.addEventListener("click", copySelection); pasteBtn.addEventListener("click", pasteSelection);
+  window.addEventListener("vv-insert-chord", (event) => {
+    if (!pianoRoll.offsetParent) return;
+    const chord = (event as CustomEvent<{ notes?: string[] }>).detail?.notes ?? [];
+    if (!chord.length) return;
+    const start = Math.max(0, Math.min(steps() - 1, selection.size ? Math.max(...Array.from(selection, (note) => note.step + note.len)) : 0));
+    ctx.checkpoint(); selection.clear();
+    chord.forEach((noteName) => { const note: VNote = { note: noteName, step: start, len: Math.min(4, steps() - start), vel: 100 }; notes().push(note); selection.add(note); deps.audition(noteName, 90, 2); });
+    selected = selection.values().next().value ?? null; deps.saveAll(); ctx.paintSession(); paintRoll();
+  });
+
   window.addEventListener("keydown", (ev) => {
-    if (ev.key !== "Delete" && ev.key !== "Backspace") return;
     const active = document.activeElement;
     if (active instanceof HTMLElement && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) return;
-    if (!selected || !pianoRoll.offsetParent) return;
+    if (!pianoRoll.offsetParent) return;
+    const command = ev.ctrlKey || ev.metaKey;
+    if (command && ev.key.toLowerCase() === "a") { ev.preventDefault(); selectAll(); return; }
+    if (command && ev.key.toLowerCase() === "c") { ev.preventDefault(); copySelection(); return; }
+    if (command && ev.key.toLowerCase() === "v") { ev.preventDefault(); pasteSelection(); return; }
+    if (ev.key !== "Delete" && ev.key !== "Backspace") return;
+    if (!selection.size) return;
     ev.preventDefault();
     ctx.checkpoint();
-    synthLaneNotes[activeSynth.lane][clip.sel] = notes().filter((n) => n !== selected);
-    selected = null;
+    synthLaneNotes[activeSynth.lane][clip.sel] = notes().filter((n) => !selection.has(n));
+    selected = null; selection.clear();
     paintRoll(); ctx.paintSession(); deps.saveAll();
   });
 

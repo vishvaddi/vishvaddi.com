@@ -4,7 +4,7 @@
 import {
   PAD_BANK_SIZE, TRACKS, ARRANGE_TRACKS, clip, transport,
   allPats, allVels, synthLaneNotes, synthPatches, SYNTH_LANES, patternLengths, patternDivisions, laneLength, laneRate, padEvents, blockAt, songEndBar,
-  rackState, audible, mixState,
+  rackState, audible, mixState, audioTracks,
 } from "./state";
 import type { ArrangeTrackId, TrackId } from "./state";
 import { ensureNodes, trackGain, playDrum, playPad, metroClick, buildMasterChain, buildTracks } from "./engine";
@@ -59,7 +59,7 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
     const bars = mode === "song" ? songEndBar() : 1;
     const arrangeSceneAt = (track: ArrangeTrackId, bar: number): number | null => mode === "song"
       ? blockAt(track, bar)?.scene ?? null
-      : track === "drums" || track === "pads" ? clip.play[track] : clip.play.synth;
+      : clip.play[track];
     const barDurations = Array.from({ length: bars }, (_, bar) => Math.max(beat * 4, ...ARRANGE_TRACKS.map((track) => {
       const scene = arrangeSceneAt(track, bar); return scene === null ? 0 : patternLengths[scene] * beat / (patternDivisions[scene] || 4);
     })));
@@ -110,8 +110,9 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
           for (let i = 0; i < ratchets; i++) playPad(off, event.pad, event.velocity, Math.max(base, when + event.offset / 1000 + i * spacing), event.pad % PAD_BANK_SIZE, ot[event.pad % ot.length]);
         });
       }
-      if (!onlyTrack || onlyTrack === "synth") {
+      if (!onlyTrack || (onlyTrack !== "drums" && onlyTrack !== "pads")) {
         SYNTH_LANES.forEach((lane) => {
+          if (onlyTrack && onlyTrack !== lane) return;
           const synthClip = arrangeSceneAt(lane, bar);
           if (synthClip === null) return;
           const laneSd = beat / (patternDivisions[synthClip] || 4);
@@ -131,6 +132,18 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
         });
       }
       if (transport.metro) for (let b = 0; b < 4; b++) metroClick(off, om, barStarts[bar] + b * beat, b === 0);
+    }
+    if (mode === "song" && !onlyTrack && audioTracks.length) {
+      const decode = new AudioContext();
+      try {
+        for (const track of audioTracks) for (const item of track.clips) {
+          try {
+            const buffer = await decode.decodeAudioData(await (await fetch(item.data)).arrayBuffer());
+            const source = off.createBufferSource(), gain = off.createGain(); source.buffer = buffer; gain.gain.value = item.gain; source.connect(gain).connect(om);
+            if (item.offset < buffer.duration) source.start(barStarts[item.startBar] ?? item.startBar * beat * 4, item.offset, Math.min(buffer.duration - item.offset, item.bars * beat * 4));
+          } catch { /* a missing local file does not block the remaining render */ }
+        }
+      } finally { void decode.close(); }
     }
     return off.startRendering();
   }

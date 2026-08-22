@@ -474,8 +474,9 @@ export function buildSynth(): SynthUI {
     ["Ab", ["G#4", "C5", "D#5"]], ["Bb", ["A#4", "D5", "F5"]], ["C7", ["C4", "E4", "G4", "A#4"]],
   ];
   chords.forEach(([label, notes]) => {
-    const button = btn(label, "wa-btn-sm");
-    button.addEventListener("click", () => { notes.forEach((note) => audition(note, 90, 3.5)); });
+    const button = btn(`＋ ${label}`, "wa-btn-sm");
+    help(button, `Drop ${label} into the active MIDI clip after the current selection.`);
+    button.addEventListener("click", () => { window.dispatchEvent(new CustomEvent("vv-insert-chord", { detail: { notes } })); });
     chordRow.append(button);
   });
   // Piano roll v2 — canvas Cubase-style editor, extracted to roll.ts (C3).

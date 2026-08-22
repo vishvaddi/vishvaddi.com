@@ -3,17 +3,21 @@
 // verification method for this repo (no test framework, plain assertions).
 // Usage: node scripts/studio-e2e.mjs [baseURL]   (default http://localhost:4321)
 import { chromium } from 'playwright-core'
+import { serveBuiltSite } from './serve-built-site.mjs'
 
-const BASE = process.argv[2] ?? 'http://localhost:4321'
-const testWav = (() => {
-  const sampleRate = 8000, samples = sampleRate * 2, out = Buffer.alloc(44 + samples * 2)
+const builtSite = process.argv[2] === 'dist' ? await serveBuiltSite(4399) : null
+const BASE = builtSite?.base ?? process.argv[2] ?? 'http://localhost:4321'
+const createWav = (seconds) => {
+  const sampleRate = 8000, samples = sampleRate * seconds, out = Buffer.alloc(44 + samples * 2)
   out.write('RIFF', 0); out.writeUInt32LE(36 + samples * 2, 4); out.write('WAVEfmt ', 8)
   out.writeUInt32LE(16, 16); out.writeUInt16LE(1, 20); out.writeUInt16LE(1, 22)
   out.writeUInt32LE(sampleRate, 24); out.writeUInt32LE(sampleRate * 2, 28); out.writeUInt16LE(2, 32); out.writeUInt16LE(16, 34)
   out.write('data', 36); out.writeUInt32LE(samples * 2, 40)
   for (let i = 0; i < samples; i++) out.writeInt16LE(Math.round(Math.sin(i / sampleRate * Math.PI * 2 * 220) * 10000), 44 + i * 2)
   return out
-})()
+}
+const testWav = createWav(2)
+const arrangeWav = createWav(5)
 const results = []
 let failed = 0
 const modeRoute = {
@@ -45,7 +49,7 @@ page.on('console', (m) => {
   // dev-server-only noise: SW registration 404s + Vite dep re-optimisation
   if (m.type() === 'error' && !DEV_NOISE.test(m.text())) consoleErrors.push(m.text())
 })
-page.on('pageerror', (e) => consoleErrors.push(String(e)))
+page.on('pageerror', (e) => consoleErrors.push(e.stack ?? String(e)))
 
 try {
   // ── cold boot: a first-time visitor must meet a playable instrument, not a
@@ -109,19 +113,19 @@ try {
 
   // ── S0: the arrangement is audible ──
   const songBtn = page.locator('.wa-transport-core button.wa-toggle')
-  check('song: Session/Arrange toggle lives in the transport core', await songBtn.count() === 1)
-  check('song: starts in Session', (await songBtn.textContent()) === 'Session')
+  check('song: Clips/Song toggle lives in the transport core', await songBtn.count() === 1)
+  check('song: starts in Clips', (await songBtn.textContent()) === 'Clips')
   await songBtn.click()
-  check('song: toggle arms Arrange mode', (await songBtn.textContent()) === 'Arrange')
+  check('song: toggle arms Song mode', (await songBtn.textContent()) === 'Song')
   await page.click('.wa-transport button:has-text("▶")')
   await page.waitForTimeout(1200)
   check('song: arrangement plays (LCD playhead)', /▶/.test((await page.textContent('.wa-lcd')) ?? ''))
   await page.click('.wa-transport button:has-text("■")')
   await page.waitForTimeout(200)
   await openMode(page, 'CLIPS')
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Session' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Clips' }).click()
   await page.locator('.wa-clip').first().click()
-  check('song: launching a clip returns to Session, visibly', (await songBtn.textContent()) === 'Session')
+  check('song: launching a clip returns to Clips, visibly', (await songBtn.textContent()) === 'Clips')
 
   // ── S0: recording targets the visible scene, and the transport says so ──
   check('rec chip: hidden while nothing is armed', await page.locator('.wa-rec-chip:visible').count() === 0)
@@ -178,7 +182,7 @@ try {
   await page.locator('.wa-pad-layers button', { hasText: 'Add layer' }).click()
   const chooser = await chooserPromise
   await chooser.setFiles({ name: 'layer.wav', mimeType: 'audio/wav', buffer: testWav })
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(600)
   check('samples: a pad layer decodes and appears', await page.locator('.wa-pad-layer-row', { hasText: 'layer.wav' }).count() === 1)
   let layerModes = 0
   for (const mode of ['velocity', 'roundrobin', 'random', 'layered']) {
@@ -252,9 +256,49 @@ try {
   await page.locator('.wa-page-synth .wa-subtab', { hasText: 'Sound' }).click()
   check('synth: essential sound controls are the default patch surface', await page.locator('.wa-synth-quick').isVisible() && await page.locator('.wa-synth-quick .wa-slider-row').count() === 7)
 
+  // ── v20: chords and multi-note editing are writing operations ──
+  const notesBeforeChord = await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').synthLaneNotes?.bass ?? {}).flat().length)
+  await page.locator('.wa-page-synth .wa-subtab', { hasText: 'Notes' }).click()
+  await page.locator('.wa-property-tabs button', { hasText: 'Chords' }).click()
+  await page.locator('.wa-chords button').first().click()
+  await page.locator('.wa-roll-toolbar button', { hasText: 'All' }).click()
+  await page.locator('.wa-roll-toolbar button', { hasText: 'Copy' }).click()
+  await page.locator('.wa-roll-toolbar button', { hasText: 'Paste' }).click()
+  await page.waitForTimeout(600)
+  const notesAfterPaste = await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').synthLaneNotes?.bass ?? {}).flat().length)
+  check('piano roll: chord drop and select/copy/paste create editable notes', notesAfterPaste >= notesBeforeChord + 6, `${notesBeforeChord}→${notesAfterPaste}`)
+
+  // ── v20: tracks are addable and clips remain independent ──
+  await openMode(page, 'CLIPS')
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Song' }).click()
+  await page.locator('.wa-composer-head button', { hasText: 'MIDI track' }).click()
+  await page.locator('.wa-name-dialog input').fill('Keys 2')
+  await page.locator('.wa-name-dialog button', { hasText: 'Save' }).click()
+  await page.waitForTimeout(250)
+  check('tracks: a MIDI track is added to Song', await page.locator('.wa-arrange-lane-name', { hasText: 'Keys 2' }).count() === 1)
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Clips' }).click()
+  check('clips: Drum Rack, Pads and each MIDI instrument have separate rows', await page.locator('.wa-session-row[data-track]').count() === 6)
+  await page.locator('.wa-session-row[data-track="bass"] .wa-clip').nth(1).click()
+  await page.locator('.wa-session-row[data-track="lead"] .wa-clip').nth(3).click()
+  await page.waitForTimeout(600)
+  const independentClips = await page.evaluate(() => JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').clipPlay)
+  check('clips: MIDI tracks launch different scenes independently', independentClips?.bass === 1 && independentClips?.lead === 3, JSON.stringify(independentClips))
+
+  // ── v20: local audio enters the arrangement as an editable track clip ──
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Song' }).click()
+  await page.locator('.wa-composer-head input[type="file"]').setInputFiles({ name: 'vinyl-loop.wav', mimeType: 'audio/wav', buffer: arrangeWav })
+  await page.waitForFunction(() => document.querySelectorAll('.wa-audio-block').length === 1)
+  await page.locator('.wa-audio-block').click()
+  await page.locator('.wa-composer-head button', { hasText: 'Split' }).click()
+  const audioAfterSplit = await page.locator('.wa-audio-block').count()
+  check('song: audio clips can be split on the timeline', audioAfterSplit === 2, `${audioAfterSplit} clips`)
+  await page.locator('.wa-composer-head button', { hasText: 'Duplicate' }).click()
+  const audioAfterDuplicate = await page.locator('.wa-audio-block').count()
+  check('song: audio clips can be duplicated', audioAfterDuplicate === 3, `${audioAfterDuplicate} clips`)
+
   // ── workflow: the arrangement is undoable ──
   await openMode(page, 'CLIPS')
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Arrange' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Song' }).click()
   await page.waitForTimeout(250)
   const chainBefore = await page.locator('.wa-chain-block').count()
   await page.locator('.wa-composer-head button', { hasText: 'Clip' }).click()
@@ -293,12 +337,12 @@ try {
   await page.waitForTimeout(300)
 
   // ── S1: the clip decides the editor (double-tap → drum grid, scene selected) ──
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Session' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Clips' }).click()
   await page.locator('.wa-session-row').nth(1).locator('.wa-clip').nth(2).dblclick()
   await page.waitForTimeout(300)
   check('clips: double-tap opens the drum editor', await page.locator('.wa-page-drums').isVisible())
   await openMode(page, 'CLIPS')
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Session' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Clips' }).click()
   await page.waitForTimeout(200)
   const selScene = await page.evaluate(() => {
     const firstTrackRow = [...document.querySelectorAll('.wa-session-row')][1]
@@ -307,7 +351,7 @@ try {
   check('clips: double-tap selected the tapped scene', selScene === 2, `scene idx ${selScene}`)
 
   // ── S1: automation + song library fold shut by default ──
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Arrange' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Song' }).click()
   check('song page: automation and library are folded',
     await page.locator('.wa-fold').count() === 2
     && await page.evaluate(() => [...document.querySelectorAll('.wa-fold')].every((d) => !d.open)))
@@ -372,7 +416,7 @@ try {
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.wa-transport', { timeout: 15000 })
   await openMode(page, 'CLIPS')
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Arrange' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Song' }).click()
   const migrated = await page.evaluate(() => ({
     lanes: document.querySelectorAll('.wa-arrange-lane').length,
     synthCounts: [...document.querySelectorAll('.wa-arrange-lane')].slice(2).map((lane) => lane.querySelectorAll('.wa-chain-block').length),
@@ -437,9 +481,10 @@ try {
   // ── console clean ──
   check('console: no errors', consoleErrors.length === 0, consoleErrors.slice(0, 2).join(' | '))
 } catch (err) {
-  check(`RUN ABORTED: ${String(err).slice(0, 140)}`, false)
+  check(`RUN ABORTED: ${String(err).slice(0, 140)}`, false, consoleErrors.slice(0, 3).join(' | '))
 } finally {
   await browser.close()
+  if (builtSite) await builtSite.close()
 }
 
 console.log(`\nVishAmp e2e vs ${BASE}\n${results.join('\n')}\n`)

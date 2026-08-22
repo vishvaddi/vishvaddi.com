@@ -6,8 +6,10 @@
 // element, never on the page.
 // Usage: node scripts/studio-density-e2e.mjs [baseURL]
 import { chromium } from 'playwright-core'
+import { serveBuiltSite } from './serve-built-site.mjs'
 
-const BASE = process.argv[2] ?? 'http://localhost:4321'
+const builtSite = process.argv[2] === 'dist' ? await serveBuiltSite(4401) : null
+const BASE = builtSite?.base ?? process.argv[2] ?? 'http://localhost:4321'
 const MODES = ['BEAT', 'DRUMS', 'SYNTH', 'SONG', 'DJ', 'MIX']
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900, minInk: 50 },
@@ -105,6 +107,7 @@ try {
   check(`RUN ABORTED: ${String(err).slice(0, 160)}`, false)
 } finally {
   await browser.close()
+  if (builtSite) await builtSite.close()
 }
 
 console.log(`\nStudio density vs ${BASE}\n${results.join('\n')}\n`)

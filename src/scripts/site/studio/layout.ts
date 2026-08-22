@@ -57,8 +57,8 @@ export interface Layout {
 }
 
 const MODES: Array<{ id: ModeId; label: string; helpText: string }> = [
-  { id: "drums", label: "DRUMS", helpText: "Program the eight drum lanes and shape the selected sound." },
-  { id: "pads", label: "BEAT", helpText: "Finger-drum, load one-shots or chop a break." },
+  { id: "drums", label: "RACK", helpText: "Sequence a synthesised or sampled drum kit." },
+  { id: "pads", label: "PADS", helpText: "Sample vinyl, finger-drum one-shots or chop a break." },
   { id: "synth", label: "SYNTH", helpText: "Write notes or shape a synth sound." },
   { id: "song", label: "SONG", helpText: "Build the finished song on the arrangement timeline." },
   { id: "dj", label: "DJ", helpText: "Mix local audio across two decks with cues, loops, EQ, sync and recording." },
@@ -122,7 +122,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   const addDrumsBtn = btn("Add to song", "wa-btn-sm wa-add-song");
   addDrumsBtn.addEventListener("click", () => p.addCurrentToSong("beat"));
   drumPropsBtn.addEventListener("click", () => drumsPage.classList.toggle("show-inspector"));
-  drumsBar.append(el("span", "wa-view-title", "STEP SEQUENCER"), el("span", "wa-toolbar-spacer"), drumPropsBtn, addDrumsBtn);
+  drumsBar.append(el("span", "wa-view-title", "DRUM RACK SEQUENCER"), el("span", "wa-toolbar-spacer"), drumPropsBtn, addDrumsBtn);
   const drumsWorkspace = el("div", "wa-drums-workspace");
   const closeDrumPropsBtn = btn("Close properties", "wa-btn-sm wa-properties-close");
   closeDrumPropsBtn.addEventListener("click", () => drumsPage.classList.remove("show-inspector"));
