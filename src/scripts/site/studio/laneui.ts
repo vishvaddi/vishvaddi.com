@@ -148,10 +148,12 @@ export function buildLaneInspector(): LaneInspector {
     sdBlock.replaceChildren(el("div", "wa-fx-title", "SYNTH DRUM"));
     const specs = DP_SPECS[lane] ?? [];
     specs.forEach((spec) => {
+      const value = Number(dp[lane][spec.key] ?? DP_DEF[lane][spec.key] ?? spec.min);
+      (dp[lane][spec.key] as number) = value;
       const item = el("div", "wa-sd-item");
       const inp = document.createElement("input");
-      inp.type = "range"; inp.min = String(spec.min); inp.max = String(spec.max); inp.step = String(spec.step); inp.value = String(dp[lane][spec.key]);
-      const vout = el("span", "wa-sd-val", `${dp[lane][spec.key]}${spec.unit ?? ""}`);
+      inp.type = "range"; inp.min = String(spec.min); inp.max = String(spec.max); inp.step = String(spec.step); inp.value = String(value);
+      const vout = el("span", "wa-sd-val", `${value}${spec.unit ?? ""}`);
       inp.addEventListener("input", () => {
         const v = Number(inp.value); (dp[lane][spec.key] as number) = v; vout.textContent = `${v}${spec.unit ?? ""}`; saveAll(); audition();
       });
@@ -207,7 +209,26 @@ export function buildLaneInspector(): LaneInspector {
     paint(); saveAll(); audition();
   });
 
-  panel.append(kitRow, titleRow, waveCanvas, waveEmpty, fileName, actions, stepBlock, sendRow, knobRow, sdBlock);
+  const propertyTabs = el("div", "wa-property-tabs wa-drum-property-tabs");
+  const soundTab = btn("Sound", "wa-subtab active"), stepTab = btn("Step", "wa-subtab"), sendsTab = btn("Sends", "wa-subtab"), kitTab = btn("Kit", "wa-subtab");
+  const soundPane = el("div", "wa-drum-property-pane wa-drum-sound-pane");
+  const stepPane = el("div", "wa-drum-property-pane");
+  const sendsPane = el("div", "wa-drum-property-pane");
+  const kitPane = el("div", "wa-drum-property-pane");
+  soundPane.append(waveCanvas, waveEmpty, fileName, actions, knobRow, sdBlock);
+  stepPane.append(stepBlock);
+  sendsPane.append(el("div", "wa-fx-title", "SENDS"), sendRow);
+  kitPane.append(kitRow);
+  const showPropertyPane = (view: "sound" | "step" | "sends" | "kit") => {
+    soundTab.classList.toggle("active", view === "sound"); stepTab.classList.toggle("active", view === "step"); sendsTab.classList.toggle("active", view === "sends"); kitTab.classList.toggle("active", view === "kit");
+    soundPane.hidden = view !== "sound"; stepPane.hidden = view !== "step"; sendsPane.hidden = view !== "sends"; kitPane.hidden = view !== "kit";
+    localStorage.setItem("vv_studio_drum_properties", view);
+  };
+  soundTab.addEventListener("click", () => showPropertyPane("sound")); stepTab.addEventListener("click", () => showPropertyPane("step")); sendsTab.addEventListener("click", () => showPropertyPane("sends")); kitTab.addEventListener("click", () => showPropertyPane("kit"));
+  propertyTabs.append(soundTab, stepTab, sendsTab, kitTab);
+  panel.append(titleRow, propertyTabs, soundPane, stepPane, sendsPane, kitPane);
+  const savedPropertyPane = localStorage.getItem("vv_studio_drum_properties");
+  showPropertyPane(savedPropertyPane === "step" || savedPropertyPane === "sends" || savedPropertyPane === "kit" ? savedPropertyPane : "sound");
   paint();
   gridRepainters.push(paint);
 

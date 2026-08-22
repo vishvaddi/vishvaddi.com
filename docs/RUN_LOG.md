@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-08-22 — Studio fixed-frame workflow
+
+- Reworked Beat around one fixed aperture: Play remains immediate, performance controls become an Android drawer, and One-shot/Chop are mutually exclusive local sample pages instead of a scrolling stack.
+- Added explicit 16-step desktop and eight-step Android drum paging. Split the drum rail into Sound, Step, Sends and Kit pages; split Synth properties into Preset, Chords and Perform; made its keyboard view-specific and optional.
+- Repacked Mix into channels/scope above a contained desktop device drawer and Channels/Devices/Scope replacement pages on Android. The four production workspaces now hold the outer frame at zero scroll while active inner surfaces retain controlled scrolling.
+- Extended core and responsive coverage for all samples, sample-page replacement, drum paging and drawers, synth keyboard/property state and Mix page replacement. Core, responsive and density suites pass across five viewports with clean consoles.
+
 ## 2026-08-22 — Studio dedicated producer workspaces
 
 - Restored six direct destinations: Beat, Drums, Synth, Song, DJ and Mix. Beat remains the first screen for immediate finger-drumming and sample/break work; the FL-style sequencer now has a dedicated, roomier Drums workspace and property rail.

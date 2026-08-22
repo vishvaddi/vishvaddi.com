@@ -2619,6 +2619,181 @@
   }
 }
 
+/* ── Studio v19: fixed frame and in-place detail pages ──────────────── */
+
+.wa-beat-controls-toggle,
+.wa-mix-tabs { display: none; }
+
+.wa-beat-main {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.wa-beat-view { min-height: 0; overflow: hidden; }
+.wa-beat-play > .wa-panel,
+.wa-beat-play .wa-mpc-deck { height: 100%; min-height: 0; }
+.wa-beat-sample {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  overflow: hidden;
+}
+.wa-sample-tabs,
+.wa-property-tabs,
+.wa-mix-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+.wa-sample-tabs { grid-column: 1 / -1; }
+.wa-beat-sample > .wa-sample-card {
+  grid-column: 1;
+  grid-row: 2;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.wa-beat-sample > .wa-sample-card[hidden] { display: none; }
+
+.wa-step-pager {
+  display: inline-grid;
+  grid-template-columns: 30px minmax(48px, auto) 30px;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+}
+.wa-step-pager .wa-btn-sm { min-width: 30px; padding-inline: 4px; }
+.wa-step-range {
+  color: var(--wa-muted);
+  font: 700 10px/1 var(--wa-mono);
+  text-align: center;
+}
+.wa-drum-property-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.wa-drum-property-pane,
+.wa-synth-property-pane { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.wa-drum-sound-pane { display: flex; flex-direction: column; gap: 8px; }
+.wa-drum-property-pane .wa-lane-knobs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.wa-drums-workspace > .wa-lane-aside,
+.wa-synth-side { overscroll-behavior: contain; }
+.wa-synth-side > .wa-property-tabs { flex: 0 0 auto; }
+.wa-synth-side > .wa-synth-property-pane { width: 100%; }
+.wa-page-synth.keyboard-hidden > .wa-keys-header,
+.wa-page-synth.keyboard-hidden > .wa-synth-keys { display: none; }
+
+.immersive-page .wa-page-mix {
+  grid-template-columns: minmax(560px, 1fr) minmax(230px, 24%);
+  grid-template-rows: minmax(0, 1fr) clamp(180px, 27dvh, 230px);
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.immersive-page .wa-page-mix > .wa-mix-tabs { display: none; }
+.immersive-page .wa-page-mix > .wa-mix-channels { grid-column: 1; grid-row: 1; min-height: 0; }
+.immersive-page .wa-page-mix > .wa-mix-scope { grid-column: 2; grid-row: 1; min-height: 0; }
+.immersive-page .wa-page-mix > .wa-mix-flex {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.immersive-page .wa-page-mix .wa-devdetail { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+@media (max-width: 760px), (max-height: 540px) and (pointer: coarse) {
+  .immersive-page .wa-page-beat,
+  .immersive-page .wa-page-drums,
+  .immersive-page .wa-page-synth,
+  .immersive-page .wa-page-mix { height: 100%; min-height: 0; overflow: hidden; }
+
+  .wa-beat-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .wa-beat-controls-toggle { display: inline-flex; }
+  .wa-beat-tabs .wa-toolbar-spacer,
+  .wa-beat-tabs .wa-edit-pattern { display: none; }
+  .wa-beat-play > .wa-panel,
+  .wa-beat-play .wa-mpc-deck,
+  .wa-beat-play .wa-mpc-pad-area { height: 100%; min-height: 0; }
+  .immersive-page .wa-page-pads .wa-mpc-deck { display: block; }
+  .immersive-page .wa-page-pads .wa-mpc-pad-area { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  .immersive-page .wa-page-pads .wa-mpc-pads { height: 100%; min-height: 0; grid-template-rows: repeat(4, minmax(64px, 1fr)); }
+  .immersive-page .wa-page-pads .wa-mpc-pad { height: auto; min-height: 64px; }
+  .immersive-page .wa-page-pads .wa-mpc-side { display: none; }
+  .immersive-page .wa-page-pads.show-controls .wa-mpc-side {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: 62px;
+    z-index: 190;
+    display: block;
+    width: auto;
+    max-height: min(65dvh, 520px);
+    padding: 10px;
+    overflow-y: auto;
+    background: rgba(28,33,40,.99);
+    border: 1px solid var(--wa-border-2);
+    box-shadow: 0 -16px 48px #000c;
+  }
+  .wa-beat-controls-close { display: inline-flex; position: sticky; top: 0; z-index: 2; width: 100%; min-height: 44px; margin-bottom: 8px; }
+  .immersive-page .wa-page-pads .wa-mpc-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .wa-beat-sample { padding-bottom: 0; }
+  .wa-beat-sample > .wa-sample-card { padding: 10px; }
+  .wa-beat-sample .wa-inspector { display: block; position: static; width: 100%; max-height: none; overflow: visible; }
+
+  .wa-drums-workspace { height: 100%; min-height: 0; display: block; overflow: hidden; }
+  .wa-drums-workspace > .wa-panel { height: 100%; min-height: 0; overflow: hidden; }
+  .immersive-page .wa-page-drums .wa-pat-row { overflow-x: auto; overscroll-behavior-x: contain; }
+  .immersive-page .wa-page-drums .wa-grid { min-width: 0; width: 100%; height: auto; min-height: 0; flex: 1; }
+  .immersive-page .wa-page-drums .wa-row { min-height: 0; }
+  .immersive-page .wa-page-drums .wa-drum,
+  .immersive-page .wa-page-drums .wa-ruler-spacer { flex: 0 0 68px; width: 68px; }
+  .immersive-page .wa-page-drums .wa-grid .wa-cell { min-width: 0; }
+  .wa-page-drums .wa-row-tools { flex: 0 0 auto; }
+  .immersive-page .wa-page-drums.show-inspector .wa-drums-workspace > .wa-lane-aside { overflow: hidden; display: flex; flex-direction: column; }
+  .wa-page-drums.show-inspector .wa-lane-inspector { min-height: 0; display: flex; flex-direction: column; }
+  .wa-page-drums.show-inspector .wa-drum-property-pane { flex: 1; }
+
+  .immersive-page .wa-page-synth .wa-synth-main { height: 100%; min-height: 0; display: block; overflow: hidden; }
+  .immersive-page .wa-page-synth .wa-synth-viewhost,
+  .immersive-page .wa-page-synth .wa-sound-host,
+  .immersive-page .wa-page-synth .wa-sound-host > .wa-panel { height: 100%; min-height: 0; }
+  .immersive-page .wa-page-synth .wa-sound-host { overflow-y: auto; overscroll-behavior: contain; }
+  .immersive-page .wa-page-synth.show-inspector .wa-synth-side { overflow: hidden; }
+  .wa-page-synth.show-inspector .wa-synth-property-pane { flex: 1; }
+  .wa-page-synth > .wa-keys-header,
+  .wa-page-synth > .wa-synth-keys { flex: 0 0 auto; }
+
+  .immersive-page .wa-page-mix {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+    padding-bottom: 0;
+  }
+  .immersive-page .wa-page-mix > .wa-mix-tabs { display: grid; grid-column: 1; grid-row: 1; }
+  .immersive-page .wa-page-mix > .wa-mix-channels,
+  .immersive-page .wa-page-mix > .wa-mix-scope,
+  .immersive-page .wa-page-mix > .wa-mix-flex { grid-column: 1; grid-row: 2; width: 100%; height: 100%; min-height: 0; margin: 0; }
+  .immersive-page .wa-page-mix[data-mobile-view="channels"] > .wa-mix-scope,
+  .immersive-page .wa-page-mix[data-mobile-view="channels"] > .wa-mix-flex,
+  .immersive-page .wa-page-mix[data-mobile-view="devices"] > .wa-mix-channels,
+  .immersive-page .wa-page-mix[data-mobile-view="devices"] > .wa-mix-scope,
+  .immersive-page .wa-page-mix[data-mobile-view="scope"] > .wa-mix-channels,
+  .immersive-page .wa-page-mix[data-mobile-view="scope"] > .wa-mix-flex { display: none; }
+  .immersive-page .wa-page-mix > .wa-mix-channels { overflow-x: auto; overflow-y: hidden; }
+  .immersive-page .wa-page-mix .wa-mixer { width: max-content; min-width: 100%; height: 100%; }
+  .immersive-page .wa-page-mix .wa-ch { height: 100%; min-height: 0; }
+  .immersive-page .wa-page-mix > .wa-mix-scope { padding: 8px; }
+  .immersive-page .wa-page-mix > .wa-mix-scope .wa-orb { width: 100%; height: calc(100% - 24px); }
+  .immersive-page .wa-page-mix > .wa-mix-flex { overflow: hidden; }
+}
+
+@media (max-height: 540px) and (pointer: coarse) {
+  .immersive-page .wa-page-pads.show-controls .wa-mpc-side { left: 82px; bottom: 8px; max-height: calc(100dvh - 92px); }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    APERTURE ARMATURE — "metal never scrolls, only glass does"
    Every mode is one faceplate cut to the chassis aperture (.wa-pagehost). The
@@ -4232,4 +4407,119 @@ button.wa-arrange-lane-name { cursor: pointer; }
     bottom: 8px;
     max-height: calc(100dvh - 92px);
   }
+}
+
+/* v19 must win the historical responsive layers above. */
+.wa-beat-sample { grid-template-columns: 1fr; overflow: hidden; }
+.wa-beat-sample > .wa-sample-card { grid-column: 1; }
+.wa-lane-inspector {
+  display: flex !important;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+}
+.wa-lane-inspector > .wa-drum-property-tabs {
+  display: grid !important;
+  flex: 0 0 auto;
+  align-self: stretch;
+  justify-self: stretch;
+  box-sizing: border-box;
+  min-width: 100%;
+  max-width: 100%;
+  width: 100% !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 5px;
+}
+.wa-drum-property-tabs > .wa-subtab {
+  display: inline-flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 5px;
+  border: 1px solid var(--wa-border);
+  border-radius: var(--wa-radius-sm);
+  background: var(--wa-inset);
+  overflow: hidden;
+}
+.wa-drum-property-tabs > .wa-subtab.active {
+  color: var(--wa-accent);
+  border-color: var(--wa-accent-dim);
+  background: var(--wa-surface-2);
+}
+.immersive-page .wa-page-mix {
+  display: grid;
+  grid-template-columns: minmax(560px, 1fr) minmax(230px, 24%);
+  grid-template-rows: minmax(0, 1fr) clamp(180px, 27dvh, 230px);
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.immersive-page .wa-page-mix > .wa-mix-channels { grid-column: 1; grid-row: 1; min-height: 0; }
+.immersive-page .wa-page-mix > .wa-mix-scope { grid-column: 2; grid-row: 1; min-height: 0; }
+.immersive-page .wa-page-mix > .wa-mix-flex {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+.immersive-page .wa-page-mix .wa-devdetail { min-height: 0; overflow-y: auto; }
+
+@media (max-width: 760px), (max-height: 540px) and (pointer: coarse) {
+  .immersive-page .wa-page-drums,
+  .immersive-page .wa-page-mix { height: 100%; min-height: 0; overflow: hidden; }
+  .wa-drums-workspace { height: 100%; min-height: 0; overflow: hidden; }
+  .wa-drums-workspace > .wa-panel { height: 100%; min-height: 0; padding: 4px; overflow: hidden; }
+  .immersive-page .wa-page-drums .wa-pat-row { overflow-x: auto; }
+  .wa-step-pager-mobile {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 44px 1fr 44px;
+    width: 100%;
+    min-height: 38px;
+    margin: 0;
+    padding: 3px;
+    border: 1px solid var(--wa-border);
+    border-radius: var(--wa-radius-sm);
+    background: var(--wa-inset);
+  }
+  .wa-step-pager-mobile .wa-btn-sm { min-height: 32px; }
+  .wa-page-drums .wa-panel:has(> .wa-grid)::after { content: none; display: none; }
+  .immersive-page .wa-page-drums .wa-grid { min-width: 0; width: 100%; }
+  .immersive-page .wa-page-drums .wa-row { gap: 2px; }
+  .immersive-page .wa-page-drums .wa-drum,
+  .immersive-page .wa-page-drums .wa-ruler-spacer { flex-basis: 52px; width: 52px; }
+
+  .immersive-page .wa-page-mix {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+    padding-bottom: 0;
+  }
+  .immersive-page .wa-page-mix > .wa-mix-tabs { display: grid; grid-column: 1; grid-row: 1; }
+  .immersive-page .wa-page-mix > .wa-mix-channels,
+  .immersive-page .wa-page-mix > .wa-mix-scope,
+  .immersive-page .wa-page-mix > .wa-mix-flex {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+  }
+  .immersive-page .wa-page-mix[data-mobile-view="channels"] > .wa-mix-scope,
+  .immersive-page .wa-page-mix[data-mobile-view="channels"] > .wa-mix-flex,
+  .immersive-page .wa-page-mix[data-mobile-view="devices"] > .wa-mix-channels,
+  .immersive-page .wa-page-mix[data-mobile-view="devices"] > .wa-mix-scope,
+  .immersive-page .wa-page-mix[data-mobile-view="scope"] > .wa-mix-channels,
+  .immersive-page .wa-page-mix[data-mobile-view="scope"] > .wa-mix-flex { display: none; }
+  .immersive-page .wa-page-mix[data-mobile-view="scope"] > .wa-mix-scope { display: block; }
+  .immersive-page .wa-page-mix > .wa-mix-channels { overflow-x: auto; overflow-y: hidden; }
+  .immersive-page .wa-page-mix .wa-mixer { width: max-content; min-width: 100%; height: 100%; }
+  .immersive-page .wa-page-mix .wa-ch { height: 100%; min-height: 0; }
+  .immersive-page .wa-page-mix > .wa-mix-scope { padding: 8px; }
+  .immersive-page .wa-page-mix > .wa-mix-scope .wa-orb { width: 100%; height: calc(100% - 24px); }
 }

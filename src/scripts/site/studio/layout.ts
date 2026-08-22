@@ -81,11 +81,24 @@ export function buildLayout(p: LayoutPanels): Layout {
   const quickBreakBtn = btn("Chop break", "wa-btn-sm");
   const addBeatBtn = btn("Add to song", "wa-btn-sm wa-add-song");
   const editPatternBtn = btn("Edit pattern", "wa-btn-sm wa-edit-pattern");
+  const beatControlsBtn = btn("Controls", "wa-btn-sm wa-beat-controls-toggle");
   const playHost = el("div", "wa-beat-view wa-beat-play"); playHost.append(p.mpcPanel);
   const sampleHost = el("div", "wa-beat-view wa-beat-sample");
+  const sampleTabs = el("div", "wa-sample-tabs");
+  const oneShotBtn = btn("One-shot", "wa-subtab active"), chopBtn = btn("Chop", "wa-subtab");
   const oneShot = el("section", "wa-sample-card"); oneShot.append(p.inspector);
   const breakCard = el("section", "wa-sample-card wa-break-card"); breakCard.append(el("div", "wa-fx-title", "CHOP A BREAK"), p.chop);
-  sampleHost.append(oneShot, breakCard);
+  type SampleView = "one-shot" | "chop";
+  const showSampleView = (view: SampleView) => {
+    oneShotBtn.classList.toggle("active", view === "one-shot"); chopBtn.classList.toggle("active", view === "chop");
+    oneShot.hidden = view !== "one-shot"; breakCard.hidden = view !== "chop";
+    sampleHost.dataset.sampleView = view;
+    localStorage.setItem("vv_studio_sample_view", view);
+  };
+  oneShotBtn.addEventListener("click", () => showSampleView("one-shot"));
+  chopBtn.addEventListener("click", () => showSampleView("chop"));
+  sampleTabs.append(oneShotBtn, chopBtn); sampleHost.append(sampleTabs, oneShot, breakCard);
+  showSampleView(localStorage.getItem("vv_studio_sample_view") === "chop" ? "chop" : "one-shot");
   type BeatView = "play" | "sample";
   const showBeatView = (view: BeatView) => {
     playBtn.classList.toggle("active", view === "play"); sampleBtn.classList.toggle("active", view === "sample");
@@ -94,10 +107,11 @@ export function buildLayout(p: LayoutPanels): Layout {
   };
   playBtn.addEventListener("click", () => showBeatView("play"));
   sampleBtn.addEventListener("click", () => showBeatView("sample"));
-  quickSampleBtn.addEventListener("click", () => { showBeatView("sample"); oneShot.scrollIntoView({ block: "start" }); p.loadSelectedSample(); });
-  quickBreakBtn.addEventListener("click", () => { showBeatView("sample"); breakCard.scrollIntoView({ block: "start" }); p.loadBreak(); });
+  quickSampleBtn.addEventListener("click", () => { showBeatView("sample"); showSampleView("one-shot"); p.loadSelectedSample(); });
+  quickBreakBtn.addEventListener("click", () => { showBeatView("sample"); showSampleView("chop"); p.loadBreak(); });
   addBeatBtn.addEventListener("click", () => p.addCurrentToSong("beat"));
-  beatBar.append(playBtn, sampleBtn, el("span", "wa-toolbar-spacer"), quickSampleBtn, quickBreakBtn, editPatternBtn, addBeatBtn);
+  beatControlsBtn.addEventListener("click", () => beatPage.classList.toggle("show-controls"));
+  beatBar.append(playBtn, sampleBtn, el("span", "wa-toolbar-spacer"), beatControlsBtn, quickSampleBtn, quickBreakBtn, editPatternBtn, addBeatBtn);
   beatMain.append(beatBar, playHost, sampleHost); beatPage.append(beatMain);
   showBeatView(localStorage.getItem("vv_studio_beat_view") === "sample" ? "sample" : "play");
 
@@ -121,6 +135,9 @@ export function buildLayout(p: LayoutPanels): Layout {
   const mpcSide = p.mpcPanel.querySelector(".wa-mpc-side");
   if (mpcSide) {
     mpcSide.classList.add("condensed");
+    const closeControlsBtn = btn("Close controls", "wa-btn-sm wa-properties-close wa-beat-controls-close");
+    closeControlsBtn.addEventListener("click", () => beatPage.classList.remove("show-controls"));
+    mpcSide.prepend(closeControlsBtn);
     const moreBtn = btn("More", "wa-btn-sm wa-side-more");
     help(moreBtn, "Show the pattern tools — rotate, mutate, fill, ghosts, groove extraction, MIDI and resampling.");
     moreBtn.addEventListener("click", () => {
@@ -138,13 +155,14 @@ export function buildLayout(p: LayoutPanels): Layout {
   const synthBar = el("div", "wa-subtabs");
   const rollTab = btn("Notes", "wa-subtab");
   const patchTab = btn("Sound", "wa-subtab");
+  const keyboardBtn = btn("Keyboard", "wa-btn-sm wa-keyboard-toggle");
   const addSynthBtn = btn("Add to song", "wa-btn-sm wa-add-song");
   const synthPropsBtn = btn("Properties", "wa-btn-sm wa-synth-properties-toggle");
   help(rollTab, "Write notes in the piano roll or play the keyboard.");
   help(patchTab, "Choose a preset or shape the essential sound controls.");
   addSynthBtn.addEventListener("click", () => p.addCurrentToSong("synth"));
   synthPropsBtn.addEventListener("click", () => soundPage.classList.toggle("show-inspector"));
-  synthBar.append(rollTab, patchTab, el("span", "wa-toolbar-spacer"), synthPropsBtn, addSynthBtn);
+  synthBar.append(rollTab, patchTab, el("span", "wa-toolbar-spacer"), keyboardBtn, synthPropsBtn, addSynthBtn);
   const soundHost = el("div", "wa-sound-host");
   soundHost.append(p.synthPanel);
   p.synthPanel.hidden = false;
@@ -175,20 +193,48 @@ export function buildLayout(p: LayoutPanels): Layout {
   orbTab.addEventListener("click", () => showOrb(true));
   scopeWrap.append(scopeHead, p.scope, orb.canvas);
   showOrb(localStorage.getItem("vv_studio_screen") === "orb");
-  const chordFold = el("details", "wa-synth-extra") as HTMLDetailsElement;
-  chordFold.append(el("summary", "wa-fold-head", "Chords"), p.chordPanel);
-  const performFold = el("details", "wa-synth-extra") as HTMLDetailsElement;
-  performFold.append(el("summary", "wa-fold-head", "Perform"), p.xyPanel, scopeWrap);
-  synthSide.append(chordFold, performFold);
+  const presetPane = el("div", "wa-synth-property-pane wa-synth-preset-pane");
+  Array.from(synthSide.children)
+    .filter((child) => child !== closeSynthPropsBtn && !child.classList.contains("wa-inspector-title"))
+    .forEach((child) => presetPane.append(child));
+  const chordPane = el("div", "wa-synth-property-pane"); chordPane.append(p.chordPanel);
+  const performPane = el("div", "wa-synth-property-pane"); performPane.append(p.xyPanel, scopeWrap);
+  const synthPropertyTabs = el("div", "wa-property-tabs");
+  const presetPropsBtn = btn("Preset", "wa-subtab active"), chordPropsBtn = btn("Chords", "wa-subtab"), performPropsBtn = btn("Perform", "wa-subtab");
+  const showSynthProperties = (view: "preset" | "chords" | "perform") => {
+    presetPropsBtn.classList.toggle("active", view === "preset"); chordPropsBtn.classList.toggle("active", view === "chords"); performPropsBtn.classList.toggle("active", view === "perform");
+    presetPane.hidden = view !== "preset"; chordPane.hidden = view !== "chords"; performPane.hidden = view !== "perform";
+    localStorage.setItem("vv_studio_synth_properties", view);
+  };
+  presetPropsBtn.addEventListener("click", () => showSynthProperties("preset")); chordPropsBtn.addEventListener("click", () => showSynthProperties("chords")); performPropsBtn.addEventListener("click", () => showSynthProperties("perform"));
+  synthPropertyTabs.append(presetPropsBtn, chordPropsBtn, performPropsBtn);
+  synthSide.append(synthPropertyTabs, presetPane, chordPane, performPane);
+  const savedSynthProperties = localStorage.getItem("vv_studio_synth_properties");
+  showSynthProperties(savedSynthProperties === "chords" || savedSynthProperties === "perform" ? savedSynthProperties : "preset");
   synthMain.append(synthViewHost, synthSide);
+  p.keysHeader.classList.add("wa-keys-header");
   soundPage.append(synthBar, synthMain, p.keysHeader, p.synthKeys);
   let synthView: "roll" | "patch" = localStorage.getItem("vv_studio_synthview") === "patch" ? "patch" : "roll";
+  const keyboardPreference = () => localStorage.getItem(`vv_studio_keyboard_${synthView}`);
+  let keyboardVisible = keyboardPreference() ? keyboardPreference() !== "hidden" : synthView === "roll";
+  const paintKeyboard = () => {
+    soundPage.classList.toggle("keyboard-hidden", !keyboardVisible);
+    keyboardBtn.classList.toggle("active", keyboardVisible);
+    keyboardBtn.setAttribute("aria-pressed", String(keyboardVisible));
+  };
+  keyboardBtn.addEventListener("click", () => {
+    keyboardVisible = !keyboardVisible;
+    localStorage.setItem(`vv_studio_keyboard_${synthView}`, keyboardVisible ? "visible" : "hidden");
+    paintKeyboard();
+  });
   const paintSynthView = () => {
     rollTab.classList.toggle("active", synthView === "roll");
     patchTab.classList.toggle("active", synthView === "patch");
     p.pianoRoll.style.display = synthView === "roll" ? "" : "none";
     soundHost.style.display = synthView === "patch" ? "" : "none";
     soundPage.dataset.view = synthView;
+    keyboardVisible = keyboardPreference() ? keyboardPreference() !== "hidden" : synthView === "roll";
+    paintKeyboard();
     if (!soundPage.hidden) p.onSynthVisible();
     localStorage.setItem("vv_studio_synthview", synthView);
   };
@@ -210,13 +256,24 @@ export function buildLayout(p: LayoutPanels): Layout {
   // beside a master scope well, devices span the bottom as a rail. Export is
   // a rare terminal action, so it lives behind a transport key, not here.
   const mixPage = el("div", "wa-page wa-page-mix");
+  const mixTabs = el("div", "wa-mix-tabs");
+  const channelsBtn = btn("Channels", "wa-subtab active"), devicesBtn = btn("Devices", "wa-subtab"), scopeBtn = btn("Scope", "wa-subtab");
   p.mixer.classList.add("wa-mix-channels");
   p.devicePanel.classList.add("wa-mix-flex");
   const scopeWell = el("div", "wa-panel wa-mix-scope");
   const mixOrb = buildOrb();
   help(scopeWell, "Master output — the finished mix, post-limiter.");
   scopeWell.append(el("div", "wa-fx-title", "LYSERGIC SPHERE"), mixOrb.canvas);
-  mixPage.append(p.mixer, scopeWell, p.devicePanel);
+  const showMixView = (view: "channels" | "devices" | "scope") => {
+    mixPage.dataset.mobileView = view;
+    channelsBtn.classList.toggle("active", view === "channels"); devicesBtn.classList.toggle("active", view === "devices"); scopeBtn.classList.toggle("active", view === "scope");
+    localStorage.setItem("vv_studio_mix_view", view);
+  };
+  channelsBtn.addEventListener("click", () => showMixView("channels")); devicesBtn.addEventListener("click", () => showMixView("devices")); scopeBtn.addEventListener("click", () => showMixView("scope"));
+  mixTabs.append(channelsBtn, devicesBtn, scopeBtn);
+  mixPage.append(mixTabs, p.mixer, scopeWell, p.devicePanel);
+  const savedMixView = localStorage.getItem("vv_studio_mix_view");
+  showMixView(savedMixView === "devices" || savedMixView === "scope" ? savedMixView : "channels");
   editPatternBtn.addEventListener("click", () => setMode("drums"));
 
   const pages: Record<ModeId, HTMLElement> = {

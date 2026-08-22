@@ -193,6 +193,7 @@ try {
   const padNameAfterBadFile = await page.evaluate(() => JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').sampleParams?.[63]?.name)
   check('samples: a corrupt file does not replace the existing pad', padNameAfterBadFile === padNameBeforeBadFile)
 
+  await page.locator('.wa-sample-tabs .wa-subtab', { hasText: 'Chop' }).click()
   await page.locator('.wa-break-card input[type="file"]').setInputFiles({ name: 'break.wav', mimeType: 'audio/wav', buffer: testWav })
   await page.waitForTimeout(300)
   await page.locator('.wa-break-card button', { hasText: 'Equal' }).click()
@@ -236,6 +237,7 @@ try {
   await page.waitForSelector('.wa-transport', { timeout: 15000 })
   await openMode(page, 'PADS')
   await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Sample' }).click()
+  await page.locator('.wa-sample-tabs .wa-subtab', { hasText: 'One-shot' }).click()
   check('samples: loaded layers survive reload', await page.locator('.wa-pad-layer-row', { hasText: 'layer.wav' }).count() === 1)
 
   // ── workflow: pattern length is settable where the pattern is edited ──

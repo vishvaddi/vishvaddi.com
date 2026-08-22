@@ -46,11 +46,16 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
   // Pattern length + rate belong here too — resizing a drum pattern used to
   // mean leaving DRUMS for the piano-roll toolbar.
   const patternBar = buildPatternBar({ compact: true });
-  patRow.append(el("span", "wa-sep"), patternBar.root, el("span", "wa-sep"), copyBtn);
+  const stepPager = el("div", "wa-step-pager");
+  const previousSteps = btn("‹", "wa-btn-sm"), stepRange = el("span", "wa-step-range"), nextSteps = btn("›", "wa-btn-sm");
+  previousSteps.setAttribute("aria-label", "Previous step page"); nextSteps.setAttribute("aria-label", "Next step page");
+  stepPager.append(previousSteps, stepRange, nextSteps);
+  patRow.append(el("span", "wa-sep"), patternBar.root, stepPager, el("span", "wa-sep"), copyBtn);
   beat.append(patRow);
 
   const grid = el("div", "wa-grid");
   const ruler = stepRuler(STEPS); grid.append(ruler);
+  Array.from(ruler.children).slice(1).forEach((tick, step) => { (tick as HTMLElement).dataset.stepIndex = String(step); });
   const cells: HTMLElement[][] = [];
   const laneBtns: HTMLElement[] = [];
 
@@ -69,6 +74,7 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
     for (let c = 0; c < STEPS; c++) {
       const cell = el("button", "wa-cell" + (isGridLine(c) ? " wa-beat" : "")) as HTMLButtonElement;
       cell.type = "button";
+      cell.dataset.stepIndex = String(c);
       cell.setAttribute("aria-label", `${name} step ${c + 1}`);
       if (allPats[clip.sel][r][c]) { cell.classList.add("on"); setCellOpacity(cell, allVels[clip.sel][r][c]); }
       cell.addEventListener("click", () => {
@@ -98,13 +104,35 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
     cells.push(rowCells); grid.append(rowEl);
   });
   laneBtns[0]?.classList.add("active");
-  gridRepainters.push(() => cells.forEach((row) => row.forEach((cell, c) => {
-    cell.classList.toggle("wa-beat", isGridLine(c));
-    cell.classList.toggle("outside-pattern", c >= patternLengths[clip.sel]);
-    (cell as HTMLButtonElement).disabled = c >= patternLengths[clip.sel];
-    cell.hidden = c >= patternLengths[clip.sel];
-  })));
-  gridRepainters.push(() => Array.from(ruler.children).slice(1).forEach((tick, c) => { (tick as HTMLElement).hidden = c >= patternLengths[clip.sel]; }));
+  let stepPage = Math.max(0, Number(localStorage.getItem("vv_studio_drum_step_page")) || 0);
+  const compactSteps = window.matchMedia("(max-width: 760px), (max-height: 540px) and (pointer: coarse)");
+  const pageSize = () => compactSteps.matches ? 8 : 16;
+  const paintStepPage = () => {
+    if (compactSteps.matches) {
+      beat.insertBefore(stepPager, grid);
+      stepPager.classList.add("wa-step-pager-mobile");
+    } else {
+      patRow.insertBefore(stepPager, copyBtn);
+      stepPager.classList.remove("wa-step-pager-mobile");
+    }
+    const size = pageSize(), length = patternLengths[clip.sel], pages = Math.max(1, Math.ceil(length / size));
+    stepPage = Math.min(stepPage, pages - 1);
+    const start = stepPage * size, end = Math.min(length, start + size);
+    beat.style.setProperty("--wa-visible-steps", String(size));
+    stepRange.textContent = `${start + 1}–${end}`;
+    previousSteps.disabled = stepPage === 0; nextSteps.disabled = stepPage >= pages - 1;
+    cells.forEach((row) => row.forEach((cell, c) => {
+      const outside = c >= length;
+      cell.classList.toggle("wa-beat", isGridLine(c)); cell.classList.toggle("outside-pattern", outside);
+      (cell as HTMLButtonElement).disabled = outside; cell.hidden = outside || c < start || c >= start + size;
+    }));
+    Array.from(ruler.children).slice(1).forEach((tick, c) => { (tick as HTMLElement).hidden = c >= length || c < start || c >= start + size; });
+    localStorage.setItem("vv_studio_drum_step_page", String(stepPage));
+  };
+  previousSteps.addEventListener("click", () => { stepPage = Math.max(0, stepPage - 1); paintStepPage(); });
+  nextSteps.addEventListener("click", () => { stepPage += 1; paintStepPage(); });
+  compactSteps.addEventListener("change", paintStepPage);
+  gridRepainters.push(paintStepPage);
 
   const clearBtn = btn("CLEAR", "wa-btn-sm");
   const randomBtn = btn("RANDOM", "wa-btn-sm");
@@ -129,6 +157,7 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
   });
   const rowTools = el("div", "wa-row-tools"); rowTools.append(randomBtn, clearBtn);
   beat.append(grid, rowTools);
+  paintStepPage();
 
   return { beat, cells, sceneBtns };
 }
