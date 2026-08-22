@@ -59,6 +59,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   help(midiBtn, "Connect Web MIDI inputs. Notes starting at MIDI note 36 map across the 16 pads.");
   help(resampleBtn, "Render the playing clips through the mixer and effects onto the selected pad.");
   const resampleQuality = document.createElement("select");
+  resampleQuality.setAttribute("aria-label", "Resample quality");
   [["clean", "Clean"], ["12bit", "12-bit"], ["8bit", "8-bit"], ["jungle", "Jungle grit"]].forEach(([value, label]) => {
     const option = document.createElement("option"); option.value = value; option.textContent = label; resampleQuality.append(option);
   });
@@ -155,6 +156,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   const layersBlock = el("div", "wa-pad-layers");
   layersBlock.append(el("div", "wa-fx-title", "LAYERS"));
   const layerModeSel = document.createElement("select");
+  layerModeSel.setAttribute("aria-label", "Pad layer mode");
   ([["velocity", "VELOCITY SPLIT"], ["roundrobin", "ROUND ROBIN"], ["random", "RANDOM"], ["layered", "LAYERED"]] as const)
     .forEach(([v, label]) => { const o = document.createElement("option"); o.value = v; o.textContent = label; layerModeSel.append(o); });
   help(layerModeSel, "How the pad picks between its main sample and the layers: by velocity range, alternating, at random, or all at once.");

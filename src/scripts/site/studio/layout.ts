@@ -20,7 +20,8 @@ export interface LayoutPanels {
   xyPanel: HTMLElement;
   scope: HTMLElement;
   chordPanel: HTMLElement;
-  synthPanel: HTMLElement;          // patch editor + presets (roll/keys pulled out in synthui)
+  synthPanel: HTMLElement;          // patch editor (roll/keys and properties are separate surfaces)
+  synthInspector: HTMLElement;
   sessionGrid: HTMLElement;
   launchStatus: HTMLElement;
   song: HTMLElement;                // arrangement lanes + help (grid/status re-homed here)
@@ -56,8 +57,8 @@ export interface Layout {
 }
 
 const MODES: Array<{ id: ModeId; label: string; helpText: string }> = [
-  { id: "drums", label: "BEAT", helpText: "Program drums on the step grid." },
-  { id: "pads", label: "BEAT", helpText: "Finger-drum, sequence, load one-shots or chop a break." },
+  { id: "drums", label: "DRUMS", helpText: "Program the eight drum lanes and shape the selected sound." },
+  { id: "pads", label: "BEAT", helpText: "Finger-drum, load one-shots or chop a break." },
   { id: "synth", label: "SYNTH", helpText: "Write notes or shape a synth sound." },
   { id: "song", label: "SONG", helpText: "Build the finished song on the arrangement timeline." },
   { id: "dj", label: "DJ", helpText: "Mix local audio across two decks with cues, loops, EQ, sync and recording." },
@@ -69,41 +70,51 @@ export function buildLayout(p: LayoutPanels): Layout {
 
   const closeOverlays = () => {};
 
-  // BEAT is the front door: finger-drumming, FL-style sequencing and sample
-  // capture are views of one instrument, not separate destinations.
-  const beatPage = el("div", "wa-page wa-page-beat wa-page-pads wa-page-drums");
+  // BEAT is the front door. Detailed sequencing lives in DRUMS so neither
+  // performance pads nor the eight-lane editor has to share a small aperture.
+  const beatPage = el("div", "wa-page wa-page-beat wa-page-pads");
   const beatMain = el("div", "wa-beat-main");
   const beatBar = el("div", "wa-subtabs wa-beat-tabs");
   const playBtn = btn("Play", "wa-subtab active");
-  const stepsBtn = btn("Steps", "wa-subtab");
   const sampleBtn = btn("Sample", "wa-subtab");
   const quickSampleBtn = btn("Load sample", "wa-btn-sm wa-beat-primary");
   const quickBreakBtn = btn("Chop break", "wa-btn-sm");
   const addBeatBtn = btn("Add to song", "wa-btn-sm wa-add-song");
-  const editLaneBtn = btn("Edit sound", "wa-btn-sm wa-edit-lane");
+  const editPatternBtn = btn("Edit pattern", "wa-btn-sm wa-edit-pattern");
   const playHost = el("div", "wa-beat-view wa-beat-play"); playHost.append(p.mpcPanel);
-  const stepsHost = el("div", "wa-beat-view wa-beat-steps"); stepsHost.append(p.beat, p.laneInspector);
   const sampleHost = el("div", "wa-beat-view wa-beat-sample");
   const oneShot = el("section", "wa-sample-card"); oneShot.append(p.inspector);
   const breakCard = el("section", "wa-sample-card wa-break-card"); breakCard.append(el("div", "wa-fx-title", "CHOP A BREAK"), p.chop);
   sampleHost.append(oneShot, breakCard);
-  type BeatView = "play" | "steps" | "sample";
+  type BeatView = "play" | "sample";
   const showBeatView = (view: BeatView) => {
-    playBtn.classList.toggle("active", view === "play"); stepsBtn.classList.toggle("active", view === "steps"); sampleBtn.classList.toggle("active", view === "sample");
-    playHost.hidden = view !== "play"; stepsHost.hidden = view !== "steps"; sampleHost.hidden = view !== "sample";
-    editLaneBtn.hidden = view !== "steps";
+    playBtn.classList.toggle("active", view === "play"); sampleBtn.classList.toggle("active", view === "sample");
+    playHost.hidden = view !== "play"; sampleHost.hidden = view !== "sample";
     localStorage.setItem("vv_studio_beat_view", view);
   };
   playBtn.addEventListener("click", () => showBeatView("play"));
-  stepsBtn.addEventListener("click", () => showBeatView("steps"));
   sampleBtn.addEventListener("click", () => showBeatView("sample"));
   quickSampleBtn.addEventListener("click", () => { showBeatView("sample"); oneShot.scrollIntoView({ block: "start" }); p.loadSelectedSample(); });
   quickBreakBtn.addEventListener("click", () => { showBeatView("sample"); breakCard.scrollIntoView({ block: "start" }); p.loadBreak(); });
   addBeatBtn.addEventListener("click", () => p.addCurrentToSong("beat"));
-  editLaneBtn.addEventListener("click", () => stepsHost.classList.toggle("show-inspector"));
-  beatBar.append(playBtn, stepsBtn, sampleBtn, el("span", "wa-toolbar-spacer"), quickSampleBtn, quickBreakBtn, addBeatBtn, editLaneBtn);
-  beatMain.append(beatBar, playHost, stepsHost, sampleHost); beatPage.append(beatMain);
-  showBeatView((localStorage.getItem("vv_studio_beat_view") as BeatView | null) ?? "play");
+  beatBar.append(playBtn, sampleBtn, el("span", "wa-toolbar-spacer"), quickSampleBtn, quickBreakBtn, editPatternBtn, addBeatBtn);
+  beatMain.append(beatBar, playHost, sampleHost); beatPage.append(beatMain);
+  showBeatView(localStorage.getItem("vv_studio_beat_view") === "sample" ? "sample" : "play");
+
+  // DRUMS owns one roomy editor plus one selected-lane property rail.
+  const drumsPage = el("div", "wa-page wa-page-drums");
+  const drumsBar = el("div", "wa-subtabs wa-drums-tabs");
+  const drumPropsBtn = btn("Properties", "wa-btn-sm wa-drum-properties-toggle");
+  const addDrumsBtn = btn("Add to song", "wa-btn-sm wa-add-song");
+  addDrumsBtn.addEventListener("click", () => p.addCurrentToSong("beat"));
+  drumPropsBtn.addEventListener("click", () => drumsPage.classList.toggle("show-inspector"));
+  drumsBar.append(el("span", "wa-view-title", "STEP SEQUENCER"), el("span", "wa-toolbar-spacer"), drumPropsBtn, addDrumsBtn);
+  const drumsWorkspace = el("div", "wa-drums-workspace");
+  const closeDrumPropsBtn = btn("Close properties", "wa-btn-sm wa-properties-close");
+  closeDrumPropsBtn.addEventListener("click", () => drumsPage.classList.remove("show-inspector"));
+  p.laneInspector.prepend(closeDrumPropsBtn);
+  drumsWorkspace.append(p.beat, p.laneInspector);
+  drumsPage.append(drumsBar, drumsWorkspace);
 
   // Side toolbar: performance essentials up front, pattern tools behind ⋯
   // (queried rather than passed — padsui owns the column, layout only folds it)
@@ -128,17 +139,23 @@ export function buildLayout(p: LayoutPanels): Layout {
   const rollTab = btn("Notes", "wa-subtab");
   const patchTab = btn("Sound", "wa-subtab");
   const addSynthBtn = btn("Add to song", "wa-btn-sm wa-add-song");
+  const synthPropsBtn = btn("Properties", "wa-btn-sm wa-synth-properties-toggle");
   help(rollTab, "Write notes in the piano roll or play the keyboard.");
   help(patchTab, "Choose a preset or shape the essential sound controls.");
   addSynthBtn.addEventListener("click", () => p.addCurrentToSong("synth"));
-  synthBar.append(rollTab, patchTab, el("span", "wa-toolbar-spacer"), addSynthBtn);
+  synthPropsBtn.addEventListener("click", () => soundPage.classList.toggle("show-inspector"));
+  synthBar.append(rollTab, patchTab, el("span", "wa-toolbar-spacer"), synthPropsBtn, addSynthBtn);
   const soundHost = el("div", "wa-sound-host");
   soundHost.append(p.synthPanel);
   p.synthPanel.hidden = false;
   const synthViewHost = el("div", "wa-synth-viewhost");
   synthViewHost.append(p.pianoRoll, soundHost);
   const synthMain = el("div", "wa-synth-main");
-  const synthSide = el("div", "wa-synth-side");
+  const synthSide = p.synthInspector;
+  synthSide.classList.add("wa-synth-side");
+  const closeSynthPropsBtn = btn("Close properties", "wa-btn-sm wa-properties-close");
+  closeSynthPropsBtn.addEventListener("click", () => soundPage.classList.remove("show-inspector"));
+  synthSide.prepend(closeSynthPropsBtn);
   // WAVE ⇄ SPHERE share one screen slot: the waveform reads the synth bus,
   // the sphere the master bus, so they answer different questions.
   const scopeWrap = el("div", "wa-xy-wrap");
@@ -200,19 +217,16 @@ export function buildLayout(p: LayoutPanels): Layout {
   help(scopeWell, "Master output — the finished mix, post-limiter.");
   scopeWell.append(el("div", "wa-fx-title", "LYSERGIC SPHERE"), mixOrb.canvas);
   mixPage.append(p.mixer, scopeWell, p.devicePanel);
+  editPatternBtn.addEventListener("click", () => setMode("drums"));
 
   const pages: Record<ModeId, HTMLElement> = {
-    drums: beatPage, pads: beatPage,
+    drums: drumsPage, pads: beatPage,
     synth: soundPage, song: songPage, dj: djPage, mix: mixPage,
   };
-  workarea.append(beatPage, soundPage, songPage, djPage, mixPage);
+  workarea.append(beatPage, drumsPage, soundPage, songPage, djPage, mixPage);
 
-  // ── Flat FLM navigation (S2) ──
-  // Six stable keys, no workspace layer: SONG is home, every surface is one
-  // tap away, and the dock never changes height. The old workspace concept
-  // survives only as an optional intent hint to setMode ("edit" opens pads on
-  // Steps with the inspector; "play" opens Perform) — used by the track rail
-  // and clip double-taps, never by the nav keys themselves.
+  // Six stable destinations, no workspace layer. The mobile dock and desktop
+  // rail share these exact controls, with BEAT as the immediate front door.
   const modeBar = el("nav", "wa-modebar");
   modeBar.setAttribute("aria-label", "Studio screens");
   const primaryNav = el("div", "wa-primary-nav wa-primary-nav-flat");
@@ -235,12 +249,12 @@ export function buildLayout(p: LayoutPanels): Layout {
     activeMode = next;
     if ((["drums", "pads", "synth"] as ModeId[]).includes(next)) lastEditMode = next;
     closeOverlays();
-    modeButtons.forEach((button, id) => button.classList.toggle("active", id === next || (id === "pads" && next === "drums")));
+    modeButtons.forEach((button, id) => button.classList.toggle("active", id === next));
     new Set(Object.values(pages)).forEach((page) => { page.hidden = true; }); pages[next].hidden = false;
     trackButtons.forEach((button) => button.classList.toggle("active", button.dataset.mode === lastEditMode));
     // Intent hints: an explicit edit/play ask still shapes the pads page.
     if (next === "pads" && workspace === "play") showBeatView("play");
-    if ((next === "pads" && workspace === "edit") || next === "drums") showBeatView("steps");
+    if (next === "pads" && workspace === "edit") { setMode("drums"); return; }
     if (next === "synth") p.onSynthVisible();
     orb.setActive(next === "synth" && !orb.canvas.hidden);
     mixOrb.setActive(next === "mix");
@@ -250,8 +264,10 @@ export function buildLayout(p: LayoutPanels): Layout {
 
   ([
     ["pads", "BEAT", "◆"],
+    ["drums", "DRUMS", "▦"],
     ["synth", "SYNTH", "♪"],
     ["song", "SONG", "▤"],
+    ["dj", "DJ", "◉"],
     ["mix", "MIX", "≡"],
   ] as const).forEach(([id, label, icon]) => {
     const button = btn("", "wa-modekey") as HTMLButtonElement;
@@ -265,15 +281,14 @@ export function buildLayout(p: LayoutPanels): Layout {
   const menuSummary = el("summary", "wa-modekey wa-menu-key");
   menuSummary.append(el("span", "wa-mode-icon", "•••"), el("span", "wa-mode-label", "MENU"));
   const menuBody = el("div", "wa-studio-menu-body");
-  const djMenuBtn = btn("DJ decks", "wa-menu-action"), projectMenuBtn = btn("Project & export", "wa-menu-action"), helpMenuBtn = btn("Help & shortcuts", "wa-menu-action");
+  const projectMenuBtn = btn("Project & export", "wa-menu-action"), helpMenuBtn = btn("Help & shortcuts", "wa-menu-action");
   const scaleMenuBtn = btn("Interface scale", "wa-menu-action"), fullscreenMenuBtn = btn("Full screen", "wa-menu-action"), powerMenuBtn = btn("Audio power", "wa-menu-action");
-  djMenuBtn.addEventListener("click", () => { studioMenu.open = false; setMode("dj"); });
   projectMenuBtn.addEventListener("click", () => { studioMenu.open = false; p.openProjectMenu(); });
   helpMenuBtn.addEventListener("click", () => { studioMenu.open = false; p.openTutorial(); });
   scaleMenuBtn.addEventListener("click", () => { studioMenu.open = false; p.cycleScale(); });
   fullscreenMenuBtn.addEventListener("click", () => { studioMenu.open = false; p.toggleFullscreen(); });
   powerMenuBtn.addEventListener("click", () => { studioMenu.open = false; p.togglePower(); });
-  menuBody.append(djMenuBtn, projectMenuBtn, helpMenuBtn, el("div", "wa-menu-section", "DISPLAY & AUDIO"), scaleMenuBtn, fullscreenMenuBtn, powerMenuBtn); studioMenu.append(menuSummary, menuBody);
+  menuBody.append(projectMenuBtn, helpMenuBtn, el("div", "wa-menu-section", "DISPLAY & AUDIO"), scaleMenuBtn, fullscreenMenuBtn, powerMenuBtn); studioMenu.append(menuSummary, menuBody);
   setMode(activeMode);
 
   // tutorial nav proxies — composite actions per tour stop:
@@ -287,7 +302,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   const navButtons = [
     nav(() => { setMode("pads"); showBeatView("play"); }),
     nav(() => { setMode("pads"); showBeatView("sample"); }),
-    nav(() => { setMode("pads"); showBeatView("steps"); }),
+    nav(() => setMode("drums")),
     nav(() => { setMode("synth"); synthView = "roll"; paintSynthView(); }),
     nav(() => setMode("song")),
     nav(() => setMode("mix")),

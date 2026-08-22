@@ -11,7 +11,7 @@ const viewports = [
 let failures = 0
 const lines = []
 const modeRoute = {
-  DRUMS: ['pads', '.wa-page-drums'],
+  DRUMS: ['drums', '.wa-page-drums'],
   PADS: ['pads', '.wa-page-pads'],
   SYNTH: ['synth', '.wa-page-synth'],
   CLIPS: ['song', '.wa-page-song'],
@@ -19,14 +19,8 @@ const modeRoute = {
   MIX: ['mix', '.wa-page-mix'],
 }
 const openMode = async (page, mode) => {
-  if (mode === 'DJ') {
-    await page.locator('.wa-studio-menu > summary').click()
-    await page.locator('.wa-studio-menu-body button', { hasText: 'DJ decks' }).click()
-    return
-  }
   const [key] = modeRoute[mode]
   await page.locator(`.wa-modekey[data-mode="${key}"]`).click()
-  if (mode === 'DRUMS') await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Steps' }).click()
   if (mode === 'PADS') await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' }).click()
 }
 const check = (name, value, detail = '') => {
@@ -63,7 +57,7 @@ for (const [name, width, height] of viewports) {
     check(`${name}: no document horizontal overflow`, geometry.docWidth <= geometry.clientWidth + 1, `${geometry.docWidth}/${geometry.clientWidth}`)
     check(`${name}: workstation fills viewport`, Math.abs(geometry.winHeight - geometry.viewportHeight) <= 2, `${geometry.winHeight}/${geometry.viewportHeight}`)
     check(`${name}: BEAT is the opening screen`, await page.locator('.wa-page-beat').isVisible())
-    check(`${name}: four primary destinations`, await page.locator('.wa-primary-nav .wa-modekey').count() === 4 && await page.locator('.wa-context-nav').count() === 0)
+    check(`${name}: six primary destinations`, await page.locator('.wa-primary-nav .wa-modekey').count() === 6 && await page.locator('.wa-context-nav').count() === 0)
     await page.screenshot({ path: `C:/tmp/studio-beat-${name}.png`, fullPage: false })
     await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Sample' }).click()
     check(`${name}: samples and breaks share one focused view`, await page.locator('.wa-load-selected').isVisible() && await page.locator('.wa-break-card button', { hasText: 'Load break' }).isVisible())
@@ -73,6 +67,7 @@ for (const [name, width, height] of viewports) {
     for (const mode of ['DRUMS', 'PADS', 'SYNTH', 'CLIPS', 'DJ', 'MIX']) {
       await openMode(page, mode)
       check(`${name}: ${mode} opens`, await page.locator(modeRoute[mode][1]).isVisible())
+      if (mode === 'DRUMS') await page.screenshot({ path: `C:/tmp/studio-drums-${name}.png`, fullPage: false })
       if ((name === 'desktop' || name === 'laptop') && mode === 'PADS') {
         const fill = await page.evaluate(() => {
           const active = document.querySelector('.wa-page:not([hidden])')?.getBoundingClientRect()
@@ -83,31 +78,48 @@ for (const [name, width, height] of viewports) {
       }
       if ((name === 'desktop' || name === 'laptop') && mode === 'MIX') {
         const mixLayout = await page.evaluate(() => {
-          const gap = (panelSelector, contentSelector) => {
-            const panel = document.querySelector(panelSelector)?.getBoundingClientRect()
-            const content = document.querySelector(contentSelector)?.getBoundingClientRect()
-            return panel && content ? Math.round(panel.bottom - content.bottom) : 999
-          }
           const channelTops = [...document.querySelectorAll('.wa-mixer .wa-ch')].map((channel) => Math.round(channel.getBoundingClientRect().top))
+          const mix = document.querySelector('.wa-page-mix')
           return {
-            // export moved to a transport-key modal; the device rail and the
-            // channel plate are what must stay tight now
-            gaps: [gap('.wa-mix-flex', '.wa-devbrowser'), gap('.wa-mix-channels', '.wa-mixer')],
             channelRows: new Set(channelTops).size,
+            overflow: mix ? getComputedStyle(mix).overflowY : '',
+            scrollRange: mix ? mix.scrollHeight - mix.clientHeight : 0,
           }
         })
-        check(`${name}: MIX panels are compact`, mixLayout.gaps.every((gap) => gap <= 20), `${mixLayout.gaps.join('/')}px trailing space`)
         check(`${name}: MIX channels stay on one row`, mixLayout.channelRows === 1, `${mixLayout.channelRows} rows`)
+        check(`${name}: MIX owns vertical scrolling`, ['auto', 'scroll'].includes(mixLayout.overflow), `${mixLayout.overflow} · ${Math.round(mixLayout.scrollRange)}px`)
+        if (mixLayout.scrollRange > 0) {
+          await page.locator('.wa-page-mix').evaluate((node) => { node.scrollTop = 0 })
+          await page.locator('.wa-page-mix').hover()
+          await page.mouse.wheel(0, 320)
+          await page.waitForTimeout(50)
+          check(`${name}: MIX accepts wheel scrolling`, await page.locator('.wa-page-mix').evaluate((node) => node.scrollTop > 0))
+        }
+        await page.locator('.wa-page-mix').evaluate((node) => { node.scrollTop = node.scrollHeight })
+        const mixEnd = await page.evaluate(() => {
+          const page = document.querySelector('.wa-page-mix')?.getBoundingClientRect()
+          const detail = document.querySelector('.wa-page-mix .wa-devdetail')?.getBoundingClientRect()
+          return !!page && !!detail && detail.bottom <= page.bottom + 2 && detail.top < page.bottom
+        })
+        check(`${name}: MIX can scroll to the final device controls`, mixEnd)
         check(`${name}: MIX uses the single Lysergic sphere`, await page.locator('.wa-page-mix .wa-orb[data-visualizer="lysergic-sphere"]').count() === 1 && await page.locator('.wa-page-mix .wa-spectral, .wa-page-mix .wa-master-scope').count() === 0)
         if (name === 'desktop') await page.screenshot({ path: 'C:/tmp/studio-mix-desktop.png', fullPage: false })
       }
       if ((name === 'phone' || name === 'landscape') && mode === 'DRUMS') {
         const cell = await page.locator('.wa-grid .wa-cell').first().evaluate((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height }))
         check(`${name}: DRUMS cells remain usable`, cell.width >= 36 && cell.height >= 36, `${Math.round(cell.width)}×${Math.round(cell.height)}px`)
+        await page.locator('.wa-drum-properties-toggle').click()
+        check(`${name}: DRUMS properties open as a drawer`, await page.locator('.wa-drums-workspace > .wa-lane-aside').isVisible())
+        await page.locator('.wa-drums-workspace .wa-properties-close').click()
       }
       if ((name === 'desktop' || name === 'laptop') && mode === 'DRUMS') {
         const sends = await page.locator('.wa-lane-sends').evaluate((node) => ({ scroll: node.scrollWidth, client: node.clientWidth }))
         check(`${name}: drum sends stay inside the inspector`, sends.scroll <= sends.client + 1, `${sends.scroll}/${sends.client}`)
+        const drumLayout = await page.evaluate(() => ({
+          row: document.querySelector('.wa-page-drums .wa-row')?.getBoundingClientRect().height ?? 0,
+          inspector: document.querySelector('.wa-drums-workspace > .wa-lane-aside')?.getBoundingClientRect().width ?? 0,
+        }))
+        check(`${name}: DRUMS rows and property rail have working space`, drumLayout.row >= 38 && drumLayout.inspector >= 280, `${Math.round(drumLayout.row)}px / ${Math.round(drumLayout.inspector)}px`)
       }
       if ((name === 'phone' || name === 'landscape') && mode === 'PADS') {
         const pads = await page.locator('.wa-mpc-pad').evaluateAll((nodes) => nodes.map((node) => {
@@ -125,10 +137,18 @@ for (const [name, width, height] of viewports) {
           return panel && mixer ? Math.round(panel.bottom - mixer.bottom) : 999
         })
         check(`${name}: MIX channel plate has no dead band`, mixGap <= 24, `${mixGap}px trailing space`)
+        const mobileMixScroll = await page.locator('.wa-page-mix').evaluate((node) => ({ overflow: getComputedStyle(node).overflowY, range: node.scrollHeight - node.clientHeight }))
+        check(`${name}: MIX remains vertically scrollable`, ['auto', 'scroll'].includes(mobileMixScroll.overflow) && mobileMixScroll.range > 0, `${mobileMixScroll.overflow} · ${Math.round(mobileMixScroll.range)}px`)
       }
       if (mode === 'SYNTH') {
         const hint = await page.locator('.wa-keys-hint').evaluate((node) => ({ scroll: node.scrollWidth, client: node.clientWidth }))
         check(`${name}: synth key hint is contained`, hint.scroll <= hint.client + 1, `${hint.scroll}/${hint.client}`)
+        if (name !== 'phone' && name !== 'landscape') check(`${name}: synth property rail stays visible`, await page.locator('.wa-synth-properties').isVisible())
+        else {
+          await page.locator('.wa-synth-properties-toggle').click()
+          check(`${name}: synth properties open as a drawer`, await page.locator('.wa-synth-properties').isVisible())
+          await page.locator('.wa-synth-properties .wa-properties-close').click()
+        }
       }
       if (mode === 'DJ') {
         const djLayout = await page.evaluate(() => {
@@ -235,11 +255,11 @@ for (const [name, width, height] of viewports) {
       await page.locator('.wa-transport-more').click()
       check(`${name}: CLIPS exposes scene range`, /Scenes \d+–\d+ of 16/.test((await page.locator('.wa-scene-position').textContent()) ?? ''))
       await openMode(page, 'PADS')
-      // The four stable destinations must sit inside the viewport on the dock.
+      // The six stable destinations must sit inside the viewport on the dock.
       const keyBounds = await page.locator('.wa-primary-nav .wa-modekey').evaluateAll((nodes) => nodes.map((node) => {
         const r = node.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }
       }))
-      check(`${name}: mode keys stay inside the viewport`, keyBounds.length === 4 && keyBounds.every((r) => r.top >= 0 && r.left >= 0 && r.right <= width + 1 && r.bottom <= height + 1), `${keyBounds.length} keys`)
+      check(`${name}: mode keys stay inside the viewport`, keyBounds.length === 6 && keyBounds.every((r) => r.top >= 0 && r.left >= 0 && r.right <= width + 1 && r.bottom <= height + 1), `${keyBounds.length} keys`)
       await openMode(page, 'CLIPS')
       await page.locator('.wa-studio-menu > summary').click()
       await page.locator('.wa-studio-menu-body button', { hasText: 'Help & shortcuts' }).click()

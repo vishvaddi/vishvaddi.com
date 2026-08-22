@@ -17,18 +17,12 @@ const testWav = (() => {
 const results = []
 let failed = 0
 const modeRoute = {
-  DRUMS: 'pads', PADS: 'pads', SYNTH: 'synth',
+  DRUMS: 'drums', PADS: 'pads', SYNTH: 'synth',
   CLIPS: 'song', DJ: 'dj', MIX: 'mix',
 }
 
 async function openMode(page, mode) {
-  if (mode === 'DJ') {
-    await page.locator('.wa-studio-menu > summary').click()
-    await page.locator('.wa-studio-menu-body button', { hasText: 'DJ decks' }).click()
-    return
-  }
   await page.locator(`.wa-modekey[data-mode="${modeRoute[mode]}"]`).click()
-  if (mode === 'DRUMS') await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Steps' }).click()
   if (mode === 'PADS') await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' }).click()
 }
 
@@ -72,7 +66,7 @@ try {
   check('first run: non-modal hint is shown', cold.hint)
   check('first run: demo has its real title', cold.title === 'MIDNIGHT ACID', String(cold.title))
   check('first run: the MPC pads are the opening screen', await page.locator('.wa-page-pads').isVisible())
-  check('first run: four primary destinations', await page.locator('.wa-primary-nav .wa-modekey').count() === 4)
+  check('first run: six primary destinations', await page.locator('.wa-primary-nav .wa-modekey').count() === 6)
   await openMode(page, 'SYNTH')
   check('first run: controls are usable immediately', true)
 
@@ -88,7 +82,9 @@ try {
 
   // ── toggle a drum step ──
   await openMode(page, 'DRUMS')
-  check('beat: FL-style steps share the front-page instrument', await page.locator('.wa-beat-steps').isVisible())
+  check('drums: FL-style steps have a dedicated workspace', await page.locator('.wa-drums-workspace').isVisible())
+  const drumGeometry = await page.locator('.wa-page-drums .wa-row').first().evaluate((row) => ({ height: row.getBoundingClientRect().height, inspector: !!document.querySelector('.wa-drums-workspace > .wa-lane-aside')?.checkVisibility() }))
+  check('drums: rows are not squashed and properties stay visible', drumGeometry.height >= 38 && drumGeometry.inspector, JSON.stringify(drumGeometry))
   const cell = page.locator('.wa-grid .wa-row .wa-cell').nth(0)
   const wasOn = await cell.evaluate((n) => n.classList.contains('on'))
   await cell.click()
@@ -164,8 +160,44 @@ try {
   await page.locator('.wa-selected-sample > .wa-load-selected + input[type="file"]').setInputFiles({ name: 'one-shot.wav', mimeType: 'audio/wav', buffer: testWav })
   await page.waitForTimeout(300)
   check('samples: one-shot loads onto the selected pad', /one-shot\.wav/.test((await page.locator('.wa-sample-card .wa-inspector').textContent()) ?? ''))
+
+  // Every bank and pad must reach the same trigger path. This catches bank
+  // indexing regressions that a single selected-pad upload cannot see.
+  await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' }).click()
+  let triggeredPads = 0
+  const bankButtons = page.locator('.wa-pad-banks button')
+  for (let bank = 0; bank < 4; bank++) {
+    await bankButtons.nth(bank).click()
+    const pads = page.locator('.wa-mpc-pad')
+    for (let pad = 0; pad < 16; pad++) { await pads.nth(pad).click(); triggeredPads++ }
+  }
+  check('samples: all 64 pads across four banks trigger', triggeredPads === 64)
+  await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Sample' }).click()
+
+  const chooserPromise = page.waitForEvent('filechooser')
+  await page.locator('.wa-pad-layers button', { hasText: 'Add layer' }).click()
+  const chooser = await chooserPromise
+  await chooser.setFiles({ name: 'layer.wav', mimeType: 'audio/wav', buffer: testWav })
+  await page.waitForTimeout(300)
+  check('samples: a pad layer decodes and appears', await page.locator('.wa-pad-layer-row', { hasText: 'layer.wav' }).count() === 1)
+  let layerModes = 0
+  for (const mode of ['velocity', 'roundrobin', 'random', 'layered']) {
+    await page.selectOption('select[aria-label="Pad layer mode"]', mode)
+    layerModes += (await page.inputValue('select[aria-label="Pad layer mode"]')) === mode ? 1 : 0
+  }
+  check('samples: every layer playback mode is selectable', layerModes === 4)
+
+  const padNameBeforeBadFile = await page.evaluate(() => JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').sampleParams?.[63]?.name)
+  await page.locator('.wa-selected-sample > .wa-load-selected + input[type="file"]').setInputFiles({ name: 'broken.wav', mimeType: 'audio/wav', buffer: Buffer.from('not audio') })
+  await page.waitForTimeout(250)
+  const padNameAfterBadFile = await page.evaluate(() => JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').sampleParams?.[63]?.name)
+  check('samples: a corrupt file does not replace the existing pad', padNameAfterBadFile === padNameBeforeBadFile)
+
   await page.locator('.wa-break-card input[type="file"]').setInputFiles({ name: 'break.wav', mimeType: 'audio/wav', buffer: testWav })
   await page.waitForTimeout(300)
+  await page.locator('.wa-break-card button', { hasText: 'Equal' }).click()
+  await page.locator('.wa-break-card button', { hasText: 'Assign to bank' }).click()
+  check('samples: equal slicing assigns a full bank', /16 slices assigned/.test((await page.locator('.wa-break-card .wa-status').textContent()) ?? ''))
   await page.locator('.wa-break-card button', { hasText: 'Transient' }).click()
   await page.locator('.wa-break-card button', { hasText: 'Assign + pattern' }).click()
   await page.waitForTimeout(700)
@@ -174,11 +206,37 @@ try {
     return { pads: [...document.querySelectorAll('.wa-mpc-pad-name')].filter((node) => /break\.wav/.test(node.textContent ?? '')).length, events: Math.max(0, ...(saved.padEvents ?? []).map((events) => events.length)) }
   })
   check('samples: a break slices to pads and creates a pattern', chopped.pads >= 4 && chopped.events >= 4, JSON.stringify(chopped))
+  await page.locator('.wa-break-card button', { hasText: 'Manual' }).click()
+  const chopBox = await page.locator('.wa-break-card canvas').boundingBox()
+  if (chopBox) {
+    await page.mouse.click(chopBox.x + chopBox.width * .33, chopBox.y + chopBox.height * .5)
+    await page.mouse.click(chopBox.x + chopBox.width * .67, chopBox.y + chopBox.height * .5)
+  }
+  await page.locator('.wa-break-card button', { hasText: 'Assign to bank' }).click()
+  check('samples: manual slice markers assign correctly', /3 slices assigned/.test((await page.locator('.wa-break-card .wa-status').textContent()) ?? ''))
   const songBlocksBefore = await page.locator('.wa-chain-block').count()
   await page.locator('.wa-beat-tabs button', { hasText: 'Add to song' }).click()
   await page.waitForTimeout(150)
   check('workflow: Add to song appends drums and pads together', await page.locator('.wa-chain-block').count() === songBlocksBefore + 2)
   await page.locator('.wa-transport button[aria-label="Undo"]').click()
+
+  await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' }).click()
+  await page.locator('.wa-side-more').click()
+  let resampleModes = 0
+  for (const quality of ['clean', '12bit', '8bit', 'jungle']) {
+    await page.selectOption('select[aria-label="Resample quality"]', quality)
+    await page.locator('.wa-mpc-toolbar button', { hasText: 'Resample' }).click()
+    await page.locator('.wa-mpc-toolbar .wa-status').waitFor({ state: 'visible' })
+    await page.waitForFunction(() => /resampled|failed/i.test(document.querySelector('.wa-mpc-toolbar .wa-status')?.textContent ?? ''))
+    if (/resampled/i.test((await page.locator('.wa-mpc-toolbar .wa-status').textContent()) ?? '')) resampleModes++
+  }
+  check('samples: all four resampling qualities render to a pad', resampleModes === 4, `${resampleModes}/4`)
+  await page.waitForTimeout(600)
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.wa-transport', { timeout: 15000 })
+  await openMode(page, 'PADS')
+  await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Sample' }).click()
+  check('samples: loaded layers survive reload', await page.locator('.wa-pad-layer-row', { hasText: 'layer.wav' }).count() === 1)
 
   // ── workflow: pattern length is settable where the pattern is edited ──
   await openMode(page, 'DRUMS')

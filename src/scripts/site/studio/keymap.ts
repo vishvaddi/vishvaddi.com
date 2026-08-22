@@ -39,11 +39,11 @@ export function bindKeyboard(deps: KeyboardDeps): void {
       else if (key === "s") { ev.preventDefault(); deps.exportBtn?.click(); }
       return;
     }
-    // Alt+1–4 selects the four primary destinations. Bare digits are NOT free: 1–4 are pad keys in
+    // Alt+1–6 selects the six primary destinations. Bare digits are NOT free: 1–4 are pad keys in
     // DRUMS/PADS and 2/3/5 are note keys in SYNTH, so Alt is what keeps mode
     // switching from stealing them.
     if (ev.altKey && !ev.shiftKey && /^[1-6]$/.test(ev.key)) {
-      const mode = (["pads", "synth", "song", "mix"] as ModeId[])[Number(ev.key) - 1];
+      const mode = (["pads", "drums", "synth", "song", "dj", "mix"] as ModeId[])[Number(ev.key) - 1];
       if (mode && deps.selectMode) { ev.preventDefault(); deps.selectMode(mode); }
     }
   });

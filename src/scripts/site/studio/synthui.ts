@@ -19,6 +19,7 @@ import { buildXYField } from "./xyfield";
 
 export interface SynthUI {
   synthPanel: HTMLElement;
+  synthInspector: HTMLElement;
   synthKeys: HTMLElement;
   liveKeys: LiveVoices;
   rollPlayheadBar: HTMLElement;
@@ -600,7 +601,9 @@ export function buildSynth(): SynthUI {
   // them; appending them here too would just steal them back at boot.
   // Scope + chord player live in the side column beside the XY field (G/H) —
   // both were dead space up here.
-  synthPanel.append(presetBrowserRow, presetRow, patchBox);
+  synthPanel.append(patchBox);
+  const synthInspector = el("aside", "wa-synth-properties");
+  synthInspector.append(el("div", "wa-inspector-title", "SYNTH PROPERTIES"), presetBrowserRow, presetRow);
   const chordPanel = el("div", "wa-xy-wrap");
   chordPanel.append(el("div", "wa-fx-title", "CHORD PLAYER"), chordRow);
 
@@ -617,7 +620,7 @@ export function buildSynth(): SynthUI {
   });
 
   return {
-    synthPanel, synthKeys, liveKeys, rollPlayheadBar, paintRoll, renderPatchEditor,
+    synthPanel, synthInspector, synthKeys, liveKeys, rollPlayheadBar, paintRoll, renderPatchEditor,
     recordSynthOn, recordSynthOff,
     isSynthRec: () => synthRec,
     setOctaveShift, getOctaveShift: () => octaveShift,

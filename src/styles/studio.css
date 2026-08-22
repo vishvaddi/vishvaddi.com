@@ -4019,3 +4019,217 @@ button.wa-arrange-lane-name { cursor: pointer; }
   .wa-vpatch.wa-simple { display: block; }
   .wa-vpatch.wa-simple .wa-synth-quick { width: 100%; grid-template-columns: repeat(7, minmax(90px, 1fr)); }
 }
+
+/* ── Studio v18: instrument ownership and producer workflow ───────────── */
+
+.immersive-page .wa-primary-nav { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+
+.immersive-page .wa-page-drums {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+}
+.wa-view-title {
+  align-self: center;
+  color: var(--wa-muted);
+  font: 700 10px/1 var(--wa-mono);
+  letter-spacing: .12em;
+}
+.wa-drums-workspace {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 310px);
+  gap: 10px;
+  overflow: hidden;
+}
+.wa-drums-workspace > .wa-panel {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+}
+.immersive-page .wa-drums-workspace > .wa-lane-aside {
+  position: static;
+  display: block;
+  width: auto;
+  max-height: none;
+  min-width: 0;
+  overflow-y: auto;
+}
+.immersive-page .wa-page-drums .wa-grid .wa-cell,
+.immersive-page .wa-page-drums .wa-drum {
+  height: clamp(38px, 6dvh, 58px);
+  min-height: 38px;
+}
+.wa-drum-properties-toggle,
+.wa-synth-properties-toggle { display: none; }
+.wa-properties-close { display: none; }
+
+.immersive-page .wa-page-synth .wa-synth-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  align-items: stretch;
+  min-height: 0;
+  overflow: hidden;
+}
+.immersive-page .wa-page-synth .wa-synth-viewhost { min-width: 0; min-height: 0; }
+.immersive-page .wa-page-synth .wa-synth-side {
+  display: flex;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  padding: 10px;
+  overflow-y: auto;
+  border: 1px solid var(--wa-border);
+  border-radius: var(--wa-radius-sm);
+  background: var(--wa-surface);
+}
+.wa-synth-properties > .wa-export {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  width: 100%;
+}
+.wa-synth-properties .wa-preset-search,
+.wa-synth-properties select { width: 100%; }
+.wa-synth-properties .wa-preset-categories { display: flex; flex-wrap: wrap; gap: 4px; }
+.wa-synth-properties .wa-preset-categories .wa-btn-sm { flex: 1 1 62px; }
+.wa-synth-properties > .wa-export:nth-of-type(2) .wa-btn-sm { width: 100%; }
+.immersive-page .wa-page-synth[data-view="patch"] .wa-sound-host,
+.immersive-page .wa-page-synth[data-view="patch"] .wa-sound-host > .wa-panel,
+.immersive-page .wa-page-synth[data-view="patch"] .wa-vpatch.wa-simple,
+.immersive-page .wa-page-synth[data-view="patch"] .wa-vpatch.wa-simple .wa-synth-quick { height: 100%; min-height: 0; }
+.immersive-page .wa-vpatch.wa-simple { display: block; columns: auto; margin: 0; }
+.immersive-page .wa-vpatch.wa-simple .wa-synth-quick {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  grid-template-rows: auto repeat(2, minmax(110px, 1fr));
+  gap: 10px;
+  padding: 16px;
+}
+.wa-synth-quick .wa-slider-row {
+  min-height: 104px;
+  margin: 0;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid var(--wa-border);
+  border-radius: var(--wa-radius-sm);
+  background: var(--wa-surface-2);
+}
+.wa-synth-quick .wa-knob { width: 54px; height: 54px; }
+@media (min-width: 761px) and (min-height: 541px) {
+  .immersive-page .wa-vpatch.wa-simple .wa-synth-quick { align-items: stretch; }
+  .immersive-page .wa-vpatch.wa-simple .wa-synth-quick .wa-slider-row {
+    height: 100%;
+    min-height: 0;
+  }
+  .immersive-page .wa-vpatch.wa-simple .wa-synth-quick .wa-slider-row:last-child { grid-column: span 2; }
+}
+.immersive-page .wa-vpatch:not(.wa-simple) {
+  columns: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  align-content: start;
+}
+
+/* MIX owns vertical scrolling. Device detail no longer traps the wheel in a
+   clipped child while the final controls sit below the viewport. */
+.immersive-page .wa-page-mix {
+  height: 100%;
+  min-height: 0;
+  grid-template-columns: minmax(560px, 1fr) minmax(230px, 24%);
+  grid-template-rows: minmax(430px, 62dvh) minmax(280px, auto);
+  align-content: start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 16px;
+}
+.immersive-page .wa-page-mix > .wa-mix-flex {
+  min-height: 280px;
+  max-height: none;
+  overflow: visible;
+}
+.immersive-page .wa-page-mix .wa-devdetail { overflow: visible; }
+
+@media (max-width: 760px), (max-height: 540px) and (pointer: coarse) {
+  .immersive-page .wa-primary-nav { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .immersive-page .wa-modekey { padding-inline: 1px; }
+  .wa-mode-label { font-size: 7px; letter-spacing: .01em; }
+  .wa-beat-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+  .immersive-page .wa-page-drums { overflow-y: auto; }
+  .wa-drums-workspace { display: block; overflow: visible; }
+  .wa-drums-workspace > .wa-panel { min-height: 470px; height: auto; overflow: auto; }
+  .immersive-page .wa-drums-workspace > .wa-lane-aside { display: none; }
+  .immersive-page .wa-page-drums.show-inspector .wa-drums-workspace > .wa-lane-aside {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: 62px;
+    z-index: 190;
+    display: block;
+    width: auto;
+    max-height: min(64dvh, 520px);
+    padding: 10px;
+    overflow-y: auto;
+    background: rgba(28,33,40,.99);
+    box-shadow: 0 -16px 48px #000c;
+  }
+  .wa-drum-properties-toggle,
+  .wa-synth-properties-toggle { display: inline-flex; }
+  .wa-properties-close {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: inline-flex;
+    min-height: 44px;
+    margin-bottom: 8px;
+  }
+
+  .immersive-page .wa-page-synth .wa-synth-main { display: block; overflow: auto; }
+  .immersive-page .wa-page-synth .wa-synth-side { display: none; }
+  .immersive-page .wa-page-synth.show-inspector .wa-synth-side {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: 62px;
+    z-index: 190;
+    display: flex;
+    width: auto;
+    max-height: min(68dvh, 560px);
+    overflow-y: auto;
+    background: rgba(28,33,40,.99);
+    box-shadow: 0 -16px 48px #000c;
+  }
+  .immersive-page .wa-vpatch.wa-simple .wa-synth-quick {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+    grid-template-rows: auto;
+    height: auto;
+    padding: 10px;
+  }
+  .immersive-page .wa-vpatch:not(.wa-simple) { grid-template-columns: 1fr; }
+
+  .immersive-page .wa-page-mix {
+    display: block;
+    height: 100%;
+    overflow-y: auto;
+    padding-bottom: 72px;
+  }
+  .immersive-page .wa-page-mix > .wa-mix-flex { min-height: 420px; overflow: visible; }
+}
+
+@media (max-height: 540px) and (pointer: coarse) {
+  .immersive-page .wa-page-drums.show-inspector .wa-drums-workspace > .wa-lane-aside,
+  .immersive-page .wa-page-synth.show-inspector .wa-synth-side {
+    left: 82px;
+    bottom: 8px;
+    max-height: calc(100dvh - 92px);
+  }
+}

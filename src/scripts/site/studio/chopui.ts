@@ -22,6 +22,7 @@ export function buildChop(deps: { paintMpcPads: () => void; paintEventLane: () =
   const loadBreakBtn = btn("Load break"), micBtn = btn("Record mic"), equalBtn = btn("Equal"), transientBtn = btn("Transient"), clearSlicesBtn = btn("Manual");
   const assignSlicesBtn = btn("Assign to bank"), patternBtn = btn("Assign + pattern"), normaliseBtn = btn("Normalise"), syncBpmBtn = btn("Sync BPM");
   const sliceCountSel = document.createElement("select");
+  sliceCountSel.setAttribute("aria-label", "Break slice count");
   [4, 8, 12, 16].forEach((n) => { const o = document.createElement("option"); o.value = String(n); o.textContent = `${n} slices`; sliceCountSel.append(o); });
   sliceCountSel.value = "16";
   help(loadBreakBtn, "Load an audio file into the chop editor.");

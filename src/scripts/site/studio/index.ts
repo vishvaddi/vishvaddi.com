@@ -299,7 +299,7 @@ export async function initStudio(): Promise<void> {
 
   const layout = buildLayout({
     beat, mpcPanel, padSeqPanel, padGrid, pianoRoll, synthKeys,
-    keysHeader: synth.keysHeader, synthPanel, xyPanel: synth.xyPanel, scope: synth.scope, chordPanel: synth.chordPanel,
+    keysHeader: synth.keysHeader, synthPanel, synthInspector: synth.synthInspector, xyPanel: synth.xyPanel, scope: synth.scope, chordPanel: synth.chordPanel,
     sessionGrid, launchStatus, song, djPanel: dj.root, mixer: mixer.root, devicePanel,
     chop, inspector, laneInspector, loadSelectedSample, loadBreak, addCurrentToSong, openProjectMenu, openTutorial: () => tutorialBtn.click(),
     cycleScale: () => densityBtn.click(), toggleFullscreen: () => fsBtn.click(), togglePower: () => powerBtn.click(),

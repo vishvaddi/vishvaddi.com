@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-08-22 — Studio dedicated producer workspaces
+
+- Restored six direct destinations: Beat, Drums, Synth, Song, DJ and Mix. Beat remains the first screen for immediate finger-drumming and sample/break work; the FL-style sequencer now has a dedicated, roomier Drums workspace and property rail.
+- Split Synth into a central Notes/Sound instrument and a separate preset/performance property rail. Removed the legacy masonry constraint from the simple patch surface and balanced its seven essential macros across the available desktop area; touch properties open as dismissible drawers.
+- Made Mix the single vertical scroll owner and verified real wheel scrolling through its final device controls. Added short-landscape drawer handling and retained DJ as a primary desktop and Android destination.
+- Expanded browser coverage across all 64 pads, sample layers and playback modes, corrupt-file rejection, equal/transient/manual chopping, pattern creation, four resampling qualities and layer persistence. Core, responsive and density suites pass across desktop, laptop, tablet, Android portrait and Android landscape with clean consoles.
+
 ## 2026-08-22 — Studio sound-first simplification
 
 - Replaced six competing primary modes with Beat, Synth, Song and Mix. Beat opens first; DJ, project/export and help moved to the top-right menu, and the permanent transport now concentrates on playback, tempo and history.

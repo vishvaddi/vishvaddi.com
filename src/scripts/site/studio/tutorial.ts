@@ -32,7 +32,7 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
     ["Ctrl+Z", "Undo"],
     ["Ctrl+Shift+Z or Ctrl+Y", "Redo"],
     ["Ctrl+S", "Open project / export"],
-    ["Alt+1–4", "Switch Beat, Synth, Song or Mix"],
+    ["Alt+1–6", "Switch Beat, Drums, Synth, Song, DJ or Mix"],
     ["1-4, Q-R, A-F, Z-V", "Play pads in Beat"],
     ["Z–M row", "Play synth notes C3–B3 (SYNTH mode)"],
     ["Q–P row", "Play synth notes C4–E5 (SYNTH mode)"],
@@ -116,13 +116,13 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
   help(browseHelpBtn, "Switch to a searchable reference covering every section, plus keyboard shortcuts.");
   help(takeTourBtn, "Switch back to the guided step-by-step tour.");
   // workspace = nav-proxy index (layout.ts navButtons):
-  // 0 PADS/perform+inspector · 1 PADS/chop · 2 PADS/steps · 3 KEYS · 4 SONG · 5 MIX · 6 SOUND/patch · 7 DJ
+  // 0 BEAT/play · 1 BEAT/sample · 2 DRUMS · 3 SYNTH/notes · 4 SONG · 5 MIX · 6 SYNTH/patch · 7 DJ
   const tutorialSteps: Array<{ workspace: number; target: HTMLElement; title: string; text: string }> = [
-    { workspace: 0, target: padGrid, title: "Start in Beat", text: "Beat opens first with a playable kit. Finger-drum immediately, then switch between Play, Steps and Sample without leaving the instrument." },
+    { workspace: 0, target: padGrid, title: "Start in Beat", text: "Beat opens first with a playable kit. Finger-drum immediately, load a one-shot or chop a break, then open Drums when the groove needs detailed sequencing." },
     { workspace: 0, target: padGrid, title: "Play the pads", text: "Use the mouse, touch, computer keyboard or MIDI controller. Drop an audio file directly onto any pad to replace it." },
     { workspace: 1, target: selectedSampleEditor, title: "Shape the selected pad", text: "Sample keeps one-shot loading and the selected pad's trim, tune, filter, choke, reverse, loop and warp controls together." },
     { workspace: 1, target: waveform, title: "Chop a break", text: "Load or record audio, choose equal, transient or manual slicing, then assign the slices to the active pad bank." },
-    { workspace: 2, target: beatGrid, title: "Program the beat", text: "Steps is the FL-style drum sequencer: each sound has a row and time runs left to right. Click or drag to place hits." },
+    { workspace: 2, target: beatGrid, title: "Program the drums", text: "Drums is the roomy FL-style sequencer: each sound has a row, time runs left to right and the selected lane's properties remain beside the grid." },
     { workspace: 3, target: pianoRoll, title: "Add musical parts", text: "Program synth notes in the piano roll or play them from the always-visible keys below. Drag a note to move it, its right edge to resize, or click without dragging to delete it." },
     { workspace: 3, target: gridSel, title: "Grid & quantize", text: "Sets the snap resolution for the piano roll, and the beat-line grouping shown on the drum and pad grids. Coarser (1/4) locks notes to the beat; 1/16 allows free placement." },
     { workspace: 6, target: presetRow, title: "The VV-1 synth", text: "The Patch view holds the full editor. Search or randomize a patch, or drag the envelope shape and watch the live waveform preview react. Simple view collapses the editor to the essentials — Advanced view reveals the full mod matrix." },
