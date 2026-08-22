@@ -12,6 +12,7 @@ export interface ChopUI {
   chop: HTMLElement;
   getChopBuffer: () => AudioBuffer | null;
   waveform: HTMLCanvasElement;   // tutorial target
+  loadBreak: () => void;
 }
 
 export function buildChop(deps: { paintMpcPads: () => void; paintEventLane: () => void }): ChopUI {
@@ -163,5 +164,5 @@ export function buildChop(deps: { paintMpcPads: () => void; paintEventLane: () =
   chop.append(chopToolbar, waveform, el("p", "wa-help", "Chopping is non-destructive — click a slice to hear it. Sync BPM matches the project tempo to the break; Assign + pattern replays the chopped break on the pads, ready to rearrange in the Sequence lane."));
 
 
-  return { chop, getChopBuffer: () => chopBuffer, waveform };
+  return { chop, getChopBuffer: () => chopBuffer, waveform, loadBreak: () => chopInput.click() };
 }

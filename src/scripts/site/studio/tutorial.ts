@@ -10,19 +10,21 @@ export interface TutorialTargets {
   selectedSampleEditor: HTMLElement;
   waveform: HTMLElement;
   eventLane: HTMLElement;
+  beatGrid: HTMLElement;
   pianoRoll: HTMLElement;
   gridSel: HTMLElement;
   presetRow: HTMLElement;
   sessionGrid: HTMLElement;
   devicePanel: HTMLElement;
   exportBtn: HTMLElement;
+  projectMenu: HTMLElement;
   transportBar: HTMLElement;
   tutorialBtn: HTMLElement;
   djPanel: HTMLElement;
 }
 
 export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: number) => void } {
-  const { tabBtns, padGrid, selectedSampleEditor, waveform, eventLane, pianoRoll, gridSel, presetRow, sessionGrid, devicePanel, exportBtn, transportBar, tutorialBtn, djPanel } = t;
+  const { tabBtns, padGrid, selectedSampleEditor, waveform, beatGrid, pianoRoll, gridSel, presetRow, sessionGrid, devicePanel, projectMenu, transportBar, tutorialBtn, djPanel } = t;
   const shortcutsBox = el("div", "wa-help-shortcuts");
   shortcutsBox.append(el("div", "wa-fx-title", "KEYBOARD SHORTCUTS"));
   ([
@@ -30,8 +32,8 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
     ["Ctrl+Z", "Undo"],
     ["Ctrl+Shift+Z or Ctrl+Y", "Redo"],
     ["Ctrl+S", "Open project / export"],
-    ["Alt+1–6", "Switch Studio mode"],
-    ["1-4, Q-R, A-F, Z-V", "Play MPC pads (DRUMS & PADS modes)"],
+    ["Alt+1–4", "Switch Beat, Synth, Song or Mix"],
+    ["1-4, Q-R, A-F, Z-V", "Play pads in Beat"],
     ["Z–M row", "Play synth notes C3–B3 (SYNTH mode)"],
     ["Q–P row", "Play synth notes C4–E5 (SYNTH mode)"],
     ["− / =", "Shift synth keyboard octave (SYNTH mode)"],
@@ -50,7 +52,6 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
   const helpTopics: Array<{ section: string; title: string; text: string }> = [
     { section: "Create", title: "Pads & sampling", text: "Drop an audio file onto any pad, or record from the mic. The inspector on the right shows the selected pad's tune, start/end, filter, attack/decay, choke group, loop and warp controls." },
     { section: "Create", title: "Chopping breaks", text: "Load or record a longer break, then slice it equally, by transient detection, or manually. Sync BPM matches the project tempo to the break; Assign + pattern replays the chop across the pads." },
-    { section: "Create", title: "Scratch pad", text: "Drag the vinyl left/right to scratch the selected pad's sample (or the loaded break) over the beat. Forward and backward both play; release to stop." },
     { section: "Create", title: "MPC performance tools", text: "Full Level forces max velocity; 16 Levels maps the pad bank across velocity, pitch, filter or start. Note Repeat retriggers a held pad. Rotate, Mutate, Fill and Ghosts generate variations on the selected pad's pattern; Extract Groove captures its timing/velocity feel into the Player device." },
     { section: "Sequence", title: "Drum sequencer", text: "Click a step to toggle a hit, right-click (or long-press) for velocity. Click a drum's name to open its sound-design panel below the row." },
     { section: "Sequence", title: "Pad sequence grid", text: "Every pad in the current bank gets its own row — switching the selected pad highlights its row instead of swapping what you're looking at. Velocity/Chance/Micro/Ratchet sliders apply to whichever pad is selected." },
@@ -117,19 +118,19 @@ export function buildTutorial(t: TutorialTargets): { showTutorialStep: (index: n
   // workspace = nav-proxy index (layout.ts navButtons):
   // 0 PADS/perform+inspector · 1 PADS/chop · 2 PADS/steps · 3 KEYS · 4 SONG · 5 MIX · 6 SOUND/patch · 7 DJ
   const tutorialSteps: Array<{ workspace: number; target: HTMLElement; title: string; text: string }> = [
-    { workspace: 0, target: padGrid, title: "The PADS mode", text: "The mode keys under the LCD switch the whole screen, hardware style. PADS is the sampling and performance mode — start here whenever you are building a new beat." },
+    { workspace: 0, target: padGrid, title: "Start in Beat", text: "Beat opens first with a playable kit. Finger-drum immediately, then switch between Play, Steps and Sample without leaving the instrument." },
     { workspace: 0, target: padGrid, title: "Play the pads", text: "Use the mouse, touch, computer keyboard or MIDI controller. Drop an audio file directly onto any pad to replace it." },
-    { workspace: 0, target: selectedSampleEditor, title: "Shape the selected pad", text: "The selected-pad editor lives beside the deck (Edit pad opens it on small screens). Trim, tune, filter, choke, reverse, loop or warp it here." },
+    { workspace: 1, target: selectedSampleEditor, title: "Shape the selected pad", text: "Sample keeps one-shot loading and the selected pad's trim, tune, filter, choke, reverse, loop and warp controls together." },
     { workspace: 1, target: waveform, title: "Chop a break", text: "Load or record audio, choose equal, transient or manual slicing, then assign the slices to the active pad bank." },
-    { workspace: 2, target: eventLane, title: "Sequence pad events", text: "Drag across the lane to paint or erase hits. Use velocity, chance, microtiming and ratchets to make the pattern move." },
+    { workspace: 2, target: beatGrid, title: "Program the beat", text: "Steps is the FL-style drum sequencer: each sound has a row and time runs left to right. Click or drag to place hits." },
     { workspace: 3, target: pianoRoll, title: "Add musical parts", text: "Program synth notes in the piano roll or play them from the always-visible keys below. Drag a note to move it, its right edge to resize, or click without dragging to delete it." },
     { workspace: 3, target: gridSel, title: "Grid & quantize", text: "Sets the snap resolution for the piano roll, and the beat-line grouping shown on the drum and pad grids. Coarser (1/4) locks notes to the beat; 1/16 allows free placement." },
     { workspace: 6, target: presetRow, title: "The VV-1 synth", text: "The Patch view holds the full editor. Search or randomize a patch, or drag the envelope shape and watch the live waveform preview react. Simple view collapses the editor to the essentials — Advanced view reveals the full mod matrix." },
     { workspace: 4, target: sessionGrid, title: "Launch clips and scenes", text: "Each column is a track and each row a scene. Launch single clips or a whole row — changes wait for the next bar so transitions stay in time." },
     { workspace: 5, target: devicePanel, title: "Process the sound", text: "Use macros, groove controls and device bypass switches to shape the complete signal chain." },
     { workspace: 7, target: djPanel, title: "Mix local tracks", text: "The DJ mode is a real two-deck local mixer: load or drop audio, work the direct-drive platters, set cues and loops, match tempo, shape each deck with EQ and filter, then record the local mix. Browse Help has the full control reference." },
-    { workspace: 5, target: exportBtn, title: "Save and export", text: "Save an editable project before exporting. WAV preserves full quality; MP3 is smaller for sharing." },
-    { workspace: 5, target: transportBar, title: "Transport stays available", text: "Playback, BPM, grid, metronome, undo and tutorial controls remain visible in every mode. Space plays/stops; Ctrl+Z undoes." },
+    { workspace: 5, target: projectMenu, title: "Save and export", text: "Project and export live in the top-right menu. Save an editable project before rendering WAV, MP3 or stems." },
+    { workspace: 5, target: transportBar, title: "Transport stays available", text: "Playback, BPM and undo remain available everywhere; timing controls disclose only when needed. Space plays/stops; Ctrl+Z undoes." },
     { workspace: 5, target: tutorialBtn, title: "Come back anytime", text: "This same button reopens things later — Browse Help (top of this card) is a searchable reference for every section plus the full keyboard-shortcut list, or replay this tour from the start." },
   ];
   let tutorialIndex = 0, tutorialTarget: HTMLElement | null = null;

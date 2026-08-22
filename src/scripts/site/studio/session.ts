@@ -14,6 +14,7 @@ export interface SessionView {
   launchStatus: HTMLElement;
   paintSession: () => void;
   arrangeLanePaints: Array<() => void>;
+  addCurrentToSong: (source: "beat" | "synth") => void;
   // tutorial tour targets
   sessionGrid: HTMLElement;
 }
@@ -460,5 +461,14 @@ export function buildSession(): SessionView {
   showView(localStorage.getItem("vv_studio_song_view") === "session" ? "session" : "arrange");
   requestAnimationFrame(paintScenePosition);
 
-  return { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid };
+  const addCurrentToSong = (source: "beat" | "synth"): void => {
+    ctx.checkpoint();
+    const startBar = Math.max(0, ...ARRANGE_TRACKS.flatMap((track) => arrangement[track].map((block) => block.startBar + block.bars)));
+    const tracks: ArrangeTrackId[] = source === "beat" ? ["drums", "pads"] : ["bass", "lead", "harmony"];
+    tracks.forEach((track) => arrangement[track].push(createArrangeBlock(clip.sel, startBar)));
+    launchStatus.textContent = `${source === "beat" ? "Beat" : "Synth"} added at bar ${startBar + 1}`;
+    saveAll(); paintChain();
+  };
+
+  return { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid, addCurrentToSong };
 }

@@ -2,7 +2,7 @@
 // scope), DOM piano roll, on-screen keys, key recording. Extracted verbatim
 // from index.ts (Phase 0 split). Playhead state reads from ctx.playhead
 // (already rewired before the cut).
-import { STEPS, SCENE_LABELS, ROLL_NOTES, clip, transport, stepDur, patternStepDur, mpc, activeSynth, synthLaneNotes, patternLengths, vsynthPatch } from "./state";
+import { STEPS, SCENE_LABELS, ROLL_NOTES, clip, transport, stepDur, patternStepDur, mpc, activeSynth, synthLaneNotes, patternLengths, vsynthPatch, fx } from "./state";
 import type { VNote } from "./state";
 import { ac, ensureNodes } from "./engine";
 import * as engine from "./engine";
@@ -230,14 +230,14 @@ export function buildSynth(): SynthUI {
   // Simple/Advanced — collapses to Wave/Filter/Envelope/Volume for newcomers
   // (CS50 Synth's "only 3 engines" lesson); the class lives on patchBox
   // itself, so it survives renderPatchEditor()'s replaceChildren() rebuilds.
-  const simpleBtn = btn("Simple view", "wa-toggle wa-btn-sm");
-  let simpleMode = localStorage.getItem("vv_studio_synth_simple") === "1";
+  const simpleBtn = btn("Advanced", "wa-toggle wa-btn-sm");
+  let simpleMode = localStorage.getItem("vv_studio_synth_simple") !== "0";
   function applySimpleMode(): void {
     patchBox.classList.toggle("wa-simple", simpleMode);
-    simpleBtn.textContent = simpleMode ? "Advanced view" : "Simple view";
+    simpleBtn.textContent = simpleMode ? "Advanced" : "Essentials";
     simpleBtn.classList.toggle("active", simpleMode);
   }
-  help(simpleBtn, "Collapse the patch editor to Wave, Filter, Envelope and Volume, or show the full mod matrix and macros.");
+  help(simpleBtn, "Show the full oscillators, envelopes, LFOs and modulation matrix, or return to the essential sound controls.");
   simpleBtn.addEventListener("click", () => {
     simpleMode = !simpleMode;
     localStorage.setItem("vv_studio_synth_simple", simpleMode ? "1" : "0");
@@ -269,6 +269,16 @@ export function buildSynth(): SynthUI {
     const pSlider = (host: HTMLElement, label: string, min: number, max: number, step: number, get: () => number, set: (v: number) => void) => {
       host.append(sliderRow(label, min, max, get(), step, (v) => { set(v); saveAll(); }));
     };
+    const quickBox = el("div", "wa-vblock wa-synth-quick");
+    quickBox.append(el("div", "wa-fx-title", "ESSENTIAL SOUND"));
+    pSlider(quickBox, "Shape", 0, 1, 0.01, () => vsynthPatch.osc1.pos, (v) => { vsynthPatch.osc1.pos = v; });
+    pSlider(quickBox, "Brightness", 0, 1, 0.01, () => Math.log(Math.max(60, vsynthPatch.filter.cutoff) / 60) / Math.log(16000 / 60), (v) => { vsynthPatch.filter.cutoff = 60 * Math.pow(16000 / 60, v); });
+    pSlider(quickBox, "Movement", 0, 1, 0.01, () => vsynthPatch.drift ?? 0, (v) => { vsynthPatch.drift = v; });
+    pSlider(quickBox, "Attack", 0, 2, 0.01, () => vsynthPatch.env1.a, (v) => { vsynthPatch.env1.a = v; });
+    pSlider(quickBox, "Release", 0.01, 3, 0.01, () => vsynthPatch.env1.r, (v) => { vsynthPatch.env1.r = v; });
+    pSlider(quickBox, "Space", 0, 1, 0.01, () => fx.reverb, (v) => { fx.reverb = v; engine.applyFxState(); });
+    pSlider(quickBox, "Volume", 0, 1, 0.01, () => vsynthPatch.volume, (v) => { vsynthPatch.volume = v; });
+    patchBox.append(quickBox);
     // Shows total incoming mod-matrix depth on the one slider it targets
     // (Vital-style knob highlight, simplified to a text badge) instead of
     // only listing it in the separate matrix table below.

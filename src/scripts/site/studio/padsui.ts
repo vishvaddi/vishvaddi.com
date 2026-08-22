@@ -22,6 +22,7 @@ export interface PadsUI {
   eventLane: HTMLElement;
   selectedPadLabel: HTMLElement;
   selectedSampleEditor: HTMLElement;
+  loadSelectedSample: () => void;
 }
 
 export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Promise<AudioBuffer> }): PadsUI {
@@ -101,6 +102,20 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   }
   const reverseSelectedBtn = btn("Reverse", "wa-toggle wa-btn-sm"), loopSelectedBtn = btn("Loop", "wa-toggle wa-btn-sm"), warpSelectedBtn = btn("Warp", "wa-toggle wa-btn-sm");
   const muteSelectedBtn = btn("Mute", "wa-toggle wa-btn-sm"), soloSelectedBtn = btn("Solo", "wa-toggle wa-btn-sm");
+  const selectedFileInput = document.createElement("input"); selectedFileInput.type = "file"; selectedFileInput.accept = "audio/*"; selectedFileInput.hidden = true;
+  const loadSelectedBtn = btn("＋ Load sample", "wa-btn-sm wa-load-selected");
+  help(loadSelectedBtn, "Replace the selected pad with an audio file from this device.");
+  loadSelectedBtn.addEventListener("click", () => selectedFileInput.click());
+  selectedFileInput.addEventListener("change", async () => {
+    const file = selectedFileInput.files?.[0]; if (!file) return;
+    try {
+      ctx.checkpoint();
+      const pad = mpc.selectedPad;
+      sampleData[pad] = await readAsDataUrl(file); sampleParams[pad].name = file.name;
+      await hydrateSample(pad); paintMpcPads(); saveAll();
+    } catch { selectedPadLabel.textContent = "Could not load sample"; }
+    selectedFileInput.value = "";
+  });
   help(reverseSelectedBtn, "Play this pad's audio backwards.");
   help(loopSelectedBtn, "Loop the selected sample while it plays.");
   help(warpSelectedBtn, "Use granular playback to follow project tempo without ordinary repitching.");
@@ -122,6 +137,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
     mpc.padSolo[mpc.selectedPad] = !mpc.padSolo[mpc.selectedPad]; paintMpcPads(); saveAll();
   });
   selectedSampleEditor.append(
+    el("div", "wa-sample-primary", "ONE-SHOT"), loadSelectedBtn, selectedFileInput,
     selectedParam("Tune", "tune", -24, 24, 1),
     selectedParam("Start", "start", 0, 0.95, 0.01),
     selectedParam("End", "end", 0.05, 1, 0.01),
@@ -491,5 +507,5 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   paintMpcPads();
 
 
-  return { mpcPanel, padSeqPanel, padButtons, paintMpcPads, paintEventLane, triggerPerformancePad, padGrid, eventLane, selectedPadLabel, selectedSampleEditor };
+  return { mpcPanel, padSeqPanel, padButtons, paintMpcPads, paintEventLane, triggerPerformancePad, padGrid, eventLane, selectedPadLabel, selectedSampleEditor, loadSelectedSample: () => selectedFileInput.click() };
 }

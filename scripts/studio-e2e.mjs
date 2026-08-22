@@ -17,12 +17,19 @@ const testWav = (() => {
 const results = []
 let failed = 0
 const modeRoute = {
-  DRUMS: 'drums', PADS: 'pads', SYNTH: 'synth',
+  DRUMS: 'pads', PADS: 'pads', SYNTH: 'synth',
   CLIPS: 'song', DJ: 'dj', MIX: 'mix',
 }
 
 async function openMode(page, mode) {
+  if (mode === 'DJ') {
+    await page.locator('.wa-studio-menu > summary').click()
+    await page.locator('.wa-studio-menu-body button', { hasText: 'DJ decks' }).click()
+    return
+  }
   await page.locator(`.wa-modekey[data-mode="${modeRoute[mode]}"]`).click()
+  if (mode === 'DRUMS') await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Steps' }).click()
+  if (mode === 'PADS') await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' }).click()
 }
 
 function check(name, ok, detail = '') {
@@ -65,6 +72,7 @@ try {
   check('first run: non-modal hint is shown', cold.hint)
   check('first run: demo has its real title', cold.title === 'MIDNIGHT ACID', String(cold.title))
   check('first run: the MPC pads are the opening screen', await page.locator('.wa-page-pads').isVisible())
+  check('first run: four primary destinations', await page.locator('.wa-primary-nav .wa-modekey').count() === 4)
   await openMode(page, 'SYNTH')
   check('first run: controls are usable immediately', true)
 
@@ -80,6 +88,7 @@ try {
 
   // ── toggle a drum step ──
   await openMode(page, 'DRUMS')
+  check('beat: FL-style steps share the front-page instrument', await page.locator('.wa-beat-steps').isVisible())
   const cell = page.locator('.wa-grid .wa-row .wa-cell').nth(0)
   const wasOn = await cell.evaluate((n) => n.classList.contains('on'))
   await cell.click()
@@ -135,9 +144,10 @@ try {
   check('autosave: step survives reload', await cellAfter.evaluate((n) => n.classList.contains('on')) !== wasOn)
 
   // ── export WAV is non-trivial (export is a transport key opening a modal) ──
-  await page.click('.wa-transport button:has-text("EXPORT")')
+  await page.locator('.wa-studio-menu > summary').click()
+  await page.locator('.wa-studio-menu-body button', { hasText: 'Project & export' }).click()
   await page.waitForTimeout(300)
-  check('export: modal opens from the transport key', await page.locator('.wa-export-dialog[open]').count() === 1)
+  check('export: modal opens from the secondary menu', await page.locator('.wa-export-dialog[open]').count() === 1)
   const dl = page.waitForEvent('download', { timeout: 60000 }).catch(() => null)
   await page.click('button:has-text("Export WAV")')
   const download = await dl
@@ -148,6 +158,28 @@ try {
   await page.click('.wa-export-dialog-head button:has-text("Close")')
   await page.waitForTimeout(200)
 
+  // Beat owns one-shots and break chopping without sending users elsewhere.
+  await openMode(page, 'PADS')
+  await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Sample' }).click()
+  await page.locator('.wa-selected-sample > .wa-load-selected + input[type="file"]').setInputFiles({ name: 'one-shot.wav', mimeType: 'audio/wav', buffer: testWav })
+  await page.waitForTimeout(300)
+  check('samples: one-shot loads onto the selected pad', /one-shot\.wav/.test((await page.locator('.wa-sample-card .wa-inspector').textContent()) ?? ''))
+  await page.locator('.wa-break-card input[type="file"]').setInputFiles({ name: 'break.wav', mimeType: 'audio/wav', buffer: testWav })
+  await page.waitForTimeout(300)
+  await page.locator('.wa-break-card button', { hasText: 'Transient' }).click()
+  await page.locator('.wa-break-card button', { hasText: 'Assign + pattern' }).click()
+  await page.waitForTimeout(700)
+  const chopped = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}')
+    return { pads: [...document.querySelectorAll('.wa-mpc-pad-name')].filter((node) => /break\.wav/.test(node.textContent ?? '')).length, events: Math.max(0, ...(saved.padEvents ?? []).map((events) => events.length)) }
+  })
+  check('samples: a break slices to pads and creates a pattern', chopped.pads >= 4 && chopped.events >= 4, JSON.stringify(chopped))
+  const songBlocksBefore = await page.locator('.wa-chain-block').count()
+  await page.locator('.wa-beat-tabs button', { hasText: 'Add to song' }).click()
+  await page.waitForTimeout(150)
+  check('workflow: Add to song appends drums and pads together', await page.locator('.wa-chain-block').count() === songBlocksBefore + 2)
+  await page.locator('.wa-transport button[aria-label="Undo"]').click()
+
   // ── workflow: pattern length is settable where the pattern is edited ──
   await openMode(page, 'DRUMS')
   await page.waitForTimeout(200)
@@ -156,6 +188,9 @@ try {
   await openMode(page, 'SYNTH')
   await page.waitForTimeout(250)
   check('workflow: the roll agrees with it', await page.inputValue('.wa-page-synth select[aria-label="Pattern length"]') === '8')
+  check('synth: Tools is removed', await page.locator('.wa-page-synth .wa-subtab', { hasText: 'Tools' }).count() === 0)
+  await page.locator('.wa-page-synth .wa-subtab', { hasText: 'Sound' }).click()
+  check('synth: essential sound controls are the default patch surface', await page.locator('.wa-synth-quick').isVisible() && await page.locator('.wa-synth-quick .wa-slider-row').count() === 7)
 
   // ── workflow: the arrangement is undoable ──
   await openMode(page, 'CLIPS')
@@ -254,7 +289,8 @@ try {
   check('mixer: mute state survives reload', await page.locator('.wa-mute').first().getAttribute('aria-pressed') === 'true')
 
   // ── project transitions: blank is explicit, in-place and undoable ──
-  await page.locator('.wa-export-key').click()
+  await page.locator('.wa-studio-menu > summary').click()
+  await page.locator('.wa-studio-menu-body button', { hasText: 'Project & export' }).click()
   await page.locator('.wa-export-dialog button', { hasText: 'New song' }).click()
   await page.waitForTimeout(350)
   const blank = await page.evaluate(() => ({ title: document.querySelector('.wa-project-name')?.value, steps: document.querySelectorAll('.wa-cell.on').length }))

@@ -8,7 +8,7 @@
 import { chromium } from 'playwright-core'
 
 const BASE = process.argv[2] ?? 'http://localhost:4321'
-const MODES = ['DRUMS', 'PADS', 'SYNTH', 'CLIPS', 'MIX']
+const MODES = ['BEAT', 'SYNTH', 'SONG', 'MIX']
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900, minInk: 50 },
   { name: 'laptop', width: 1280, height: 720, minInk: 45 },
@@ -18,11 +18,10 @@ const VIEWPORTS = [
 // than being padded with furniture it does not need.
 // The arranger's unpainted grid is usable time, not dead case: padding it to
 // satisfy the generic ink score would destroy the timeline's working area.
-const INK_FLOOR = { MIX: 42, CLIPS: 25 }
+const INK_FLOOR = { MIX: 42, SONG: 25 }
 const MAX_TRAILING = 40
 const modeRoute = {
-  DRUMS: 'drums', PADS: 'pads', SYNTH: 'synth',
-  CLIPS: 'song', MIX: 'mix',
+  BEAT: 'pads', SYNTH: 'synth', SONG: 'song', MIX: 'mix',
 }
 const openMode = async (page, mode) => {
   await page.locator(`.wa-modekey[data-mode="${modeRoute[mode]}"]`).click()

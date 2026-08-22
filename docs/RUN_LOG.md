@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-08-22 — Studio sound-first simplification
+
+- Replaced six competing primary modes with Beat, Synth, Song and Mix. Beat opens first; DJ, project/export and help moved to the top-right menu, and the permanent transport now concentrates on playback, tempo and history.
+- Merged finger-drumming, the FL-style drum grid and sampling into Play, Steps and Sample views. Added direct selected-pad one-shot loading, retained drag-and-drop, and made break load/record, transient/equal/manual slicing, bank assignment and pattern creation one focused workflow.
+- Reduced Synth from Roll/Patch/Tools to Notes and Sound. Sound defaults to seven essential controls; Advanced preserves the complete patch engine, while chords and performance visualisation use optional disclosures.
+- Added Beat/Synth Add to song actions, updated shortcuts and the guided help, and extended browser coverage for primary navigation, one-shot loading, break-to-pattern creation, menu routing and responsive containment.
+
 ## 2026-08-22 — Studio timeline-first arrangement
 
 - Replaced the scene-chain composer with a bar ruler, moving playhead, loop region and five independent Drums, Pads, Bass, Lead and Harmony lanes. Clips now keep stable IDs and free positions, including gaps, with drag, edge-trim, split, duplicate, delete and keyboard operations.

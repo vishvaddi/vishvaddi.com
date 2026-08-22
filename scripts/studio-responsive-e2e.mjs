@@ -11,7 +11,7 @@ const viewports = [
 let failures = 0
 const lines = []
 const modeRoute = {
-  DRUMS: ['drums', '.wa-page-drums'],
+  DRUMS: ['pads', '.wa-page-drums'],
   PADS: ['pads', '.wa-page-pads'],
   SYNTH: ['synth', '.wa-page-synth'],
   CLIPS: ['song', '.wa-page-song'],
@@ -19,8 +19,15 @@ const modeRoute = {
   MIX: ['mix', '.wa-page-mix'],
 }
 const openMode = async (page, mode) => {
+  if (mode === 'DJ') {
+    await page.locator('.wa-studio-menu > summary').click()
+    await page.locator('.wa-studio-menu-body button', { hasText: 'DJ decks' }).click()
+    return
+  }
   const [key] = modeRoute[mode]
   await page.locator(`.wa-modekey[data-mode="${key}"]`).click()
+  if (mode === 'DRUMS') await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Steps' }).click()
+  if (mode === 'PADS') await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' }).click()
 }
 const check = (name, value, detail = '') => {
   lines.push(`  ${value ? '✓' : '✗'} ${name}${detail ? ` — ${detail}` : ''}`)
@@ -41,6 +48,9 @@ for (const [name, width, height] of viewports) {
       localStorage.setItem('vv_studio_tutorial_seen', '1')
       localStorage.removeItem('vv_studio_mode')
       localStorage.removeItem('vv_studio_workspace')
+      localStorage.removeItem('vv_studio_beat_view')
+      localStorage.removeItem('vv_studio_synthview')
+      localStorage.removeItem('vv_studio_synth_simple')
     })
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.waitForSelector('.wa-modebar', { timeout: 15000 })
@@ -52,8 +62,13 @@ for (const [name, width, height] of viewports) {
     }))
     check(`${name}: no document horizontal overflow`, geometry.docWidth <= geometry.clientWidth + 1, `${geometry.docWidth}/${geometry.clientWidth}`)
     check(`${name}: workstation fills viewport`, Math.abs(geometry.winHeight - geometry.viewportHeight) <= 2, `${geometry.winHeight}/${geometry.viewportHeight}`)
-    check(`${name}: PADS is the opening screen`, await page.locator('.wa-page-pads').isVisible())
-    check(`${name}: six flat mode keys, no context row`, await page.locator('.wa-primary-nav .wa-modekey').count() === 6 && await page.locator('.wa-context-nav').count() === 0)
+    check(`${name}: BEAT is the opening screen`, await page.locator('.wa-page-beat').isVisible())
+    check(`${name}: four primary destinations`, await page.locator('.wa-primary-nav .wa-modekey').count() === 4 && await page.locator('.wa-context-nav').count() === 0)
+    await page.screenshot({ path: `C:/tmp/studio-beat-${name}.png`, fullPage: false })
+    await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Sample' }).click()
+    check(`${name}: samples and breaks share one focused view`, await page.locator('.wa-load-selected').isVisible() && await page.locator('.wa-break-card button', { hasText: 'Load break' }).isVisible())
+    await page.screenshot({ path: `C:/tmp/studio-sample-${name}.png`, fullPage: false })
+    await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' }).click()
 
     for (const mode of ['DRUMS', 'PADS', 'SYNTH', 'CLIPS', 'DJ', 'MIX']) {
       await openMode(page, mode)
@@ -149,14 +164,10 @@ for (const [name, width, height] of viewports) {
     check(`${name}: three synth lanes`, await page.locator('.wa-roll-lane').count() === 3)
     await page.locator('.wa-roll-lane', { hasText: 'Lead' }).click()
     check(`${name}: lead lane activates`, await page.locator('.wa-roll-lane', { hasText: 'Lead' }).evaluate((node) => node.classList.contains('active')))
-    if (name === 'phone' || name === 'landscape') await page.locator('.wa-page-synth .wa-subtab', { hasText: 'Tools' }).click()
-    await page.locator('.wa-field-modes button', { hasText: 'Drift' }).click()
-    const before = await page.locator('.wa-xy-readout').textContent()
-    await page.keyboard.down('KeyD')
-    await page.waitForTimeout(300)
-    await page.keyboard.up('KeyD')
-    const after = await page.locator('.wa-xy-readout').textContent()
-    check(`${name}: signal garden responds to keyboard`, before !== after, `${before} → ${after}`)
+    check(`${name}: synth has Notes and Sound only`, await page.locator('.wa-page-synth .wa-subtab').evaluateAll((nodes) => nodes.filter((node) => ['Notes', 'Sound'].includes(node.textContent.trim())).length) === 2 && await page.locator('.wa-page-synth .wa-subtab', { hasText: 'Tools' }).count() === 0)
+    await page.locator('.wa-page-synth .wa-subtab', { hasText: 'Sound' }).click()
+    check(`${name}: essential synth controls fit the main surface`, await page.locator('.wa-synth-quick').isVisible() && await page.locator('.wa-synth-quick .wa-slider-row').count() === 7)
+    await page.screenshot({ path: `C:/tmp/studio-sound-${name}.png`, fullPage: false })
 
     await openMode(page, 'CLIPS')
     // the first-run demo seeds an arrangement, so these assert a DELTA rather
@@ -220,16 +231,18 @@ for (const [name, width, height] of viewports) {
       const transport = await page.locator('.wa-transport').evaluate((node) => ({ scroll: node.scrollWidth, client: node.clientWidth }))
       check(`${name}: primary transport does not scroll`, transport.scroll <= transport.client + 1, `${transport.scroll}/${transport.client}`)
       await page.locator('.wa-transport-more').click()
-      check(`${name}: secondary transport is disclosed`, await page.locator('.wa-transport-timing').isVisible() && await page.locator('.wa-transport-actions').isVisible())
+      check(`${name}: secondary timing is disclosed`, await page.locator('.wa-transport-timing').isVisible())
+      await page.locator('.wa-transport-more').click()
       check(`${name}: CLIPS exposes scene range`, /Scenes \d+–\d+ of 16/.test((await page.locator('.wa-scene-position').textContent()) ?? ''))
-      await openMode(page, 'DRUMS')
-      // Flat nav (S2): all six keys must sit inside the viewport on the dock.
+      await openMode(page, 'PADS')
+      // The four stable destinations must sit inside the viewport on the dock.
       const keyBounds = await page.locator('.wa-primary-nav .wa-modekey').evaluateAll((nodes) => nodes.map((node) => {
         const r = node.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }
       }))
-      check(`${name}: mode keys stay inside the viewport`, keyBounds.length === 6 && keyBounds.every((r) => r.top >= 0 && r.left >= 0 && r.right <= width + 1 && r.bottom <= height + 1), `${keyBounds.length} keys`)
+      check(`${name}: mode keys stay inside the viewport`, keyBounds.length === 4 && keyBounds.every((r) => r.top >= 0 && r.left >= 0 && r.right <= width + 1 && r.bottom <= height + 1), `${keyBounds.length} keys`)
       await openMode(page, 'CLIPS')
-      await page.locator('.wa-transport button', { hasText: '? Tutorial' }).click()
+      await page.locator('.wa-studio-menu > summary').click()
+      await page.locator('.wa-studio-menu-body button', { hasText: 'Help & shortcuts' }).click()
       const tutorialTop = await page.evaluate(() => {
         const card = document.querySelector('.wa-tutorial-card'); if (!card) return false
         const r = card.getBoundingClientRect(); const top = document.elementFromPoint(r.left + 8, r.top + 8)
@@ -237,7 +250,6 @@ for (const [name, width, height] of viewports) {
       })
       check(`${name}: tutorial card stays above its target`, tutorialTop)
       await page.locator('.wa-tutorial-card button', { hasText: 'Close' }).click()
-      await page.locator('.wa-transport-more').click()
     }
     await page.screenshot({ path: `C:/tmp/studio-${name}.png`, fullPage: false })
     await openMode(page, 'DJ')

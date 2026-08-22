@@ -244,13 +244,14 @@ export async function initStudio(): Promise<void> {
   const exportHead = el("div", "wa-export-dialog-head");
   exportHead.append(el("div", "wa-fx-title", "EXPORT / PROJECT"), exportClose);
   exportDialog.append(exportHead, exp);
-  exportBtn.addEventListener("click", () => { if (!exportDialog.isConnected) win.append(exportDialog); exportDialog.showModal(); });
+  const openProjectMenu = () => { if (!exportDialog.isConnected) win.append(exportDialog); exportDialog.showModal(); };
+  exportBtn.addEventListener("click", openProjectMenu);
 
   // ── MPC performance ── (padsui.ts — Phase 0 split)
-  const { mpcPanel, padSeqPanel, padButtons, paintMpcPads, paintEventLane, triggerPerformancePad, padGrid, eventLane, selectedPadLabel, selectedSampleEditor } = buildPads({ renderBuffer });
+  const { mpcPanel, padSeqPanel, padButtons, paintMpcPads, paintEventLane, triggerPerformancePad, padGrid, eventLane, selectedPadLabel, selectedSampleEditor, loadSelectedSample } = buildPads({ renderBuffer });
 
   // ── Chop / sample capture ── (chopui.ts — Phase 0 split)
-  const { chop, waveform } = buildChop({ paintMpcPads, paintEventLane });
+  const { chop, waveform, loadBreak } = buildChop({ paintMpcPads, paintEventLane });
 
   // ── Synth: VV-1 wavetable ── (synthui.ts — Phase 0 split)
   const synth = buildSynth();
@@ -270,7 +271,7 @@ export async function initStudio(): Promise<void> {
   ctx.updateRecChip = updateRecChip;
 
   // ── Session view ── (session.ts — Phase 0 split)
-  const { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid } = buildSession();
+  const { song, launchStatus, paintSession, arrangeLanePaints, sessionGrid, addCurrentToSong } = buildSession();
   ctx.paintSession = paintSession;
 
   // ── Mixer ── (mixerui.ts — Phase 0 split)
@@ -300,12 +301,14 @@ export async function initStudio(): Promise<void> {
     beat, mpcPanel, padSeqPanel, padGrid, pianoRoll, synthKeys,
     keysHeader: synth.keysHeader, synthPanel, xyPanel: synth.xyPanel, scope: synth.scope, chordPanel: synth.chordPanel,
     sessionGrid, launchStatus, song, djPanel: dj.root, mixer: mixer.root, devicePanel,
-    chop, inspector, laneInspector,
+    chop, inspector, laneInspector, loadSelectedSample, loadBreak, addCurrentToSong, openProjectMenu, openTutorial: () => tutorialBtn.click(),
+    cycleScale: () => densityBtn.click(), toggleFullscreen: () => fsBtn.click(), togglePower: () => powerBtn.click(),
     onSynthVisible: () => synth.waveRedraws().forEach((fn) => fn()),
     onModeChange: (label) => { lcdMode.textContent = label; },
     overlayContext: () => `for ${selectedPadLabel.textContent || "the selected pad"} · scene ${SCENE_LABELS[clip.sel]}`,
   });
   const tabBtns = layout.navButtons;
+  titleBar.append(layout.menu);
   // FLM: the clip decides the editor — double-tapping a clip or lane block
   // lands in the right editor with that scene selected. No "choose a view".
   ctx.openTrackEditor = (track, scene) => {
@@ -326,8 +329,8 @@ export async function initStudio(): Promise<void> {
 
   // ── Help and tutorial ── (tutorial.ts — Phase 0 split)
   const { showTutorialStep } = buildTutorial({
-    tabBtns, padGrid, selectedSampleEditor, waveform, eventLane, pianoRoll,
-    gridSel, presetRow, sessionGrid, devicePanel, exportBtn,
+    tabBtns, padGrid, selectedSampleEditor, waveform, eventLane, beatGrid: beat, pianoRoll,
+    gridSel, presetRow, sessionGrid, devicePanel, exportBtn, projectMenu: layout.menu,
     transportBar, tutorialBtn, djPanel: dj.root,
   });
   tutorialBtn.addEventListener("click", () => showTutorialStep(0));
