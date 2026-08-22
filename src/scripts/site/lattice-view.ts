@@ -17,6 +17,9 @@ export interface LatticeAdapter {
   toast(msg: string, kind?: 'info' | 'success' | 'error'): void
   /** optional hook: a cell was ticked done (deck plays a sound) */
   onTick?(): void
+  /** optional hook: hand a file to the user. Hosts where <a download> is a
+   *  silent no-op (Capacitor WebView) must supply this; browsers can omit it. */
+  saveFile?(blob: Blob, name: string): void
 }
 
 const COLLAPSE_DEPTH = 2
@@ -823,11 +826,17 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
       dl.textContent = 'download JSON'
       dl.addEventListener('click', () => {
         if (!sheet) return
-        const a = document.createElement('a')
-        a.href = URL.createObjectURL(new Blob([JSON.stringify(sheet, null, 2)], { type: 'application/json' }))
-        a.download = `${sheet.title.replace(/[^\w\- ]+/g, '')}.lattice.json`
-        a.click()
-        URL.revokeObjectURL(a.href)
+        const blob = new Blob([JSON.stringify(sheet, null, 2)], { type: 'application/json' })
+        const name = `${sheet.title.replace(/[^\w\- ]+/g, '')}.lattice.json`
+        if (adapter.saveFile) {
+          adapter.saveFile(blob, name)
+        } else {
+          const a = document.createElement('a')
+          a.href = URL.createObjectURL(blob)
+          a.download = name
+          a.click()
+          URL.revokeObjectURL(a.href)
+        }
         menu.remove()
       })
       menu.appendChild(dl)
