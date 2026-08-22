@@ -11,7 +11,7 @@ import { ensureNodes, trackGain, playDrum, playPad, metroClick, buildMasterChain
 import * as engine from "./engine";
 import { playNote } from "./vsynth";
 import { projectState, applyProject, saveAll } from "./persistence";
-import { el, btn, help, download, encodeWav, encodeMp3 } from "./helpers";
+import { el, btn, help, download, encodeWav, encodeMp3, dataUrlToBytes } from "./helpers";
 import { ctx } from "./ctx";
 
 export interface ProjectExport {
@@ -138,7 +138,7 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
       try {
         for (const track of audioTracks) for (const item of track.clips) {
           try {
-            const buffer = await decode.decodeAudioData(await (await fetch(item.data)).arrayBuffer());
+            const buffer = await decode.decodeAudioData(dataUrlToBytes(item.data));
             const source = off.createBufferSource(), gain = off.createGain(); source.buffer = buffer; gain.gain.value = item.gain; source.connect(gain).connect(om);
             if (item.offset < buffer.duration) source.start(barStarts[item.startBar] ?? item.startBar * beat * 4, item.offset, Math.min(buffer.duration - item.offset, item.bars * beat * 4));
           } catch { /* a missing local file does not block the remaining render */ }

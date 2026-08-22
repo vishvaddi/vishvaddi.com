@@ -6,6 +6,7 @@ import { ac, ensureNodes, trackGain, playDrum, playPad, metroClick } from "./eng
 import * as engine from "./engine";
 import { playNote } from "./vsynth";
 import { ctx, playhead } from "./ctx";
+import { dataUrlToBytes } from "./helpers";
 
 export interface PlaybackDeps {
   cells: HTMLElement[][];
@@ -25,7 +26,7 @@ export function buildPlayback(deps: PlaybackDeps): void {
     const context = ac();
     await Promise.all(audioTracks.flatMap((track) => track.clips.map(async (item) => {
       if (audioBuffers.has(item.id)) return;
-      try { audioBuffers.set(item.id, await context.decodeAudioData(await (await fetch(item.data)).arrayBuffer())); } catch { /* keep the timeline editable */ }
+      try { audioBuffers.set(item.id, await context.decodeAudioData(dataUrlToBytes(item.data))); } catch { /* keep the timeline editable */ }
     })));
   };
   void hydrateAudio();

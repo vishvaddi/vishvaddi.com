@@ -21,16 +21,17 @@ const route = await OGImageRoute({
     bgGradient: [[250, 250, 247]] as [number, number, number][],
     border: { color: [26, 26, 26] as [number, number, number], width: 4, side: "block-start" as const },
     padding: 80,
+    fonts: ["./public/fonts/source-serif-4-latin.woff2"],
     font: {
       title: {
         size: 72,
-        families: ["Iowan Old Style", "Garamond", "Times New Roman", "serif"],
+        families: ["Source Serif 4"],
         weight: "Normal" as const,
         color: [26, 26, 26] as [number, number, number],
       },
       description: {
         size: 32,
-        families: ["Iowan Old Style", "Garamond", "Times New Roman", "serif"],
+        families: ["Source Serif 4"],
         weight: "Normal" as const,
         color: [80, 80, 80] as [number, number, number],
         lineHeight: 1.4,

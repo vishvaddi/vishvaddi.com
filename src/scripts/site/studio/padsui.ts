@@ -109,12 +109,15 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   loadSelectedBtn.addEventListener("click", () => selectedFileInput.click());
   selectedFileInput.addEventListener("change", async () => {
     const file = selectedFileInput.files?.[0]; if (!file) return;
+    const pad = mpc.selectedPad, previousData = sampleData[pad], previousName = sampleParams[pad].name, previousBuffer = sampleBuffers[pad];
     try {
       ctx.checkpoint();
-      const pad = mpc.selectedPad;
       sampleData[pad] = await readAsDataUrl(file); sampleParams[pad].name = file.name;
       await hydrateSample(pad); paintMpcPads(); saveAll();
-    } catch { selectedPadLabel.textContent = "Could not load sample"; }
+    } catch {
+      sampleData[pad] = previousData; sampleParams[pad].name = previousName; sampleBuffers[pad] = previousBuffer;
+      paintMpcPads(); selectedPadLabel.textContent = "Could not load sample";
+    }
     selectedFileInput.value = "";
   });
   help(reverseSelectedBtn, "Play this pad's audio backwards.");
