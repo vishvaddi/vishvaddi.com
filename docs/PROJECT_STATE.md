@@ -1,6 +1,6 @@
 # Project State
 
-_Last updated: 2026-08-22 — Studio now separates beat-making, clip launching and multitrack song arrangement._
+_Last updated: 2026-08-23 — Last Cast refreshed from its current standalone Godot build._
 
 ## Current Position
 
@@ -36,6 +36,7 @@ _Last updated: 2026-08-22 — Studio now separates beat-making, clip launching a
 - Acoustic Decoy is now the save-compatible Cavitation Wake: it arms the next dash and lays a short damaging pressure corridor for escapes, traps and positioning. Manual and automatic sonar spend reserve and raise attention; phase, substrate and ghost contacts return deterministic `RESOLVED`, `SUBSTRATE · NO COUPLING` and `PHANTOM ECHO` feedback.
 - Survey, extraction, disturbance, prey biomass, scavenger pressure and apex pressure persist per sector and alter later population pressure. Xenobiology now states the next research method, all refined parts feed current modules, and authored wreck sites carry the campaign’s evidence and archive fragments.
 - A canonical vessel-assembly manifest drives both the in-game submarine attachments and PDA drawing. The matching Blender socket/action contract and validator-export script define the path to animated GLB assemblies without duplicating upgrade placement rules.
+- `/games/last-cast/` hosts the current Godot web export of Last Cast. The standalone project remains the source of truth; the site stores its large WebAssembly runtime as gzip and serves it transparently through the Worker.
 - `/games/carromancy/` hosts the production Carromancy build and is listed on `/games`.
 - Carromancy remains developed in its own `vishvaddi/carromancy` repository; the site carries a built snapshot under `public/games/carromancy/`.
 - The current snapshot uses a dual Power-and-clearance victory model: rivals require 5/7/9 own-colour coins, Guardians require a settled Queen, and misses act as the limited life economy. Successful own-colour pots retain the table; opponent coins and foul debts are respotted.

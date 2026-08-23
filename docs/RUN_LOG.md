@@ -1,5 +1,10 @@
 # Run Log
 
+## 2026-08-23 — Last Cast production refresh
+
+- Ran the standalone Godot project's Tier 1 headless smoke suite successfully and exported its current release build to `/games/last-cast/`.
+- Recompressed the WebAssembly runtime for Cloudflare's per-asset limit; the existing Worker route continues to serve it at the filename expected by Godot.
+
 ## 2026-08-22 — Studio multitrack Clips and Song workflow
 
 - Separated Drum Rack sequencing from Pads sampling/chopping. Clips now gives Drum Rack, Pads and every MIDI instrument an independent Ableton-style row and launch state instead of collapsing all synth parts into one clip.
