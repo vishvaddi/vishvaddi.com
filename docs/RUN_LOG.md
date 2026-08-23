@@ -4,6 +4,8 @@
 
 - Ran the standalone Godot project's Tier 1 headless smoke suite successfully and exported its current release build to `/games/last-cast/`.
 - Recompressed the WebAssembly runtime for Cloudflare's per-asset limit; the existing Worker route continues to serve it at the filename expected by Godot.
+- Kept Godot's generated boot code in an external script because the site's content security policy blocks the newer exporter's inline form.
+- Added a live browser smoke check for canvas startup, page errors and gzip delivery of the WebAssembly runtime.
 
 ## 2026-08-22 — Studio multitrack Clips and Song workflow
 
