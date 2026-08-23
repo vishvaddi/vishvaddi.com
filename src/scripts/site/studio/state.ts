@@ -208,6 +208,7 @@ export const TRACKS: TrackId[] = ["drums", "pads", "bass", "lead", "harmony"];
 export const TRACK_LABELS: Record<TrackId, string> = { drums: "Drum Rack", pads: "Pads", bass: "Bass", lead: "Lead", harmony: "Harmony" };
 export const clip = {
   sel: 0,
+  quantization: "bar" as "bar" | "beat" | "none",
   play: { drums: 0, pads: 0, bass: 0, lead: 0, harmony: 0 } as Record<TrackId, number | null>,
   queued: { drums: undefined, pads: undefined, bass: undefined, lead: undefined, harmony: undefined } as Record<TrackId, number | null | undefined>,
 };

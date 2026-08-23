@@ -190,13 +190,14 @@ export function buildPlayback(deps: PlaybackDeps): void {
       const clockScene = TRACKS.map((track) => clip.play[track]).find((scene) => scene !== null) ?? clip.sel;
       nextTime += patternStepDur(clockScene);
       playhead.schStep++; playhead.absStep++;
+      let launched = clip.quantization === "beat" && playhead.schStep % 4 === 0 ? applyQueued() : false;
       const activeScenes = transport.songMode
         ? ARRANGE_TRACKS.map((track) => blockAt(track, songPos.bar)?.scene ?? null)
         : TRACKS.map((track) => clip.play[track]);
       const cycleLength = Math.max(1, ...activeScenes.filter((v): v is number => v !== null).map((scene) => patternLengths[scene]));
       if (playhead.schStep >= cycleLength) {
         playhead.schStep = 0;
-        const launched = applyQueued();
+        if (clip.quantization === "bar") launched = applyQueued() || launched;
         if (launched) {
           transport.songMode = false;
           ctx.songBtn.textContent = "Clips"; ctx.songBtn.classList.remove("active"); ctx.renderSel.value = "pattern";

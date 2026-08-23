@@ -37,6 +37,11 @@ export function buildChop(deps: { paintMpcPads: () => void; paintEventLane: () =
   help(patternBtn, "Assign the slices AND write them in order into this scene's pad sequence — instant break replay, ready to rearrange.");
   const chopStatus = el("span", "wa-status", "Select a pad or load a break");
   const waveform = document.createElement("canvas"); waveform.className = "wa-waveform";
+  const waveStage = el("div", "wa-chop-stage");
+  const emptyState = btn("Drop audio here or choose a break", "wa-chop-empty");
+  emptyState.addEventListener("click", () => chopInput.click());
+  waveStage.append(waveform, emptyState);
+  chop.classList.add("is-empty");
   help(waveform, "Waveform chop editor. Click a slice to audition it; in Manual mode clicking also adds a marker.");
   let chopBuffer: AudioBuffer | null = null, chopData: string | null = null, chopName = "", slices: Array<[number, number]> = equalSlices(16);
   let chopBpm: number | null = null, chopManual = false, selectedSlice = -1;
@@ -72,6 +77,7 @@ export function buildChop(deps: { paintMpcPads: () => void; paintEventLane: () =
     chopBpm = guessBreakBpm(chopBuffer.duration); syncBpmBtn.disabled = chopBpm === null;
     chopManual = false; selectedSlice = -1;
     chopStatus.textContent = `${name} · ${chopBuffer.duration.toFixed(2)}s${chopBpm ? ` · ≈${Math.round(chopBpm)} BPM` : ""}`;
+    chop.classList.remove("is-empty"); emptyState.hidden = true;
     refreshWaveform();
   }
   syncBpmBtn.disabled = true;
@@ -162,7 +168,7 @@ export function buildChop(deps: { paintMpcPads: () => void; paintEventLane: () =
     chopBuffer = normalised; chopData = await blobAsDataUrl(encodeWav(normalised)); refreshWaveform(); chopStatus.textContent = "Normalised";
   });
   chopToolbar.append(loadBreakBtn, micBtn, sliceCountSel, equalBtn, transientBtn, clearSlicesBtn, normaliseBtn, syncBpmBtn, assignSlicesBtn, patternBtn, chopInput, chopStatus);
-  chop.append(chopToolbar, waveform, el("p", "wa-help", "Chopping is non-destructive — click a slice to hear it. Sync BPM matches the project tempo to the break; Assign + pattern replays the chopped break on the pads, ready to rearrange in the Sequence lane."));
+  chop.append(chopToolbar, waveStage, el("p", "wa-help", "Chopping is non-destructive — click a slice to hear it. Sync BPM matches the project tempo to the break; Assign + pattern replays the chopped break on the pads, ready to rearrange in the Sequence lane."));
 
 
   return { chop, getChopBuffer: () => chopBuffer, waveform, loadBreak: () => chopInput.click() };

@@ -271,14 +271,23 @@ export function buildSynth(): SynthUI {
       host.append(sliderRow(label, min, max, get(), step, (v) => { set(v); saveAll(); }));
     };
     const quickBox = el("div", "wa-vblock wa-synth-quick");
-    quickBox.append(el("div", "wa-fx-title", "ESSENTIAL SOUND"));
-    pSlider(quickBox, "Shape", 0, 1, 0.01, () => vsynthPatch.osc1.pos, (v) => { vsynthPatch.osc1.pos = v; });
-    pSlider(quickBox, "Brightness", 0, 1, 0.01, () => Math.log(Math.max(60, vsynthPatch.filter.cutoff) / 60) / Math.log(16000 / 60), (v) => { vsynthPatch.filter.cutoff = 60 * Math.pow(16000 / 60, v); });
-    pSlider(quickBox, "Movement", 0, 1, 0.01, () => vsynthPatch.drift ?? 0, (v) => { vsynthPatch.drift = v; });
-    pSlider(quickBox, "Attack", 0, 2, 0.01, () => vsynthPatch.env1.a, (v) => { vsynthPatch.env1.a = v; });
-    pSlider(quickBox, "Release", 0.01, 3, 0.01, () => vsynthPatch.env1.r, (v) => { vsynthPatch.env1.r = v; });
-    pSlider(quickBox, "Space", 0, 1, 0.01, () => fx.reverb, (v) => { fx.reverb = v; engine.applyFxState(); });
-    pSlider(quickBox, "Volume", 0, 1, 0.01, () => vsynthPatch.volume, (v) => { vsynthPatch.volume = v; });
+    quickBox.append(el("div", "wa-fx-title", "VV-1 PERFORMANCE PANEL"));
+    const oscillatorModule = el("section", "wa-synth-module wa-synth-module-osc");
+    const filterModule = el("section", "wa-synth-module wa-synth-module-filter");
+    const envelopeModule = el("section", "wa-synth-module wa-synth-module-envelope");
+    const outputModule = el("section", "wa-synth-module wa-synth-module-output");
+    oscillatorModule.append(el("div", "wa-synth-module-title", "OSCILLATOR"));
+    filterModule.append(el("div", "wa-synth-module-title", "FILTER"));
+    envelopeModule.append(el("div", "wa-synth-module-title", "ENVELOPE"));
+    outputModule.append(el("div", "wa-synth-module-title", "OUTPUT"));
+    pSlider(oscillatorModule, "Shape", 0, 1, 0.01, () => vsynthPatch.osc1.pos, (v) => { vsynthPatch.osc1.pos = v; });
+    pSlider(oscillatorModule, "Movement", 0, 1, 0.01, () => vsynthPatch.drift ?? 0, (v) => { vsynthPatch.drift = v; });
+    pSlider(filterModule, "Brightness", 0, 1, 0.01, () => Math.log(Math.max(60, vsynthPatch.filter.cutoff) / 60) / Math.log(16000 / 60), (v) => { vsynthPatch.filter.cutoff = 60 * Math.pow(16000 / 60, v); });
+    pSlider(envelopeModule, "Attack", 0, 2, 0.01, () => vsynthPatch.env1.a, (v) => { vsynthPatch.env1.a = v; });
+    pSlider(envelopeModule, "Release", 0.01, 3, 0.01, () => vsynthPatch.env1.r, (v) => { vsynthPatch.env1.r = v; });
+    pSlider(outputModule, "Space", 0, 1, 0.01, () => fx.reverb, (v) => { fx.reverb = v; engine.applyFxState(); });
+    pSlider(outputModule, "Volume", 0, 1, 0.01, () => vsynthPatch.volume, (v) => { vsynthPatch.volume = v; });
+    quickBox.append(oscillatorModule, filterModule, envelopeModule, outputModule);
     patchBox.append(quickBox);
     // Shows total incoming mod-matrix depth on the one slider it targets
     // (Vital-style knob highlight, simplified to a text badge) instead of

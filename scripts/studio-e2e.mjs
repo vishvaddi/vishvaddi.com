@@ -130,6 +130,7 @@ try {
   // ── S0: recording targets the visible scene, and the transport says so ──
   check('rec chip: hidden while nothing is armed', await page.locator('.wa-rec-chip:visible').count() === 0)
   await openMode(page, 'SYNTH')
+  await page.locator('.wa-keyboard-toggle').click()
   await page.locator('.wa-export button:has-text("● Rec")').click()
   const chipText = await page.locator('.wa-rec-chip').textContent()
   check('rec chip: names the visible scene when armed', /^REC → [A-P]$/.test(chipText ?? ''), String(chipText))
@@ -144,7 +145,7 @@ try {
   check('autosave: step survives reload', await cellAfter.evaluate((n) => n.classList.contains('on')) !== wasOn)
 
   // ── export WAV is non-trivial (export is a transport key opening a modal) ──
-  await page.locator('.wa-studio-menu > summary').click()
+  await page.locator('.wa-menu > summary', { hasText: 'File' }).click()
   await page.locator('.wa-studio-menu-body button', { hasText: 'Project & export' }).click()
   await page.waitForTimeout(300)
   check('export: modal opens from the secondary menu', await page.locator('.wa-export-dialog[open]').count() === 1)
@@ -278,23 +279,49 @@ try {
   check('tracks: a MIDI track is added to Song', await page.locator('.wa-arrange-lane-name', { hasText: 'Keys 2' }).count() === 1)
   await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Clips' }).click()
   check('clips: Drum Rack, Pads and each MIDI instrument have separate rows', await page.locator('.wa-session-row[data-track]').count() === 6)
+  check('clips: populated slots expose names and activity', await page.locator('.wa-clip.has .wa-clip-name').count() > 0 && await page.locator('.wa-clip.has .wa-clip-activity').count() > 0)
+  check('clips: launch quantization offers bar, beat and immediate', await page.locator('select[aria-label="Clip launch quantization"] option').count() === 3)
   await page.locator('.wa-session-row[data-track="bass"] .wa-clip').nth(1).click()
   await page.locator('.wa-session-row[data-track="lead"] .wa-clip').nth(3).click()
   await page.waitForTimeout(600)
   const independentClips = await page.evaluate(() => JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').clipPlay)
   check('clips: MIDI tracks launch different scenes independently', independentClips?.bass === 1 && independentClips?.lead === 3, JSON.stringify(independentClips))
+  await page.keyboard.press('Tab')
+  await page.waitForTimeout(50)
+  check('workflow: Tab switches Clips to Song', await page.locator('.wa-composer').isVisible())
+  await page.keyboard.press('Tab')
+  await page.waitForTimeout(50)
+  const tabState = await page.evaluate(() => ({
+    stored: localStorage.getItem('vv_studio_song_view'),
+    composerHidden: document.querySelector('.wa-composer')?.hasAttribute('hidden'),
+    sessionHidden: document.querySelector('.wa-session')?.hasAttribute('hidden'),
+    focus: document.activeElement?.className,
+  }))
+  check('workflow: Tab switches Song back to Clips', await page.locator('.wa-session').isVisible(), JSON.stringify(tabState))
 
   // ── v20: local audio enters the arrangement as an editable track clip ──
   await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Song' }).click()
   await page.locator('.wa-composer-head input[type="file"]').setInputFiles({ name: 'vinyl-loop.wav', mimeType: 'audio/wav', buffer: arrangeWav })
   await page.waitForFunction(() => document.querySelectorAll('.wa-audio-block').length === 1)
   await page.locator('.wa-audio-block').click()
+  const audioBarsBeforeSplit = await page.evaluate(() => JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').audioTracks?.[0]?.clips?.[0]?.bars ?? 0)
+  const rulerBox = await page.locator('.wa-timeline-ruler').boundingBox()
+  if (rulerBox && audioBarsBeforeSplit > 2) await page.mouse.click(rulerBox.x + (audioBarsBeforeSplit - 1) * 56 + 2, rulerBox.y + rulerBox.height / 2)
   await page.locator('.wa-composer-head button', { hasText: 'Split' }).click()
   const audioAfterSplit = await page.locator('.wa-audio-block').count()
   check('song: audio clips can be split on the timeline', audioAfterSplit === 2, `${audioAfterSplit} clips`)
+  await page.waitForTimeout(500)
+  const splitBars = await page.evaluate(() => JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').audioTracks?.[0]?.clips?.map((clip) => clip.bars) ?? [])
+  check('song: split honours the playhead when it is inside the clip', audioBarsBeforeSplit <= 2 || splitBars.includes(audioBarsBeforeSplit - 1), JSON.stringify(splitBars))
   await page.locator('.wa-composer-head button', { hasText: 'Duplicate' }).click()
   const audioAfterDuplicate = await page.locator('.wa-audio-block').count()
   check('song: audio clips can be duplicated', audioAfterDuplicate === 3, `${audioAfterDuplicate} clips`)
+  if (await page.locator('.wa-arrange-selection').isVisible()) await page.locator('.wa-arrange-selection button[aria-label="Close clip inspector"]').click()
+  const beforeCopyPaste = await page.locator('.wa-chain-block').count()
+  await page.locator('.wa-chain-block').first().click()
+  await page.locator('.wa-composer-head button', { hasText: 'Copy' }).click()
+  await page.locator('.wa-composer-head button', { hasText: 'Paste' }).click()
+  check('song: selected clips copy and paste at the playhead', await page.locator('.wa-chain-block').count() === beforeCopyPaste + 1)
 
   // ── workflow: the arrangement is undoable ──
   await openMode(page, 'CLIPS')
@@ -352,8 +379,10 @@ try {
 
   // ── S1: automation + song library fold shut by default ──
   await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Song' }).click()
+  await page.waitForTimeout(50)
   check('song page: automation and library are folded',
-    await page.locator('.wa-fold').count() === 2
+    await page.locator('.wa-composer').isVisible()
+    && await page.locator('.wa-fold').count() === 2
     && await page.evaluate(() => [...document.querySelectorAll('.wa-fold')].every((d) => !d.open)))
 
   // ── workflow: loading a song applies in place, no page restart ──
@@ -367,8 +396,9 @@ try {
   check('workflow: song loads without reloading the page', inPlace.survived, `bpm now ${inPlace.bpm}`)
 
   // ── reach: controls have accessible names ──
+  await openMode(page, 'DRUMS')
   const named = await page.evaluate(() => ({
-    cell: document.querySelector('.wa-cell')?.getAttribute('aria-label'),
+    cell: document.querySelector('.wa-page-drums .wa-cell')?.getAttribute('aria-label'),
     key: document.querySelector('.wa-key')?.getAttribute('aria-label'),
   }))
   check('reach: drum cells and keys are named', !!named.cell && !!named.key, `${named.cell} / ${named.key}`)
@@ -393,7 +423,7 @@ try {
   check('mixer: mute state survives reload', await page.locator('.wa-mute').first().getAttribute('aria-pressed') === 'true')
 
   // ── project transitions: blank is explicit, in-place and undoable ──
-  await page.locator('.wa-studio-menu > summary').click()
+  await page.locator('.wa-menu > summary', { hasText: 'File' }).click()
   await page.locator('.wa-studio-menu-body button', { hasText: 'Project & export' }).click()
   await page.locator('.wa-export-dialog button', { hasText: 'New song' }).click()
   await page.waitForTimeout(350)
@@ -434,8 +464,12 @@ try {
   check('dj: hot cue can be set', await page.locator('.wa-dj-deck-a .wa-dj-hotcue').first().evaluate((node) => node.classList.contains('set')))
   check('dj: local file is added to browser library', await page.locator('.wa-dj-library-row', { hasText: 'local-test.wav' }).count() === 1)
   await page.locator('.wa-dj-deck-a .wa-dj-start').click()
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(120)
+  const vinylTransformA = await page.locator('.wa-dj-deck-a .wa-dj-vinyl').evaluate((node) => getComputedStyle(node).transform)
+  await page.waitForTimeout(180)
+  const vinylTransformB = await page.locator('.wa-dj-deck-a .wa-dj-vinyl').evaluate((node) => getComputedStyle(node).transform)
   check('dj: start animates the direct-drive deck', await page.locator('.wa-dj-deck-a').evaluate((node) => node.classList.contains('playing')))
+  check('dj: vinyl visibly rotates while playing', vinylTransformA !== vinylTransformB, `${vinylTransformA} → ${vinylTransformB}`)
   check('dj: level meter responds to deck audio', await page.locator('.wa-dj-meter .lit').count() > 0)
   check('dj: tonearm is a connected stylus assembly', await page.locator('.wa-dj-deck-a .wa-dj-arm-assembly .wa-dj-headshell').count() === 1)
   await page.locator('.wa-dj-deck-a .wa-dj-loop-length').selectOption('0.25')

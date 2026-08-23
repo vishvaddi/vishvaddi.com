@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-08-24 — Studio standalone-DAW density pass
+
+- Rebuilt Studio around a single 46 px application/transport bar, a 55 px vertical mode rail and conventional File, Edit, View and Help menus. Browser, Inspector and Device dock panes now collapse independently with persisted state.
+- Repacked Beat into performance controls, 4×4 pads, a selected-pad inspector and a current-bank event dock; added an actionable empty chopper. Bounded Synth's macro rack below the piano roll, made its keyboard opt-in, and converted Mix to full-height channels with explicit Devices/Scope pages and a contained horizontal rack.
+- Corrected short-landscape grid placement, LCD/transport overlap, Mixer control clipping and Song timeline clips being covered by widened track labels. Extended responsive coverage for shell dimensions, menus, pane persistence, keyboard disclosure and sample empty state.
+- Passed Astro check/build, the full Studio functional suite, responsive coverage at desktop, laptop, tablet, Android portrait and Android landscape, and density coverage for all six destinations with clean consoles.
+
 ## 2026-08-23 — Last Cast production refresh
 
 - Ran the standalone Godot project's Tier 1 headless smoke suite successfully and exported its current release build to `/games/last-cast/`.

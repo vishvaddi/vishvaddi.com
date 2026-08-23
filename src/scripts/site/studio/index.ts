@@ -76,7 +76,7 @@ export async function initStudio(): Promise<void> {
 
   const win = el("div", "wa-win");
   const titleBar = el("div", "wa-title");
-  const homeLink = el("a", "wa-title-text", "VISHVADDI / STUDIO") as HTMLAnchorElement;
+  const homeLink = el("a", "wa-title-text", "V / STUDIO") as HTMLAnchorElement;
   homeLink.href = "/";
   homeLink.setAttribute("aria-label", "Exit Studio and return home");
   help(homeLink, "Return to vishvaddi.com.");
@@ -144,6 +144,7 @@ export async function initStudio(): Promise<void> {
     setTimeout(() => saveState.classList.remove("flash"), 450);
   });
   lcd.append(lcdBpm, lcdState, lcdMode, saveState);
+  titleBar.append(lcd);
 
   // ── Transport ──
   const transportBar = el("div", "wa-transport");
@@ -299,11 +300,13 @@ export async function initStudio(): Promise<void> {
   const dj = buildDj({ renderStudioMix: (mode) => renderBuffer(mode) });
 
   const layout = buildLayout({
+    shell: win,
     beat, mpcPanel, padSeqPanel, padGrid, pianoRoll, synthKeys,
     keysHeader: synth.keysHeader, synthPanel, synthInspector: synth.synthInspector, xyPanel: synth.xyPanel, scope: synth.scope, chordPanel: synth.chordPanel,
     sessionGrid, launchStatus, song, djPanel: dj.root, mixer: mixer.root, devicePanel,
     chop, inspector, laneInspector, loadSelectedSample, loadBreak, addCurrentToSong, openProjectMenu, openTutorial: () => tutorialBtn.click(),
     cycleScale: () => densityBtn.click(), toggleFullscreen: () => fsBtn.click(), togglePower: () => powerBtn.click(),
+    undo: () => undoBtn.click(), redo: () => redoBtn.click(),
     onSynthVisible: () => synth.waveRedraws().forEach((fn) => fn()),
     onModeChange: (label) => { lcdMode.textContent = label; },
     overlayContext: () => `for ${selectedPadLabel.textContent || "the selected pad"} · scene ${SCENE_LABELS[clip.sel]}`,
@@ -318,9 +321,11 @@ export async function initStudio(): Promise<void> {
   };
   // Mode keys + transport stick together while the page scrolls (Cubase-style
   // fixed toolbars) — the un-squash (E) lets every panel take natural height.
+  const appBar = el("header", "wa-appbar");
+  appBar.append(titleBar, transportBar);
   const stickyChrome = el("div", "wa-sticky-chrome");
-  stickyChrome.append(layout.modeBar, transportBar);
-  win.append(titleBar, lcd, stickyChrome, layout.workarea);
+  stickyChrome.append(layout.modeBar);
+  win.append(appBar, stickyChrome, layout.workarea);
   root.append(win);
   // Fullscreen is the one fixed-height case: the chassis becomes the display
   // and scrolls internally.

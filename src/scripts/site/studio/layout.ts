@@ -10,6 +10,7 @@ export type ModeId = "drums" | "pads" | "synth" | "song" | "dj" | "mix";
 export type WorkspaceId = "arrange" | "edit" | "mix" | "play";
 
 export interface LayoutPanels {
+  shell: HTMLElement;
   beat: HTMLElement;
   mpcPanel: HTMLElement;
   padSeqPanel: HTMLElement;
@@ -39,6 +40,8 @@ export interface LayoutPanels {
   cycleScale: () => void;
   toggleFullscreen: () => void;
   togglePower: () => void;
+  undo: () => void;
+  redo: () => void;
   onSynthVisible: () => void;       // canvases need a redraw once measurable
   onModeChange: (label: string) => void;
   /** "what am I editing for" line shown in overlay headers (chop/scratch) —
@@ -82,16 +85,21 @@ export function buildLayout(p: LayoutPanels): Layout {
   const addBeatBtn = btn("Add to song", "wa-btn-sm wa-add-song");
   const editPatternBtn = btn("Edit pattern", "wa-btn-sm wa-edit-pattern");
   const beatControlsBtn = btn("Controls", "wa-btn-sm wa-beat-controls-toggle");
-  const playHost = el("div", "wa-beat-view wa-beat-play"); playHost.append(p.mpcPanel);
+  const playHost = el("div", "wa-beat-view wa-beat-play");
+  p.padSeqPanel.classList.add("wa-device-dock");
+  playHost.append(p.mpcPanel, p.padSeqPanel);
   const sampleHost = el("div", "wa-beat-view wa-beat-sample");
   const sampleTabs = el("div", "wa-sample-tabs");
   const oneShotBtn = btn("One-shot", "wa-subtab active"), chopBtn = btn("Chop", "wa-subtab");
   const oneShot = el("section", "wa-sample-card"); oneShot.append(p.inspector);
   const breakCard = el("section", "wa-sample-card wa-break-card"); breakCard.append(el("div", "wa-fx-title", "CHOP A BREAK"), p.chop);
   type SampleView = "one-shot" | "chop";
+  let sampleView: SampleView = "one-shot";
   const showSampleView = (view: SampleView) => {
+    sampleView = view;
     oneShotBtn.classList.toggle("active", view === "one-shot"); chopBtn.classList.toggle("active", view === "chop");
     oneShot.hidden = view !== "one-shot"; breakCard.hidden = view !== "chop";
+    if (view === "one-shot") oneShot.append(p.inspector);
     sampleHost.dataset.sampleView = view;
     localStorage.setItem("vv_studio_sample_view", view);
   };
@@ -103,6 +111,8 @@ export function buildLayout(p: LayoutPanels): Layout {
   const showBeatView = (view: BeatView) => {
     playBtn.classList.toggle("active", view === "play"); sampleBtn.classList.toggle("active", view === "sample");
     playHost.hidden = view !== "play"; sampleHost.hidden = view !== "sample";
+    if (view === "play") p.mpcPanel.append(p.inspector);
+    else if (sampleView === "one-shot") oneShot.append(p.inspector);
     localStorage.setItem("vv_studio_beat_view", view);
   };
   playBtn.addEventListener("click", () => showBeatView("play"));
@@ -134,6 +144,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   // (queried rather than passed — padsui owns the column, layout only folds it)
   const mpcSide = p.mpcPanel.querySelector(".wa-mpc-side");
   if (mpcSide) {
+    mpcSide.classList.add("wa-browser-pane");
     mpcSide.classList.add("condensed");
     const closeControlsBtn = btn("Close controls", "wa-btn-sm wa-properties-close wa-beat-controls-close");
     closeControlsBtn.addEventListener("click", () => beatPage.classList.remove("show-controls"));
@@ -170,7 +181,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   synthViewHost.append(p.pianoRoll, soundHost);
   const synthMain = el("div", "wa-synth-main");
   const synthSide = p.synthInspector;
-  synthSide.classList.add("wa-synth-side");
+  synthSide.classList.add("wa-synth-side", "wa-inspector-pane");
   const closeSynthPropsBtn = btn("Close properties", "wa-btn-sm wa-properties-close");
   closeSynthPropsBtn.addEventListener("click", () => soundPage.classList.remove("show-inspector"));
   synthSide.prepend(closeSynthPropsBtn);
@@ -194,6 +205,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   scopeWrap.append(scopeHead, p.scope, orb.canvas);
   showOrb(localStorage.getItem("vv_studio_screen") === "orb");
   const presetPane = el("div", "wa-synth-property-pane wa-synth-preset-pane");
+  presetPane.classList.add("wa-browser-pane");
   Array.from(synthSide.children)
     .filter((child) => child !== closeSynthPropsBtn && !child.classList.contains("wa-inspector-title"))
     .forEach((child) => presetPane.append(child));
@@ -213,10 +225,12 @@ export function buildLayout(p: LayoutPanels): Layout {
   showSynthProperties(savedSynthProperties === "chords" || savedSynthProperties === "perform" ? savedSynthProperties : "preset");
   synthMain.append(synthViewHost, synthSide);
   p.keysHeader.classList.add("wa-keys-header");
+  p.keysHeader.classList.add("wa-device-dock");
+  p.synthKeys.classList.add("wa-device-dock");
   soundPage.append(synthBar, synthMain, p.keysHeader, p.synthKeys);
   let synthView: "roll" | "patch" = localStorage.getItem("vv_studio_synthview") === "patch" ? "patch" : "roll";
   const keyboardPreference = () => localStorage.getItem(`vv_studio_keyboard_${synthView}`);
-  let keyboardVisible = keyboardPreference() ? keyboardPreference() !== "hidden" : synthView === "roll";
+  let keyboardVisible = keyboardPreference() ? keyboardPreference() !== "hidden" : false;
   const paintKeyboard = () => {
     soundPage.classList.toggle("keyboard-hidden", !keyboardVisible);
     keyboardBtn.classList.toggle("active", keyboardVisible);
@@ -233,7 +247,7 @@ export function buildLayout(p: LayoutPanels): Layout {
     p.pianoRoll.style.display = synthView === "roll" ? "" : "none";
     soundHost.style.display = synthView === "patch" ? "" : "none";
     soundPage.dataset.view = synthView;
-    keyboardVisible = keyboardPreference() ? keyboardPreference() !== "hidden" : synthView === "roll";
+    keyboardVisible = keyboardPreference() ? keyboardPreference() !== "hidden" : false;
     paintKeyboard();
     if (!soundPage.hidden) p.onSynthVisible();
     localStorage.setItem("vv_studio_synthview", synthView);
@@ -246,11 +260,14 @@ export function buildLayout(p: LayoutPanels): Layout {
   const songPage = el("div", "wa-page wa-page-song");
   const trackButtons: HTMLButtonElement[] = [];
   const arrangeMain = el("div", "wa-arrange-main"); arrangeMain.append(p.song); songPage.append(arrangeMain);
+  p.song.querySelector(".wa-song-library")?.classList.add("wa-browser-pane");
+  p.song.querySelector(".wa-automation-editor")?.classList.add("wa-device-dock");
 
   // ── DJ ── two local-file decks. Provider embeds deliberately stay outside
   // this audio graph: their public APIs do not license extraction or mixing.
   const djPage = el("div", "wa-page wa-page-dj");
   djPage.append(p.djPanel);
+  p.djPanel.querySelector(".wa-dj-library")?.classList.add("wa-browser-pane");
 
   // ── MIX ── one console faceplate: channel strips fill the upper aperture
   // beside a master scope well, devices span the bottom as a rail. Export is
@@ -259,8 +276,8 @@ export function buildLayout(p: LayoutPanels): Layout {
   const mixTabs = el("div", "wa-mix-tabs");
   const channelsBtn = btn("Channels", "wa-subtab active"), devicesBtn = btn("Devices", "wa-subtab"), scopeBtn = btn("Scope", "wa-subtab");
   p.mixer.classList.add("wa-mix-channels");
-  p.devicePanel.classList.add("wa-mix-flex");
-  const scopeWell = el("div", "wa-panel wa-mix-scope");
+  p.devicePanel.classList.add("wa-mix-flex", "wa-device-dock");
+  const scopeWell = el("div", "wa-panel wa-mix-scope wa-inspector-pane");
   const mixOrb = buildOrb();
   help(scopeWell, "Master output — the finished mix, post-limiter.");
   scopeWell.append(el("div", "wa-fx-title", "LYSERGIC SPHERE"), mixOrb.canvas);
@@ -334,18 +351,57 @@ export function buildLayout(p: LayoutPanels): Layout {
     help(button, MODES.find((m) => m.id === id)!.helpText);
     modeButtons.set(id, button); primaryNav.append(button);
   });
-  const studioMenu = el("details", "wa-studio-menu") as HTMLDetailsElement;
-  const menuSummary = el("summary", "wa-modekey wa-menu-key");
-  menuSummary.append(el("span", "wa-mode-icon", "•••"), el("span", "wa-mode-label", "MENU"));
-  const menuBody = el("div", "wa-studio-menu-body");
-  const projectMenuBtn = btn("Project & export", "wa-menu-action"), helpMenuBtn = btn("Help & shortcuts", "wa-menu-action");
-  const scaleMenuBtn = btn("Interface scale", "wa-menu-action"), fullscreenMenuBtn = btn("Full screen", "wa-menu-action"), powerMenuBtn = btn("Audio power", "wa-menu-action");
-  projectMenuBtn.addEventListener("click", () => { studioMenu.open = false; p.openProjectMenu(); });
-  helpMenuBtn.addEventListener("click", () => { studioMenu.open = false; p.openTutorial(); });
-  scaleMenuBtn.addEventListener("click", () => { studioMenu.open = false; p.cycleScale(); });
-  fullscreenMenuBtn.addEventListener("click", () => { studioMenu.open = false; p.toggleFullscreen(); });
-  powerMenuBtn.addEventListener("click", () => { studioMenu.open = false; p.togglePower(); });
-  menuBody.append(projectMenuBtn, helpMenuBtn, el("div", "wa-menu-section", "DISPLAY & AUDIO"), scaleMenuBtn, fullscreenMenuBtn, powerMenuBtn); studioMenu.append(menuSummary, menuBody);
+  p.inspector.classList.add("wa-inspector-pane");
+  p.laneInspector.classList.add("wa-inspector-pane");
+  const studioMenu = el("nav", "wa-studio-menu");
+  studioMenu.setAttribute("aria-label", "Studio menus");
+  const closeMenus = () => studioMenu.querySelectorAll<HTMLDetailsElement>("details[open]").forEach((menu) => { menu.open = false; });
+  const menuAction = (label: string, action: () => void, shortcut = "") => {
+    const button = btn(label, "wa-menu-action");
+    if (shortcut) button.append(el("span", "wa-menu-shortcut", shortcut));
+    button.addEventListener("click", () => { closeMenus(); action(); });
+    return button;
+  };
+  const menuGroup = (label: string, actions: HTMLElement[]) => {
+    const menu = el("details", "wa-menu") as HTMLDetailsElement;
+    const summary = el("summary", "wa-menu-label", label);
+    const body = el("div", "wa-studio-menu-body"); body.append(...actions); menu.append(summary, body);
+    menu.addEventListener("toggle", () => {
+      if (!menu.open) return;
+      studioMenu.querySelectorAll<HTMLDetailsElement>("details[open]").forEach((other) => { if (other !== menu) other.open = false; });
+    });
+    return menu;
+  };
+  const clickSongTool = (label: string) => {
+    const button = Array.from(songPage.querySelectorAll<HTMLButtonElement>(".wa-composer-head button")).find((candidate) => candidate.textContent?.trim() === label);
+    button?.click();
+  };
+  const paneState = (key: "browser" | "inspector" | "device", button: HTMLButtonElement) => {
+    const hidden = p.shell.classList.toggle(`wa-${key}-hidden`);
+    localStorage.setItem(`vv_studio_${key}_pane`, hidden ? "hidden" : "visible");
+    button.classList.toggle("active", !hidden); button.setAttribute("aria-pressed", String(!hidden));
+  };
+  const browserToggle = btn("Browser", "wa-menu-action active"), inspectorToggle = btn("Inspector", "wa-menu-action active"), deviceToggle = btn("Device dock", "wa-menu-action active");
+  ([browserToggle, inspectorToggle, deviceToggle] as HTMLButtonElement[]).forEach((button) => button.setAttribute("aria-pressed", "true"));
+  browserToggle.addEventListener("click", () => { closeMenus(); paneState("browser", browserToggle); });
+  inspectorToggle.addEventListener("click", () => { closeMenus(); paneState("inspector", inspectorToggle); });
+  deviceToggle.addEventListener("click", () => { closeMenus(); paneState("device", deviceToggle); });
+  (["browser", "inspector", "device"] as const).forEach((key) => {
+    const hidden = localStorage.getItem(`vv_studio_${key}_pane`) === "hidden";
+    p.shell.classList.toggle(`wa-${key}-hidden`, hidden);
+    const button = key === "browser" ? browserToggle : key === "inspector" ? inspectorToggle : deviceToggle;
+    button.classList.toggle("active", !hidden); button.setAttribute("aria-pressed", String(!hidden));
+  });
+  studioMenu.append(
+    menuGroup("File", [menuAction("Project & export", p.openProjectMenu), menuAction("Audio power", p.togglePower)]),
+    menuGroup("Edit", [
+      menuAction("Undo", p.undo, "Ctrl Z"), menuAction("Redo", p.redo, "Ctrl Y"),
+      menuAction("Duplicate", () => clickSongTool("Duplicate"), "Ctrl D"), menuAction("Copy", () => clickSongTool("Copy"), "Ctrl C"),
+      menuAction("Paste", () => clickSongTool("Paste"), "Ctrl V"), menuAction("Delete", () => clickSongTool("Delete"), "Del"),
+    ]),
+    menuGroup("View", [browserToggle, inspectorToggle, deviceToggle, menuAction("Interface scale", p.cycleScale), menuAction("Full screen", p.toggleFullscreen)]),
+    menuGroup("Help", [menuAction("Help & shortcuts", p.openTutorial)]),
+  );
   setMode(activeMode);
 
   // tutorial nav proxies — composite actions per tour stop:

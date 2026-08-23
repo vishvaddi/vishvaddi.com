@@ -68,11 +68,33 @@ for (const [name, width, height] of viewports) {
     check(`${name}: workstation fills viewport`, Math.abs(geometry.winHeight - geometry.viewportHeight) <= 2, `${geometry.winHeight}/${geometry.viewportHeight}`)
     check(`${name}: BEAT is the opening screen`, await page.locator('.wa-page-beat').isVisible())
     check(`${name}: six primary destinations`, await page.locator('.wa-primary-nav .wa-modekey').count() === 6 && await page.locator('.wa-context-nav').count() === 0)
+    check(`${name}: conventional application menus are present`, await page.locator('.wa-studio-menu > .wa-menu').count() === 4)
+    if (name === 'desktop' || name === 'laptop') {
+      const shellDensity = await page.evaluate(() => ({
+        appbar: document.querySelector('.wa-appbar')?.getBoundingClientRect().height ?? 999,
+        rail: document.querySelector('.wa-modebar')?.getBoundingClientRect().width ?? 999,
+      }))
+      check(`${name}: application bar stays DAW-dense`, shellDensity.appbar <= 48, `${Math.round(shellDensity.appbar)}px`)
+      check(`${name}: mode rail stays DAW-dense`, shellDensity.rail <= 56, `${Math.round(shellDensity.rail)}px`)
+      for (const [label, className, key] of [
+        ['Browser', 'wa-browser-hidden', 'vv_studio_browser_pane'],
+        ['Inspector', 'wa-inspector-hidden', 'vv_studio_inspector_pane'],
+        ['Device dock', 'wa-device-hidden', 'vv_studio_device_pane'],
+      ]) {
+        await page.locator('.wa-menu > summary', { hasText: 'View' }).click()
+        await page.locator('.wa-menu[open] button', { hasText: label }).click()
+        check(`${name}: ${label.toLowerCase()} pane can collapse`, await page.locator('.wa-win').evaluate((node, cls) => node.classList.contains(cls), className))
+        check(`${name}: ${label.toLowerCase()} pane preference persists`, await page.evaluate((storageKey) => localStorage.getItem(storageKey) === 'hidden', key))
+        await page.locator('.wa-menu > summary', { hasText: 'View' }).click()
+        await page.locator('.wa-menu[open] button', { hasText: label }).click()
+      }
+    }
     await page.screenshot({ path: `C:/tmp/studio-beat-${name}.png`, fullPage: false })
     await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Sample' }).click()
     check(`${name}: one-shot editor opens without stacking the chopper`, await page.locator('.wa-load-selected').isVisible() && !await page.locator('.wa-break-card').isVisible())
     await page.locator('.wa-sample-tabs .wa-subtab', { hasText: 'Chop' }).click()
     check(`${name}: break chopper replaces the one-shot editor`, await page.locator('.wa-break-card button', { hasText: 'Load break' }).isVisible() && !await page.locator('.wa-load-selected').isVisible())
+    check(`${name}: empty chopper explains its next action`, await page.locator('.wa-chop-empty').isVisible())
     await page.screenshot({ path: `C:/tmp/studio-sample-${name}.png`, fullPage: false })
     await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' }).click()
 
@@ -199,12 +221,18 @@ for (const [name, width, height] of viewports) {
           const mixerRect = mixer?.getBoundingClientRect()
           const recordStatus = document.querySelector('.wa-dj-record-status')?.getBoundingClientRect()
           const performanceButtons = [...document.querySelectorAll('.wa-dj-deck .wa-dj-performance .wa-btn')].map((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height, clipped: node.scrollWidth > node.clientWidth + 1 }))
+          const turntable = document.querySelector('.wa-dj-deck-a .wa-dj-turntable')?.getBoundingClientRect()
+          const start = document.querySelector('.wa-dj-deck-a .wa-dj-start')?.getBoundingClientRect()
+          const speed = document.querySelector('.wa-dj-deck-a .wa-dj-speed')?.getBoundingClientRect()
+          const intersects = (a, b) => !!a && !!b && a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1
+          const contained = (outer, inner) => !!outer && !!inner && inner.left >= outer.left - 1 && inner.right <= outer.right + 1 && inner.top >= outer.top - 1 && inner.bottom <= outer.bottom + 1
           const quartzClear = !platter || !quartz || quartz.bottom <= platter.top || quartz.right <= platter.left || quartz.left >= platter.right
-          return { widths: decks.map((deck) => Math.round(deck.width)), tops: decks.map((deck) => Math.round(deck.top)), lefts: decks.map((deck) => Math.round(deck.left)), deckHostScroll: hostEl ? hostEl.scrollWidth - hostEl.clientWidth : 0, crossfader: crossfader?.width ?? 0, platter: platter?.width ?? 0, quartzClear, quartzGap: platter && quartz ? platter.top - quartz.bottom : 0, pitchWidth: pitch?.width ?? 0, pitchHeight: pitch?.height ?? 0, hostBottom: host?.bottom ?? 0, libraryTop: library?.top ?? 0, performanceButtons, mixerScroll: mixer ? mixer.scrollHeight - mixer.clientHeight : 999, mixerBottom: mixerRect?.bottom ?? 0, recordBottom: recordStatus?.bottom ?? 999 }
+          return { widths: decks.map((deck) => Math.round(deck.width)), tops: decks.map((deck) => Math.round(deck.top)), lefts: decks.map((deck) => Math.round(deck.left)), deckHostScroll: hostEl ? hostEl.scrollWidth - hostEl.clientWidth : 0, crossfader: crossfader?.width ?? 0, platter: platter?.width ?? 0, platterControlsClear: contained(turntable, platter) && contained(turntable, start) && contained(turntable, speed) && !intersects(platter, start) && !intersects(platter, speed), quartzClear, quartzGap: platter && quartz ? platter.top - quartz.bottom : 0, pitchWidth: pitch?.width ?? 0, pitchHeight: pitch?.height ?? 0, hostBottom: host?.bottom ?? 0, libraryTop: library?.top ?? 0, performanceButtons, mixerScroll: mixer ? mixer.scrollHeight - mixer.clientHeight : 999, mixerBottom: mixerRect?.bottom ?? 0, recordBottom: recordStatus?.bottom ?? 999 }
         })
         check(`${name}: DJ exposes two usable decks`, djLayout.widths.length === 2 && djLayout.widths.every((width) => width >= (name === 'desktop' || name === 'laptop' ? 260 : 320)), djLayout.widths.join('/'))
         check(`${name}: DJ crossfader is usable`, djLayout.crossfader >= 90, `${Math.round(djLayout.crossfader)}px`)
         check(`${name}: DJ platter is turntable-sized`, djLayout.platter >= 220, `${Math.round(djLayout.platter)}px`)
+        check(`${name}: DJ platter clears 33/45 and start controls`, djLayout.platterControlsClear)
         check(`${name}: quartz badge clears the platter`, djLayout.quartzClear, `${Math.round(djLayout.quartzGap)}px gap`)
         check(`${name}: DJ pitch control is vertical`, djLayout.pitchHeight > djLayout.pitchWidth * 2, `${Math.round(djLayout.pitchWidth)}×${Math.round(djLayout.pitchHeight)}px`)
         check(`${name}: DJ performance buttons do not squash`, djLayout.performanceButtons.every((button) => button.width >= 28 && button.height >= 30 && !button.clipped), `${Math.round(Math.min(...djLayout.performanceButtons.map((button) => button.width)))}×${Math.round(Math.min(...djLayout.performanceButtons.map((button) => button.height)))}px min`)
@@ -222,7 +250,14 @@ for (const [name, width, height] of viewports) {
     check(`${name}: synth has Notes and Sound only`, await page.locator('.wa-page-synth .wa-subtab').evaluateAll((nodes) => nodes.filter((node) => ['Notes', 'Sound'].includes(node.textContent.trim())).length) === 2 && await page.locator('.wa-page-synth .wa-subtab', { hasText: 'Tools' }).count() === 0)
     await page.locator('.wa-page-synth .wa-subtab', { hasText: 'Sound' }).click()
     check(`${name}: essential synth controls fit the main surface`, await page.locator('.wa-synth-quick').isVisible() && await page.locator('.wa-synth-quick .wa-slider-row').count() === 7)
-    check(`${name}: Sound reclaims the keyboard area by default`, !await page.locator('.wa-synth-keys').isVisible())
+    const soundDensity = await page.locator('.wa-synth-quick .wa-slider-row').evaluateAll((nodes) => ({
+      tallest: Math.max(...nodes.map((node) => node.getBoundingClientRect().height)),
+      average: nodes.reduce((sum, node) => sum + node.getBoundingClientRect().height, 0) / nodes.length,
+    }))
+    check(`${name}: synth controls use instrument density`, soundDensity.tallest <= 150, `${Math.round(soundDensity.average)}px average / ${Math.round(soundDensity.tallest)}px max`)
+    check(`${name}: keyboard stays out of the workspace until requested`, !await page.locator('.wa-page-synth > .wa-keys').isVisible())
+    await page.locator('.wa-keyboard-toggle').click()
+    check(`${name}: keyboard remains available on demand`, await page.locator('.wa-page-synth > .wa-keys').isVisible())
     await page.screenshot({ path: `C:/tmp/studio-sound-${name}.png`, fullPage: false })
 
     await openMode(page, 'CLIPS')
@@ -284,7 +319,7 @@ for (const [name, width, height] of viewports) {
         }).map((node) => node.className || node.tagName)
       })
       check(`${name}: header controls clear the status display`, headerCollisions.length === 0, headerCollisions.join(', ') || 'clear')
-      const transport = await page.locator('.wa-transport').evaluate((node) => ({ scroll: node.scrollWidth, client: node.clientWidth }))
+      const transport = await page.locator('.wa-appbar > .wa-transport').evaluate((node) => ({ scroll: node.scrollWidth, client: node.clientWidth }))
       check(`${name}: primary transport does not scroll`, transport.scroll <= transport.client + 1, `${transport.scroll}/${transport.client}`)
       await page.locator('.wa-transport-more').click()
       check(`${name}: secondary timing is disclosed`, await page.locator('.wa-transport-timing').isVisible())
@@ -297,8 +332,8 @@ for (const [name, width, height] of viewports) {
       }))
       check(`${name}: mode keys stay inside the viewport`, keyBounds.length === 6 && keyBounds.every((r) => r.top >= 0 && r.left >= 0 && r.right <= width + 1 && r.bottom <= height + 1), `${keyBounds.length} keys`)
       await openMode(page, 'CLIPS')
-      await page.locator('.wa-studio-menu > summary').click()
-      await page.locator('.wa-studio-menu-body button', { hasText: 'Help & shortcuts' }).click()
+      await page.locator('.wa-menu > summary', { hasText: 'Help' }).click()
+      await page.locator('.wa-menu[open] .wa-studio-menu-body button', { hasText: 'Help & shortcuts' }).click()
       const tutorialTop = await page.evaluate(() => {
         const card = document.querySelector('.wa-tutorial-card'); if (!card) return false
         const r = card.getBoundingClientRect(); const top = document.elementFromPoint(r.left + 8, r.top + 8)
