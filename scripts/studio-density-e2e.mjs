@@ -81,8 +81,9 @@ try {
           return false
         }
         const boxes = [...page.querySelectorAll('*')].filter((e) => !inGlass(e))
-          .map((e) => e.getBoundingClientRect()).filter((r) => r.height > 2)
-        const deepest = boxes.length ? Math.max(...boxes.map((r) => r.bottom)) : 0
+          .map((e) => ({ element: e, rect: e.getBoundingClientRect() })).filter(({ rect }) => rect.height > 2)
+        const deepestBox = boxes.reduce((deepest, box) => !deepest || box.rect.bottom > deepest.rect.bottom ? box : deepest, null)
+        const deepest = deepestBox?.rect.bottom ?? 0
         const pageOverflowY = getComputedStyle(page).overflowY
         const pageIsGlass = pageOverflowY === 'auto' || pageOverflowY === 'scroll'
         // scrollers that are legitimately "glass" (overflow-y auto/scroll)
@@ -90,6 +91,7 @@ try {
         return {
           ink: +ink.toFixed(1),
           overflow: Math.round(deepest - VH),
+          deepest: deepestBox ? `${deepestBox.element.tagName.toLowerCase()}.${[...deepestBox.element.classList].join('.')}` : '',
           trailing: pageIsGlass ? 0 : Math.round(VH - deepest),
           metalScroll: Math.round(metalScroll),
         }
@@ -97,7 +99,7 @@ try {
       const tag = `${vp.name}/${mode}`
       const floor = INK_FLOOR[mode] ?? vp.minInk
       check(`${tag}: ink coverage`, m.ink >= floor, `${m.ink}% (min ${floor}%)`)
-      check(`${tag}: no page overflow`, m.overflow <= 0, m.overflow > 0 ? `overflows ${m.overflow}px` : 'fits')
+      check(`${tag}: no page overflow`, m.overflow <= 0, m.overflow > 0 ? `${m.deepest} overflows ${m.overflow}px` : 'fits')
       check(`${tag}: no trailing void`, m.trailing <= MAX_TRAILING, `${Math.max(0, m.trailing)}px bare case`)
       check(`${tag}: metal does not scroll`, m.metalScroll <= 0, `${m.metalScroll}px page scroll`)
     }

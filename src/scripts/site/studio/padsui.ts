@@ -508,7 +508,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   // in the workspace section below.
   mpcPanel.append(mpcDeck);
   const padSeqPanel = el("div", "wa-panel");
-  padSeqPanel.append(el("div", "wa-lbl", "Pad sequence — current bank"), eventLane, eventEditor);
+  padSeqPanel.append(el("div", "wa-lbl", "Selected pad sequence"), eventLane, eventEditor);
   paintMpcPads();
 
 

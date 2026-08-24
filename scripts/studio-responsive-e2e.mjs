@@ -89,13 +89,13 @@ for (const [name, width, height] of viewports) {
         await page.locator('.wa-menu[open] button', { hasText: label }).click()
       }
     }
-    await page.screenshot({ path: `C:/tmp/studio-beat-${name}.png`, fullPage: false })
+    await page.screenshot({ path: `studio-beat-${name}.png`, fullPage: false })
     await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Sample' }).click()
     check(`${name}: one-shot editor opens without stacking the chopper`, await page.locator('.wa-load-selected').isVisible() && !await page.locator('.wa-break-card').isVisible())
     await page.locator('.wa-sample-tabs .wa-subtab', { hasText: 'Chop' }).click()
     check(`${name}: break chopper replaces the one-shot editor`, await page.locator('.wa-break-card button', { hasText: 'Load break' }).isVisible() && !await page.locator('.wa-load-selected').isVisible())
     check(`${name}: empty chopper explains its next action`, await page.locator('.wa-chop-empty').isVisible())
-    await page.screenshot({ path: `C:/tmp/studio-sample-${name}.png`, fullPage: false })
+    await page.screenshot({ path: `studio-sample-${name}.png`, fullPage: false })
     await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' }).click()
 
     for (const mode of ['DRUMS', 'PADS', 'SYNTH', 'CLIPS', 'DJ', 'MIX']) {
@@ -105,7 +105,7 @@ for (const [name, width, height] of viewports) {
         const pageScroll = await page.locator(modeRoute[mode][1]).evaluate((node) => ({ overflow: getComputedStyle(node).overflowY, range: node.scrollHeight - node.clientHeight }))
         check(`${name}: ${mode} stays in the fixed frame`, pageScroll.range <= 1 && pageScroll.overflow !== 'scroll', `${pageScroll.overflow} · ${Math.round(pageScroll.range)}px`)
       }
-      if (mode === 'DRUMS') await page.screenshot({ path: `C:/tmp/studio-drums-${name}.png`, fullPage: false })
+      if (mode === 'DRUMS') await page.screenshot({ path: `studio-drums-${name}.png`, fullPage: false })
       if ((name === 'desktop' || name === 'laptop') && mode === 'PADS') {
         const fill = await page.evaluate(() => {
           const active = document.querySelector('.wa-page:not([hidden])')?.getBoundingClientRect()
@@ -126,15 +126,19 @@ for (const [name, width, height] of viewports) {
         })
         check(`${name}: MIX channels stay on one row`, mixLayout.channelRows === 1, `${mixLayout.channelRows} rows`)
         check(`${name}: MIX frame does not scroll`, mixLayout.scrollRange <= 1 && mixLayout.overflow === 'hidden', `${mixLayout.overflow} · ${Math.round(mixLayout.scrollRange)}px`)
-        await page.locator('.wa-page-mix .wa-devdetail').evaluate((node) => { node.scrollTop = node.scrollHeight })
         const mixEnd = await page.evaluate(() => {
           const page = document.querySelector('.wa-page-mix .wa-mix-flex')?.getBoundingClientRect()
           const detail = document.querySelector('.wa-page-mix .wa-devdetail')?.getBoundingClientRect()
-          return !!page && !!detail && detail.bottom <= page.bottom + 2 && detail.top < page.bottom
+          const controls = [...document.querySelectorAll('.wa-page-mix .wa-devdetail .wa-device:not([style*="display: none"]) .wa-slider-row')].map((node) => node.getBoundingClientRect())
+          return !!page && !!detail && detail.bottom <= page.bottom + 2 && detail.top < page.bottom && controls.every((control) => control.top >= detail.top - 1 && control.bottom <= detail.bottom + 1)
         })
-        check(`${name}: device drawer contains its final controls`, mixEnd)
+        check(`${name}: complete device controls remain visible`, mixEnd)
+        const orb = await page.locator('.wa-page-mix .wa-orb[data-visualizer="lysergic-sphere"]').evaluate((node) => {
+          const rect = node.getBoundingClientRect(); return { visible: node.checkVisibility(), width: rect.width, height: rect.height }
+        })
+        check(`${name}: Lysergic sphere is permanently visible`, orb.visible && orb.width >= 240 && orb.height >= 180, `${Math.round(orb.width)}×${Math.round(orb.height)}px`)
         check(`${name}: MIX uses the single Lysergic sphere`, await page.locator('.wa-page-mix .wa-orb[data-visualizer="lysergic-sphere"]').count() === 1 && await page.locator('.wa-page-mix .wa-spectral, .wa-page-mix .wa-master-scope').count() === 0)
-        if (name === 'desktop') await page.screenshot({ path: 'C:/tmp/studio-mix-desktop.png', fullPage: false })
+        if (name === 'desktop') await page.screenshot({ path: 'studio-mix-desktop.png', fullPage: false })
       }
       if ((name === 'phone' || name === 'landscape') && mode === 'DRUMS') {
         const cell = await page.locator('.wa-grid .wa-cell').first().evaluate((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height }))
@@ -258,7 +262,7 @@ for (const [name, width, height] of viewports) {
     check(`${name}: keyboard stays out of the workspace until requested`, !await page.locator('.wa-page-synth > .wa-keys').isVisible())
     await page.locator('.wa-keyboard-toggle').click()
     check(`${name}: keyboard remains available on demand`, await page.locator('.wa-page-synth > .wa-keys').isVisible())
-    await page.screenshot({ path: `C:/tmp/studio-sound-${name}.png`, fullPage: false })
+    await page.screenshot({ path: `studio-sound-${name}.png`, fullPage: false })
 
     await openMode(page, 'CLIPS')
     // the first-run demo seeds an arrangement, so these assert a DELTA rather
@@ -303,7 +307,7 @@ for (const [name, width, height] of viewports) {
     })
     check(`${name}: Arrange panel does not hide content`, arrangeLayout.panelClip <= 1, `${Math.round(arrangeLayout.panelClip)}px clipped`)
     check(`${name}: all Arrange controls are reachable`, arrangeLayout.reachable, `${Math.round(arrangeLayout.pageScroll)}px internal scroll`)
-    await page.screenshot({ path: `C:/tmp/studio-arrange-${name}.png`, fullPage: false })
+    await page.screenshot({ path: `studio-arrange-${name}.png`, fullPage: false })
 
     if (name === 'phone' || name === 'landscape') {
       const targets = await page.locator('.wa-primary-nav .wa-modekey').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height))
@@ -342,9 +346,9 @@ for (const [name, width, height] of viewports) {
       check(`${name}: tutorial card stays above its target`, tutorialTop)
       await page.locator('.wa-tutorial-card button', { hasText: 'Close' }).click()
     }
-    await page.screenshot({ path: `C:/tmp/studio-${name}.png`, fullPage: false })
+    await page.screenshot({ path: `studio-${name}.png`, fullPage: false })
     await openMode(page, 'DJ')
-    await page.screenshot({ path: `C:/tmp/studio-dj-${name}.png`, fullPage: false })
+    await page.screenshot({ path: `studio-dj-${name}.png`, fullPage: false })
     check(`${name}: console clean`, errors.length === 0, errors.slice(0, 2).join(' | '))
   } catch (error) {
     check(`${name}: run completed`, false, String(error).slice(0, 180))

@@ -269,9 +269,9 @@ export function buildLayout(p: LayoutPanels): Layout {
   djPage.append(p.djPanel);
   p.djPanel.querySelector(".wa-dj-library")?.classList.add("wa-browser-pane");
 
-  // ── MIX ── one console faceplate: channel strips fill the upper aperture
-  // beside a master scope well, devices span the bottom as a rail. Export is
-  // a rare terminal action, so it lives behind a transport key, not here.
+  // ── MIX ── channels remain the primary surface while the selected
+  // device and master visualiser share a permanent lower dock on desktop.
+  // Mobile keeps the same three surfaces as mutually-exclusive pages.
   const mixPage = el("div", "wa-page wa-page-mix");
   const mixTabs = el("div", "wa-mix-tabs");
   const channelsBtn = btn("Channels", "wa-subtab active"), devicesBtn = btn("Devices", "wa-subtab"), scopeBtn = btn("Scope", "wa-subtab");
@@ -281,6 +281,8 @@ export function buildLayout(p: LayoutPanels): Layout {
   const mixOrb = buildOrb();
   help(scopeWell, "Master output — the finished mix, post-limiter.");
   scopeWell.append(el("div", "wa-fx-title", "LYSERGIC SPHERE"), mixOrb.canvas);
+  const mixLower = el("div", "wa-mix-lower");
+  mixLower.append(p.devicePanel, scopeWell);
   const showMixView = (view: "channels" | "devices" | "scope") => {
     mixPage.dataset.mobileView = view;
     channelsBtn.classList.toggle("active", view === "channels"); devicesBtn.classList.toggle("active", view === "devices"); scopeBtn.classList.toggle("active", view === "scope");
@@ -288,7 +290,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   };
   channelsBtn.addEventListener("click", () => showMixView("channels")); devicesBtn.addEventListener("click", () => showMixView("devices")); scopeBtn.addEventListener("click", () => showMixView("scope"));
   mixTabs.append(channelsBtn, devicesBtn, scopeBtn);
-  mixPage.append(mixTabs, p.mixer, scopeWell, p.devicePanel);
+  mixPage.append(mixTabs, p.mixer, mixLower);
   const savedMixView = localStorage.getItem("vv_studio_mix_view");
   showMixView(savedMixView === "devices" || savedMixView === "scope" ? savedMixView : "channels");
   editPatternBtn.addEventListener("click", () => setMode("drums"));

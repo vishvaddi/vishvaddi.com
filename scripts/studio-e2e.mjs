@@ -502,7 +502,7 @@ try {
   check('dj: master effects bus exposes active state', await page.locator('.wa-dj').getAttribute('data-effect') === 'echo')
   await page.locator('.wa-dj-clear-cues').first().click()
   check('dj: cues can be cleared without right click', !await page.locator('.wa-dj-deck-a .wa-dj-hotcue').first().evaluate((node) => node.classList.contains('set')))
-  await page.screenshot({ path: 'C:/tmp/studio-dj-playing.png', fullPage: false })
+  await page.screenshot({ path: 'studio-dj-playing.png', fullPage: false })
   if (!await page.locator('.wa-dj-deck-a').evaluate((node) => node.classList.contains('playing'))) {
     await page.locator('.wa-dj-deck-a .wa-dj-start').click()
     await page.waitForTimeout(100)

@@ -1,5 +1,12 @@
 # Run Log
 
+## 2026-08-24 — Studio fixed-surface rework
+
+- Replaced Mix's desktop tabs with a permanent two-level console: ten fitted channel strips above complete selected-device controls and the always-visible Lysergic sphere. Android retains full-surface Channels, Devices and Scope pages.
+- Made Synth Notes and Sound genuinely exclusive, expanded Sound into a 2×2 instrument panel, reduced display scanlines to 6% and disabled the texture on touch layouts.
+- Reduced Beat's lower sequencer from sixteen clipped rows to the selected pad, repacked selected-pad controls into four columns and removed all remaining desktop/laptop Studio overflow. Short Android landscape now uses a single-row app bar and a contained five-lane arranger.
+- Strengthened responsive and density diagnostics for clipped controls, the visible sphere and the exact deepest overflowing element. Astro check/build, Studio functional, responsive and density suites pass with clean consoles across desktop, laptop, tablet, Android portrait and Android landscape.
+
 ## 2026-08-24 — Studio standalone-DAW density pass
 
 - Rebuilt Studio around a single 46 px application/transport bar, a 55 px vertical mode rail and conventional File, Edit, View and Help menus. Browser, Inspector and Device dock panes now collapse independently with persisted state.

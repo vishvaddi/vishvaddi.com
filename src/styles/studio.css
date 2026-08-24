@@ -4672,8 +4672,22 @@ button.wa-arrange-lane-name { cursor: pointer; }
   .wa-composer-head > * { flex: 0 0 auto; }
 }
 
-/* v22: desktop workstation shell. Mouse layouts use DAW density; coarse
-   pointers retain the larger controls defined by the mobile layers above. */
+/* Canonical Studio workspace. This is the sole final layout contract: fixed
+   chassis, one active surface, one contextual dock, and no desktop page scroll. */
+.wa-lcd::after,
+.wa-xy-wrap::after,
+.wa-bandscan::after,
+.wa-roll2-scroll::after { opacity: .06; }
+.immersive-page .wa-pagehost,
+.immersive-page .wa-page,
+.immersive-page .wa-beat-main,
+.immersive-page .wa-beat-view,
+.immersive-page .wa-drums-workspace,
+.immersive-page .wa-synth-main,
+.immersive-page .wa-synth-viewhost,
+.immersive-page .wa-arrange-main,
+.immersive-page .wa-page-dj,
+.immersive-page .wa-page-mix { min-height: 0; overflow: hidden; }
 .wa-appbar { min-width: 0; }
 .wa-studio-menu { display: flex; align-items: stretch; gap: 1px; }
 .wa-menu { position: relative; }
@@ -4870,7 +4884,7 @@ button.wa-arrange-lane-name { cursor: pointer; }
 
   .immersive-page .wa-beat-play {
     display: grid;
-    grid-template-rows: minmax(0, 1fr) minmax(145px, 22dvh);
+    grid-template-rows: minmax(0, 1fr) 150px;
     gap: 4px;
     overflow: hidden;
   }
@@ -4882,14 +4896,20 @@ button.wa-arrange-lane-name { cursor: pointer; }
     overflow: hidden;
   }
   .immersive-page .wa-beat-play > .wa-panel:first-child > .wa-mpc-deck { min-width: 0; min-height: 0; }
-  .immersive-page .wa-beat-play > .wa-panel:first-child > .wa-inspector { position: static; min-width: 0; max-height: none; overflow-y: auto; }
+  .immersive-page .wa-beat-play > .wa-panel:first-child > .wa-inspector { position: static; min-width: 0; max-height: none; overflow: hidden; }
+  .immersive-page .wa-beat-play .wa-inspector .wa-selected-sample { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  .immersive-page .wa-beat-play .wa-inspector .wa-knob-row { min-width: 0; padding: 3px 1px; }
+  .immersive-page .wa-beat-play .wa-pad-layers { display: none; }
   .immersive-page .wa-page-pads .wa-mpc-deck { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 5px; }
   .immersive-page .wa-page-pads .wa-mpc-side { grid-column: 1; grid-row: 1; width: auto; min-width: 0; padding: 6px; }
   .immersive-page .wa-page-pads .wa-mpc-pad-area { grid-column: 2; grid-row: 1; min-width: 0; min-height: 0; }
   .immersive-page .wa-page-pads .wa-mpc-pads { width: 100%; max-width: none; height: 100%; gap: 5px; }
   .immersive-page .wa-page-pads .wa-mpc-pad { min-height: 0; padding: 6px; }
-  .immersive-page .wa-beat-play > .wa-device-dock { min-height: 0; height: 100%; overflow-y: auto; padding: 6px; }
-  .immersive-page .wa-beat-sample > .wa-sample-card { height: auto; max-height: 100%; align-self: start; overflow-y: auto; }
+  .immersive-page .wa-beat-play > .wa-device-dock { min-height: 0; height: 100%; overflow: hidden; padding: 6px; }
+  .immersive-page .wa-beat-play .wa-event-grid { overflow-x: auto; overflow-y: hidden; }
+  .immersive-page .wa-beat-play .wa-event-grid > .wa-row:not(.selected) { display: none; }
+  .immersive-page .wa-beat-play .wa-event-editor { display: none; }
+  .immersive-page .wa-beat-sample > .wa-sample-card { height: 100%; min-height: 0; max-height: none; align-self: stretch; overflow: hidden; }
   .immersive-page .wa-break-card .wa-chop-stage { height: clamp(190px, 33dvh, 300px); }
 
   .immersive-page .wa-page-drums { grid-template-rows: 32px minmax(0, 1fr); }
@@ -4910,21 +4930,27 @@ button.wa-arrange-lane-name { cursor: pointer; }
   }
   .immersive-page .wa-page-synth .wa-synth-main { grid-template-columns: minmax(0, 1fr) minmax(260px, 290px); gap: 5px; }
   .immersive-page .wa-page-synth .wa-synth-viewhost {
-    display: grid;
-    grid-template-rows: minmax(210px, 1fr) clamp(190px, 24dvh, 225px);
-    gap: 4px;
+    display: block;
     overflow: hidden;
   }
-  .immersive-page .wa-page-synth[data-view="patch"] .wa-synth-viewhost { grid-template-rows: minmax(210px, 1fr) clamp(210px, 27dvh, 250px); }
   .immersive-page .wa-page-synth .wa-piano-roll,
-  .immersive-page .wa-page-synth .wa-sound-host { display: block !important; min-height: 0; height: 100%; overflow: hidden; }
+  .immersive-page .wa-page-synth .wa-sound-host { min-height: 0; height: 100%; overflow: hidden; }
+  .immersive-page .wa-page-synth[data-view="roll"] .wa-piano-roll { display: flex !important; }
+  .immersive-page .wa-page-synth[data-view="roll"] .wa-sound-host { display: none !important; }
+  .immersive-page .wa-page-synth[data-view="patch"] .wa-piano-roll { display: none !important; }
+  .immersive-page .wa-page-synth[data-view="patch"] .wa-sound-host { display: block !important; }
   .immersive-page .wa-page-synth .wa-piano-roll { overflow: auto; }
   .immersive-page .wa-page-synth .wa-sound-host > .wa-panel,
   .immersive-page .wa-page-synth .wa-vpatch.wa-simple,
   .immersive-page .wa-page-synth .wa-synth-quick { height: 100%; min-height: 0; }
-  .immersive-page .wa-vpatch.wa-simple .wa-synth-quick { grid-template-rows: auto minmax(105px, 1fr); padding: 7px; gap: 5px; }
-  .immersive-page .wa-synth-module { padding: 5px; }
-  .immersive-page .wa-synth-quick .wa-knob { width: 46px; height: 46px; }
+  .immersive-page .wa-vpatch.wa-simple .wa-synth-quick {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto repeat(2, minmax(0, 1fr));
+    padding: 7px;
+    gap: 5px;
+  }
+  .immersive-page .wa-synth-module { min-height: 0; padding: 8px; }
+  .immersive-page .wa-synth-quick .wa-knob { width: clamp(50px, 6dvh, 64px); height: clamp(50px, 6dvh, 64px); }
   .immersive-page .wa-page-synth > .wa-keys-header { min-height: 30px; margin: 0; padding: 2px 4px; }
   .immersive-page .wa-page-synth > .wa-synth-keys,
   .immersive-page .wa-page-synth > .wa-synth-keys .wa-key { height: clamp(96px, 15dvh, 130px); }
@@ -4942,22 +4968,27 @@ button.wa-arrange-lane-name { cursor: pointer; }
   .immersive-page .wa-page-mix {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 32px minmax(0, 1fr) clamp(190px, 24dvh, 220px);
+    grid-template-rows: minmax(0, 58fr) minmax(240px, 42fr);
     gap: 4px;
     overflow: hidden;
     padding: 0;
   }
-  .immersive-page .wa-page-mix > .wa-mix-tabs { display: grid; grid-column: 1; grid-row: 1; }
-  .immersive-page .wa-page-mix > .wa-mix-channels,
-  .immersive-page .wa-page-mix > .wa-mix-scope { grid-column: 1; grid-row: 2; min-height: 0; width: 100%; height: 100%; }
-  .immersive-page .wa-page-mix > .wa-mix-flex { grid-column: 1; grid-row: 3; min-height: 0; width: 100%; height: 100%; overflow: hidden; }
-  .immersive-page .wa-page-mix > .wa-mix-scope { display: none; }
-  .immersive-page .wa-page-mix[data-mobile-view="scope"] > .wa-mix-channels,
-  .immersive-page .wa-page-mix[data-mobile-view="devices"] > .wa-mix-channels { display: none; }
-  .immersive-page .wa-page-mix[data-mobile-view="scope"] > .wa-mix-scope { display: block; }
-  .immersive-page .wa-page-mix[data-mobile-view="scope"] > .wa-mix-flex { display: none; }
-  .immersive-page .wa-page-mix[data-mobile-view="devices"] { grid-template-rows: 32px minmax(0, 1fr); }
-  .immersive-page .wa-page-mix[data-mobile-view="devices"] > .wa-mix-flex { display: block; grid-row: 2; }
+  .immersive-page .wa-page-mix > .wa-mix-tabs { display: none; }
+  .immersive-page .wa-page-mix > .wa-mix-channels { grid-column: 1; grid-row: 1; min-height: 0; width: 100%; height: 100%; }
+  .immersive-page .wa-page-mix > .wa-mix-lower {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(240px, .8fr);
+    gap: 4px;
+    overflow: hidden;
+  }
+  .immersive-page .wa-page-mix .wa-mix-flex,
+  .immersive-page .wa-page-mix .wa-mix-scope { min-width: 0; min-height: 0; width: 100%; height: 100%; overflow: hidden; }
+  .immersive-page .wa-page-mix .wa-mix-scope { display: flex; flex-direction: column; }
+  .immersive-page .wa-page-mix .wa-mix-scope .wa-orb { flex: 1; width: 100%; min-height: 0; }
   .immersive-page .wa-page-mix .wa-mixer { height: 100%; gap: 4px; }
   .immersive-page .wa-page-mix .wa-ch { min-width: 0; height: 100%; padding: 6px 4px; }
   .immersive-page .wa-page-mix .wa-devtabs { flex-basis: 112px; }
@@ -4965,15 +4996,16 @@ button.wa-arrange-lane-name { cursor: pointer; }
   .immersive-page .wa-page-mix .wa-devbrowser { gap: 5px; }
   .immersive-page .wa-page-mix .wa-devtab { padding-block: 5px; }
   .immersive-page .wa-page-mix .wa-devdetail .wa-device {
-    display: flex;
+    display: grid;
     height: 100%;
-    flex-wrap: nowrap;
+    grid-template-columns: minmax(150px, .85fr) repeat(5, minmax(86px, 1fr));
     align-items: center;
     gap: 8px;
     padding: 5px 8px;
   }
-  .immersive-page .wa-page-mix .wa-devdetail .wa-device-header { flex: 0 0 210px; }
-  .immersive-page .wa-page-mix .wa-devdetail .wa-slider-row { flex: 1 1 120px; margin: 0; }
+  .immersive-page .wa-page-mix .wa-devdetail { overflow: hidden; }
+  .immersive-page .wa-page-mix .wa-devdetail .wa-device-header { min-width: 0; }
+  .immersive-page .wa-page-mix .wa-devdetail .wa-slider-row { min-width: 0; margin: 0; }
 
   .immersive-page .wa-page-dj .wa-dj-library { min-height: 48px; max-height: 92px; padding: 6px; }
 }
@@ -4990,6 +5022,10 @@ button.wa-arrange-lane-name { cursor: pointer; }
 }
 
 @media (max-width: 760px), (max-height: 540px) and (pointer: coarse) {
+  .wa-lcd::after,
+  .wa-xy-wrap::after,
+  .wa-bandscan::after,
+  .wa-roll2-scroll::after { display: none; }
   .immersive-page .wa-appbar { flex: 0 0 auto; display: flex; flex-direction: column; min-width: 0; }
   .immersive-page .wa-title { height: 40px; margin: 0; padding: 3px 5px; gap: 4px; }
   .immersive-page .wa-title-text,
@@ -5009,8 +5045,64 @@ button.wa-arrange-lane-name { cursor: pointer; }
   .wa-menu > .wa-studio-menu-body { position: fixed; top: 42px; right: 5px; left: auto; width: min(230px, calc(100vw - 10px)); }
   .immersive-page .wa-transport { width: 100%; min-height: 44px; margin: 0; }
   .immersive-page .wa-beat-play > .wa-device-dock { display: none; }
+  .immersive-page .wa-page-mix {
+    height: 100%;
+    display: grid;
+    grid-template: 40px minmax(0, 1fr) / minmax(0, 1fr);
+    gap: 4px;
+    overflow: hidden;
+  }
+  .immersive-page .wa-page-mix > .wa-mix-tabs { display: grid; grid-row: 1; }
+  .immersive-page .wa-page-mix > .wa-mix-channels,
+  .immersive-page .wa-page-mix > .wa-mix-lower { grid-row: 2; min-width: 0; min-height: 0; width: 100%; height: 100%; }
+  .immersive-page .wa-page-mix > .wa-mix-lower { display: block; overflow: hidden; }
+  .immersive-page .wa-page-mix[data-mobile-view="channels"] > .wa-mix-lower,
+  .immersive-page .wa-page-mix[data-mobile-view="devices"] > .wa-mix-channels,
+  .immersive-page .wa-page-mix[data-mobile-view="scope"] > .wa-mix-channels { display: none; }
+  .immersive-page .wa-page-mix[data-mobile-view="devices"] .wa-mix-scope,
+  .immersive-page .wa-page-mix[data-mobile-view="scope"] .wa-mix-flex { display: none; }
+  .immersive-page .wa-page-mix[data-mobile-view="scope"] .wa-mix-scope { display: flex; flex-direction: column; }
+  .immersive-page .wa-page-mix .wa-mix-flex,
+  .immersive-page .wa-page-mix .wa-mix-scope { width: 100%; height: 100%; min-height: 0; margin: 0; overflow: hidden; }
+  .immersive-page .wa-page-mix .wa-mix-scope .wa-orb { flex: 1; width: 100%; min-height: 0; }
+  .immersive-page .wa-page-mix .wa-mix-channels { overflow-x: auto; overflow-y: hidden; }
+  .immersive-page .wa-page-mix .wa-mixer { width: max-content; min-width: 100%; height: 100%; }
+  .immersive-page .wa-page-mix .wa-ch { min-width: 72px; height: 100%; }
+  .immersive-page .wa-page-mix .wa-devbrowser { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  .immersive-page .wa-page-mix .wa-devtabs { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; }
+  .immersive-page .wa-page-mix .wa-devdetail { overflow: hidden; }
+  .immersive-page .wa-page-mix .wa-devdetail .wa-device { height: 100%; overflow: hidden; }
 }
 
 @media (max-height: 540px) and (pointer: coarse) {
-  .immersive-page .wa-appbar { display: contents; }
+  .immersive-page .wa-win {
+    grid-template-columns: 76px minmax(0, 1fr);
+    grid-template-rows: 42px minmax(0, 1fr);
+  }
+  .immersive-page .wa-appbar {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    height: 42px;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    overflow: hidden;
+  }
+  .immersive-page .wa-title { grid-column: auto; grid-row: auto; flex: 0 0 300px; height: 42px; }
+  .immersive-page .wa-project-name { min-width: 0; height: 32px; }
+  .immersive-page .wa-transport { grid-column: auto; grid-row: auto; flex: 1 1 auto; min-width: 0; min-height: 42px; height: 42px; padding: 3px 5px; }
+  .immersive-page .wa-sticky-chrome { grid-column: 1; grid-row: 2; }
+  .immersive-page .wa-modebar { grid-column: auto; grid-row: auto; }
+  .immersive-page .wa-pagehost { grid-column: 2; grid-row: 2; }
+  .immersive-page .wa-page-song,
+  .immersive-page .wa-page-song .wa-arrange-main,
+  .immersive-page .wa-page-song .wa-arrange-main > .wa-panel { height: 100%; min-height: 0; overflow: hidden; }
+  .immersive-page .wa-page-song .wa-arrange-main .wa-composer { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  .immersive-page .wa-page-song .wa-chainstrip.wa-arrange-lanes { flex: 1 1 auto; min-height: 0; height: auto; overflow-x: auto; overflow-y: hidden; }
+  .immersive-page .wa-page-song .wa-song-viewbar,
+  .immersive-page .wa-page-song .wa-composer-head { min-height: 34px; padding: 2px 5px; }
+  .immersive-page .wa-page-song .wa-arrange-main .wa-chainstrip.wa-arrange-lanes > .wa-arrange-lane { flex: 1 1 34px; min-height: 34px; max-height: 42px; }
+  .immersive-page .wa-page-song .wa-arrange-lane-name { padding: 3px 7px; }
+  .immersive-page .wa-page-song .wa-fold:not([open]) { display: none; }
+  .immersive-page .wa-page-song .wa-arrange-main .wa-composer:has(.wa-fold[open]) { overflow-y: auto; }
 }
