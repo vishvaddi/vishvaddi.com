@@ -2023,6 +2023,127 @@
   .wa-modekey { min-height: 44px; }
 }
 
+/* v20: hardware-style fixed surfaces. Advanced synthesis is banked instead
+   of becoming a long document; the pad sequencer can take over the deck. */
+.wa-synth-modebar,
+.wa-synth-bank-nav,
+.wa-pad-view-toggle,
+.wa-pad-sequence-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.wa-synth-bank-nav[hidden] { display: none; }
+.wa-synth-modebar { min-width: 0; gap: 4px; }
+.wa-synth-modebar .wa-synth-bank-nav { flex: 1 1 auto; }
+.wa-synth-modebar > .wa-toggle { flex: 0 0 auto; min-height: 28px; }
+.wa-synth-bank-nav {
+  flex: 0 0 32px;
+  min-height: 32px;
+  padding: 2px;
+  background: var(--wa-inset);
+  border: 1px solid var(--wa-border);
+  border-radius: var(--wa-radius-sm);
+}
+.wa-synth-bank-nav .wa-subtab,
+.wa-pad-view-toggle .wa-subtab { flex: 1 1 0; min-width: 0; }
+.wa-pad-sequence-head { flex: 0 0 30px; justify-content: space-between; }
+.wa-pad-sequence-head .wa-pad-view-toggle { width: min(260px, 52%); }
+.wa-mpc-side > .wa-pad-view-toggle { flex: 0 0 auto; margin-bottom: 4px; }
+
+.immersive-page .wa-page-synth[data-view="patch"] .wa-sound-host > .wa-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 4px;
+  overflow: hidden;
+}
+.immersive-page .wa-vpatch:not(.wa-simple) {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  align-content: stretch;
+  gap: 5px;
+}
+.immersive-page .wa-vpatch:not(.wa-simple) > .wa-synth-quick,
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="osc1"] > [data-synth-bank]:not([data-synth-bank="osc1"]),
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="osc2"] > [data-synth-bank]:not([data-synth-bank="osc2"]),
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="noise"] > [data-synth-bank]:not([data-synth-bank="noise"]),
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="filter"] > [data-synth-bank]:not([data-synth-bank="filter"]),
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="envelopes"] > [data-synth-bank]:not([data-synth-bank="envelopes"]),
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="lfo"] > [data-synth-bank]:not([data-synth-bank="lfo"]),
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="matrix"] > [data-synth-bank]:not([data-synth-bank="matrix"]) { display: none; }
+.immersive-page .wa-vpatch:not(.wa-simple) > [data-synth-bank] {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="envelopes"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="osc1"],
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="osc2"],
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="noise"],
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="matrix"] { grid-template-columns: minmax(0, 1fr); }
+.immersive-page .wa-vpatch:not(.wa-simple) .wa-slider-row { margin-block: 3px; }
+.immersive-page .wa-vpatch:not(.wa-simple) .wa-wave-mini,
+.immersive-page .wa-vpatch:not(.wa-simple) .wa-env-canvas { max-height: 62px; }
+
+.immersive-page .wa-beat-play:has(> .wa-device-dock[data-sequence-view="all"]) {
+  grid-template-rows: minmax(0, 1fr);
+}
+.immersive-page .wa-beat-play:has(> .wa-device-dock[data-sequence-view="all"]) > .wa-panel:first-child { display: none; }
+.immersive-page .wa-beat-play > .wa-device-dock[data-sequence-view="all"] {
+  display: flex;
+  flex-direction: column;
+}
+.immersive-page .wa-beat-play > .wa-device-dock[data-sequence-view="all"] .wa-event-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.immersive-page .wa-beat-play > .wa-device-dock[data-sequence-view="all"] .wa-event-grid > .wa-row {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 20px;
+}
+.immersive-page .wa-beat-play > .wa-device-dock[data-sequence-view="all"] .wa-event-grid .wa-cell,
+.immersive-page .wa-beat-play > .wa-device-dock[data-sequence-view="all"] .wa-event-grid .wa-drum {
+  height: auto;
+  min-height: 20px;
+}
+.immersive-page .wa-beat-play > .wa-device-dock[data-sequence-view="all"] .wa-event-editor { display: none; }
+
+@media (max-width: 760px), (max-height: 540px) and (pointer: coarse) {
+  .immersive-page .wa-beat-play:has(> .wa-device-dock[data-sequence-view="all"]) > .wa-device-dock { display: flex; }
+  .immersive-page .wa-vpatch:not(.wa-simple) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="envelopes"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .immersive-page .wa-page-synth .wa-synth-main,
+  .immersive-page .wa-page-synth .wa-synth-viewhost,
+  .immersive-page .wa-page-synth .wa-sound-host { overflow: hidden; }
+  .immersive-page .wa-vpatch:not(.wa-simple) > [data-synth-bank] { padding: 5px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-slider-row {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1px;
+    margin-block: 2px;
+  }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-row { align-items: center; }
+  .immersive-page .wa-vpatch:not(.wa-simple) select,
+  .immersive-page .wa-vpatch:not(.wa-simple) input { width: 100%; min-width: 0; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-vmatrix-row {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) 52px;
+    gap: 3px;
+    margin-block: 3px;
+  }
+}
+
 /* ── Studio v16: timeline-first song workspace ─────────────────────────── */
 .wa-page-song .wa-arrange-shell { grid-template-columns: 138px minmax(0, 1fr); }
 .wa-page-song .wa-arrange-inspector { display: none; }
@@ -5105,4 +5226,121 @@ button.wa-arrange-lane-name { cursor: pointer; }
   .immersive-page .wa-page-song .wa-arrange-lane-name { padding: 3px 7px; }
   .immersive-page .wa-page-song .wa-fold:not([open]) { display: none; }
   .immersive-page .wa-page-song .wa-arrange-main .wa-composer:has(.wa-fold[open]) { overflow-y: auto; }
+}
+
+/* v20 cascade guard: fixed synth banks and the optional full pad sequencer
+   must override the historical responsive/density layers above. */
+.immersive-page .wa-page-synth[data-view="patch"] .wa-sound-host > .wa-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 4px;
+  overflow: hidden;
+}
+.immersive-page .wa-page-synth[data-view="patch"] .wa-synth-bank-nav[hidden] + .wa-vpatch { grid-row: 1 / -1; }
+.immersive-page .wa-vpatch:not(.wa-simple) {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  align-content: stretch;
+  gap: 5px;
+}
+.immersive-page .wa-vpatch:not(.wa-simple) > .wa-synth-quick,
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="osc1"] > [data-synth-bank]:not([data-synth-bank="osc1"]),
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="osc2"] > [data-synth-bank]:not([data-synth-bank="osc2"]),
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="noise"] > [data-synth-bank]:not([data-synth-bank="noise"]),
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="filter"] > [data-synth-bank]:not([data-synth-bank="filter"]),
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="envelopes"] > [data-synth-bank]:not([data-synth-bank="envelopes"]),
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="lfo"] > [data-synth-bank]:not([data-synth-bank="lfo"]),
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="matrix"] > [data-synth-bank]:not([data-synth-bank="matrix"]) { display: none; }
+.immersive-page .wa-vpatch:not(.wa-simple) > [data-synth-bank] {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="envelopes"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="osc1"],
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="osc2"],
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="noise"],
+.immersive-page .wa-vpatch:not(.wa-simple)[data-bank="matrix"] { grid-template-columns: minmax(0, 1fr); }
+.immersive-page .wa-beat-play:has(> .wa-device-dock[data-sequence-view="all"]) { grid-template-rows: minmax(0, 1fr); }
+.immersive-page .wa-beat-play:has(> .wa-device-dock[data-sequence-view="all"]) > .wa-panel:first-child { display: none; }
+.immersive-page .wa-beat-play > .wa-device-dock[data-sequence-view="all"] { display: flex; flex-direction: column; }
+.immersive-page .wa-beat-play > .wa-device-dock[data-sequence-view="all"] .wa-event-grid > .wa-row { display: flex; } /* v20 base */
+
+@media (max-height: 540px) and (pointer: coarse) {
+  .immersive-page .wa-vpatch:not(.wa-simple) > [data-synth-bank] {
+    height: 100%;
+    display: grid;
+    grid-auto-flow: row;
+    align-items: center;
+    gap: 3px;
+  }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="osc1"] > [data-synth-bank],
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="osc2"] > [data-synth-bank] {
+    grid-template: auto minmax(0, 1fr) auto / repeat(5, minmax(0, 1fr));
+  }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank^="osc"] .wa-fx-title,
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank^="osc"] .wa-advanced-only { grid-column: 1 / -1; }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank^="osc"] .wa-wave-mini { grid-column: span 2; width: 100%; height: 48px; }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank^="osc"] .wa-waveselect { grid-column: span 2; }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank^="osc"] .wa-advanced-only {
+    display: grid;
+    grid-template-columns: 1.4fr repeat(4, minmax(0, 1fr));
+    align-items: center;
+    gap: 3px;
+  }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank^="osc"] .wa-advanced-only .wa-export { margin: 0; gap: 2px; }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="filter"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="filter"] > [data-synth-bank] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="filter"] .wa-fx-title { grid-column: 1 / -1; }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="filter"] .wa-advanced-only { display: contents; }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="envelopes"] > [data-synth-bank] {
+    grid-template: auto 48px minmax(0, 1fr) / repeat(4, minmax(0, 1fr));
+  }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="envelopes"] .wa-fx-title,
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="envelopes"] .wa-env-canvas { grid-column: 1 / -1; width: 100%; height: 48px; }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="lfo"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="matrix"] > .wa-vmatrix {
+    grid-template: auto repeat(2, minmax(0, 1fr)) / repeat(3, minmax(0, 1fr));
+  }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="matrix"] .wa-fx-title { grid-column: 1 / -1; }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="matrix"] .wa-vmatrix-row {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) 44px;
+    min-width: 0;
+    margin: 0;
+  }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob { width: 38px; height: 38px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-val,
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-lbl { font-size: 7px; }
+}
+
+@media (max-width: 760px), (max-height: 540px) and (pointer: coarse) {
+  .immersive-page .wa-beat-play:has(> .wa-device-dock[data-sequence-view="all"]) > .wa-device-dock { display: flex; }
+  .immersive-page .wa-vpatch:not(.wa-simple) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .immersive-page .wa-vpatch:not(.wa-simple)[data-bank="envelopes"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .immersive-page .wa-page-synth .wa-synth-main,
+  .immersive-page .wa-page-synth .wa-synth-viewhost,
+  .immersive-page .wa-page-synth .wa-sound-host { overflow: hidden; }
+  .immersive-page .wa-vpatch:not(.wa-simple) > [data-synth-bank] { padding: 5px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-slider-row {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1px;
+    margin-block: 2px;
+  }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-row { align-items: center; }
+  .immersive-page .wa-vpatch:not(.wa-simple) select,
+  .immersive-page .wa-vpatch:not(.wa-simple) input { width: 100%; min-width: 0; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-vmatrix-row {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) 52px;
+    gap: 3px;
+    margin-block: 3px;
+  }
 }

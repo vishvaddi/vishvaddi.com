@@ -228,6 +228,30 @@ export function buildSynth(): SynthUI {
   auditionBtn.addEventListener("click", () => audition("C4"));
   // Patch editor — rebuilt whenever a preset load replaces the patch wholesale.
   const patchBox = el("div", "wa-vpatch");
+  const synthModeBar = el("div", "wa-synth-modebar");
+  type SynthBank = "osc1" | "osc2" | "noise" | "filter" | "envelopes" | "lfo" | "matrix";
+  const synthBankNav = el("div", "wa-synth-bank-nav");
+  const synthBankButtons: HTMLButtonElement[] = [];
+  let activeSynthBank: SynthBank = (localStorage.getItem("vv_studio_synth_bank") as SynthBank | null) ?? "osc1";
+  if (!["osc1", "osc2", "noise", "filter", "envelopes", "lfo", "matrix"].includes(activeSynthBank)) activeSynthBank = "osc1";
+  const selectSynthBank = (bank: SynthBank): void => {
+    activeSynthBank = bank;
+    patchBox.dataset.bank = bank;
+    synthBankButtons.forEach((button) => {
+      const selected = button.dataset.bank === bank;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    localStorage.setItem("vv_studio_synth_bank", bank);
+  };
+  (["osc1", "osc2", "noise", "filter", "envelopes", "lfo", "matrix"] as SynthBank[]).forEach((bank) => {
+    const button = btn(bank === "envelopes" ? "Envelopes" : bank.startsWith("osc") ? `OSC ${bank.slice(-1)}` : bank.toUpperCase(), "wa-subtab") as HTMLButtonElement;
+    button.dataset.bank = bank;
+    button.addEventListener("click", () => selectSynthBank(bank));
+    synthBankButtons.push(button);
+    synthBankNav.append(button);
+  });
+  selectSynthBank(activeSynthBank);
   // Simple/Advanced — collapses to Wave/Filter/Envelope/Volume for newcomers
   // (CS50 Synth's "only 3 engines" lesson); the class lives on patchBox
   // itself, so it survives renderPatchEditor()'s replaceChildren() rebuilds.
@@ -235,6 +259,7 @@ export function buildSynth(): SynthUI {
   let simpleMode = localStorage.getItem("vv_studio_synth_simple") !== "0";
   function applySimpleMode(): void {
     patchBox.classList.toggle("wa-simple", simpleMode);
+    synthBankNav.hidden = simpleMode;
     simpleBtn.textContent = simpleMode ? "Advanced" : "Essentials";
     simpleBtn.classList.toggle("active", simpleMode);
   }
@@ -244,9 +269,10 @@ export function buildSynth(): SynthUI {
     localStorage.setItem("vv_studio_synth_simple", simpleMode ? "1" : "0");
     applySimpleMode();
   });
+  synthModeBar.append(synthBankNav, simpleBtn);
   applySimpleMode();
   presetBrowserRow.append(presetSearch, presetCategoryRow);
-  presetRow.append(el("span", "wa-lbl", "PRESET"), presetSel, loadPresetBtn, savePatchBtn, deletePatchBtn, exportPatchBtn, importPatchBtn, patchInput, auditionBtn, randomizeBtn, simpleBtn);
+  presetRow.append(el("span", "wa-lbl", "PRESET"), presetSel, loadPresetBtn, savePatchBtn, deletePatchBtn, exportPatchBtn, importPatchBtn, patchInput, auditionBtn, randomizeBtn);
   // Live oscilloscope — taps synthGain via an analyser. Stays a flat line
   // until audio has actually started (ensureNodes() runs on first pad/key
   // press), matching the rest of the app's "audio starts on first click" rule.
@@ -305,6 +331,7 @@ export function buildSynth(): SynthUI {
     (["osc1", "osc2"] as const).forEach((key, i) => {
       const o = vsynthPatch[key];
       const box = el("div", "wa-vblock" + (i === 1 ? " wa-advanced-only-block" : ""));
+      box.dataset.synthBank = i === 0 ? "osc1" : "osc2";
       box.append(el("div", "wa-fx-title", `OSC ${i + 1}`));
       const waveCanvas = document.createElement("canvas"); waveCanvas.className = "wa-wave-mini";
       box.append(waveCanvas);
@@ -365,11 +392,13 @@ export function buildSynth(): SynthUI {
       redrawWave();
     });
     const noiseBox = el("div", "wa-vblock wa-advanced-only-block");
+    noiseBox.dataset.synthBank = "noise";
     noiseBox.append(el("div", "wa-fx-title", "NOISE"));
     pSlider(noiseBox, "Level", 0, 1, 0.01, () => vsynthPatch.noise.level, (v) => { vsynthPatch.noise.level = v; });
     pSlider(noiseBox, "Colour", 200, 16000, 100, () => vsynthPatch.noise.colour, (v) => { vsynthPatch.noise.colour = v; });
     patchBox.append(noiseBox);
     const filterBox = el("div", "wa-vblock");
+    filterBox.dataset.synthBank = "filter";
     filterBox.append(el("div", "wa-fx-title", "FILTER"));
     filterBox.append(selRow("Type", [["lowpass", "LOW PASS"], ["highpass", "HIGH PASS"], ["bandpass", "BAND PASS"], ["notch", "NOTCH"]], vsynthPatch.filter.type, (v) => { vsynthPatch.filter.type = v as VPatch["filter"]["type"]; saveAll(); }));
     const cutoffRow = sliderRow("Cutoff", 30, 18000, vsynthPatch.filter.cutoff, 10, (v) => { vsynthPatch.filter.cutoff = v; saveAll(); });
@@ -383,6 +412,7 @@ export function buildSynth(): SynthUI {
     patchBox.append(filterBox);
     // LYSERGIC voice motion (F) — always visible, these are performance knobs
     const motionBox = el("div", "wa-vblock");
+    motionBox.dataset.synthBank = "filter";
     motionBox.append(el("div", "wa-fx-title", "MOTION"));
     pSlider(motionBox, "Glide", 0, 0.5, 0.01, () => vsynthPatch.glide ?? 0, (v) => { vsynthPatch.glide = v; });
     pSlider(motionBox, "Drift", 0, 1, 0.01, () => vsynthPatch.drift ?? 0, (v) => { vsynthPatch.drift = v; });
@@ -397,6 +427,7 @@ export function buildSynth(): SynthUI {
     (["env1", "env2"] as const).forEach((key, i) => {
       const e = vsynthPatch[key];
       const box = el("div", "wa-vblock" + (i === 1 ? " wa-advanced-only-block" : ""));
+      box.dataset.synthBank = "envelopes";
       box.append(el("div", "wa-fx-title", i === 0 ? "ENV 1 · AMP" : "ENV 2 · MOD"));
       const envCanvas = document.createElement("canvas"); envCanvas.className = "wa-env-canvas";
       box.append(envCanvas);
@@ -443,12 +474,14 @@ export function buildSynth(): SynthUI {
     (["lfo1", "lfo2"] as const).forEach((key, i) => {
       const l = vsynthPatch[key];
       const box = el("div", "wa-vblock wa-advanced-only-block");
+      box.dataset.synthBank = "lfo";
       box.append(el("div", "wa-fx-title", `LFO ${i + 1}`));
       box.append(selRow("Shape", [["sine", "SINE"], ["triangle", "TRI"], ["sawtooth", "SAW"], ["square", "SQR"]], l.shape, (v) => { l.shape = v as VPatch["lfo1"]["shape"]; saveAll(); }));
       pSlider(box, "Rate Hz", 0.05, 20, 0.05, () => l.rate, (v) => { l.rate = v; });
       patchBox.append(box);
     });
     const matrixBox = el("div", "wa-vblock wa-vmatrix wa-advanced-only-block");
+    matrixBox.dataset.synthBank = "matrix";
     matrixBox.append(el("div", "wa-fx-title", "MOD MATRIX"));
     vsynthPatch.matrix.forEach((slot: ModSlot) => {
       const row = el("div", "wa-vmatrix-row");
@@ -466,6 +499,7 @@ export function buildSynth(): SynthUI {
     });
     patchBox.append(matrixBox);
     const macroBox = el("div", "wa-vblock");
+    macroBox.dataset.synthBank = "filter";
     macroBox.append(el("div", "wa-fx-title", "MACROS — map via matrix"));
     pSlider(macroBox, "Volume", 0, 1, 0.01, () => vsynthPatch.volume, (v) => { vsynthPatch.volume = v; });
     const macroAdvanced = el("div", "wa-advanced-only");
@@ -611,7 +645,7 @@ export function buildSynth(): SynthUI {
   // them; appending them here too would just steal them back at boot.
   // Scope + chord player live in the side column beside the XY field (G/H) —
   // both were dead space up here.
-  synthPanel.append(patchBox);
+  synthPanel.append(synthModeBar, patchBox);
   const synthInspector = el("aside", "wa-synth-properties");
   synthInspector.append(el("div", "wa-inspector-title", "SYNTH PROPERTIES"), presetBrowserRow, presetRow);
   const chordPanel = el("div", "wa-xy-wrap");

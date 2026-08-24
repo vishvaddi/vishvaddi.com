@@ -1,5 +1,11 @@
 # Run Log
 
+## 2026-08-24 — Studio fixed synth banks and all-pad sequencing
+
+- Replaced the Advanced synth's clipped long surface with seven persisted hardware-style banks: OSC 1, OSC 2, Noise, Filter, Envelopes, LFO and Matrix. The Advanced/Essentials switch now lives directly on Sound instead of low in the properties drawer.
+- Added a persisted Pads/All steps switch. Pads retains the performance deck and selected-pad strip; All steps replaces it with the complete 16-lane pad sequencer in the fixed workspace.
+- Added internal-control containment checks for every synth bank and all 16 pad lanes across desktop, laptop, Android portrait and short landscape. Landscape repacks controls horizontally rather than scrolling.
+
 ## 2026-08-24 — Studio fixed-surface rework
 
 - Replaced Mix's desktop tabs with a permanent two-level console: ten fitted channel strips above complete selected-device controls and the always-visible Lysergic sphere. Android retains full-surface Channels, Devices and Scope pages.

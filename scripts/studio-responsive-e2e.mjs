@@ -184,6 +184,19 @@ for (const [name, width, height] of viewports) {
         check(`${name}: BEAT controls open as a drawer`, await page.locator('.wa-mpc-side').isVisible())
         await page.locator('.wa-beat-controls-close').click()
       }
+      if (mode === 'PADS') {
+        if (name === 'phone' || name === 'landscape') await page.locator('.wa-beat-controls-toggle').click()
+        await page.locator('.wa-pad-view-toggle .wa-subtab:visible', { hasText: 'All steps' }).first().click()
+        const allPadRows = await page.locator('.wa-device-dock[data-sequence-view="all"] .wa-event-grid > .wa-row:visible').count()
+        check(`${name}: all-pad view exposes every pad lane`, allPadRows === 16, `${allPadRows}/16 lanes`)
+        check(`${name}: all-pad sequencer replaces the performance surface`, !await page.locator('.wa-mpc-pad:visible').count())
+        check(`${name}: pad view preference persists`, await page.evaluate(() => localStorage.getItem('vv_studio_pad_sequence_view')) === 'all')
+        check(`${name}: all-pad switch shows its active state`, await page.locator('.wa-device-dock [data-sequence-view="all"]').evaluate((node) => node.classList.contains('active')) && !await page.locator('.wa-device-dock [data-sequence-view="selected"]').evaluate((node) => node.classList.contains('active')))
+        if (name === 'desktop') await page.screenshot({ path: 'studio-pads-all-desktop.png', fullPage: false })
+        await page.locator('.wa-device-dock .wa-pad-view-toggle .wa-subtab:visible', { hasText: 'Pads' }).click()
+        check(`${name}: performance pads remain available`, await page.locator('.wa-mpc-pad:visible').count() === 16)
+        if (name === 'phone' || name === 'landscape') await page.locator('.wa-beat-controls-close').click()
+      }
       if ((name === 'phone' || name === 'landscape') && mode === 'MIX') {
         const widths = await page.locator('.wa-mixer .wa-ch').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().width))
         check(`${name}: MIX channels remain readable`, widths.every((width) => width >= 72), `${Math.round(Math.min(...widths))}px min`)
@@ -259,6 +272,22 @@ for (const [name, width, height] of viewports) {
       average: nodes.reduce((sum, node) => sum + node.getBoundingClientRect().height, 0) / nodes.length,
     }))
     check(`${name}: synth controls use instrument density`, soundDensity.tallest <= 150, `${Math.round(soundDensity.average)}px average / ${Math.round(soundDensity.tallest)}px max`)
+    await page.locator('.wa-synth-modebar button', { hasText: 'Advanced' }).click()
+    check(`${name}: advanced synth uses seven fixed banks`, await page.locator('.wa-synth-bank-nav .wa-subtab').count() === 7)
+    for (const bank of ['OSC 1', 'OSC 2', 'NOISE', 'FILTER', 'Envelopes', 'LFO', 'MATRIX']) {
+      await page.locator('.wa-synth-bank-nav .wa-subtab', { hasText: bank, exact: true }).click()
+      if (name === 'landscape' && bank === 'OSC 1') await page.screenshot({ path: 'studio-synth-osc-landscape.png', fullPage: false })
+      const bankFit = await page.locator('.wa-vpatch:not(.wa-simple)').evaluate((node) => {
+        const host = node.getBoundingClientRect()
+        const visible = [...node.querySelectorAll(':scope > [data-synth-bank], :scope > [data-synth-bank] .wa-slider-row, :scope > [data-synth-bank] select, :scope > [data-synth-bank] canvas')].filter((child) => child.checkVisibility())
+        const controls = visible.map((child) => child.getBoundingClientRect())
+        const contained = (control) => control.top >= host.top - 1 && control.bottom <= host.bottom + 1 && control.left >= host.left - 1 && control.right <= host.right + 1
+        return { scroll: node.scrollHeight - node.clientHeight, count: controls.length, contained: controls.every(contained), offenders: visible.filter((child) => !contained(child.getBoundingClientRect())).map((child) => child.className || child.tagName).slice(0, 3) }
+      })
+      check(`${name}: ${bank} synth bank fits without scrolling`, bankFit.count > 0 && bankFit.scroll <= 1 && bankFit.contained, `${bankFit.count} modules · ${Math.round(bankFit.scroll)}px · ${bankFit.offenders.join(', ')}`)
+    }
+    await page.screenshot({ path: `studio-synth-advanced-${name}.png`, fullPage: false })
+    await page.locator('.wa-synth-modebar button', { hasText: 'Essentials' }).click()
     check(`${name}: keyboard stays out of the workspace until requested`, !await page.locator('.wa-page-synth > .wa-keys').isVisible())
     await page.locator('.wa-keyboard-toggle').click()
     check(`${name}: keyboard remains available on demand`, await page.locator('.wa-page-synth > .wa-keys').isVisible())

@@ -501,14 +501,42 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   // MPC/Maschine-style deck: the 4×4 pads dominate; the action controls (full
   // level, levels, repeat, record, quantise, resample…) live in a side column.
   const mpcPadArea = el("div", "wa-mpc-pad-area"); mpcPadArea.append(padBankRow, padGrid);
-  const mpcSide = el("div", "wa-mpc-side"); mpcSide.append(mpcToolbar);
+  type PadSequenceView = "selected" | "all";
+  const padViewButtons: HTMLButtonElement[] = [];
+  let padSequenceView = (localStorage.getItem("vv_studio_pad_sequence_view") as PadSequenceView | null) ?? "selected";
+  if (padSequenceView !== "selected" && padSequenceView !== "all") padSequenceView = "selected";
+  const padSeqPanel = el("div", "wa-panel wa-device-dock");
+  const selectPadSequenceView = (view: PadSequenceView): void => {
+    padSequenceView = view;
+    padSeqPanel.dataset.sequenceView = view;
+    padViewButtons.forEach((button) => {
+      const selected = button.dataset.sequenceView === view;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    localStorage.setItem("vv_studio_pad_sequence_view", view);
+  };
+  const buildPadViewToggle = (): HTMLElement => {
+    const toggle = el("div", "wa-pad-view-toggle");
+    (["selected", "all"] as PadSequenceView[]).forEach((view) => {
+      const button = btn(view === "selected" ? "Pads" : "All steps", "wa-subtab") as HTMLButtonElement;
+      button.dataset.sequenceView = view;
+      button.addEventListener("click", () => selectPadSequenceView(view));
+      padViewButtons.push(button);
+      toggle.append(button);
+    });
+    return toggle;
+  };
+  const mpcSide = el("div", "wa-mpc-side"); mpcSide.append(buildPadViewToggle(), mpcToolbar);
   const mpcDeck = el("div", "wa-mpc-deck"); mpcDeck.append(mpcPadArea, mpcSide);
   // The pad event lane belongs with the other sequencers on the Sequence tab
   // (Create stays a performance surface). Assembled into padSeqPanel, mounted
   // in the workspace section below.
   mpcPanel.append(mpcDeck);
-  const padSeqPanel = el("div", "wa-panel");
-  padSeqPanel.append(el("div", "wa-lbl", "Selected pad sequence"), eventLane, eventEditor);
+  const padSequenceHead = el("div", "wa-pad-sequence-head");
+  padSequenceHead.append(el("div", "wa-lbl", "PAD SEQUENCER"), buildPadViewToggle());
+  padSeqPanel.append(padSequenceHead, eventLane, eventEditor);
+  selectPadSequenceView(padSequenceView);
   paintMpcPads();
 
 
