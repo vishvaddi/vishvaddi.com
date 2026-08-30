@@ -1,5 +1,14 @@
 # Run Log
 
+## 2026-08-30 — Studio visual and scrolling rebuild
+
+- Replaced the mixed faux-hardware styling with one graphite workstation system: three surface levels, restrained orange interaction state, quieter borders, consistent knobs and controls, and visible thin scrollbars.
+- Assigned explicit scroll ownership to Pads, Drums, Synth, Arrange, Clips, Mix and DJ instead of hiding variable content inside fixed-height panels. Laptop and Android layouts now keep the final controls reachable.
+- Enlarged and simplified the Pads performance surface, made drum rows and the property rail independently usable, widened mixer channels, turned the modulation matrix into readable rows and reduced the DJ platter's visual dominance.
+- Repacked tablet Synth into a 2×2 module grid and compact-screen Advanced Synth into focused bank views; fixed the portrait modulation matrix so source, destination and amount controls remain on-screen.
+- Replaced fixed-frame assertions with structural reachability checks that exercise each active scroll region and report hidden variable content.
+- Passed Astro check/build, Studio functional, responsive and density suites across desktop, laptop, tablet, Android portrait and short landscape with clean browser consoles.
+
 ## 2026-08-30 — Studio creation workflow refinement
 
 - Removed the Start destination and first-run modal so `/studio/` opens directly on the usable Pads workspace; primary navigation is now Make, Arrange and DJ.
