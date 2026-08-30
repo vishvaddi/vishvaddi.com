@@ -301,12 +301,14 @@ export function buildLayout(p: LayoutPanels): Layout {
   };
   workarea.append(beatPage, drumsPage, soundPage, songPage, djPage, mixPage);
 
-  // Six stable destinations, no workspace layer. The mobile dock and desktop
-  // rail share these exact controls, with BEAT as the immediate front door.
+  // Product-level intents stay stable while instrument detail remains
+  // contextual. People choose what they want to do before choosing a device.
   const modeBar = el("nav", "wa-modebar");
   modeBar.setAttribute("aria-label", "Studio screens");
   const primaryNav = el("div", "wa-primary-nav wa-primary-nav-flat");
-  modeBar.append(primaryNav);
+  const contextNav = el("div", "wa-context-nav");
+  contextNav.setAttribute("aria-label", "Make instruments");
+  modeBar.append(primaryNav, contextNav);
 
   // New visitors meet an instrument immediately; existing projects resume
   // where their owner left off, defaulting to the arranger when no view was
@@ -320,12 +322,44 @@ export function buildLayout(p: LayoutPanels): Layout {
   localStorage.removeItem("vv_studio_mode");                     // retired legacy key
   let lastEditMode: ModeId = (["drums", "pads", "synth"] as ModeId[]).includes(activeMode) ? activeMode : "drums";
   const modeButtons = new Map<ModeId, HTMLButtonElement>();
+  const intentButtons = new Map<"start" | "make" | "arrange" | "dj", HTMLButtonElement>();
+
+  const startDialog = document.createElement("dialog");
+  startDialog.className = "wa-start-dialog";
+  startDialog.setAttribute("aria-labelledby", "wa-start-title");
+  const startHead = el("div", "wa-start-head");
+  const startTitle = el("div", "wa-start-title", "What do you want to make?"); startTitle.id = "wa-start-title";
+  const startClose = btn("Close", "wa-btn-sm wa-start-close");
+  startClose.addEventListener("click", () => startDialog.close());
+  startHead.append(el("div", "wa-kicker", "V / STUDIO"), startTitle, el("p", "wa-start-copy", "Start with an outcome. Studio will reveal the tools when you need them."), startClose);
+  const startCards = el("div", "wa-start-cards");
+  const startCard = (label: string, copy: string, steps: string, action: () => void, primary = false): HTMLButtonElement => {
+    const card = btn("", `wa-start-card${primary ? " primary" : ""}`);
+    card.append(el("strong", "wa-start-card-title", label), el("span", "wa-start-card-copy", copy), el("span", "wa-start-card-steps", steps));
+    card.addEventListener("click", () => { startDialog.close(); localStorage.setItem("vv_studio_start_v1_seen", "1"); action(); });
+    return card;
+  };
+  startCards.append(
+    startCard("Continue project", "Resume exactly where you left off.", "PLAY → EDIT → EXPORT", () => setMode(activeMode)),
+    startCard("Make a beat", "Play the loaded kit, capture a pattern and arrange it.", "CHOOSE → PLAY → CAPTURE", () => { setMode("pads"); showBeatView("play"); }, true),
+    startCard("Sample or chop audio", "Load a one-shot or turn a break into playable slices.", "LOAD → SLICE → ASSIGN", () => { setMode("pads"); showBeatView("sample"); showSampleView("chop"); }),
+    startCard("DJ a set", "Choose two local tracks, mix a transition and record it.", "LOAD A/B → MIX → RECORD", () => setMode("dj"), true),
+  );
+  startDialog.append(startHead, startCards, el("p", "wa-start-privacy", "Audio stays on this device. Studio does not upload your files."));
+  workarea.append(startDialog);
+  const openStartCentre = (): void => {
+    localStorage.setItem("vv_studio_start_v1_seen", "1");
+    if (!startDialog.open) startDialog.showModal();
+  };
 
   function setMode(next: ModeId, workspace?: WorkspaceId): void {
     activeMode = next;
     if ((["drums", "pads", "synth"] as ModeId[]).includes(next)) lastEditMode = next;
     closeOverlays();
     modeButtons.forEach((button, id) => button.classList.toggle("active", id === next));
+    const makeMode = (["drums", "pads", "synth", "mix"] as ModeId[]).includes(next);
+    intentButtons.forEach((button, intent) => button.classList.toggle("active", intent === (makeMode ? "make" : next === "song" ? "arrange" : "dj")));
+    contextNav.hidden = !makeMode;
     new Set(Object.values(pages)).forEach((page) => { page.hidden = true; }); pages[next].hidden = false;
     trackButtons.forEach((button) => button.classList.toggle("active", button.dataset.mode === lastEditMode));
     // Intent hints: an explicit edit/play ask still shapes the pads page.
@@ -338,20 +372,29 @@ export function buildLayout(p: LayoutPanels): Layout {
     p.onModeChange(MODES.find((m) => m.id === next)!.label);
   }
 
+  const intentKey = (intent: "start" | "make" | "arrange" | "dj", label: string, icon: string, action: () => void): HTMLButtonElement => {
+    const button = btn("", "wa-modekey") as HTMLButtonElement;
+    button.classList.remove("wa-btn"); button.dataset.intent = intent;
+    button.append(el("span", "wa-mode-icon", icon), el("span", "wa-mode-label", label));
+    button.addEventListener("click", action); intentButtons.set(intent, button); primaryNav.append(button); return button;
+  };
+  intentKey("start", "START", "＋", openStartCentre);
+  intentKey("make", "MAKE", "◆", () => setMode(lastEditMode === "drums" || lastEditMode === "synth" ? lastEditMode : "pads"));
+  const arrangeKey = intentKey("arrange", "ARRANGE", "▤", () => setMode("song")); arrangeKey.dataset.mode = "song";
+  const djKey = intentKey("dj", "DJ", "◉", () => setMode("dj")); djKey.dataset.mode = "dj";
+
   ([
-    ["pads", "BEAT", "◆"],
+    ["pads", "PADS", "◆"],
     ["drums", "DRUMS", "▦"],
     ["synth", "SYNTH", "♪"],
-    ["song", "SONG", "▤"],
-    ["dj", "DJ", "◉"],
     ["mix", "MIX", "≡"],
   ] as const).forEach(([id, label, icon]) => {
-    const button = btn("", "wa-modekey") as HTMLButtonElement;
+    const button = btn("", "wa-modekey wa-context-key") as HTMLButtonElement;
     button.classList.remove("wa-btn"); button.dataset.mode = id;
     button.append(el("span", "wa-mode-icon", icon), el("span", "wa-mode-label", label));
     button.addEventListener("click", () => setMode(id));
     help(button, MODES.find((m) => m.id === id)!.helpText);
-    modeButtons.set(id, button); primaryNav.append(button);
+    modeButtons.set(id, button); contextNav.append(button);
   });
   p.inspector.classList.add("wa-inspector-pane");
   p.laneInspector.classList.add("wa-inspector-pane");
@@ -405,6 +448,9 @@ export function buildLayout(p: LayoutPanels): Layout {
     menuGroup("Help", [menuAction("Help & shortcuts", p.openTutorial)]),
   );
   setMode(activeMode);
+  requestAnimationFrame(() => {
+    if (!localStorage.getItem("vv_studio_start_v1_seen") && startDialog.isConnected) openStartCentre();
+  });
 
   // tutorial nav proxies — composite actions per tour stop:
   // 0 pads/perform+inspector · 1 pads/chop · 2 pads/steps · 3 synth/roll · 4 song · 5 mix · 6 synth/patch · 7 dj

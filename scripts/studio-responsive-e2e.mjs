@@ -23,6 +23,7 @@ const modeRoute = {
 }
 const openMode = async (page, mode) => {
   const [key] = modeRoute[mode]
+  if (['DRUMS', 'PADS', 'SYNTH', 'MIX'].includes(mode)) await page.locator('.wa-modekey[data-intent="make"]').click()
   await page.locator(`.wa-modekey[data-mode="${key}"]`).click()
   if (mode === 'PADS') await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' }).click()
 }
@@ -43,6 +44,7 @@ for (const [name, width, height] of viewports) {
     await page.evaluate(() => {
       localStorage.removeItem('vv_studio_v2')
       localStorage.setItem('vv_studio_tutorial_seen', '1')
+      localStorage.setItem('vv_studio_start_v1_seen', '1')
       localStorage.removeItem('vv_studio_mode')
       localStorage.removeItem('vv_studio_workspace')
       localStorage.removeItem('vv_studio_beat_view')
@@ -67,7 +69,8 @@ for (const [name, width, height] of viewports) {
     check(`${name}: no document horizontal overflow`, geometry.docWidth <= geometry.clientWidth + 1, `${geometry.docWidth}/${geometry.clientWidth}`)
     check(`${name}: workstation fills viewport`, Math.abs(geometry.winHeight - geometry.viewportHeight) <= 2, `${geometry.winHeight}/${geometry.viewportHeight}`)
     check(`${name}: BEAT is the opening screen`, await page.locator('.wa-page-beat').isVisible())
-    check(`${name}: six primary destinations`, await page.locator('.wa-primary-nav .wa-modekey').count() === 6 && await page.locator('.wa-context-nav').count() === 0)
+    check(`${name}: four primary intents`, await page.locator('.wa-primary-nav .wa-modekey').count() === 4)
+    check(`${name}: Make exposes four contextual instruments`, await page.locator('.wa-context-nav .wa-modekey').count() === 4)
     check(`${name}: conventional application menus are present`, await page.locator('.wa-studio-menu > .wa-menu').count() === 4)
     if (name === 'desktop' || name === 'laptop') {
       const shellDensity = await page.evaluate(() => ({
@@ -237,7 +240,9 @@ for (const [name, width, height] of viewports) {
           const mixer = document.querySelector('.wa-dj-mixer')
           const mixerRect = mixer?.getBoundingClientRect()
           const recordStatus = document.querySelector('.wa-dj-record-status')?.getBoundingClientRect()
-          const performanceButtons = [...document.querySelectorAll('.wa-dj-deck .wa-dj-performance .wa-btn')].map((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height, clipped: node.scrollWidth > node.clientWidth + 1 }))
+          const performanceButtons = [...document.querySelectorAll('.wa-dj-deck .wa-dj-performance .wa-btn')]
+            .filter((node) => node.checkVisibility())
+            .map((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height, clipped: node.scrollWidth > node.clientWidth + 1 }))
           const turntable = document.querySelector('.wa-dj-deck-a .wa-dj-turntable')?.getBoundingClientRect()
           const start = document.querySelector('.wa-dj-deck-a .wa-dj-start')?.getBoundingClientRect()
           const speed = document.querySelector('.wa-dj-deck-a .wa-dj-speed')?.getBoundingClientRect()
@@ -248,14 +253,18 @@ for (const [name, width, height] of viewports) {
         })
         check(`${name}: DJ exposes two usable decks`, djLayout.widths.length === 2 && djLayout.widths.every((width) => width >= (name === 'desktop' || name === 'laptop' ? 260 : 320)), djLayout.widths.join('/'))
         check(`${name}: DJ crossfader is usable`, djLayout.crossfader >= 90, `${Math.round(djLayout.crossfader)}px`)
-        check(`${name}: DJ platter is turntable-sized`, djLayout.platter >= 220, `${Math.round(djLayout.platter)}px`)
-        check(`${name}: DJ platter clears 33/45 and start controls`, djLayout.platterControlsClear)
-        check(`${name}: quartz badge clears the platter`, djLayout.quartzClear, `${Math.round(djLayout.quartzGap)}px gap`)
-        check(`${name}: DJ pitch control is vertical`, djLayout.pitchHeight > djLayout.pitchWidth * 2, `${Math.round(djLayout.pitchWidth)}×${Math.round(djLayout.pitchHeight)}px`)
-        check(`${name}: DJ performance buttons do not squash`, djLayout.performanceButtons.every((button) => button.width >= 28 && button.height >= 30 && !button.clipped), `${Math.round(Math.min(...djLayout.performanceButtons.map((button) => button.width)))}×${Math.round(Math.min(...djLayout.performanceButtons.map((button) => button.height)))}px min`)
+        if (name === 'desktop' || name === 'laptop' || name === 'tablet') {
+          check(`${name}: DJ platter is turntable-sized`, djLayout.platter >= 220, `${Math.round(djLayout.platter)}px`)
+          check(`${name}: DJ platter clears 33/45 and start controls`, djLayout.platterControlsClear)
+          check(`${name}: quartz badge clears the platter`, djLayout.quartzClear, `${Math.round(djLayout.quartzGap)}px gap`)
+          check(`${name}: DJ pitch control is vertical`, djLayout.pitchHeight > djLayout.pitchWidth * 2, `${Math.round(djLayout.pitchWidth)}×${Math.round(djLayout.pitchHeight)}px`)
+        } else check(`${name}: compact DJ view removes the decorative platter`, djLayout.platter === 0)
+        check(`${name}: DJ performance buttons do not squash`, djLayout.performanceButtons.length > 0 && djLayout.performanceButtons.every((button) => button.width >= 28 && button.height >= 30 && !button.clipped), `${Math.round(Math.min(...djLayout.performanceButtons.map((button) => button.width)))}×${Math.round(Math.min(...djLayout.performanceButtons.map((button) => button.height)))}px min`)
         check(`${name}: DJ mixer needs no internal scroll`, djLayout.mixerScroll <= 1 && djLayout.recordBottom <= djLayout.mixerBottom + 1, `${Math.round(djLayout.mixerScroll)}px overflow`)
-        if (name === 'phone' || name === 'landscape') {
+        if (name === 'phone') {
           check(`${name}: DJ decks swipe horizontally`, Math.abs(djLayout.tops[1] - djLayout.tops[0]) <= 2 && djLayout.lefts[1] > djLayout.lefts[0] + 250 && djLayout.deckHostScroll > 0, `${djLayout.lefts.join('/')} · scroll ${Math.round(djLayout.deckHostScroll)}px`)
+        } else if (name === 'landscape') {
+          check(`${name}: both DJ decks share the performance surface`, Math.abs(djLayout.tops[1] - djLayout.tops[0]) <= 2 && djLayout.lefts[1] > djLayout.lefts[0] + 250 && djLayout.recordBottom <= djLayout.hostBottom + 1, `${djLayout.lefts.join('/')} · mixer ${Math.round(djLayout.recordBottom)}/${Math.round(djLayout.hostBottom)}`)
         }
       }
     }
@@ -282,9 +291,19 @@ for (const [name, width, height] of viewports) {
         const visible = [...node.querySelectorAll(':scope > [data-synth-bank], :scope > [data-synth-bank] .wa-slider-row, :scope > [data-synth-bank] select, :scope > [data-synth-bank] canvas')].filter((child) => child.checkVisibility())
         const controls = visible.map((child) => child.getBoundingClientRect())
         const contained = (control) => control.top >= host.top - 1 && control.bottom <= host.bottom + 1 && control.left >= host.left - 1 && control.right <= host.right + 1
-        return { scroll: node.scrollHeight - node.clientHeight, count: controls.length, contained: controls.every(contained), offenders: visible.filter((child) => !contained(child.getBoundingClientRect())).map((child) => child.className || child.tagName).slice(0, 3) }
+        const bounds = (rect) => ({ left: Math.round(rect.left), right: Math.round(rect.right), top: Math.round(rect.top), bottom: Math.round(rect.bottom) })
+        return {
+          scroll: node.scrollHeight - node.clientHeight,
+          count: controls.length,
+          contained: controls.every(contained),
+          host: bounds(host),
+          offenders: visible
+            .filter((child) => !contained(child.getBoundingClientRect()))
+            .map((child) => ({ name: child.className || child.tagName, ...bounds(child.getBoundingClientRect()) }))
+            .slice(0, 3),
+        }
       })
-      check(`${name}: ${bank} synth bank fits without scrolling`, bankFit.count > 0 && bankFit.scroll <= 1 && bankFit.contained, `${bankFit.count} modules · ${Math.round(bankFit.scroll)}px · ${bankFit.offenders.join(', ')}`)
+      check(`${name}: ${bank} synth bank fits without scrolling`, bankFit.count > 0 && bankFit.scroll <= 1 && bankFit.contained, `${bankFit.count} modules · ${Math.round(bankFit.scroll)}px · host ${JSON.stringify(bankFit.host)} · ${JSON.stringify(bankFit.offenders)}`)
     }
     await page.screenshot({ path: `studio-synth-advanced-${name}.png`, fullPage: false })
     await page.locator('.wa-synth-modebar button', { hasText: 'Essentials' }).click()
@@ -359,11 +378,11 @@ for (const [name, width, height] of viewports) {
       await page.locator('.wa-transport-more').click()
       check(`${name}: CLIPS exposes scene range`, /Scenes \d+–\d+ of 16/.test((await page.locator('.wa-scene-position').textContent()) ?? ''))
       await openMode(page, 'PADS')
-      // The six stable destinations must sit inside the viewport on the dock.
+      // The four outcome destinations must sit inside the viewport on the dock.
       const keyBounds = await page.locator('.wa-primary-nav .wa-modekey').evaluateAll((nodes) => nodes.map((node) => {
         const r = node.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }
       }))
-      check(`${name}: mode keys stay inside the viewport`, keyBounds.length === 6 && keyBounds.every((r) => r.top >= 0 && r.left >= 0 && r.right <= width + 1 && r.bottom <= height + 1), `${keyBounds.length} keys`)
+      check(`${name}: mode keys stay inside the viewport`, keyBounds.length === 4 && keyBounds.every((r) => r.top >= 0 && r.left >= 0 && r.right <= width + 1 && r.bottom <= height + 1), `${keyBounds.length} keys`)
       await openMode(page, 'CLIPS')
       await page.locator('.wa-menu > summary', { hasText: 'Help' }).click()
       await page.locator('.wa-menu[open] .wa-studio-menu-body button', { hasText: 'Help & shortcuts' }).click()

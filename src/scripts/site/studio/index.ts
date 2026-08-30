@@ -149,6 +149,7 @@ export async function initStudio(): Promise<void> {
   // ── Transport ──
   const transportBar = el("div", "wa-transport");
   const playBtn = btn("▶"), stopBtn = btn("■");
+  playBtn.setAttribute("aria-label", "Play"); stopBtn.setAttribute("aria-label", "Stop");
   const bpmDown = btn("–", "wa-btn-sm"), bpmUp = btn("+", "wa-btn-sm");
   const bpmInput = document.createElement("input");
   bpmInput.type = "number"; bpmInput.min = "40"; bpmInput.max = "240"; bpmInput.value = String(transport.bpm); bpmInput.className = "wa-bpm";
@@ -156,7 +157,7 @@ export async function initStudio(): Promise<void> {
   const swingIn = document.createElement("input");
   swingIn.type = "range"; swingIn.min = "0"; swingIn.max = "0.6"; swingIn.step = "0.02"; swingIn.value = "0"; swingIn.className = "wa-swing-in";
   const swingWrap = el("span", "wa-swing"); swingWrap.append(el("span", "wa-lbl", "Swing"), swingIn);
-  const metroBtn = btn("Metro", "wa-toggle"), songBtn = btn(transport.songMode ? "Song" : "Clips", "wa-toggle");
+  const metroBtn = btn("Metro", "wa-toggle"), songBtn = btn(transport.songMode ? "Song" : "Pattern", "wa-toggle");
   const countBtn = btn("Count-in", "wa-toggle");
   let countIn = localStorage.getItem("vv_studio_countin") === "1";
   countBtn.classList.toggle("active", countIn);
@@ -195,14 +196,14 @@ export async function initStudio(): Promise<void> {
   help(recChip, "Recording is armed — pad or key passes land in this scene (the one you're editing).");
   // EXPORT is a rare terminal action — a chassis key opening a modal, rather
   // than a panel holding permanent space on the MIX faceplate.
-  const exportBtn = btn("EXPORT", "wa-btn-sm wa-export-key");
+  const exportBtn = btn("SAVE / EXPORT", "wa-btn-sm wa-export-key");
   help(exportBtn, "Render the track to WAV, MP3 or stems, or save and open project files.");
   const transportCore = el("div", "wa-transport-core");
-  transportCore.append(playBtn, stopBtn, songBtn, recChip, el("span", "wa-lbl", "BPM"), bpmDown, bpmInput, bpmUp, undoBtn, redoBtn);
+  transportCore.append(playBtn, stopBtn, songBtn, recChip, el("span", "wa-lbl", "BPM"), bpmDown, bpmInput, bpmUp, undoBtn, redoBtn, exportBtn);
   const transportTiming = el("div", "wa-transport-timing");
   transportTiming.append(swingWrap, metroBtn, metroVolIn, countBtn);
   const transportActions = el("div", "wa-transport-actions");
-  transportActions.append(exportBtn, tutorialBtn);
+  transportActions.append(tutorialBtn);
   const transportMore = btn("MORE", "wa-btn-sm wa-transport-more");
   transportMore.setAttribute("aria-expanded", "false");
   transportMore.addEventListener("click", () => {
@@ -369,7 +370,7 @@ export async function initStudio(): Promise<void> {
     lcdBpm.textContent = `${transport.bpm} BPM`;
     projectName.value = songMeta.title;
     swingIn.value = String(transport.swing);
-    songBtn.textContent = transport.songMode ? "Song" : "Clips";
+    songBtn.textContent = transport.songMode ? "Song" : "Pattern";
     songBtn.classList.toggle("active", transport.songMode);
     masterKnob.set(mixState.masterLevel);
     powerBtn.classList.toggle("on", mixState.power);
@@ -416,7 +417,7 @@ export async function initStudio(): Promise<void> {
       setTimeout(() => { songBtn.classList.remove("wa-warn-flash"); if (lcdState.textContent === "NO SONG") lcdState.textContent = prior ?? "■ STOP"; }, 1600);
       return;
     }
-    transport.songMode = !transport.songMode; songBtn.textContent = transport.songMode ? "Song" : "Clips"; songBtn.classList.toggle("active", transport.songMode);
+    transport.songMode = !transport.songMode; songBtn.textContent = transport.songMode ? "Song" : "Pattern"; songBtn.classList.toggle("active", transport.songMode);
     renderSel.value = transport.songMode ? "song" : "pattern"; saveAll();
   });
   // ── Transport / scheduler ── (playback.ts — Phase 0 split)

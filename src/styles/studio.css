@@ -2125,23 +2125,328 @@
   .immersive-page .wa-page-synth .wa-synth-main,
   .immersive-page .wa-page-synth .wa-synth-viewhost,
   .immersive-page .wa-page-synth .wa-sound-host { overflow: hidden; }
-  .immersive-page .wa-vpatch:not(.wa-simple) > [data-synth-bank] { padding: 5px; }
+  .immersive-page .wa-synth-bank-nav { max-width: 100%; min-width: 0; overflow-x: auto; overflow-y: hidden; }
+  .immersive-page .wa-synth-bank-nav .wa-subtab { flex: 0 0 auto; min-width: 44px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) > [data-synth-bank] { padding: 2px; }
   .immersive-page .wa-vpatch:not(.wa-simple) .wa-slider-row {
     display: flex;
     min-width: 0;
     flex-direction: column;
     align-items: stretch;
     gap: 1px;
-    margin-block: 2px;
+    margin-block: 1px;
   }
-  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-row { align-items: center; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-row { align-items: center; min-width: 0; padding: 2px 1px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob { width: 34px; height: 34px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-val,
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-lbl { font-size: 7px; line-height: 1; }
   .immersive-page .wa-vpatch:not(.wa-simple) select,
   .immersive-page .wa-vpatch:not(.wa-simple) input { width: 100%; min-width: 0; }
   .immersive-page .wa-vpatch:not(.wa-simple) .wa-vmatrix-row {
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) 52px;
     gap: 3px;
-    margin-block: 3px;
+    margin-block: 1px;
   }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-vmatrix-row select { min-height: 34px; height: 34px; }
+}
+
+/* Product-shell cascade guard. These rules follow the historical instrument
+   layers so intent navigation and dense phone controls keep their contract. */
+.immersive-page .wa-export-key {
+  display: inline-flex !important;
+  color: #11161a !important;
+  border-color: #e19a58 !important;
+  background: #e19a58 !important;
+  font-weight: 800;
+}
+
+@media (max-width: 760px) {
+  .wa-primary-nav { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  .immersive-page .wa-win:has(.wa-context-nav:not([hidden])) .wa-pagehost { padding-bottom: 5px; }
+  .immersive-page .wa-synth-bank-nav { max-width: 100%; min-width: 0; overflow-x: auto; overflow-y: hidden; }
+  .immersive-page .wa-synth-bank-nav .wa-subtab { flex: 0 0 auto; min-width: 44px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) > [data-synth-bank] { padding: 2px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-row.wa-slider-row {
+    min-width: 0;
+    padding: 2px 1px;
+    margin-block: 0;
+  }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob { width: 34px; height: 34px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-val,
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-lbl { font-size: 7px; line-height: 1; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-vmatrix-row { margin-block: 1px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-vmatrix-row select { min-height: 34px; height: 34px; }
+}
+
+@media (max-width: 760px), (max-height: 540px) and (pointer: coarse) {
+  .wa-menu-label { width: 36px !important; font-size: 0 !important; }
+  .wa-menu:nth-child(1) .wa-menu-label::after { content: "FILE" !important; font-size: 8px !important; }
+  .wa-menu:nth-child(2) .wa-menu-label::after { content: "EDIT" !important; font-size: 8px !important; }
+  .wa-menu:nth-child(3) .wa-menu-label::after { content: "VIEW" !important; font-size: 8px !important; }
+  .wa-menu:nth-child(4) .wa-menu-label::after { content: "HELP" !important; font-size: 8px !important; }
+}
+
+@media (max-height: 540px) and (pointer: coarse) {
+  .wa-primary-nav { display: flex !important; }
+  .immersive-page .wa-win:has(.wa-context-nav:not([hidden])) .wa-pagehost { padding-bottom: 4px; }
+  .immersive-page .wa-page-dj { overflow: hidden !important; }
+  .immersive-page .wa-dj { grid-template-rows: 28px 42px minmax(0,1fr); padding: 0; }
+  .immersive-page .wa-page-dj .wa-dj-library { min-height: 42px; max-height: 42px; overflow: hidden; }
+  .immersive-page .wa-dj-decks { display: grid !important; grid-template-columns: minmax(250px,1fr) 104px minmax(250px,1fr) !important; gap: 4px; overflow-x: auto !important; overflow-y: hidden !important; scroll-snap-type: none !important; }
+  .immersive-page .wa-dj-deck { width: auto !important; min-width: 250px; min-height: 0 !important; height: 100%; overflow: hidden !important; }
+  .immersive-page .wa-dj-mixer { position: static !important; width: auto; min-width: 104px; height: 100%; padding: 4px; display: flex; flex-direction: column; }
+  .wa-dj[data-deck-view] .wa-dj-turntable { display: none; }
+  .wa-dj[data-deck-view] .wa-dj-deck { grid-template-columns: minmax(0,1fr); grid-template-rows: 28px 22px 46px 42px minmax(52px,1fr); padding: 4px; gap: 3px; }
+  .wa-dj[data-deck-view] .wa-dj-deck > * { grid-column: 1; }
+  .wa-dj[data-deck-view] .wa-dj-deck-head { grid-row: 1; }
+  .wa-dj[data-deck-view] .wa-dj-display { grid-row: 2; }
+  .wa-dj[data-deck-view] .wa-dj-waveform { grid-row: 3; height: 46px; }
+  .wa-dj[data-deck-view] .wa-dj-transport { grid-row: 4; grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .wa-dj[data-deck-view] .wa-dj-performance { grid-row: 5; margin-top: 0 !important; overflow: hidden; }
+  .wa-dj-hotcues,
+  .wa-dj-clear-cues { display: none; }
+}
+
+/* The legacy density layers above still own instruments; these are the only
+   product-shell declarations that must remain final in the cascade. */
+.immersive-page .wa-export-key {
+  display: inline-flex !important;
+  color: #11161a !important;
+  border-color: #e19a58 !important;
+  background: #e19a58 !important;
+  font-weight: 800;
+}
+
+@media (max-width: 760px) {
+  .wa-primary-nav { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  .immersive-page .wa-win:has(.wa-context-nav:not([hidden])) .wa-pagehost { padding-bottom: 5px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob { width: 36px; height: 36px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) > [data-synth-bank] { padding: 3px; }
+}
+
+@media (max-width: 760px), (max-height: 540px) and (pointer: coarse) {
+  .wa-menu-label { width: 36px !important; font-size: 0 !important; }
+  .wa-menu:nth-child(1) .wa-menu-label::after { content: "FILE" !important; font-size: 8px !important; }
+  .wa-menu:nth-child(2) .wa-menu-label::after { content: "EDIT" !important; font-size: 8px !important; }
+  .wa-menu:nth-child(3) .wa-menu-label::after { content: "VIEW" !important; font-size: 8px !important; }
+  .wa-menu:nth-child(4) .wa-menu-label::after { content: "HELP" !important; font-size: 8px !important; }
+}
+
+@media (max-height: 540px) and (pointer: coarse) {
+  .wa-primary-nav { display: flex !important; }
+  .immersive-page .wa-win:has(.wa-context-nav:not([hidden])) .wa-pagehost { padding-bottom: 4px; }
+  .immersive-page .wa-page-dj { overflow: hidden !important; }
+  .immersive-page .wa-dj { grid-template-rows: 28px 42px minmax(0,1fr); padding: 0; }
+  .immersive-page .wa-page-dj .wa-dj-library { min-height: 42px; max-height: 42px; overflow: hidden; }
+  .immersive-page .wa-dj-decks { display: grid !important; grid-template-columns: minmax(250px,1fr) 104px minmax(250px,1fr) !important; gap: 4px; overflow-x: auto !important; overflow-y: hidden !important; scroll-snap-type: none !important; }
+  .immersive-page .wa-dj-deck { width: auto !important; min-width: 250px; min-height: 0 !important; height: 100%; overflow: hidden !important; }
+  .immersive-page .wa-dj-mixer { position: static !important; width: auto; min-width: 104px; height: 100%; padding: 4px; display: flex; flex-direction: column; }
+  .wa-dj[data-deck-view] .wa-dj-turntable { display: none; }
+  .wa-dj[data-deck-view] .wa-dj-deck { grid-template-columns: minmax(0,1fr); grid-template-rows: 28px 22px 46px 42px minmax(52px,1fr); padding: 4px; gap: 3px; }
+  .wa-dj[data-deck-view] .wa-dj-deck > * { grid-column: 1; }
+  .wa-dj[data-deck-view] .wa-dj-deck-head { grid-row: 1; }
+  .wa-dj[data-deck-view] .wa-dj-display { grid-row: 2; }
+  .wa-dj[data-deck-view] .wa-dj-waveform { grid-row: 3; height: 46px; }
+  .wa-dj[data-deck-view] .wa-dj-transport { grid-row: 4; grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .wa-dj[data-deck-view] .wa-dj-performance { grid-row: 5; margin-top: 0 !important; overflow: hidden; }
+  .wa-dj-hotcues,
+  .wa-dj-clear-cues { display: none; }
+}
+
+/* v21 product shell. A small cascade guard below the historical instrument
+   layers preserves the navigation and compact DJ contracts. */
+.wa-context-nav {
+  width: 100%;
+  padding-top: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid #29313a;
+}
+.wa-context-nav[hidden] { display: none !important; }
+.immersive-page .wa-context-key { min-height: 42px; flex-direction: row; justify-content: flex-start; padding-inline: 10px; }
+.immersive-page .wa-context-key .wa-mode-icon { font-size: 13px; }
+
+.wa-start-dialog,
+.wa-dj-recording-review {
+  width: min(760px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  overflow: auto;
+  color: #eef1f3;
+  border: 1px solid #48535e;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #20262d, #11161b 72%);
+  box-shadow: 0 28px 90px #000e, inset 0 1px #ffffff0d;
+}
+.wa-start-dialog::backdrop,
+.wa-dj-recording-review::backdrop { background: rgba(3,5,8,.82); backdrop-filter: blur(7px); }
+.wa-start-head { position: relative; padding: 28px 30px 18px; border-bottom: 1px solid #323b45; }
+.wa-kicker { color: var(--wa-accent); font: 800 9px/1 var(--wa-mono); letter-spacing: .2em; }
+.wa-start-title { display: block; margin-top: 8px; color: #f5f0e7; font: 500 clamp(24px, 4vw, 38px)/1.05 var(--wa-font); letter-spacing: .02em; }
+.wa-start-copy { max-width: 560px; margin: 10px 0 0; color: #aeb7c1; font: 14px/1.5 var(--wa-sans); }
+.wa-start-close { position: absolute; top: 18px; right: 18px; }
+.wa-start-cards { padding: 18px; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.wa-start-card {
+  min-height: 142px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  color: #dce2e7;
+  border: 1px solid #37414b;
+  border-radius: 7px;
+  background: #171d23;
+}
+.wa-start-card:hover,
+.wa-start-card:focus-visible { border-color: #8b99a7; background: #1e252d; }
+.wa-start-card.primary { border-color: color-mix(in srgb, var(--wa-accent) 65%, #37414b); background: linear-gradient(145deg, rgba(221,135,70,.16), #181e24 58%); }
+.wa-start-card-title { color: #f3eee6; font: 700 17px/1.2 var(--wa-sans); }
+.wa-start-card-copy { margin-top: 7px; color: #aeb7c1; font: 12px/1.45 var(--wa-sans); }
+.wa-start-card-steps { margin-top: auto; padding-top: 18px; color: #76d9bb; font: 700 9px/1 var(--wa-mono); letter-spacing: .1em; }
+.wa-start-privacy { margin: 0; padding: 0 30px 24px; color: #87929d; font: 10px/1.4 var(--wa-mono); }
+
+.immersive-page .wa-export-key { color: #11161a; border-color: #e19a58; background: #e19a58; font-weight: 800; }
+
+.immersive-page .wa-dj { height: 100%; min-height: 0; display: grid; grid-template-rows: 34px auto minmax(0,1fr); gap: 5px; overflow: hidden; }
+.wa-dj-workflow { min-width: 0; padding: 4px 8px; display: flex; align-items: center; gap: 14px; overflow-x: auto; border: 1px solid #303945; border-radius: 4px; background: #151b21; color: #7f8994; font: 700 8px/1 var(--wa-mono); letter-spacing: .08em; white-space: nowrap; }
+.wa-dj-workflow-title { color: #eef1f3; font-size: 10px; }
+.wa-dj-workflow > span.active { color: #74d8ba; }
+.wa-dj-view-toggle { margin-left: auto; flex: 0 0 auto; }
+.immersive-page .wa-page-dj .wa-dj-library { min-height: 62px; max-height: 152px; padding: 7px; grid-template-columns: auto auto minmax(180px,1fr) auto; }
+.wa-dj-library-tools { min-width: 0; display: grid; grid-template-columns: minmax(120px,1fr) 120px; gap: 5px; }
+.wa-dj-library-search,
+.wa-dj-library-sort { min-width: 0; min-height: 32px; }
+.wa-dj-library-row { grid-template-columns: minmax(150px,1fr) 70px 72px 64px 64px; }
+.wa-dj-library-row.queued { border-left: 3px solid #74d8ba; padding-left: 6px; }
+.wa-dj-queue { color: #74d8ba; }
+.wa-dj-recording-review { width: min(480px, calc(100vw - 24px)); padding: 24px; }
+.wa-dj-recording-review audio,
+.wa-dj-recording-review input { width: 100%; margin-top: 16px; }
+.wa-dj-recording-actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 7px; }
+.wa-dj-recording-actions .primary { color: #10151a; border-color: #e19a58; background: #e19a58; }
+.wa-dj[data-deck-view="compact"] .wa-dj-turntable { display: none; }
+.wa-dj[data-deck-view="compact"] .wa-dj-deck { grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto 92px auto minmax(76px,1fr); }
+.wa-dj[data-deck-view="compact"] .wa-dj-deck > * { grid-column: 1; }
+.wa-dj[data-deck-view="compact"] .wa-dj-deck-head { grid-row: 1; }
+.wa-dj[data-deck-view="compact"] .wa-dj-display { grid-row: 2; }
+.wa-dj[data-deck-view="compact"] .wa-dj-waveform { grid-row: 3; }
+.wa-dj[data-deck-view="compact"] .wa-dj-transport { grid-row: 4; grid-template-columns: repeat(4,minmax(0,1fr)); }
+.wa-dj[data-deck-view="compact"] .wa-dj-transport .wa-dj-play { grid-column: auto; }
+.wa-dj[data-deck-view="compact"] .wa-dj-performance { grid-row: 5; }
+
+@media (min-width: 761px) and (min-height: 541px) {
+  .immersive-page .wa-dj-decks { display: grid !important; grid-template-columns: minmax(250px,1fr) 132px minmax(250px,1fr); min-height: 0; overflow: hidden; }
+  .immersive-page .wa-dj-deck { min-height: 0; overflow: auto; }
+}
+
+@media (max-width: 760px), (max-height: 540px) and (pointer: coarse) {
+  .wa-menu-label { width: 36px; font-size: 8px; }
+  .wa-menu:nth-child(1) .wa-menu-label::after { content: "FILE"; font-size: 8px; }
+  .wa-menu:nth-child(2) .wa-menu-label::after { content: "EDIT"; font-size: 8px; }
+  .wa-menu:nth-child(3) .wa-menu-label::after { content: "VIEW"; font-size: 8px; }
+  .wa-menu:nth-child(4) .wa-menu-label::after { content: "HELP"; font-size: 8px; }
+  .immersive-page .wa-export-key { display: inline-flex !important; min-width: 72px; padding-inline: 7px; font-size: 8px; }
+  .wa-start-cards { grid-template-columns: minmax(0,1fr); }
+  .wa-start-head { padding: 22px 20px 15px; }
+  .wa-start-card { min-height: 118px; }
+  .wa-start-privacy { padding-inline: 20px; }
+}
+
+@media (max-width: 760px) {
+  .wa-primary-nav { height: 52px; grid-template-columns: repeat(4,1fr); }
+  .wa-context-nav {
+    position: fixed;
+    left: 5px;
+    right: 5px;
+    bottom: 64px;
+    width: auto;
+    height: 44px;
+    padding: 3px;
+    display: grid;
+    grid-template-columns: repeat(4,1fr);
+    gap: 3px;
+    border: 1px solid #35404a;
+    border-radius: 6px;
+    background: rgba(18,23,29,.985);
+    box-shadow: 0 -10px 30px #0008;
+  }
+  .immersive-page .wa-context-key { min-height: 36px; justify-content: center; padding: 3px; }
+  .immersive-page .wa-win:has(.wa-context-nav:not([hidden])) .wa-pagehost { padding-bottom: 52px; }
+  .wa-transport-core .wa-history { display: none; }
+  .immersive-page .wa-page-dj { overflow: hidden !important; }
+  .immersive-page .wa-dj { grid-template-rows: 32px minmax(76px,auto) minmax(0,1fr); padding-bottom: 82px; }
+  .wa-dj-workflow { gap: 9px; }
+  .wa-dj-workflow > span:not(.wa-dj-workflow-title) { display: none; }
+  .immersive-page .wa-page-dj .wa-dj-library { min-height: 76px; max-height: 126px; grid-template-columns: auto auto 1fr; overflow: auto; }
+  .wa-dj-private { display: none; }
+  .wa-dj-library-tools { grid-column: 3; grid-template-columns: minmax(0,1fr); }
+  .wa-dj-library-sort { display: none; }
+  .wa-dj-library-row { grid-template-columns: minmax(110px,1fr) 56px 58px 58px; }
+  .wa-dj-library-row .wa-dj-queue { display: none; }
+  .immersive-page .wa-dj-decks { display: flex !important; flex-direction: row !important; overflow-x: auto !important; overflow-y: hidden; scroll-snap-type: x mandatory; }
+  .immersive-page .wa-dj-deck { flex: 0 0 100%; min-height: 0; height: 100%; overflow-y: auto; scroll-snap-align: start; }
+  .immersive-page .wa-dj-mixer {
+    position: fixed;
+    left: 5px;
+    right: 5px;
+    bottom: 64px;
+    z-index: 170;
+    height: 76px;
+    padding: 5px 8px;
+    display: grid;
+    grid-template: 1fr 18px / minmax(0,1fr) 90px;
+    gap: 3px 8px;
+    background: rgba(20,25,31,.98);
+    box-shadow: 0 -9px 28px #000a;
+  }
+  .wa-dj-mixer > :not(.wa-dj-crossfader):not(.wa-dj-record):not(.wa-dj-record-status) { display: none; }
+  .wa-dj-mixer .wa-dj-crossfader { grid-column: 1; grid-row: 1 / -1; margin: 0; }
+  .wa-dj-mixer .wa-dj-record { grid-column: 2; grid-row: 1; min-height: 36px; }
+  .wa-dj-mixer .wa-dj-record-status { grid-column: 2; grid-row: 2; }
+}
+
+@media (max-height: 540px) and (pointer: coarse) {
+  .wa-primary-nav { display: flex; height: auto; }
+  .wa-context-nav {
+    position: fixed;
+    left: 82px;
+    right: 5px;
+    bottom: 5px;
+    width: auto;
+    height: 38px;
+    padding: 2px;
+    display: grid;
+    grid-template-columns: repeat(4,1fr);
+    border: 1px solid #35404a;
+    border-radius: 5px;
+    background: rgba(18,23,29,.985);
+  }
+  .immersive-page .wa-context-key { min-height: 32px; justify-content: center; }
+  .immersive-page .wa-win:has(.wa-context-nav:not([hidden])) .wa-pagehost { padding-bottom: 42px; }
+  .immersive-page .wa-page-dj { overflow: hidden !important; }
+  .immersive-page .wa-dj { grid-template-rows: 28px 42px minmax(0,1fr); padding: 0; }
+  .immersive-page .wa-page-dj .wa-dj-library { min-height: 42px; max-height: 42px; grid-template-columns: auto auto minmax(120px,1fr); overflow: hidden; }
+  .wa-dj-library-rows,
+  .wa-dj-private,
+  .wa-dj-library-sort { display: none; }
+  .wa-dj-library-tools { grid-template-columns: minmax(0,1fr); }
+  .immersive-page .wa-dj-decks { display: grid !important; grid-template-columns: minmax(250px,1fr) 104px minmax(250px,1fr); gap: 4px; overflow-x: auto !important; overflow-y: hidden; scroll-snap-type: none; }
+  .immersive-page .wa-dj-deck { width: auto; min-width: 250px; min-height: 0; height: 100%; overflow: hidden; }
+  .immersive-page .wa-dj-mixer { position: static; width: auto; height: 100%; min-width: 104px; padding: 4px; display: flex; flex-direction: column; }
+  .wa-dj-mixer > :not(.wa-dj-crossfader):not(.wa-dj-record):not(.wa-dj-record-status) { display: none; }
+  .wa-dj-mixer .wa-dj-crossfader { margin-top: auto; }
+  .wa-dj[data-deck-view] .wa-dj-turntable { display: none; }
+  .wa-dj[data-deck-view] .wa-dj-deck { grid-template-columns: minmax(0,1fr); grid-template-rows: 28px 22px 46px 42px minmax(52px,1fr); padding: 4px; gap: 3px; }
+  .wa-dj[data-deck-view] .wa-dj-deck > * { grid-column: 1; }
+  .wa-dj[data-deck-view] .wa-dj-deck-head { grid-row: 1; }
+  .wa-dj[data-deck-view] .wa-dj-display { grid-row: 2; }
+  .wa-dj[data-deck-view] .wa-dj-waveform { grid-row: 3; height: 46px; }
+  .wa-dj[data-deck-view] .wa-dj-transport { grid-row: 4; grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .wa-dj[data-deck-view] .wa-dj-performance { grid-row: 5; overflow: hidden; }
+  .wa-dj-hotcues,
+  .wa-dj-clear-cues { display: none; }
 }
 
 /* ── Studio v16: timeline-first song workspace ─────────────────────────── */
@@ -4203,16 +4508,16 @@ button.wa-arrange-lane-name { cursor: pointer; }
     bottom: 6px;
     max-height: calc(100dvh - 92px);
   }
-  .immersive-page .wa-dj-deck { min-height: 620px; }
+  .immersive-page .wa-page-dj { overflow: hidden !important; }
   .immersive-page .wa-dj-decks {
-    display: flex !important;
-    flex-direction: row !important;
-    gap: 8px;
+    display: grid !important;
+    grid-template-columns: minmax(250px, 1fr) 104px minmax(250px, 1fr);
+    gap: 4px;
     overflow-x: auto !important;
     overflow-y: hidden;
-    scroll-snap-type: x mandatory;
+    scroll-snap-type: none;
   }
-  .immersive-page .wa-dj-deck { flex: 0 0 100%; width: 100%; scroll-snap-align: start; }
+  .immersive-page .wa-dj-deck { width: auto; min-width: 250px; min-height: 0; height: 100%; overflow: hidden; scroll-snap-align: none; }
 }
 
 /* ── Tightness pass: content must either fit its aperture or own the scroll. */
@@ -5132,6 +5437,7 @@ button.wa-arrange-lane-name { cursor: pointer; }
 }
 
 @media (min-width: 761px) and (max-width: 1120px) and (min-height: 541px) {
+  .immersive-page .wa-page-dj .wa-dj-deck { grid-template-columns: minmax(0, 1fr) 108px; }
   .immersive-page .wa-title-text,
   .immersive-page .wa-master-knob,
   .immersive-page .wa-lcd-mode { display: none; }
@@ -5326,21 +5632,27 @@ button.wa-arrange-lane-name { cursor: pointer; }
   .immersive-page .wa-page-synth .wa-synth-main,
   .immersive-page .wa-page-synth .wa-synth-viewhost,
   .immersive-page .wa-page-synth .wa-sound-host { overflow: hidden; }
-  .immersive-page .wa-vpatch:not(.wa-simple) > [data-synth-bank] { padding: 5px; }
+  .immersive-page .wa-synth-bank-nav { max-width: 100%; min-width: 0; overflow-x: auto; overflow-y: hidden; }
+  .immersive-page .wa-synth-bank-nav .wa-subtab { flex: 0 0 auto; min-width: 44px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) > [data-synth-bank] { padding: 2px; }
   .immersive-page .wa-vpatch:not(.wa-simple) .wa-slider-row {
     display: flex;
     min-width: 0;
     flex-direction: column;
     align-items: stretch;
     gap: 1px;
-    margin-block: 2px;
+    margin-block: 1px;
   }
-  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-row { align-items: center; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-row { align-items: center; min-width: 0; padding: 2px 1px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob { width: 34px; height: 34px; }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-val,
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-knob-lbl { font-size: 7px; line-height: 1; }
   .immersive-page .wa-vpatch:not(.wa-simple) select,
   .immersive-page .wa-vpatch:not(.wa-simple) input { width: 100%; min-width: 0; }
   .immersive-page .wa-vpatch:not(.wa-simple) .wa-vmatrix-row {
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) 52px;
     gap: 3px;
-    margin-block: 3px;
+    margin-block: 1px;
   }
+  .immersive-page .wa-vpatch:not(.wa-simple) .wa-vmatrix-row select { min-height: 34px; height: 34px; }
 }

@@ -68,6 +68,7 @@ interface LibraryTrack {
   file: File;
   name: string;
   bpm: number | null;
+  queued: boolean;
 }
 
 const STORE_KEY = "vv_studio_dj_cues_v1";
@@ -162,6 +163,11 @@ export function buildDj(deps: { renderStudioMix?: (mode: "pattern" | "song") => 
   const mixer = el("section", "wa-dj-mixer wa-panel");
   const libraryTracks: LibraryTrack[] = [];
   const libraryRows = el("div", "wa-dj-library-rows");
+  const librarySearch = document.createElement("input");
+  librarySearch.type = "search"; librarySearch.className = "wa-dj-library-search"; librarySearch.placeholder = "Search tracks…"; librarySearch.setAttribute("aria-label", "Search local tracks");
+  const librarySort = document.createElement("select");
+  librarySort.className = "wa-select wa-dj-library-sort"; librarySort.setAttribute("aria-label", "Sort local tracks");
+  [["added", "Recently added"], ["name", "Name"], ["bpm", "BPM"]].forEach(([value, label]) => { const option = document.createElement("option"); option.value = value; option.textContent = label; librarySort.append(option); });
   let bus: GainNode | null = null, recordTarget: MediaStreamAudioDestinationNode | null = null;
   let dryGain: GainNode | null = null, wetGain: GainNode | null = null, fxInput: GainNode | null = null;
   let fxCleanup: (() => void) | null = null, fxMode = "ECHO", fxWet = 0.32, fxOn = false;
@@ -495,7 +501,7 @@ export function buildDj(deps: { renderStudioMix?: (mode: "pattern" | "song") => 
       deck.bpmReadout.textContent = `${deck.bpm.toFixed(1)} BPM`; deck.cueButton.textContent = deck.cue ? `CUE ${formatTime(deck.cue)}` : "CUE";
       deck.hotCueButtons.forEach((button, index) => button.classList.toggle("set", deck.hotCues[index] != null));
       const key = fileKey(file), existing = libraryTracks.find((track) => track.key === key);
-      if (existing) existing.bpm = deck.bpm; else libraryTracks.push({ key, file, name: file.name, bpm: deck.bpm });
+      if (existing) existing.bpm = deck.bpm; else libraryTracks.push({ key, file, name: file.name, bpm: deck.bpm, queued: false });
       renderLibrary(); drawDeckWaveform(deck);
     } catch { deck.bpmReadout.textContent = "BPM ERROR"; }
   }
@@ -503,14 +509,23 @@ export function buildDj(deps: { renderStudioMix?: (mode: "pattern" | "song") => 
   function renderLibrary(): void {
     libraryRows.replaceChildren();
     if (!libraryTracks.length) { libraryRows.append(el("p", "wa-help", "No files yet. Load or drop audio onto either deck.")); return; }
-    libraryTracks.forEach((track) => {
+    const query = librarySearch.value.trim().toLowerCase();
+    const tracks = libraryTracks.filter((track) => !query || track.name.toLowerCase().includes(query));
+    if (librarySort.value === "name") tracks.sort((a, b) => a.name.localeCompare(b.name));
+    if (librarySort.value === "bpm") tracks.sort((a, b) => (a.bpm ?? Infinity) - (b.bpm ?? Infinity));
+    tracks.sort((a, b) => Number(b.queued) - Number(a.queued));
+    if (!tracks.length) { libraryRows.append(el("p", "wa-help", "No tracks match this search.")); return; }
+    tracks.forEach((track) => {
       const row = el("div", "wa-dj-library-row");
+      row.classList.toggle("queued", track.queued);
       const name = el("span", "wa-dj-library-name", track.name), bpm = el("span", "wa-dj-library-bpm", track.bpm ? `${track.bpm.toFixed(1)} BPM` : "—");
-      const loadA = btn("→ A", "wa-btn-sm"), loadB = btn("→ B", "wa-btn-sm");
+      const queue = btn(track.queued ? "QUEUED" : "+ QUEUE", "wa-btn-sm wa-dj-queue"), loadA = btn("LOAD A", "wa-btn-sm"), loadB = btn("LOAD B", "wa-btn-sm");
+      queue.addEventListener("click", () => { track.queued = !track.queued; renderLibrary(); });
       loadA.addEventListener("click", () => void loadFile(decks[0], track.file)); loadB.addEventListener("click", () => void loadFile(decks[1], track.file));
-      row.append(name, bpm, loadA, loadB); libraryRows.append(row);
+      row.append(name, bpm, queue, loadA, loadB); libraryRows.append(row);
     });
   }
+  librarySearch.addEventListener("input", renderLibrary); librarySort.addEventListener("change", renderLibrary);
 
   const mixerTitle = el("div", "wa-fx-title", "PERFORMANCE MIXER");
   const channelStrips = el("div", "wa-dj-channel-strips");
@@ -528,6 +543,16 @@ export function buildDj(deps: { renderStudioMix?: (mode: "pattern" | "song") => 
   crossfader.classList.add("wa-dj-crossfader");
   const crossfaderInput = crossfader.querySelector<HTMLInputElement>("input")!;
   const record = btn("● REC", "wa-dj-record"), recordStatus = el("span", "wa-dj-record-status", "READY");
+  const recordingReview = document.createElement("dialog"); recordingReview.className = "wa-dj-recording-review";
+  const recordingAudio = document.createElement("audio"); recordingAudio.controls = true;
+  const recordingName = document.createElement("input"); recordingName.type = "text"; recordingName.value = "vishamp-dj-mix"; recordingName.maxLength = 64; recordingName.setAttribute("aria-label", "Recording filename");
+  const downloadRecording = btn("DOWNLOAD MIX", "wa-dj-download primary"), recordAgain = btn("RECORD AGAIN"), closeRecording = btn("CLOSE");
+  let lastRecording: Blob | null = null, lastRecordingUrl = "";
+  downloadRecording.addEventListener("click", () => { if (lastRecording) download(`${recordingName.value.trim() || "vishamp-dj-mix"}.webm`, lastRecording); });
+  recordAgain.addEventListener("click", () => { recordingReview.close(); record.click(); });
+  closeRecording.addEventListener("click", () => recordingReview.close());
+  const recordingActions = el("div", "wa-dj-recording-actions"); recordingActions.append(downloadRecording, recordAgain, closeRecording);
+  recordingReview.append(el("div", "wa-kicker", "MIX CAPTURED"), el("strong", "wa-start-title", "Keep the take?"), recordingAudio, recordingName, recordingActions);
   const effects = el("section", "wa-dj-effects");
   const effectSelect = document.createElement("select"); effectSelect.className = "wa-select wa-dj-effect-select"; effectSelect.setAttribute("aria-label", "Master effect");
   ["ECHO", "REVERB", "FLANGER", "PHASER", "FILTER", "CRUSHER", "TRANS", "ROLL"].forEach((name) => { const option = document.createElement("option"); option.value = name; option.textContent = name; effectSelect.append(option); });
@@ -545,20 +570,31 @@ export function buildDj(deps: { renderStudioMix?: (mode: "pattern" | "song") => 
     const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
     recordingChunks = []; recorder = new MediaRecorder(recordTarget.stream, { mimeType: mime });
     recorder.addEventListener("dataavailable", (event) => { if (event.data.size) recordingChunks.push(event.data); });
-    recorder.addEventListener("stop", () => { download(`vishamp-dj-mix-${Date.now()}.webm`, new Blob(recordingChunks, { type: mime })); record.classList.remove("active"); record.textContent = "● REC"; recordStatus.textContent = "SAVED"; });
+    recorder.addEventListener("stop", () => {
+      lastRecording = new Blob(recordingChunks, { type: mime }); if (lastRecordingUrl) URL.revokeObjectURL(lastRecordingUrl); lastRecordingUrl = URL.createObjectURL(lastRecording); recordingAudio.src = lastRecordingUrl;
+      recordingName.value = `vishamp-dj-mix-${Date.now()}`; record.classList.remove("active"); record.textContent = "● REC"; recordStatus.textContent = "TAKE READY"; if (!recordingReview.open) recordingReview.showModal();
+    });
     recorder.start(250); record.classList.add("active"); record.textContent = "■ STOP"; recordStatus.textContent = "RECORDING LOCAL MIX";
   });
   mixer.append(mixerTitle, channelStrips, meters, effects, crossfader, record, recordStatus);
   deckHost.append(decks[0].root, mixer, decks[1].root);
 
   const library = el("section", "wa-dj-library wa-panel");
-  const addFiles = btn("ADD LOCAL FILES", "wa-btn-sm");
+  const addFiles = btn("CHOOSE TRACKS", "wa-btn-sm wa-dj-add-files primary");
   const libraryInput = document.createElement("input"); libraryInput.type = "file"; libraryInput.accept = "audio/*"; libraryInput.multiple = true; libraryInput.hidden = true;
   addFiles.addEventListener("click", () => libraryInput.click());
-  libraryInput.addEventListener("change", () => { Array.from(libraryInput.files || []).forEach((file) => { const key = fileKey(file); if (!libraryTracks.some((track) => track.key === key)) libraryTracks.push({ key, file, name: file.name, bpm: null }); }); renderLibrary(); libraryInput.value = ""; });
-  const privacy = el("span", "wa-dj-private", "LOCAL ONLY · FILES NEVER UPLOAD");
-  library.append(el("div", "wa-fx-title", "BROWSER LIBRARY"), addFiles, privacy, libraryRows); renderLibrary();
-  root.append(deckHost, library);
+  libraryInput.addEventListener("change", () => { Array.from(libraryInput.files || []).forEach((file) => { const key = fileKey(file); if (!libraryTracks.some((track) => track.key === key)) libraryTracks.push({ key, file, name: file.name, bpm: null, queued: false }); }); renderLibrary(); libraryInput.value = ""; });
+  const privacy = el("span", "wa-dj-private", "LOCAL ONLY · NEVER UPLOADED");
+  const libraryTools = el("div", "wa-dj-library-tools"); libraryTools.append(librarySearch, librarySort);
+  library.append(el("div", "wa-fx-title", "MUSIC LIBRARY"), addFiles, libraryTools, privacy, libraryRows); renderLibrary();
+  const workflow = el("div", "wa-dj-workflow");
+  workflow.append(el("span", "wa-dj-workflow-title", "DJ A SET"), el("span", "active", "1 CHOOSE TRACKS"), el("span", "", "2 LOAD A + B"), el("span", "", "3 MIX"), el("span", "", "4 RECORD"));
+  const viewToggle = btn("VINYL VIEW", "wa-btn-sm wa-dj-view-toggle");
+  let deckView = localStorage.getItem("vv_studio_dj_view") || (matchMedia("(max-width: 760px)").matches ? "compact" : "vinyl");
+  const paintDeckView = () => { root.dataset.deckView = deckView; viewToggle.textContent = deckView === "vinyl" ? "COMPACT VIEW" : "VINYL VIEW"; };
+  viewToggle.addEventListener("click", () => { deckView = deckView === "vinyl" ? "compact" : "vinyl"; localStorage.setItem("vv_studio_dj_view", deckView); paintDeckView(); }); paintDeckView();
+  workflow.append(viewToggle);
+  root.append(workflow, library, deckHost, recordingReview);
 
   const active = (): boolean => Boolean(root.closest(".wa-page-dj:not([hidden])"));
   window.addEventListener("keydown", (event) => {

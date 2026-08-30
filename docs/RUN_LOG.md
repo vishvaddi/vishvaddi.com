@@ -1,5 +1,11 @@
 # Run Log
 
+## 2026-08-30 — Studio intent workflow and DJ quick-start
+
+- Replaced six equal destinations with Start, Make, Arrange and DJ. Make now exposes Pads, Drums, Synth and Mix contextually; first-run users get four outcome-led starting paths while returning projects resume directly.
+- Kept Pattern/Song and Save/Export in the permanent transport. Rebuilt DJ around a choose → load A/B → mix → record workflow with search, sort, queue, compact/vinyl views and review-before-download recording.
+- Added intent, first-run and DJ workflow coverage. Functional and responsive gates cover desktop, laptop, tablet, Android portrait and short landscape, including simultaneous landscape decks and all seven phone synth banks.
+
 ## 2026-08-24 — Studio fixed synth banks and all-pad sequencing
 
 - Replaced the Advanced synth's clipped long surface with seven persisted hardware-style banks: OSC 1, OSC 2, Noise, Filter, Envelopes, LFO and Matrix. The Advanced/Essentials switch now lives directly on Sound instead of low in the properties drawer.

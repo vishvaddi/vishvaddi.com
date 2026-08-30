@@ -26,6 +26,7 @@ const modeRoute = {
 }
 
 async function openMode(page, mode) {
+  if (['DRUMS', 'PADS', 'SYNTH', 'MIX'].includes(mode)) await page.locator('.wa-modekey[data-intent="make"]').click()
   await page.locator(`.wa-modekey[data-mode="${modeRoute[mode]}"]`).click()
   if (mode === 'PADS') await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' }).click()
 }
@@ -52,8 +53,8 @@ page.on('console', (m) => {
 page.on('pageerror', (e) => consoleErrors.push(e.stack ?? String(e)))
 
 try {
-  // ── cold boot: a first-time visitor must meet a playable instrument, not a
-  // modal tour over an empty grid ──
+  // ── cold boot: a first-time visitor chooses an outcome while a complete
+  // editable starter project remains ready behind the quick-start centre. ──
   await page.goto(`${BASE}/studio/`, { waitUntil: 'domcontentloaded' })
   await page.evaluate(() => localStorage.clear())
   await page.reload({ waitUntil: 'domcontentloaded' })
@@ -61,22 +62,25 @@ try {
   await page.waitForTimeout(500)
   const cold = await page.evaluate(() => ({
     seeded: document.querySelectorAll('.wa-cell.on').length,
-    tourOpen: !document.querySelector('.wa-tutorial')?.hidden,
+    startOpen: document.querySelector('.wa-start-dialog')?.open,
     hint: !!document.querySelector('.wa-firstrun-hint'),
     title: document.querySelector('.wa-project-name')?.value,
   }))
   check('first run: demo content is loaded', cold.seeded > 0, `${cold.seeded} steps`)
-  check('first run: tour does not block the UI', !cold.tourOpen)
+  check('first run: quick-start centre opens', cold.startOpen)
   check('first run: non-modal hint is shown', cold.hint)
   check('first run: demo has its real title', cold.title === 'MIDNIGHT ACID', String(cold.title))
   check('first run: the MPC pads are the opening screen', await page.locator('.wa-page-pads').isVisible())
-  check('first run: six primary destinations', await page.locator('.wa-primary-nav .wa-modekey').count() === 6)
+  check('first run: four outcome choices are clear', await page.locator('.wa-start-card').count() === 4)
+  check('first run: four primary intents replace six tools', await page.locator('.wa-primary-nav .wa-modekey').count() === 4)
+  await page.locator('.wa-start-card', { hasText: 'Make a beat' }).click()
   await openMode(page, 'SYNTH')
   check('first run: controls are usable immediately', true)
 
   await page.evaluate(() => {
     localStorage.removeItem('vv_studio_v2')
     localStorage.setItem('vv_studio_tutorial_seen', '1')  // fresh boot auto-opens the tour otherwise
+    localStorage.setItem('vv_studio_start_v1_seen', '1')
   })
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.wa-transport', { timeout: 15000 })
@@ -113,8 +117,8 @@ try {
 
   // ── S0: the arrangement is audible ──
   const songBtn = page.locator('.wa-transport-core button.wa-toggle')
-  check('song: Clips/Song toggle lives in the transport core', await songBtn.count() === 1)
-  check('song: starts in Clips', (await songBtn.textContent()) === 'Clips')
+  check('song: Pattern/Song toggle lives in the transport core', await songBtn.count() === 1)
+  check('song: starts in Pattern', (await songBtn.textContent()) === 'Pattern')
   await songBtn.click()
   check('song: toggle arms Song mode', (await songBtn.textContent()) === 'Song')
   await page.click('.wa-transport button:has-text("▶")')
@@ -124,8 +128,8 @@ try {
   await page.waitForTimeout(200)
   await openMode(page, 'CLIPS')
   await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Clips' }).click()
-  await page.locator('.wa-clip').first().click()
-  check('song: launching a clip returns to Clips, visibly', (await songBtn.textContent()) === 'Clips')
+  await page.locator('.wa-clip.has').first().click()
+  check('song: launching a clip returns to Pattern, visibly', (await songBtn.textContent()) === 'Pattern')
 
   // ── S0: recording targets the visible scene, and the transport says so ──
   check('rec chip: hidden while nothing is armed', await page.locator('.wa-rec-chip:visible').count() === 0)

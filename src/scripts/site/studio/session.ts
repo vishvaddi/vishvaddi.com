@@ -116,7 +116,7 @@ export function buildSession(): SessionView {
   function exitSongMode(): void {
     if (!transport.songMode) return;
     transport.songMode = false;
-    ctx.songBtn.textContent = "Clips"; ctx.songBtn.classList.remove("active"); ctx.renderSel.value = "pattern";
+    ctx.songBtn.textContent = "Pattern"; ctx.songBtn.classList.remove("active"); ctx.renderSel.value = "pattern";
   }
   function launchClip(track: TrackId, scene: number | null): void {
     exitSongMode();
