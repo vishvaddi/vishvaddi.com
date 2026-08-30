@@ -1,4 +1,5 @@
 import "../../../styles/studio.css";
+import "../../../styles/studio-workflow.css";
 
 // VishAmp Studio — Winamp-styled mini-DAW. Pure Web Audio, CSP-clean.
 // Session workflow: each track (drums / pads / synth) plays its own clip from

@@ -26,6 +26,7 @@ const modeRoute = {
   BEAT: 'pads', DRUMS: 'drums', SYNTH: 'synth', SONG: 'song', DJ: 'dj', MIX: 'mix',
 }
 const openMode = async (page, mode) => {
+  if (['BEAT', 'DRUMS', 'SYNTH', 'MIX'].includes(mode)) await page.locator('.wa-modekey[data-intent="make"]').click()
   await page.locator(`.wa-modekey[data-mode="${modeRoute[mode]}"]`).click()
 }
 

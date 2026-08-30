@@ -7,6 +7,7 @@ import { ensureNodes, applyFxState, initReverb, initDelay, refreshSpaceSize } fr
 import { saveAll } from "./persistence";
 import { ctx } from "./ctx";
 import { el, btn, help, sliderRow, euclideanPattern } from "./helpers";
+import { knob } from "./knob";
 
 export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLElement {
   const devicePanel = el("div", "wa-panel");
@@ -26,7 +27,8 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
     return header;
   };
   const combinator = el("div", "wa-combinator");
-  combinator.append(el("div", "wa-fx-title", "COMBINATOR MACROS"));
+  combinator.append(el("div", "wa-fx-title", "PERFORMANCE MACROS"), el("p", "wa-macro-intro", "Shape the whole mix with the large controls, then tune each mapped parameter underneath."));
+  const syncMacroDetails: Array<() => void> = [];
   const applyMacro = (index: number, value: number) => {
     rackState.macros[index] = value;
     if (index === 0) {
@@ -38,11 +40,51 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
     } else {
       rackState.grooveTiming = value * 0.7; rackState.grooveRandom = value * 18; rackState.grooveVelocity = value * 0.25;
     }
-    applyFxState(); saveAll();
+    applyFxState(); saveAll(); syncMacroDetails[index]?.();
   };
+  const macroGrid = el("div", "wa-macro-grid");
+  const macroCopy = [
+    "Compression, saturation and high-frequency bite.",
+    "Reverb, echo return, room size and regeneration.",
+    "Sample filtering and broad low/mid tonal balance.",
+    "Timing displacement, velocity drift, randomisation and glitch.",
+  ];
   ["Dirt", "Space", "Cutoff", "Break"].forEach((name, i) => {
-    combinator.append(sliderRow(name, 0, 1, rackState.macros[i], 0.01, (value) => applyMacro(i, value)));
+    const card = el("section", "wa-macro-card"); card.dataset.macro = name.toLowerCase();
+    const head = el("div", "wa-macro-head"), main = knob(name, 0, 1, rackState.macros[i], 0.01, (value) => applyMacro(i, value), { fmt: (value) => `${Math.round(value * 100)}%`, reset: 0 });
+    main.root.classList.add("wa-macro-main");
+    const identity = el("div", "wa-macro-identity"); identity.append(el("strong", "wa-macro-name", name.toUpperCase()), el("span", "wa-macro-copy", macroCopy[i]));
+    head.append(main.root, identity);
+    const details = el("div", "wa-macro-details"), syncers: Array<() => void> = [];
+    const detail = (label: string, min: number, max: number, step: number, get: () => number, set: (value: number) => void, fmt?: (value: number) => string) => {
+      const control = knob(label, min, max, get(), step, (value) => { ensureNodes(); set(value); applyFxState(); saveAll(); }, { fmt });
+      control.root.classList.add("wa-macro-detail"); details.append(control.root); syncers.push(() => control.set(get()));
+    };
+    if (i === 0) {
+      detail("Drive", 0, 1, .01, () => fx.drive ?? 0, (v) => { fx.drive = v; }, (v) => `${Math.round(v * 100)}%`);
+      detail("Threshold", -50, 0, 1, () => fx.compThreshold, (v) => { fx.compThreshold = v; }, (v) => `${Math.round(v)}dB`);
+      detail("Ratio", 1, 20, .5, () => fx.compRatio, (v) => { fx.compRatio = v; }, (v) => `${v.toFixed(1)}:1`);
+      detail("Air", -12, 12, .5, () => fx.high, (v) => { fx.high = v; }, (v) => `${v > 0 ? "+" : ""}${v.toFixed(1)}dB`);
+    } else if (i === 1) {
+      detail("Reverb", 0, .6, .01, () => fx.reverb, (v) => { fx.reverb = v; initReverb(v); }, (v) => `${Math.round(v * 100)}%`);
+      detail("Delay", 0, .6, .01, () => fx.delayMix, (v) => { fx.delayMix = v; initDelay(); }, (v) => `${Math.round(v * 100)}%`);
+      detail("Size", .4, 5, .1, () => fx.spaceSize ?? 2.2, (v) => { fx.spaceSize = v; refreshSpaceSize(); }, (v) => `${v.toFixed(1)}s`);
+      detail("Regen", 0, .85, .01, () => fx.delayFeedback, (v) => { fx.delayFeedback = v; }, (v) => `${Math.round(v * 100)}%`);
+    } else if (i === 2) {
+      detail("Pad filter", 200, 18000, 100, () => sampleParams[0]?.filter ?? 18000, (v) => { sampleParams.forEach((pad) => { pad.filter = v; }); }, (v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${Math.round(v)}Hz`);
+      detail("Low", -12, 12, .5, () => fx.low, (v) => { fx.low = v; }, (v) => `${v > 0 ? "+" : ""}${v.toFixed(1)}dB`);
+      detail("Mid", -12, 12, .5, () => fx.mid, (v) => { fx.mid = v; }, (v) => `${v > 0 ? "+" : ""}${v.toFixed(1)}dB`);
+      detail("High", -12, 12, .5, () => fx.high, (v) => { fx.high = v; }, (v) => `${v > 0 ? "+" : ""}${v.toFixed(1)}dB`);
+    } else {
+      detail("Timing", 0, .75, .01, () => rackState.grooveTiming, (v) => { rackState.grooveTiming = v; }, (v) => `${Math.round(v * 100)}%`);
+      detail("Velocity", 0, .5, .01, () => rackState.grooveVelocity, (v) => { rackState.grooveVelocity = v; }, (v) => `${Math.round(v * 100)}%`);
+      detail("Random", 0, 40, 1, () => rackState.grooveRandom, (v) => { rackState.grooveRandom = v; }, (v) => `${Math.round(v)}%`);
+      detail("Glitch", 0, 100, 1, () => rackState.glitch, (v) => { rackState.glitch = v; }, (v) => `${Math.round(v)}%`);
+    }
+    syncMacroDetails[i] = () => syncers.forEach((sync) => sync());
+    card.append(head, details); macroGrid.append(card);
   });
+  combinator.append(macroGrid);
   const patchRow = el("div", "wa-export");
   const patchSelect = document.createElement("select");
   ["Clean MPC", "Dusty Hip Hop", "Jungle Pressure", "Dub Space"].forEach((name) => {

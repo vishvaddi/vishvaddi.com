@@ -322,35 +322,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   localStorage.removeItem("vv_studio_mode");                     // retired legacy key
   let lastEditMode: ModeId = (["drums", "pads", "synth"] as ModeId[]).includes(activeMode) ? activeMode : "drums";
   const modeButtons = new Map<ModeId, HTMLButtonElement>();
-  const intentButtons = new Map<"start" | "make" | "arrange" | "dj", HTMLButtonElement>();
-
-  const startDialog = document.createElement("dialog");
-  startDialog.className = "wa-start-dialog";
-  startDialog.setAttribute("aria-labelledby", "wa-start-title");
-  const startHead = el("div", "wa-start-head");
-  const startTitle = el("div", "wa-start-title", "What do you want to make?"); startTitle.id = "wa-start-title";
-  const startClose = btn("Close", "wa-btn-sm wa-start-close");
-  startClose.addEventListener("click", () => startDialog.close());
-  startHead.append(el("div", "wa-kicker", "V / STUDIO"), startTitle, el("p", "wa-start-copy", "Start with an outcome. Studio will reveal the tools when you need them."), startClose);
-  const startCards = el("div", "wa-start-cards");
-  const startCard = (label: string, copy: string, steps: string, action: () => void, primary = false): HTMLButtonElement => {
-    const card = btn("", `wa-start-card${primary ? " primary" : ""}`);
-    card.append(el("strong", "wa-start-card-title", label), el("span", "wa-start-card-copy", copy), el("span", "wa-start-card-steps", steps));
-    card.addEventListener("click", () => { startDialog.close(); localStorage.setItem("vv_studio_start_v1_seen", "1"); action(); });
-    return card;
-  };
-  startCards.append(
-    startCard("Continue project", "Resume exactly where you left off.", "PLAY → EDIT → EXPORT", () => setMode(activeMode)),
-    startCard("Make a beat", "Play the loaded kit, capture a pattern and arrange it.", "CHOOSE → PLAY → CAPTURE", () => { setMode("pads"); showBeatView("play"); }, true),
-    startCard("Sample or chop audio", "Load a one-shot or turn a break into playable slices.", "LOAD → SLICE → ASSIGN", () => { setMode("pads"); showBeatView("sample"); showSampleView("chop"); }),
-    startCard("DJ a set", "Choose two local tracks, mix a transition and record it.", "LOAD A/B → MIX → RECORD", () => setMode("dj"), true),
-  );
-  startDialog.append(startHead, startCards, el("p", "wa-start-privacy", "Audio stays on this device. Studio does not upload your files."));
-  workarea.append(startDialog);
-  const openStartCentre = (): void => {
-    localStorage.setItem("vv_studio_start_v1_seen", "1");
-    if (!startDialog.open) startDialog.showModal();
-  };
+  const intentButtons = new Map<"make" | "arrange" | "dj", HTMLButtonElement>();
 
   function setMode(next: ModeId, workspace?: WorkspaceId): void {
     activeMode = next;
@@ -372,13 +344,12 @@ export function buildLayout(p: LayoutPanels): Layout {
     p.onModeChange(MODES.find((m) => m.id === next)!.label);
   }
 
-  const intentKey = (intent: "start" | "make" | "arrange" | "dj", label: string, icon: string, action: () => void): HTMLButtonElement => {
+  const intentKey = (intent: "make" | "arrange" | "dj", label: string, icon: string, action: () => void): HTMLButtonElement => {
     const button = btn("", "wa-modekey") as HTMLButtonElement;
     button.classList.remove("wa-btn"); button.dataset.intent = intent;
     button.append(el("span", "wa-mode-icon", icon), el("span", "wa-mode-label", label));
     button.addEventListener("click", action); intentButtons.set(intent, button); primaryNav.append(button); return button;
   };
-  intentKey("start", "START", "＋", openStartCentre);
   intentKey("make", "MAKE", "◆", () => setMode(lastEditMode === "drums" || lastEditMode === "synth" ? lastEditMode : "pads"));
   const arrangeKey = intentKey("arrange", "ARRANGE", "▤", () => setMode("song")); arrangeKey.dataset.mode = "song";
   const djKey = intentKey("dj", "DJ", "◉", () => setMode("dj")); djKey.dataset.mode = "dj";
@@ -448,9 +419,6 @@ export function buildLayout(p: LayoutPanels): Layout {
     menuGroup("Help", [menuAction("Help & shortcuts", p.openTutorial)]),
   );
   setMode(activeMode);
-  requestAnimationFrame(() => {
-    if (!localStorage.getItem("vv_studio_start_v1_seen") && startDialog.isConnected) openStartCentre();
-  });
 
   // tutorial nav proxies — composite actions per tour stop:
   // 0 pads/perform+inspector · 1 pads/chop · 2 pads/steps · 3 synth/roll · 4 song · 5 mix · 6 synth/patch · 7 dj

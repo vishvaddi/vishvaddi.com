@@ -1,5 +1,13 @@
 # Run Log
 
+## 2026-08-30 — Studio creation workflow refinement
+
+- Removed the Start destination and first-run modal so `/studio/` opens directly on the usable Pads workspace; primary navigation is now Make, Arrange and DJ.
+- Rebuilt Arrange as Arrangement and Clip launcher: stable track columns, vertical scene rows, clip activity, track stop controls, fixed timeline identities and grouped editing, loop and zoom tools.
+- Expanded Mix's four performance macros into sixteen visible mapped controls and unified Studio knobs around a dark, colour-coded hardware treatment.
+- Rebuilt Synth Sound as a linear OSC → FILTER → AMP → FX surface with four aligned modules, then compacted Advanced banks for laptop, tablet and Android portrait while retaining reachable scroll in short landscape.
+- Extended functional and responsive browser coverage for direct boot, three intents, clip-column geometry, mapped macro controls and the redesigned synth surfaces.
+
 ## 2026-08-30 — Studio intent workflow and DJ quick-start
 
 - Replaced six equal destinations with Start, Make, Arrange and DJ. Make now exposes Pads, Drums, Synth and Mix contextually; first-run users get four outcome-led starting paths while returning projects resume directly.

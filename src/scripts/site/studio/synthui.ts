@@ -297,7 +297,9 @@ export function buildSynth(): SynthUI {
       host.append(sliderRow(label, min, max, get(), step, (v) => { set(v); saveAll(); }));
     };
     const quickBox = el("div", "wa-vblock wa-synth-quick");
-    quickBox.append(el("div", "wa-fx-title", "VV-1 PERFORMANCE PANEL"));
+    const quickHead = el("div", "wa-synth-quick-head");
+    quickHead.append(el("div", "wa-fx-title", "VV-1 SOUND SHAPER"), el("span", "wa-synth-signal", "OSC → FILTER → AMP → FX"));
+    quickBox.append(quickHead);
     const oscillatorModule = el("section", "wa-synth-module wa-synth-module-osc");
     const filterModule = el("section", "wa-synth-module wa-synth-module-filter");
     const envelopeModule = el("section", "wa-synth-module wa-synth-module-envelope");

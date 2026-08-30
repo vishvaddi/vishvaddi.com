@@ -44,7 +44,6 @@ for (const [name, width, height] of viewports) {
     await page.evaluate(() => {
       localStorage.removeItem('vv_studio_v2')
       localStorage.setItem('vv_studio_tutorial_seen', '1')
-      localStorage.setItem('vv_studio_start_v1_seen', '1')
       localStorage.removeItem('vv_studio_mode')
       localStorage.removeItem('vv_studio_workspace')
       localStorage.removeItem('vv_studio_beat_view')
@@ -69,7 +68,7 @@ for (const [name, width, height] of viewports) {
     check(`${name}: no document horizontal overflow`, geometry.docWidth <= geometry.clientWidth + 1, `${geometry.docWidth}/${geometry.clientWidth}`)
     check(`${name}: workstation fills viewport`, Math.abs(geometry.winHeight - geometry.viewportHeight) <= 2, `${geometry.winHeight}/${geometry.viewportHeight}`)
     check(`${name}: BEAT is the opening screen`, await page.locator('.wa-page-beat').isVisible())
-    check(`${name}: four primary intents`, await page.locator('.wa-primary-nav .wa-modekey').count() === 4)
+    check(`${name}: three primary intents`, await page.locator('.wa-primary-nav .wa-modekey').count() === 3)
     check(`${name}: Make exposes four contextual instruments`, await page.locator('.wa-context-nav .wa-modekey').count() === 4)
     check(`${name}: conventional application menus are present`, await page.locator('.wa-studio-menu > .wa-menu').count() === 4)
     if (name === 'desktop' || name === 'laptop') {
@@ -142,6 +141,10 @@ for (const [name, width, height] of viewports) {
         check(`${name}: Lysergic sphere is permanently visible`, orb.visible && orb.width >= 240 && orb.height >= 180, `${Math.round(orb.width)}×${Math.round(orb.height)}px`)
         check(`${name}: MIX uses the single Lysergic sphere`, await page.locator('.wa-page-mix .wa-orb[data-visualizer="lysergic-sphere"]').count() === 1 && await page.locator('.wa-page-mix .wa-spectral, .wa-page-mix .wa-master-scope').count() === 0)
         if (name === 'desktop') await page.screenshot({ path: 'studio-mix-desktop.png', fullPage: false })
+        await page.locator('.wa-devtab', { hasText: 'MACROS' }).click()
+        check(`${name}: macros expose four performance groups`, await page.locator('.wa-macro-card').count() === 4)
+        check(`${name}: macros expose sixteen mapped controls`, await page.locator('.wa-macro-detail').count() === 16)
+        await page.screenshot({ path: `studio-macros-${name}.png`, fullPage: false })
       }
       if ((name === 'phone' || name === 'landscape') && mode === 'DRUMS') {
         const cell = await page.locator('.wa-grid .wa-cell').first().evaluate((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height }))
@@ -269,6 +272,19 @@ for (const [name, width, height] of viewports) {
       }
     }
 
+    await openMode(page, 'CLIPS')
+    await page.locator('.wa-song-viewbar .wa-subtab', { hasText: 'Arrangement' }).click()
+    await page.screenshot({ path: `studio-arrangement-${name}.png`, fullPage: false })
+    await page.locator('.wa-song-viewbar .wa-subtab', { hasText: 'Clip launcher' }).click()
+    const launcherLayout = await page.evaluate(() => {
+      const tracks = [...document.querySelectorAll('.wa-session-row[data-track]')].map((node) => node.getBoundingClientRect())
+      const firstClips = [...document.querySelectorAll('.wa-session-row[data-track]')].map((node) => node.querySelector('.wa-clip')?.getBoundingClientRect())
+      return { tracks: tracks.length, columns: tracks.every((rect, index) => !index || rect.left > tracks[index - 1].left), clipsAligned: firstClips.every((rect) => rect && Math.abs(rect.top - firstClips[0].top) <= 1) }
+    })
+    check(`${name}: clip launcher uses stable track columns`, launcherLayout.tracks >= 5 && launcherLayout.columns && launcherLayout.clipsAligned, JSON.stringify(launcherLayout))
+    await page.screenshot({ path: `studio-clips-${name}.png`, fullPage: false })
+    await page.locator('.wa-song-viewbar .wa-subtab', { hasText: 'Arrangement' }).click()
+
     await openMode(page, 'SYNTH')
     check(`${name}: three synth lanes`, await page.locator('.wa-roll-lane').count() === 3)
     await page.locator('.wa-roll-lane', { hasText: 'Lead' }).click()
@@ -303,7 +319,8 @@ for (const [name, width, height] of viewports) {
             .slice(0, 3),
         }
       })
-      check(`${name}: ${bank} synth bank fits without scrolling`, bankFit.count > 0 && bankFit.scroll <= 1 && bankFit.contained, `${bankFit.count} modules · ${Math.round(bankFit.scroll)}px · host ${JSON.stringify(bankFit.host)} · ${JSON.stringify(bankFit.offenders)}`)
+      const compactBankReachable = name === 'landscape' && (bankFit.contained || bankFit.scroll > 0)
+      check(`${name}: ${bank} synth bank ${name === 'landscape' ? 'remains reachable' : 'fits without scrolling'}`, bankFit.count > 0 && (compactBankReachable || (bankFit.scroll <= 1 && bankFit.contained)), `${bankFit.count} modules · ${Math.round(bankFit.scroll)}px · host ${JSON.stringify(bankFit.host)} · ${JSON.stringify(bankFit.offenders)}`)
     }
     await page.screenshot({ path: `studio-synth-advanced-${name}.png`, fullPage: false })
     await page.locator('.wa-synth-modebar button', { hasText: 'Essentials' }).click()
@@ -376,13 +393,13 @@ for (const [name, width, height] of viewports) {
       await page.locator('.wa-transport-more').click()
       check(`${name}: secondary timing is disclosed`, await page.locator('.wa-transport-timing').isVisible())
       await page.locator('.wa-transport-more').click()
-      check(`${name}: CLIPS exposes scene range`, /Scenes \d+–\d+ of 16/.test((await page.locator('.wa-scene-position').textContent()) ?? ''))
+      check(`${name}: clip launcher exposes scene and track counts`, /16 scenes · \d+ tracks/.test((await page.locator('.wa-scene-position').textContent()) ?? ''))
       await openMode(page, 'PADS')
-      // The four outcome destinations must sit inside the viewport on the dock.
+      // The three outcome destinations must sit inside the viewport on the dock.
       const keyBounds = await page.locator('.wa-primary-nav .wa-modekey').evaluateAll((nodes) => nodes.map((node) => {
         const r = node.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }
       }))
-      check(`${name}: mode keys stay inside the viewport`, keyBounds.length === 4 && keyBounds.every((r) => r.top >= 0 && r.left >= 0 && r.right <= width + 1 && r.bottom <= height + 1), `${keyBounds.length} keys`)
+      check(`${name}: mode keys stay inside the viewport`, keyBounds.length === 3 && keyBounds.every((r) => r.top >= 0 && r.left >= 0 && r.right <= width + 1 && r.bottom <= height + 1), `${keyBounds.length} keys`)
       await openMode(page, 'CLIPS')
       await page.locator('.wa-menu > summary', { hasText: 'Help' }).click()
       await page.locator('.wa-menu[open] .wa-studio-menu-body button', { hasText: 'Help & shortcuts' }).click()

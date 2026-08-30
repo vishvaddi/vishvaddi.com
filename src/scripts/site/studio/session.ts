@@ -79,11 +79,6 @@ export function buildSession(): SessionView {
   const sessionGrid = el("div", "wa-session");
   const sessionCells: HTMLButtonElement[][] = [];   // [scene][track]
   const sceneLaunchBtns: HTMLButtonElement[] = [];
-  function clipHasContent(track: TrackId, scene: number): boolean {
-    if (track === "drums") return allPats[scene].some((row) => row.some(Boolean));
-    if (track === "pads") return padEvents[scene].length > 0;
-    return synthLaneNotes[track][scene].length > 0;
-  }
   function clipActivity(track: TrackId, scene: number): number {
     if (track === "drums") return allPats[scene].reduce((total, row) => total + row.filter(Boolean).length, 0);
     if (track === "pads") return padEvents[scene].length;
@@ -92,8 +87,11 @@ export function buildSession(): SessionView {
   function paintSession(): void {
     sessionCells.forEach((row, scene) => row.forEach((cell, ti) => {
       const track = TRACKS[ti];
-      cell.classList.toggle("has", clipHasContent(track, scene));
-      cell.style.setProperty("--wa-activity", String(Math.min(1, clipActivity(track, scene) / 16)));
+      const activity = clipActivity(track, scene);
+      cell.classList.toggle("has", activity > 0);
+      cell.style.setProperty("--wa-activity", String(Math.min(1, activity / 16)));
+      const count = cell.querySelector<HTMLElement>(".wa-clip-count");
+      if (count) count.textContent = activity ? `${activity} ${track === "drums" || track === "pads" ? "hits" : "notes"}` : "empty";
       cell.classList.toggle("playing", ctx.isPlaying() && clip.play[track] === scene);
       cell.classList.toggle("armed", !ctx.isPlaying() && clip.play[track] === scene);
       cell.classList.toggle("queued", clip.queued[track] === scene);
@@ -102,10 +100,7 @@ export function buildSession(): SessionView {
     sceneLaunchBtns.forEach((b, scene) => b.classList.toggle("active", clip.sel === scene));
   }
   const paintScenePosition = (): void => {
-    if (sessionGrid.clientWidth <= 0 || sessionGrid.scrollWidth <= sessionGrid.clientWidth + 2) { scenePosition.textContent = "Scenes 1–16 of 16"; return; }
-    const start = Math.max(1, Math.min(SCENES, Math.floor(sessionGrid.scrollLeft / 52) + 1));
-    const visible = Math.max(1, Math.floor((sessionGrid.clientWidth - 76) / 52));
-    scenePosition.textContent = `Scenes ${start}–${Math.min(SCENES, start + visible - 1)} of ${SCENES}`;
+    scenePosition.textContent = `${SCENES} scenes · ${TRACKS.length} tracks`;
   };
   sessionGrid.addEventListener("scroll", paintScenePosition, { passive: true });
   new ResizeObserver(paintScenePosition).observe(sessionGrid);
@@ -143,15 +138,13 @@ export function buildSession(): SessionView {
     if (clip.sel !== scene) ctx.selectScene(scene);
     paintSession(); saveAll(); window.dispatchEvent(new CustomEvent("vv-studio-clip-launch"));
   }
-  // Transposed launcher: 3 track ROWS × 16 scene COLUMNS. Sixteen scenes as
-  // rows cannot fit the aperture; as columns they do, and time then runs
-  // left-to-right on the same axis as the chain composer below. Cells are
-  // still addressed [scene][track] so paintSession is untouched.
+  // Track columns and vertical scenes match the Live/Bitwig mental model:
+  // instruments stay put while musical alternatives run downward.
   const buildSessionGrid = (): void => {
     sessionGrid.replaceChildren(); sessionCells.splice(0); sceneLaunchBtns.splice(0);
     SCENE_LABELS.forEach(() => sessionCells.push([]));
-    const headRow = el("div", "wa-session-row wa-session-head");
-    headRow.append(el("span", "wa-session-scene", "Track / Scene"));
+    const headRow = el("div", "wa-session-row wa-session-head wa-scene-rail");
+    headRow.append(el("span", "wa-session-scene", "SCENE"));
     SCENE_LABELS.forEach((label, scene) => {
       const launch = btn(label, "wa-scene-launch"); launch.classList.remove("wa-btn");
       help(launch, `Launch every track's clip ${label} together.`); launch.addEventListener("click", () => launchScene(scene));
@@ -159,12 +152,15 @@ export function buildSession(): SessionView {
     });
     sessionGrid.append(headRow);
     TRACKS.forEach((track) => {
-      const row = el("div", "wa-session-row"); row.dataset.track = track;
-      const stop = btn(`${TRACK_LABELS[track]} ■`, "wa-clip-stop"); stop.classList.remove("wa-btn");
-      help(stop, `Stop the ${TRACK_LABELS[track].toLowerCase()} track at the next bar.`); stop.addEventListener("click", () => launchClip(track, null)); row.append(stop);
+      const row = el("div", "wa-session-row wa-track-column"); row.dataset.track = track;
+      const trackHead = el("div", "wa-clip-track-head"), trackIdentity = el("div", "wa-clip-track-identity");
+      trackIdentity.append(el("span", "wa-track-colour"), el("strong", "wa-clip-track-name", TRACK_LABELS[track]), el("span", "wa-clip-track-type", track === "drums" || track === "pads" ? "AUDIO" : "INSTRUMENT"));
+      const stop = btn("■", "wa-clip-stop"); stop.classList.remove("wa-btn"); stop.setAttribute("aria-label", `Stop ${TRACK_LABELS[track]}`);
+      help(stop, `Stop the ${TRACK_LABELS[track].toLowerCase()} track at the next bar.`); stop.addEventListener("click", () => launchClip(track, null));
+      trackHead.append(trackIdentity, stop); row.append(trackHead);
       SCENE_LABELS.forEach((label, scene) => {
         const cell = btn("", "wa-clip"); cell.classList.remove("wa-btn"); cell.style.setProperty("--scene-color", SCENE_COLORS[scene]);
-        cell.append(el("span", "wa-clip-name", label), el("span", "wa-clip-activity"));
+        cell.append(el("span", "wa-clip-launch-icon", "▶"), el("span", "wa-clip-name", `Clip ${label}`), el("span", "wa-clip-count"), el("span", "wa-clip-activity"));
         help(cell, `Launch ${TRACK_LABELS[track].toLowerCase()} clip ${label} — double-tap to edit it.`); cell.addEventListener("click", () => launchClip(track, scene));
         cell.addEventListener("dblclick", () => {
           if (track !== "drums" && track !== "pads") { activeSynth.lane = track; ctx.openTrackEditor("synth", scene); }
@@ -323,12 +319,13 @@ export function buildSession(): SessionView {
     ruler.addEventListener("click", (event) => { songPos.bar = Math.max(0, Math.floor((event.clientX - ruler.getBoundingClientRect().left) / pixelsPerBar)); paintChain(); });
     rulerRow.append(ruler); chain.append(rulerRow);
     if (ARRANGE_TRACKS.every((track) => !arrangement[track].length)) chain.append(el("span", "wa-chain-empty", "Choose a scene, then add or drag clips onto the timeline."));
-    ARRANGE_TRACKS.forEach((track) => {
+    ARRANGE_TRACKS.forEach((track, trackIndex) => {
       const row = el("div", "wa-arrange-lane");
       row.dataset.track = track;
       row.classList.toggle("sel-lane", track === selLane);
-      const name = btn(ARRANGE_TRACK_LABELS[track], "wa-arrange-lane-name");
+      const name = btn("", "wa-arrange-lane-name");
       name.classList.remove("wa-btn");
+      name.append(el("span", "wa-track-colour"), el("span", "wa-arrange-track-number", String(trackIndex + 1).padStart(2, "0")), el("strong", "wa-arrange-track-title", ARRANGE_TRACK_LABELS[track]), el("span", "wa-arrange-track-type", track === "drums" || track === "pads" ? "AUDIO" : "INSTRUMENT"));
       help(name, `Select the ${ARRANGE_TRACK_LABELS[track].toLowerCase()} arrangement track.`);
       name.addEventListener("click", () => { selLane = track; selectedId = arrangement[track][0]?.id ?? null; paintChain(); paintAutomation(); });
       row.append(name);
@@ -375,9 +372,11 @@ export function buildSession(): SessionView {
       clips.append(laneAdd);
       row.append(clips); chain.append(row);
     });
-    audioTracks.forEach((track) => {
+    audioTracks.forEach((track, trackIndex) => {
       const row = el("div", "wa-arrange-lane wa-audio-lane");
-      const name = btn(track.name, "wa-arrange-lane-name"); name.classList.remove("wa-btn"); row.append(name);
+      const name = btn("", "wa-arrange-lane-name"); name.classList.remove("wa-btn");
+      name.append(el("span", "wa-track-colour"), el("span", "wa-arrange-track-number", String(ARRANGE_TRACKS.length + trackIndex + 1).padStart(2, "0")), el("strong", "wa-arrange-track-title", track.name), el("span", "wa-arrange-track-type", "AUDIO"));
+      row.append(name);
       const clips = el("div", "wa-arrange-lane-clips"); clips.style.width = `${width}px`; clips.style.setProperty("--bar-width", `${pixelsPerBar}px`);
       const playhead = el("span", "wa-arrange-playhead"); playhead.style.left = `${songPos.bar * pixelsPerBar}px`; clips.append(playhead);
       track.clips.forEach((audioClip) => {
@@ -521,7 +520,11 @@ export function buildSession(): SessionView {
   refreshSongs();
   songLibrary.append(el("span", "wa-lbl", "SONGS"), songSel, loadSongBtn, saveSongBtn, deleteSongBtn, exportSongBtn, importSongBtn, songInput);
 
-  composerHead.append(composerTitle, addMidiTrackBtn, addAudioTrackBtn, audioInput, addBtn, duplicateBtn, copyBtn, pasteBtn, splitBtn, deleteBtn, el("span", "wa-toolbar-spacer"), loopToggle, loopStart, el("span", "wa-loop-arrow", "→"), loopEnd, zoomOutBtn, zoomReadout, zoomInBtn);
+  const trackTools = el("div", "wa-arrange-toolgroup"); trackTools.append(addMidiTrackBtn, addAudioTrackBtn, audioInput);
+  const editTools = el("div", "wa-arrange-toolgroup"); editTools.append(addBtn, duplicateBtn, copyBtn, pasteBtn, splitBtn, deleteBtn);
+  const loopTools = el("div", "wa-arrange-toolgroup wa-loop-tools"); loopTools.append(loopToggle, loopStart, el("span", "wa-loop-arrow", "→"), loopEnd);
+  const zoomTools = el("div", "wa-arrange-toolgroup wa-zoom-tools"); zoomTools.append(zoomOutBtn, zoomReadout, zoomInBtn);
+  composerHead.append(composerTitle, trackTools, editTools, el("span", "wa-toolbar-spacer"), loopTools, zoomTools);
   const automationFold = el("details", "wa-fold") as HTMLDetailsElement;
   const automationSummary = el("summary", "wa-fold-head", "AUTOMATION");
   automationFold.append(automationSummary, automation);
@@ -533,7 +536,7 @@ export function buildSession(): SessionView {
   const arrangeLanePaints: Array<() => void> = [paintChain];
   help(sessionGrid, "Each column is a track, each row a scene — launch single clips or whole scenes; changes land on the next bar so transitions stay in time.");
   const viewBar = el("div", "wa-song-viewbar");
-  const arrangeViewBtn = btn("Song", "wa-subtab active"), sessionViewBtn = btn("Clips", "wa-subtab"), captureBtn = btn("Capture", "wa-btn-sm"), quantizationSelect = document.createElement("select");
+  const arrangeViewBtn = btn("Arrangement", "wa-subtab active"), sessionViewBtn = btn("Clip launcher", "wa-subtab"), captureBtn = btn("Capture", "wa-btn-sm"), quantizationSelect = document.createElement("select");
   quantizationSelect.className = "wa-select wa-launch-quantization"; quantizationSelect.setAttribute("aria-label", "Clip launch quantization");
   quantizationSelect.append(new Option("Launch: Bar", "bar"), new Option("Launch: Beat", "beat"), new Option("Launch: Now", "none"));
   const savedQuantization = localStorage.getItem("vv_studio_launch_quantization");

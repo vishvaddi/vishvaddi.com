@@ -53,8 +53,7 @@ page.on('console', (m) => {
 page.on('pageerror', (e) => consoleErrors.push(e.stack ?? String(e)))
 
 try {
-  // ── cold boot: a first-time visitor chooses an outcome while a complete
-  // editable starter project remains ready behind the quick-start centre. ──
+  // ── cold boot: a complete starter project opens directly into making. ──
   await page.goto(`${BASE}/studio/`, { waitUntil: 'domcontentloaded' })
   await page.evaluate(() => localStorage.clear())
   await page.reload({ waitUntil: 'domcontentloaded' })
@@ -62,25 +61,22 @@ try {
   await page.waitForTimeout(500)
   const cold = await page.evaluate(() => ({
     seeded: document.querySelectorAll('.wa-cell.on').length,
-    startOpen: document.querySelector('.wa-start-dialog')?.open,
+    startScreen: !!document.querySelector('.wa-start-dialog'),
     hint: !!document.querySelector('.wa-firstrun-hint'),
     title: document.querySelector('.wa-project-name')?.value,
   }))
   check('first run: demo content is loaded', cold.seeded > 0, `${cold.seeded} steps`)
-  check('first run: quick-start centre opens', cold.startOpen)
+  check('first run: no start screen interrupts the workspace', !cold.startScreen)
   check('first run: non-modal hint is shown', cold.hint)
   check('first run: demo has its real title', cold.title === 'MIDNIGHT ACID', String(cold.title))
   check('first run: the MPC pads are the opening screen', await page.locator('.wa-page-pads').isVisible())
-  check('first run: four outcome choices are clear', await page.locator('.wa-start-card').count() === 4)
-  check('first run: four primary intents replace six tools', await page.locator('.wa-primary-nav .wa-modekey').count() === 4)
-  await page.locator('.wa-start-card', { hasText: 'Make a beat' }).click()
+  check('first run: three primary intents replace six tools', await page.locator('.wa-primary-nav .wa-modekey').count() === 3)
   await openMode(page, 'SYNTH')
   check('first run: controls are usable immediately', true)
 
   await page.evaluate(() => {
     localStorage.removeItem('vv_studio_v2')
     localStorage.setItem('vv_studio_tutorial_seen', '1')  // fresh boot auto-opens the tour otherwise
-    localStorage.setItem('vv_studio_start_v1_seen', '1')
   })
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.wa-transport', { timeout: 15000 })
@@ -127,7 +123,7 @@ try {
   await page.click('.wa-transport button:has-text("■")')
   await page.waitForTimeout(200)
   await openMode(page, 'CLIPS')
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Clips' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Clip launcher' }).click()
   await page.locator('.wa-clip.has').first().click()
   check('song: launching a clip returns to Pattern, visibly', (await songBtn.textContent()) === 'Pattern')
 
@@ -275,18 +271,20 @@ try {
 
   // ── v20: tracks are addable and clips remain independent ──
   await openMode(page, 'CLIPS')
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Song' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Arrangement' }).click()
   await page.locator('.wa-composer-head button', { hasText: 'MIDI track' }).click()
   await page.locator('.wa-name-dialog input').fill('Keys 2')
   await page.locator('.wa-name-dialog button', { hasText: 'Save' }).click()
   await page.waitForTimeout(250)
   check('tracks: a MIDI track is added to Song', await page.locator('.wa-arrange-lane-name', { hasText: 'Keys 2' }).count() === 1)
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Clips' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Clip launcher' }).click()
   check('clips: Drum Rack, Pads and each MIDI instrument have separate rows', await page.locator('.wa-session-row[data-track]').count() === 6)
   check('clips: populated slots expose names and activity', await page.locator('.wa-clip.has .wa-clip-name').count() > 0 && await page.locator('.wa-clip.has .wa-clip-activity').count() > 0)
   check('clips: launch quantization offers bar, beat and immediate', await page.locator('select[aria-label="Clip launch quantization"] option').count() === 3)
-  await page.locator('.wa-session-row[data-track="bass"] .wa-clip').nth(1).click()
-  await page.locator('.wa-session-row[data-track="lead"] .wa-clip').nth(3).click()
+  const bassClip = page.locator('.wa-session-row[data-track="bass"] .wa-clip').nth(1)
+  const leadClip = page.locator('.wa-session-row[data-track="lead"] .wa-clip').nth(3)
+  await bassClip.scrollIntoViewIfNeeded(); await bassClip.click()
+  await leadClip.scrollIntoViewIfNeeded(); await leadClip.click()
   await page.waitForTimeout(600)
   const independentClips = await page.evaluate(() => JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').clipPlay)
   check('clips: MIDI tracks launch different scenes independently', independentClips?.bass === 1 && independentClips?.lead === 3, JSON.stringify(independentClips))
@@ -304,7 +302,7 @@ try {
   check('workflow: Tab switches Song back to Clips', await page.locator('.wa-session').isVisible(), JSON.stringify(tabState))
 
   // ── v20: local audio enters the arrangement as an editable track clip ──
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Song' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Arrangement' }).click()
   await page.locator('.wa-composer-head input[type="file"]').setInputFiles({ name: 'vinyl-loop.wav', mimeType: 'audio/wav', buffer: arrangeWav })
   await page.waitForFunction(() => document.querySelectorAll('.wa-audio-block').length === 1)
   await page.locator('.wa-audio-block').click()
@@ -329,7 +327,7 @@ try {
 
   // ── workflow: the arrangement is undoable ──
   await openMode(page, 'CLIPS')
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Song' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Arrangement' }).click()
   await page.waitForTimeout(250)
   const chainBefore = await page.locator('.wa-chain-block').count()
   await page.locator('.wa-composer-head button', { hasText: 'Clip' }).click()
@@ -368,12 +366,12 @@ try {
   await page.waitForTimeout(300)
 
   // ── S1: the clip decides the editor (double-tap → drum grid, scene selected) ──
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Clips' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Clip launcher' }).click()
   await page.locator('.wa-session-row').nth(1).locator('.wa-clip').nth(2).dblclick()
   await page.waitForTimeout(300)
   check('clips: double-tap opens the drum editor', await page.locator('.wa-page-drums').isVisible())
   await openMode(page, 'CLIPS')
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Clips' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Clip launcher' }).click()
   await page.waitForTimeout(200)
   const selScene = await page.evaluate(() => {
     const firstTrackRow = [...document.querySelectorAll('.wa-session-row')][1]
@@ -382,7 +380,7 @@ try {
   check('clips: double-tap selected the tapped scene', selScene === 2, `scene idx ${selScene}`)
 
   // ── S1: automation + song library fold shut by default ──
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Song' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Arrangement' }).click()
   await page.waitForTimeout(50)
   check('song page: automation and library are folded',
     await page.locator('.wa-composer').isVisible()
@@ -450,7 +448,7 @@ try {
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.wa-transport', { timeout: 15000 })
   await openMode(page, 'CLIPS')
-  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Song' }).click()
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Arrangement' }).click()
   const migrated = await page.evaluate(() => ({
     lanes: document.querySelectorAll('.wa-arrange-lane').length,
     synthCounts: [...document.querySelectorAll('.wa-arrange-lane')].slice(2).map((lane) => lane.querySelectorAll('.wa-chain-block').length),
