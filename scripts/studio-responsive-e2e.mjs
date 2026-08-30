@@ -144,6 +144,15 @@ for (const [name, width, height] of viewports) {
         await page.locator('.wa-devtab', { hasText: 'MACROS' }).click()
         check(`${name}: macros expose four performance groups`, await page.locator('.wa-macro-card').count() === 4)
         check(`${name}: macros expose sixteen mapped controls`, await page.locator('.wa-macro-detail').count() === 16)
+        const macroFit = await page.locator('.wa-combinator').evaluate((node) => {
+          const host = node.closest('.wa-devdetail').getBoundingClientRect()
+          const controls = [...node.querySelectorAll('.wa-macro-main, .wa-macro-detail')].map((control) => control.getBoundingClientRect())
+          return {
+            contained: controls.every((control) => control.left >= host.left - 1 && control.right <= host.right + 1 && control.top >= host.top - 1 && control.bottom <= host.bottom + 1),
+            scroll: node.scrollHeight - node.clientHeight,
+          }
+        })
+        check(`${name}: macro knobs stay visible without internal scrolling`, macroFit.contained && macroFit.scroll <= 1, `${Math.round(macroFit.scroll)}px overflow`)
         await page.screenshot({ path: `studio-macros-${name}.png`, fullPage: false })
       }
       if ((name === 'phone' || name === 'landscape') && mode === 'DRUMS') {
@@ -292,6 +301,19 @@ for (const [name, width, height] of viewports) {
     check(`${name}: synth has Notes and Sound only`, await page.locator('.wa-page-synth .wa-subtab').evaluateAll((nodes) => nodes.filter((node) => ['Notes', 'Sound'].includes(node.textContent.trim())).length) === 2 && await page.locator('.wa-page-synth .wa-subtab', { hasText: 'Tools' }).count() === 0)
     await page.locator('.wa-page-synth .wa-subtab', { hasText: 'Sound' }).click()
     check(`${name}: essential synth controls fit the main surface`, await page.locator('.wa-synth-quick').isVisible() && await page.locator('.wa-synth-quick .wa-slider-row').count() === 7)
+    const soundFit = await page.locator('.wa-synth-quick').evaluate((node) => {
+      const host = node.getBoundingClientRect()
+      const modules = [...node.querySelectorAll('.wa-synth-module')].map((module) => module.getBoundingClientRect())
+      const knobs = [...node.querySelectorAll('.wa-knob')].map((knob) => knob.getBoundingClientRect())
+      const contained = (rect) => rect.left >= host.left - 1 && rect.right <= host.right + 1 && rect.top >= host.top - 1 && rect.bottom <= host.bottom + 1
+      return {
+        modulesContained: modules.every(contained),
+        knobsContained: knobs.every(contained),
+        moduleRows: new Set(modules.map((module) => Math.round(module.top))).size,
+        scroll: node.scrollHeight - node.clientHeight,
+      }
+    })
+    check(`${name}: synth modules and knobs stay visible`, soundFit.modulesContained && soundFit.knobsContained && soundFit.scroll <= 1 && soundFit.moduleRows <= (name === 'phone' ? 2 : 1), `${soundFit.moduleRows} rows · ${Math.round(soundFit.scroll)}px overflow`)
     const soundDensity = await page.locator('.wa-synth-quick .wa-slider-row').evaluateAll((nodes) => ({
       tallest: Math.max(...nodes.map((node) => node.getBoundingClientRect().height)),
       average: nodes.reduce((sum, node) => sum + node.getBoundingClientRect().height, 0) / nodes.length,
@@ -327,6 +349,15 @@ for (const [name, width, height] of viewports) {
     check(`${name}: keyboard stays out of the workspace until requested`, !await page.locator('.wa-page-synth > .wa-keys').isVisible())
     await page.locator('.wa-keyboard-toggle').click()
     check(`${name}: keyboard remains available on demand`, await page.locator('.wa-page-synth > .wa-keys').isVisible())
+    if (name === 'landscape') {
+      const keyboardSoundFit = await page.locator('.wa-synth-quick').evaluate((node) => {
+        const host = node.getBoundingClientRect()
+        const controls = [...node.querySelectorAll('.wa-synth-module, .wa-knob')].filter((control) => control.checkVisibility()).map((control) => control.getBoundingClientRect())
+        const contained = (control) => control.left >= host.left - 1 && control.right <= host.right + 1 && control.top >= host.top - 1 && control.bottom <= host.bottom + 1
+        return { count: controls.length, contained: controls.every(contained), overflow: node.scrollHeight - node.clientHeight }
+      })
+      check(`${name}: Sound controls remain usable beside the keyboard`, keyboardSoundFit.count === 11 && keyboardSoundFit.contained && keyboardSoundFit.overflow <= 1, `${keyboardSoundFit.count} controls · ${Math.round(keyboardSoundFit.overflow)}px overflow`)
+    }
     await page.screenshot({ path: `studio-sound-${name}.png`, fullPage: false })
 
     await openMode(page, 'CLIPS')
