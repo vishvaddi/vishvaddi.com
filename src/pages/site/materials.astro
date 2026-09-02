@@ -5,7 +5,7 @@ import "../../styles/site.css";
 
 <Base
   title="Material Calculators"
-  description="Free material calculators — paint, tiles, plasterboard, concrete and skirting quantities. Runs entirely in your browser."
+  description="Free material calculators by trade — paint, tiles, plasterboard, concrete slabs and strip footings, weight from volume, timber board feet, sheathing, roof tiles and more. Runs entirely in your browser."
   siteNav
 >
   <div class="blueprint tool">
@@ -304,6 +304,40 @@ import "../../styles/site.css";
             compute: (v) => (v.area <= 0 ? null : { rows: [[f0(up((v.area * pct(v.waste)) / 2.16)), "× form ply sheets"]] }),
           },
           {
+            id: "strip", title: "Strip footing",
+            blurb: "Trench-footing concrete from total run, width and depth.",
+            fields: [
+              { id: "len", label: "Total run (m)", def: "24", min: "0", step: "0.1" },
+              { id: "w", label: "Width (mm)", def: "300", min: "1", step: "10" },
+              { id: "d", label: "Depth (mm)", def: "400", min: "1", step: "10" },
+              { id: "waste", label: "Wastage (%)", def: "5", min: "0", step: "1" },
+            ],
+            compute: (v) => {
+              const vol = v.len * (v.w / 1000) * (v.d / 1000) * pct(v.waste);
+              if (vol <= 0) return null;
+              return {
+                rows: [[f2(vol) + " m³", "concrete"], [f0(up(vol / 0.0108)), "× 20 kg bags"], [f2(vol * 2.4) + " t", "mass @ 2.4 t/m³"]],
+                warn: vol > 1.5 ? "Over ~1.5 m³ — pre-mixed delivery is usually cheaper than bags." : undefined,
+              };
+            },
+          },
+          {
+            id: "weight", title: "Weight from volume",
+            blurb: "Mass at a bulk density. Concrete 2400, steel 7850, hardwood ~900, softwood ~550, plasterboard ~700, glass 2500, water 1000, sand ~1600, gravel ~1500 kg/m³.",
+            fields: [
+              { id: "vol", label: "Volume (m³)", def: "1", min: "0", step: "0.01" },
+              { id: "dens", label: "Density (kg/m³)", def: "2400", min: "1", step: "10" },
+            ],
+            compute: (v) => {
+              if (v.vol <= 0 || v.dens <= 0) return null;
+              const kg = v.vol * v.dens;
+              return {
+                rows: [[f0(kg) + " kg", "mass"], [f2(kg / 1000) + " t", "tonnes"], [f0(kg * 9.80665) + " N", "weight force"]],
+                warn: kg > 1000 ? "Over a tonne — check crane / floor loading." : undefined,
+              };
+            },
+          },
+          {
             id: "piers", title: "Footings / piers",
             blurb: "Cylindrical pier volume × count — for post footings and bored piers.",
             fields: [
@@ -326,6 +360,30 @@ import "../../styles/site.css";
       {
         trade: "Roofing",
         specs: [
+          {
+            id: "roofcover", title: "Roof area, tiles & sheathing",
+            blurb: "True area from the plan footprint and pitch, then tiles (concrete ~10.5/m², terracotta ~13/m²), 2400 × 1200 sarking/sheathing sheets and roofing squares (3 shingle bundles per square).",
+            fields: [
+              { id: "plan", label: "Plan area (m²)", def: "120", min: "0", step: "0.5" },
+              { id: "pitch", label: "Pitch (°)", def: "22.5", min: "0", step: "0.5" },
+              { id: "tiles", label: "Tiles / m²", def: "10.5", min: "0", step: "0.5" },
+              { id: "waste", label: "Wastage (%)", def: "5", min: "0", step: "1" },
+            ],
+            compute: (v) => {
+              if (v.plan <= 0 || v.pitch < 0 || v.pitch >= 90) return null;
+              const area = v.plan / Math.cos((v.pitch * Math.PI) / 180);
+              const gross = area * pct(v.waste);
+              return {
+                rows: [
+                  [f2(area) + " m²", "roof surface"],
+                  [f0(up(gross * v.tiles)), "tiles incl. wastage"],
+                  [f0(up(gross / 2.88)), "× 2400 × 1200 sheets"],
+                  [f2(area / 9.290304) + " sq", "roofing squares"],
+                  [f0(up((gross / 9.290304) * 3)), "shingle bundles"],
+                ],
+              };
+            },
+          },
           {
             id: "roofsheets", title: "Roof sheets",
             blurb: "Sheet count from roof width and sheet cover (corrugated 762 mm, Trimdek 762, Klip-Lok 700).",
@@ -415,6 +473,43 @@ import "../../styles/site.css";
               if (v.len <= 0 || v.spc <= 0) return null;
               const studs = up((v.len * 1000) / v.spc) + 1;
               return { rows: [[f0(studs), "studs @ " + f0(v.spc) + " mm"], [f2(v.len * 2) + " m", "top + bottom plate"], [f2(studs * v.ht) + " m", "stud lineal metres"]] };
+            },
+          },
+          {
+            id: "timber", title: "Timber volume & board feet",
+            blurb: "Cubic metres, board feet (1 bf = 144 in³) and mass for a run of one section. Hardwood ~900, softwood ~550 kg/m³.",
+            fields: [
+              { id: "w", label: "Section width (mm)", def: "90", min: "1", step: "1" },
+              { id: "d", label: "Section depth (mm)", def: "45", min: "1", step: "1" },
+              { id: "lm", label: "Total length (m)", def: "60", min: "0", step: "0.1" },
+              { id: "dens", label: "Density (kg/m³)", def: "550", min: "1", step: "10" },
+            ],
+            compute: (v) => {
+              const vol = (v.w / 1000) * (v.d / 1000) * v.lm;
+              if (vol <= 0) return null;
+              return {
+                rows: [
+                  [f2(vol) + " m³", "volume"],
+                  [f1(vol / 0.002359737) + " bf", "board feet"],
+                  [f0(vol * v.dens) + " kg", "mass"],
+                  [f2((v.w * v.d) / 1e6 * v.dens) + " kg/m", "per lineal metre"],
+                ],
+              };
+            },
+          },
+          {
+            id: "sheathing", title: "Sheet flooring / sheathing",
+            blurb: "Sheets to cover an area — yellow-tongue 3600 × 900, ply 2400 × 1200 (the 4 × 8 sheet).",
+            fields: [
+              { id: "area", label: "Area (m²)", def: "40", min: "0", step: "0.1" },
+              { id: "w", label: "Sheet width (mm)", def: "1200", min: "1", step: "1" },
+              { id: "h", label: "Sheet length (mm)", def: "2400", min: "1", step: "1" },
+              { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
+            ],
+            compute: (v) => {
+              const sheetArea = (v.w / 1000) * (v.h / 1000);
+              if (sheetArea <= 0 || v.area <= 0) return null;
+              return { rows: [[f0(up((v.area * pct(v.waste)) / sheetArea)), "sheets"], [f2(sheetArea) + " m²", "per sheet"]] };
             },
           },
           {

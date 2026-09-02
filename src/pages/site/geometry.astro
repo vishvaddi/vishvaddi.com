@@ -5,7 +5,7 @@ import "../../styles/site.css";
 
 <Base
   title="Geometry & Setout"
-  description="Free on-site setout tools in sections — 3-4-5 square check, triangle solver, trig, circles and arcs, falls and grades, stairs, roof pitch and areas. Runs entirely in your browser."
+  description="Free construction-master style setout maths — feet-inch-fraction and metric dimensions, square check, triangle solver, trig, circles and arcs, falls, stairs with stairwell opening, common/hip/valley/jack rafters with cutting angles, compound mitres, rake walls, polygons and volumes. Runs entirely in your browser."
   siteNav
 >
   <div class="blueprint tool">
@@ -17,6 +17,24 @@ import "../../styles/site.css";
       <nav class="geo-tabs no-print" id="geo-tabs" role="tablist" aria-label="Geometry sections"></nav>
       <div class="geo-content">
         <div class="geo-panel" data-panel="setout"><div id="calcs-setout"></div></div>
+        <div class="geo-panel" data-panel="dimensions" hidden>
+          <p>Dimensional maths in any mix of units. Type <code>5' 3-1/2" + 2' 7"</code>, <code>1.2m - 300</code> or <code>12' x 10'</code> and read the answer in millimetres, metres and feet-inches. Multiplying two lengths gives an area, three a volume. Press Enter to keep a line on the tape.</p>
+          <div class="field"><label for="dim-expr">Expression</label><input type="text" id="dim-expr" autocomplete="off" spellcheck="false" placeholder='5&#39; 3-1/2" + 2&#39; 7"' value='5&#39; 3-1/2" + 2&#39; 7"' /></div>
+          <div class="dim-bar">
+            <div class="field"><label for="dim-bare">Bare numbers are</label>
+              <select id="dim-bare"><option value="mm" selected>mm</option><option value="in">inches</option><option value="ft">feet</option><option value="none">plain numbers</option></select></div>
+            <div class="field"><label for="dim-denom">Round fractions to</label>
+              <select id="dim-denom"><option value="2">1/2</option><option value="4">1/4</option><option value="8">1/8</option><option value="16" selected>1/16</option><option value="32">1/32</option><option value="64">1/64</option></select></div>
+          </div>
+          <div class="btn-row no-print dim-examples">
+            <button type="button" class="btn btn-ghost" data-dim-example='12&#39; 6" - 2400'>12' 6" − 2400</button>
+            <button type="button" class="btn btn-ghost" data-dim-example='(3600 + 1200) x 2'>(3600 + 1200) × 2</button>
+            <button type="button" class="btn btn-ghost" data-dim-example='10&#39; x 12&#39;'>10' × 12'</button>
+            <button type="button" class="btn btn-ghost" data-dim-example='6m x 4m x 100mm'>6m × 4m × 100mm</button>
+          </div>
+          <div id="dim-out" class="result" aria-live="polite"></div>
+          <details class="dim-tape"><summary>Tape</summary><ol id="dim-hist"></ol></details>
+        </div>
         <div class="geo-panel" data-panel="triangles" hidden>
           <p>Enter any 3 values (at least one side). Sides <code>a, b, c</code> sit opposite angles <code>A, B, C</code>. Angles in degrees.</p>
           <div class="tri-grid">
@@ -45,6 +63,7 @@ import "../../styles/site.css";
         <div class="geo-panel" data-panel="falls" hidden><div id="calcs-falls"></div></div>
         <div class="geo-panel" data-panel="stairs" hidden><div id="calcs-stairs"></div></div>
         <div class="geo-panel" data-panel="roof" hidden><div id="calcs-roof"></div></div>
+        <div class="geo-panel" data-panel="angles" hidden><div id="calcs-angles"></div></div>
         <div class="geo-panel" data-panel="areas" hidden><div id="calcs-areas"></div></div>
       </div>
     </div>
@@ -59,10 +78,17 @@ import "../../styles/site.css";
   <script>
     import { mountCalcs, wireActions, type CalcSpec } from "../../scripts/site/calc";
     import { initTriangle } from "../../scripts/site/triangle";
+    import { initDims } from "../../scripts/site/dims";
+    import {
+      solveRafters, solveStairs, compoundMitre, dmsToDeg, degToDms,
+      rakeWallStuds, archedRakeStuds, regularPolygon, arcFromRadius,
+    } from "../../scripts/site/carpentry";
 
     const f2 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 2 });
     const f0 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 0 });
     const f1 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 1 });
+    const deg = (n: number) => f1(n) + "°";
+    const m3 = (mm3: number) => f2(mm3 / 1e9) + " m³";
 
     const setout: CalcSpec[] = [
       {
@@ -157,6 +183,100 @@ import "../../styles/site.css";
           };
         },
       },
+      {
+        id: "arcangle",
+        title: "Arc from radius & angle",
+        blurb: "Arc length, chord, rise and sector/segment areas from a radius and the included angle.",
+        fields: [
+          { id: "r", label: "Radius (mm)", def: "1000", min: "0", step: "1" },
+          { id: "a", label: "Included angle (°)", def: "90", min: "0", step: "0.5" },
+        ],
+        compute: (v) => {
+          if (v.r <= 0 || v.a <= 0 || v.a > 360) return null;
+          const o = arcFromRadius(v.r, v.a);
+          return {
+            rows: [
+              [f0(o.arc) + " mm", "arc length"],
+              [f0(o.chord) + " mm", "chord"],
+              [f0(o.rise) + " mm", "rise (sagitta)"],
+              [f2(o.sector / 1e6) + " m²", "sector area"],
+              [f2(o.segment / 1e6) + " m²", "segment area"],
+            ],
+          };
+        },
+      },
+      {
+        id: "cylinder",
+        title: "Column / post hole / pillar",
+        blurb: "Cylinder volume and surface from diameter and height — concrete for post holes, render for columns.",
+        fields: [
+          { id: "d", label: "Diameter (mm)", def: "450", min: "0", step: "1" },
+          { id: "h", label: "Height / depth (mm)", def: "900", min: "0", step: "1" },
+          { id: "n", label: "How many", def: "1", min: "1", step: "1" },
+        ],
+        compute: (v) => {
+          if (v.d <= 0 || v.h <= 0 || v.n < 1) return null;
+          const r = v.d / 2;
+          const vol = Math.PI * r * r * v.h * v.n;
+          return {
+            rows: [
+              [m3(vol), "volume (all)"],
+              [f1(vol / 1e6) + " L", "litres"],
+              [f2((Math.PI * v.d * v.h * v.n) / 1e6) + " m²", "curved surface"],
+              [f2((Math.PI * r * r) / 1e6) + " m²", "end area (each)"],
+            ],
+          };
+        },
+      },
+      {
+        id: "cone",
+        title: "Cone / hopper",
+        blurb: "Volume and slant height of a cone, or the frustum left when you cut the top off.",
+        fields: [
+          { id: "d", label: "Base diameter (mm)", def: "600", min: "0", step: "1" },
+          { id: "top", label: "Top diameter (mm, 0 = point)", def: "0", min: "0", step: "1" },
+          { id: "h", label: "Height (mm)", def: "800", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          if (v.d <= 0 || v.h <= 0 || v.top < 0) return null;
+          const R = v.d / 2, r = v.top / 2;
+          const vol = (Math.PI * v.h * (R * R + R * r + r * r)) / 3;
+          const slant = Math.hypot(v.h, R - r);
+          return {
+            rows: [
+              [m3(vol), "volume"],
+              [f1(vol / 1e6) + " L", "litres"],
+              [f0(slant) + " mm", "slant height"],
+              [f2((Math.PI * (R + r) * slant) / 1e6) + " m²", "curved surface"],
+            ],
+          };
+        },
+      },
+      {
+        id: "archwindow",
+        title: "Arched opening / window",
+        blurb: "Segmental or semicircular head on a rectangular opening. Rise = half the width for a full semicircle.",
+        fields: [
+          { id: "w", label: "Width (mm)", def: "1200", min: "0", step: "1" },
+          { id: "h", label: "Height to springing (mm)", def: "1500", min: "0", step: "1" },
+          { id: "rise", label: "Arch rise (mm)", def: "300", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          if (v.w <= 0 || v.h < 0 || v.rise <= 0 || v.rise > v.w / 2) return null;
+          const r = (v.w * v.w) / (8 * v.rise) + v.rise / 2;
+          const theta = 2 * Math.asin(Math.min(1, v.w / (2 * r)));
+          const seg = (r * r * (theta - Math.sin(theta))) / 2;
+          const arc = r * theta;
+          return {
+            rows: [
+              [f2((v.w * v.h + seg) / 1e6) + " m²", "opening area"],
+              [f0(r) + " mm", "arch radius"],
+              [f0(arc) + " mm", "arch length (head trim)"],
+              [f0(arc + 2 * v.h + v.w) + " mm", "perimeter"],
+            ],
+          };
+        },
+      },
     ];
 
     const falls: CalcSpec[] = [
@@ -221,30 +341,50 @@ import "../../styles/site.css";
     const stairs: CalcSpec[] = [
       {
         id: "stairs",
-        title: "Stairs",
-        blurb: "Comfort range (AS1657): riser 115–190 mm, going 240–355 mm.",
+        title: "Stair layout",
+        blurb: "Full layout from floor-to-floor rise. NCC housing: riser 115–190 mm, going 240–355 mm, 2R+G 550–700. Set the max riser to the exact riser you want for a riser-limited layout.",
         fields: [
-          { id: "rise", label: "Total rise (mm)", def: "1000", min: "1", step: "1" },
+          { id: "rise", label: "Total rise (mm)", def: "2700", min: "1", step: "1" },
           { id: "going", label: "Going / tread (mm)", def: "250", min: "1", step: "1" },
           { id: "maxr", label: "Max riser (mm)", def: "190", min: "1", step: "1" },
         ],
         compute: (v) => {
-          if (v.rise <= 0 || v.maxr <= 0) return null;
-          const risers = Math.max(1, Math.ceil(v.rise / v.maxr));
-          const riserH = v.rise / risers;
-          const treads = risers - 1;
-          const run = treads * v.going;
-          const twoRG = 2 * riserH + v.going;
-          const ok = riserH >= 115 && riserH <= 190 && v.going >= 240 && v.going <= 355;
+          if (v.rise <= 0 || v.maxr <= 0 || v.going <= 0) return null;
+          const s = solveStairs({ rise: v.rise, going: v.going, maxRiser: v.maxr });
+          const ok = s.riserHeight >= 115 && s.riserHeight <= 190 && v.going >= 240 && v.going <= 355;
           return {
             rows: [
-              [String(risers), "risers"],
-              [f1(riserH) + " mm", "riser height"],
-              [String(treads), "treads"],
-              [f0(run) + " mm", "total run"],
-              [f0(twoRG) + " mm", "2R+G (comfort 550–700)"],
+              [String(s.risers), "risers"],
+              [f1(s.riserHeight) + " mm", "riser height"],
+              [String(s.treads), "treads"],
+              [f0(s.run) + " mm", "total run"],
+              [f0(s.stringer) + " mm", "stringer length (floor to floor)"],
+              [deg(s.incline), "incline angle"],
+              [f0(s.twoRG) + " mm", "2R+G (comfort 550–700)"],
             ],
-            warn: ok ? undefined : "Outside the AS1657 comfort range — adjust riser or going.",
+            warn: ok ? undefined : "Outside the NCC comfort range — adjust riser or going.",
+          };
+        },
+      },
+      {
+        id: "stairwell",
+        title: "Stairwell opening",
+        blurb: "Set the riser and going and solve the well length needed for headroom (NCC min 2000 mm vertical from the nosing line). Floor depth = joists + flooring + ceiling lining above.",
+        fields: [
+          { id: "riser", label: "Riser height (mm)", def: "180", min: "1", step: "0.5" },
+          { id: "going", label: "Going (mm)", def: "250", min: "1", step: "1" },
+          { id: "head", label: "Headroom (mm)", def: "2000", min: "1", step: "10" },
+          { id: "floor", label: "Floor depth above (mm)", def: "300", min: "0", step: "10" },
+        ],
+        compute: (v) => {
+          if (v.riser <= 0 || v.going <= 0 || v.head <= 0) return null;
+          const opening = ((v.head + v.floor) * v.going) / v.riser;
+          return {
+            rows: [
+              [f0(opening) + " mm", "well length back from top riser"],
+              [f1(opening / v.going) + " treads", "treads under the well"],
+              [deg((Math.atan(v.riser / v.going) * 180) / Math.PI), "incline angle"],
+            ],
           };
         },
       },
@@ -253,20 +393,104 @@ import "../../styles/site.css";
     const roof: CalcSpec[] = [
       {
         id: "roof",
-        title: "Roof pitch",
-        blurb: "Rise and rafter length from span and pitch (excludes overhang).",
+        title: "Common rafter",
+        blurb: "Rise, rafter length and cutting angles from span and pitch. Lengths run plate to ridge centre line — deduct half the ridge thickness.",
         fields: [
           { id: "span", label: "Span (mm)", def: "6000", min: "0", step: "1" },
           { id: "pitch", label: "Pitch (degrees)", def: "22.5", min: "0", step: "0.5" },
+          { id: "oh", label: "Horizontal overhang (mm)", def: "450", min: "0", step: "1" },
         ],
         compute: (v) => {
           if (v.span <= 0 || v.pitch <= 0 || v.pitch >= 90) return null;
-          const run = v.span / 2;
-          const rad = (v.pitch * Math.PI) / 180;
+          const r = solveRafters({ span: v.span, pitch: v.pitch, overhang: v.oh });
           return {
             rows: [
-              [f0(run * Math.tan(rad)) + " mm", "rise"],
-              [f0(run / Math.cos(rad)) + " mm", "rafter length"],
+              [f0(r.rise) + " mm", "rise"],
+              [f0(r.run / Math.cos((v.pitch * Math.PI) / 180)) + " mm", "rafter, plate to ridge"],
+              [f0(r.commonLength) + " mm", "rafter incl. overhang"],
+              [deg(r.plumbCut), "plumb cut (saw setting)"],
+              [deg(r.levelCut), "level / seat cut"],
+            ],
+          };
+        },
+      },
+      {
+        id: "hip",
+        title: "Hip & valley rafters",
+        blurb: "Regular (both roofs same pitch) or irregular hip — leave the end pitch at 0 for regular. Cheek angles are measured off the rafter's edge; the mitre-saw setting is 90° minus that.",
+        fields: [
+          { id: "span", label: "Main span (mm)", def: "6000", min: "0", step: "1" },
+          { id: "pitch", label: "Main pitch (°)", def: "22.5", min: "0", step: "0.5" },
+          { id: "end", label: "End pitch (°, 0 = same)", def: "0", min: "0", step: "0.5" },
+          { id: "oh", label: "Horizontal overhang (mm)", def: "0", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          if (v.span <= 0 || v.pitch <= 0 || v.pitch >= 90 || v.end >= 90) return null;
+          const r = solveRafters({ span: v.span, pitch: v.pitch, endPitch: v.end, overhang: v.oh });
+          const rows: [string, string][] = [
+            [f0(r.hipRun) + " mm", "hip run (plan)"],
+            [f0(r.hipLength) + " mm", "hip / valley length" + (v.oh > 0 ? " incl. overhang" : "")],
+            [deg(r.hipPitch), "hip pitch"],
+            [deg(r.hipPlumb), "hip plumb cut"],
+            [deg(r.hipLevel), "hip level cut"],
+          ];
+          if (r.irregular) {
+            rows.push([f0(r.endRun) + " mm", "end roof run"]);
+            rows.push([deg(r.hipCheekMain), "hip cheek, main side"]);
+            rows.push([deg(r.hipCheekEnd), "hip cheek, end side"]);
+          } else {
+            rows.push([deg(r.hipCheekMain), "hip cheek (each side)"]);
+          }
+          return {
+            rows,
+            warn: r.irregular ? "Irregular hip — with equal overhangs the two fascia heights differ; check the eaves detail." : undefined,
+          };
+        },
+      },
+      {
+        id: "jacks",
+        title: "Jack rafters",
+        blurb: "Jack lengths (plate to hip centre line, no overhang) and the common difference at your spacing, for regular or irregular hips.",
+        fields: [
+          { id: "span", label: "Main span (mm)", def: "6000", min: "0", step: "1" },
+          { id: "pitch", label: "Main pitch (°)", def: "22.5", min: "0", step: "0.5" },
+          { id: "end", label: "End pitch (°, 0 = same)", def: "0", min: "0", step: "0.5" },
+          { id: "spc", label: "Rafter spacing (mm)", def: "600", min: "1", step: "50" },
+        ],
+        compute: (v) => {
+          if (v.span <= 0 || v.pitch <= 0 || v.pitch >= 90 || v.end >= 90 || v.spc <= 0) return null;
+          const r = solveRafters({ span: v.span, pitch: v.pitch, endPitch: v.end, spacing: v.spc });
+          const rows: [string, string][] = [
+            [f0(r.jackDiffMain) + " mm", "common difference, main side"],
+            [deg(r.jackCheekMain), "jack cheek, main side (off the edge)"],
+            [deg(90 - r.jackCheekMain), "mitre-saw setting, main side"],
+          ];
+          if (r.irregular) {
+            rows.push([f0(r.jackDiffEnd) + " mm", "common difference, end side"]);
+            rows.push([deg(r.jackCheekEnd), "jack cheek, end side"]);
+            rows.push([deg(90 - r.jackCheekEnd), "mitre-saw setting, end side"]);
+          }
+          r.jacksMain.forEach((len, k) => rows.push([f0(len) + " mm", `main jack ${k + 1}`]));
+          if (r.irregular) r.jacksEnd.forEach((len, k) => rows.push([f0(len) + " mm", `end jack ${k + 1}`]));
+          return { rows };
+        },
+      },
+      {
+        id: "roofarea",
+        title: "Roof area from plan",
+        blurb: "True roof area from the plan (footprint) area and pitch. Squares are the 100 ft² roofing unit.",
+        fields: [
+          { id: "plan", label: "Plan area (m²)", def: "120", min: "0", step: "0.5" },
+          { id: "pitch", label: "Pitch (°)", def: "22.5", min: "0", step: "0.5" },
+        ],
+        compute: (v) => {
+          if (v.plan <= 0 || v.pitch < 0 || v.pitch >= 90) return null;
+          const area = v.plan / Math.cos((v.pitch * Math.PI) / 180);
+          return {
+            rows: [
+              [f2(area) + " m²", "roof surface"],
+              [f2(area / 9.290304) + " squares", "roofing squares"],
+              [f2(area / v.plan) + " ×", "pitch factor"],
             ],
           };
         },
@@ -328,37 +552,161 @@ import "../../styles/site.css";
       {
         id: "polygon",
         title: "Regular polygon",
-        blurb: "Area and across-flats/corners from number of sides and side length.",
+        blurb: "Angles, perimeter, area and across-flats/corners. Enter a side length, or an across-flats size to solve the side.",
         fields: [
           { id: "n", label: "Sides", def: "6", min: "3", step: "1" },
           { id: "s", label: "Side length (mm)", def: "600", min: "0", step: "1" },
+          { id: "af", label: "or across flats (mm)", def: "0", min: "0", step: "1" },
         ],
         compute: (v) => {
           const n = Math.round(v.n);
-          if (n < 3 || v.s <= 0) return null;
-          const area = (n * v.s * v.s) / (4 * Math.tan(Math.PI / n));
-          const rc = v.s / (2 * Math.sin(Math.PI / n));
-          const ri = v.s / (2 * Math.tan(Math.PI / n));
+          const side = v.af > 0 ? v.af * Math.tan(Math.PI / n) : v.s;
+          if (n < 3 || side <= 0) return null;
+          const p = regularPolygon(n, side);
           return {
             rows: [
-              [f2(area / 1e6) + " m²", "area"],
-              [f0(rc * 2) + " mm", "across corners"],
-              [f0(ri * 2) + " mm", "across flats"],
+              [f0(side) + " mm", "side length"],
+              [deg(p.interior), "corner (interior) angle"],
+              [deg(p.cut), "mitre on each piece end"],
+              [deg(p.central), "central angle"],
+              [f0(p.perimeter) + " mm", "perimeter"],
+              [f2(p.area / 1e6) + " m²", "area"],
+              [f0(p.acrossCorners) + " mm", "across corners"],
+              [f0(p.acrossFlats) + " mm", "across flats"],
+            ],
+          };
+        },
+      },
+      {
+        id: "box",
+        title: "Box / room volume",
+        blurb: "Length × width × height — volume, floor area, wall area and perimeter in one go.",
+        fields: [
+          { id: "l", label: "Length (mm)", def: "4000", min: "0", step: "1" },
+          { id: "w", label: "Width (mm)", def: "3000", min: "0", step: "1" },
+          { id: "h", label: "Height (mm)", def: "2700", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          if (v.l <= 0 || v.w <= 0 || v.h <= 0) return null;
+          return {
+            rows: [
+              [m3(v.l * v.w * v.h), "volume"],
+              [f2((v.l * v.w) / 1e6) + " m²", "floor / ceiling area"],
+              [f2((2 * (v.l + v.w) * v.h) / 1e6) + " m²", "wall area (gross)"],
+              [f0(2 * (v.l + v.w)) + " mm", "perimeter"],
+              [f0(Math.hypot(v.l, v.w)) + " mm", "floor diagonal"],
             ],
           };
         },
       },
     ];
 
+    const angles: CalcSpec[] = [
+      {
+        id: "crown",
+        title: "Compound mitre (crown / splayed)",
+        blurb: "Crown mould laid flat on the saw: spring angle is the angle between the mould and the wall (38° or 45° stock). Also works for hopper/splayed boxes — spring = side tilt from vertical.",
+        fields: [
+          { id: "spring", label: "Spring angle (°)", def: "38", min: "0", step: "0.5" },
+          { id: "corner", label: "Wall corner angle (°)", def: "90", min: "1", step: "0.5" },
+        ],
+        compute: (v) => {
+          if (v.spring < 0 || v.spring >= 90 || v.corner <= 0 || v.corner >= 360) return null;
+          const m = compoundMitre(v.spring, v.corner);
+          return {
+            rows: [
+              [deg(m.mitre), "mitre angle"],
+              [deg(m.bevel), "blade tilt / bevel"],
+            ],
+            warn: "Inside corners: left piece mitre right, bevel left; outside corners reverse. Test on offcuts first.",
+          };
+        },
+      },
+      {
+        id: "dms2dec",
+        title: "Degrees-minutes-seconds → decimal",
+        blurb: "Survey and setout angles to decimal degrees.",
+        fields: [
+          { id: "d", label: "Degrees", def: "12", step: "1" },
+          { id: "m", label: "Minutes", def: "30", min: "0", step: "1" },
+          { id: "s", label: "Seconds", def: "36", min: "0", step: "0.1" },
+        ],
+        compute: (v) => {
+          const d = dmsToDeg(v.d, v.m, v.s);
+          return {
+            rows: [
+              [d.toLocaleString("en-AU", { maximumFractionDigits: 6 }) + "°", "decimal degrees"],
+              [((d * Math.PI) / 180).toLocaleString("en-AU", { maximumFractionDigits: 6 }) + " rad", "radians"],
+              [f2(Math.tan((d * Math.PI) / 180) * 1000) + " mm/m", "rise per metre"],
+            ],
+          };
+        },
+      },
+      {
+        id: "dec2dms",
+        title: "Decimal → degrees-minutes-seconds",
+        fields: [{ id: "deg", label: "Decimal degrees", def: "22.5", step: "0.01" }],
+        compute: (v) => {
+          const o = degToDms(v.deg);
+          return { rows: [[`${o.d}° ${o.m}′ ${f2(o.s)}″`, "D:M:S"]] };
+        },
+      },
+      {
+        id: "rake",
+        title: "Rake wall studs",
+        blurb: "Stud lengths under a sloping top plate at your centres, first stud at the low end. Top cut = pitch angle.",
+        fields: [
+          { id: "len", label: "Wall length (mm)", def: "3600", min: "0", step: "1" },
+          { id: "pitch", label: "Pitch (°)", def: "22.5", min: "0", step: "0.5" },
+          { id: "h0", label: "Low-end stud height (mm)", def: "2400", min: "0", step: "1" },
+          { id: "spc", label: "Stud spacing (mm)", def: "600", min: "1", step: "50" },
+        ],
+        compute: (v) => {
+          if (v.len <= 0 || v.pitch < 0 || v.pitch >= 90 || v.spc <= 0) return null;
+          const studs = rakeWallStuds(v.len, v.pitch, v.h0, v.spc);
+          const rows: [string, string][] = [
+            [String(studs.length), "studs"],
+            [deg(v.pitch), "top plate cut"],
+            [f0(v.len / Math.cos((v.pitch * Math.PI) / 180)) + " mm", "top plate length"],
+          ];
+          studs.forEach((h, k) => rows.push([f0(h) + " mm", `stud ${k + 1} @ ${f0(Math.min(k * v.spc, v.len))}`]));
+          return { rows };
+        },
+      },
+      {
+        id: "archrake",
+        title: "Arched rake wall studs",
+        blurb: "Stud lengths under a segmental arch — chord, rise at mid-span, and the straight wall height below the springing.",
+        fields: [
+          { id: "chord", label: "Chord / opening (mm)", def: "2400", min: "0", step: "1" },
+          { id: "rise", label: "Arch rise (mm)", def: "300", min: "0", step: "1" },
+          { id: "h0", label: "Springing height (mm)", def: "2100", min: "0", step: "1" },
+          { id: "spc", label: "Stud spacing (mm)", def: "600", min: "1", step: "50" },
+        ],
+        compute: (v) => {
+          if (v.chord <= 0 || v.rise <= 0 || v.rise > v.chord / 2 || v.spc <= 0) return null;
+          const a = archedRakeStuds(v.chord, v.rise, v.h0, v.spc);
+          const rows: [string, string][] = [
+            [f0(a.radius) + " mm", "arch radius"],
+            [String(a.studs.length), "studs"],
+          ];
+          a.studs.forEach((h, k) => rows.push([f0(h) + " mm", `stud ${k + 1} @ ${f0(Math.min(k * v.spc, v.chord))}`]));
+          return { rows };
+        },
+      },
+    ];
+
     const sections: { name: string; panel: string; specs?: CalcSpec[] }[] = [
       { name: "Setout", panel: "setout", specs: setout },
+      { name: "Dimensions", panel: "dimensions" },
       { name: "Triangles", panel: "triangles" },
       { name: "Trig", panel: "trig" },
-      { name: "Circles & arcs", panel: "circles", specs: circles },
+      { name: "Circles & solids", panel: "circles", specs: circles },
       { name: "Falls & grades", panel: "falls", specs: falls },
       { name: "Stairs", panel: "stairs", specs: stairs },
-      { name: "Roof", panel: "roof", specs: roof },
-      { name: "Areas", panel: "areas", specs: areas },
+      { name: "Roof & rafters", panel: "roof", specs: roof },
+      { name: "Angles & cuts", panel: "angles", specs: angles },
+      { name: "Areas & volumes", panel: "areas", specs: areas },
     ];
 
     const tabBar = document.getElementById("geo-tabs")!;
@@ -387,6 +735,7 @@ import "../../styles/site.css";
 
     wireActions(document.querySelector(".geo-content")!, "Geometry & setout");
     initTriangle();
+    initDims();
   </script>
 
   <style>
@@ -402,6 +751,13 @@ import "../../styles/site.css";
     .tri-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem 1rem; margin: 1rem 0; }
     .trig-bar { display: flex; gap: 0.75rem; align-items: flex-end; margin: 0.75rem 0; }
     .trig-bar .field { flex: 1; max-width: 12rem; }
+    .dim-bar { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 0.5rem 0; }
+    .dim-bar .field { flex: 1; min-width: 9rem; max-width: 14rem; }
+    #dim-expr { font-family: var(--font-mono); font-size: 1.1rem; }
+    .dim-examples { margin-top: 0.25rem; }
+    .dim-examples .btn { font-family: var(--font-mono); font-size: 0.8rem; }
+    .dim-tape { margin-top: 1rem; font-size: 0.85rem; }
+    .dim-tape ol { font-family: var(--font-mono); padding-left: 1.5rem; }
     @media (max-width: 720px) {
       .geo-layout { display: block; }
       .geo-tabs { flex-direction: row; flex-wrap: wrap; gap: 0.4rem; position: static; margin-bottom: 1.25rem; }

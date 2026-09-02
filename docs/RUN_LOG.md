@@ -1,5 +1,13 @@
 # Run Log
 
+## 2026-09-02 — Site tools: Construction Master Pro parity
+
+- Audited the Calculated Industries Construction Master Pro 4065 feature list against `/site/geometry` and `/site/materials`; 13 functions were already covered, 11 were not.
+- Added `src/scripts/site/carpentry.ts` (pure, node-testable): common/hip/valley/jack rafters for regular and irregular pitches with plumb, level and cheek angles; stair layout with stringer, incline and headroom-driven stairwell opening; crown/splayed compound mitre; D:M:S conversion; straight and arched rake-wall studs; regular-polygon angles; arc from radius and angle.
+- Added `src/scripts/site/dims.ts`: feet-inch-fraction ↔ metric dimensional maths with + − × ÷, parentheses, area/volume by multiplying lengths, selectable fraction precision to 1/64 and a 20-line tape.
+- Geometry page grew from 8 to 10 sections (Dimensions, Angles & cuts) and 13 new calculators; Materials gained strip footing, weight from volume, timber volume/board feet, sheet flooring/sheathing and roof area/tiles/sheathing/squares.
+- Verified with 91 node unit checks on the maths, 66 Playwright functional checks (desktop and phone) and the existing site-tools responsive harness; `astro check` 0 errors. Build clean; not yet deployed.
+
 ## 2026-09-02 — Studio Vital/LEADR and interaction pass
 
 - Rebuilt Synth Sound around a large wavetable display and denser four-module surface; expanded Advanced to three oscillators, wavetable warping, phase, dual filters, drawable LFOs and broader modulation.
