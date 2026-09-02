@@ -331,7 +331,7 @@ export function buildLayout(p: LayoutPanels): Layout {
     modeButtons.forEach((button, id) => button.classList.toggle("active", id === next));
     const makeMode = (["drums", "pads", "synth", "mix"] as ModeId[]).includes(next);
     intentButtons.forEach((button, intent) => button.classList.toggle("active", intent === (makeMode ? "make" : next === "song" ? "arrange" : "dj")));
-    contextNav.hidden = !makeMode;
+    modeBar.classList.toggle("wa-context-off", !makeMode);
     new Set(Object.values(pages)).forEach((page) => { page.hidden = true; }); pages[next].hidden = false;
     trackButtons.forEach((button) => button.classList.toggle("active", button.dataset.mode === lastEditMode));
     // Intent hints: an explicit edit/play ask still shapes the pads page.

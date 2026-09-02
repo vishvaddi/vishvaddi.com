@@ -1,0 +1,105 @@
+/* Studio v5 — the single token layer. Every studio partial consumes these;
+   no partial defines a colour, radius or control size of its own.
+   Semantics: surfaces are neutral; ONE accent (orange) means interaction
+   state only; track colours mean identity; signal colours mean transport
+   state. Legacy --wa-* names from the v1–v4 skins are aliased at the bottom
+   so no module has to change to pick up the palette. */
+
+.wa-win {
+  /* surfaces */
+  --wa-canvas: #07090d;
+  --wa-surface: #0d1118;
+  --wa-raised: #141a23;
+  --wa-control: #1a2230;
+  --wa-control-hi: #232d3c;
+  --wa-border: #293445;
+  --wa-border-soft: #1a2330;
+  --wa-screen: #05070a;
+
+  /* text */
+  --wa-text: #e8edf5;
+  --wa-muted: #8290a4;
+  --wa-faint: #536075;
+
+  /* interaction accent — the only "brand" colour */
+  --wa-accent: #ff914d;
+  --wa-accent-dim: #b8632f;
+  --wa-accent-soft: rgba(255, 145, 77, 0.14);
+  --wa-accent-ring: rgba(255, 145, 77, 0.45);
+
+  /* signal */
+  --wa-rec: #ff5c5c;
+  --wa-play: #4ade80;
+  --wa-warn: #f0c75e;
+
+  /* track identity palette */
+  --wa-track-1: #5de4d0;
+  --wa-track-2: #ad7cff;
+  --wa-track-3: #61a8ff;
+  --wa-track-4: #f0c75e;
+  --wa-track-5: #ff6b72;
+  --wa-track-6: #ff7bd8;
+  --wa-track-7: #7ee081;
+  --wa-track-8: #ff914d;
+  --track-colour: var(--wa-accent);
+
+  /* type */
+  --wa-sans: var(--font-sans, ui-sans-serif, system-ui, "Segoe UI", sans-serif);
+  --wa-mono: var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  --wa-font: var(--wa-sans);
+  --wa-fs-xs: 11px;
+  --wa-fs-sm: 12px;
+  --wa-fs-md: 13px;
+  --wa-fs-lg: 15px;
+  --wa-fs-xl: 18px;
+
+  /* geometry */
+  --wa-radius: 6px;
+  --wa-radius-sm: 4px;
+  --wa-gap: 8px;
+  --wa-gap-in: 6px;
+  --wa-pad: 10px;
+  --wa-control-h: 32px;
+  --wa-touch: 44px;
+  --wa-knob: 40px;
+  --wa-fader-travel: 160px;
+  --wa-appbar-h: 48px;
+  --wa-rail-w: 56px;
+  --wa-dock-h: 56px;
+  --wa-inspector-w: 280px;
+
+  /* legacy aliases (v1–v4 selectors still read these) */
+  --wa-bg: var(--wa-canvas);
+  --wa-surface-2: var(--wa-raised);
+  --wa-surface-3: var(--wa-control);
+  --wa-inset: var(--wa-canvas);
+  --wa-border-2: var(--wa-border);
+  --wa-blue: var(--wa-track-3);
+  --wa-amber: var(--wa-warn);
+  --wa-orange: var(--wa-accent);
+  --wa-red: var(--wa-rec);
+  --wa-coral: var(--wa-track-5);
+  --wa-teal: var(--wa-track-1);
+  --wa-purple: var(--wa-track-2);
+  --wa-violet: var(--wa-track-2);
+  --wa-acid: var(--wa-track-1);
+  --wa-pink: var(--wa-track-6);
+  --wa-phos: var(--wa-track-1);
+  --wa-phos-dim: #2f6a5f;
+  --wa-phos-bg: var(--wa-screen);
+  --wa-screen-border: var(--wa-border);
+  --wa-night: var(--wa-canvas);
+}
+
+/* Interface scale (View › Interface scale cycles these). */
+.wa-win[data-density="compact"] { --wa-control-h: 28px; --wa-knob: 36px; --wa-gap: 6px; --wa-pad: 8px; }
+.wa-win[data-density="touch"] { --wa-control-h: 40px; --wa-knob: 52px; --wa-gap: 10px; --wa-pad: 12px; }
+
+/* Track identity: set data-track on any element that represents a track and
+   everything inside inherits its colour. */
+[data-track="drums"] { --track-colour: var(--wa-track-2); }
+[data-track="pads"] { --track-colour: var(--wa-track-8); }
+[data-track="bass"] { --track-colour: var(--wa-track-1); }
+[data-track="lead"] { --track-colour: var(--wa-track-3); }
+[data-track="harmony"] { --track-colour: var(--wa-track-6); }
+[data-track="audio"] { --track-colour: var(--wa-track-7); }

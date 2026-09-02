@@ -22,6 +22,7 @@ export interface PadsUI {
   eventLane: HTMLElement;
   selectedPadLabel: HTMLElement;
   selectedSampleEditor: HTMLElement;
+  recordBtn: HTMLButtonElement;
   loadSelectedSample: () => void;
 }
 
@@ -540,5 +541,5 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   paintMpcPads();
 
 
-  return { mpcPanel, padSeqPanel, padButtons, paintMpcPads, paintEventLane, triggerPerformancePad, padGrid, eventLane, selectedPadLabel, selectedSampleEditor, loadSelectedSample: () => selectedFileInput.click() };
+  return { mpcPanel, padSeqPanel, padButtons, paintMpcPads, paintEventLane, triggerPerformancePad, padGrid, eventLane, selectedPadLabel, selectedSampleEditor, recordBtn, loadSelectedSample: () => selectedFileInput.click() };
 }

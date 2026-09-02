@@ -13,6 +13,7 @@ export interface PlaybackDeps {
   rollPlayheadBar: HTMLElement;
   launchStatus: HTMLElement;
   lcdState: HTMLElement;
+  position: HTMLElement;
   playBtn: HTMLElement;
   stopBtn: HTMLElement;
   getCountIn: () => boolean;
@@ -66,6 +67,8 @@ export function buildPlayback(deps: PlaybackDeps): void {
     }
     playhead.lastStepStartedMs = performance.now();
     playhead.lastHi = s; deps.lcdState.textContent = `▶ ${String(s + 1).padStart(2, "0")}`;
+    const bar = (arrangedBar ?? Math.floor(playhead.absStep / 16)) + 1;
+    deps.position.textContent = `${bar}.${Math.floor((s % 16) / 4) + 1}.${(s % 4) + 1}`;
   }
   function scheduleStep(s: number, baseWhen: number): void {
     const arrangedBar = transport.songMode ? songPos.bar : null;
@@ -210,6 +213,7 @@ export function buildPlayback(deps: PlaybackDeps): void {
     }
   }
   deps.playBtn.addEventListener("click", () => {
+    deps.playBtn.classList.add("active");
     if (playhead.playing) return;
     ensureNodes(); playhead.playing = true; playhead.schStep = 0; playhead.absStep = 0;
     songPos.bar = songLoop.on ? songLoop.startBar : 0;
@@ -233,6 +237,7 @@ export function buildPlayback(deps: PlaybackDeps): void {
     TRACKS.forEach((track) => { clip.queued[track] = undefined; });
     ctx.paintSession();
     playhead.lastHi = -1; deps.lcdState.textContent = "■ STOP";
+    deps.position.textContent = "1.1.1"; deps.playBtn.classList.remove("active");
   });
 
 

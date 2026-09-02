@@ -1,0 +1,322 @@
+/* Studio v4 presentation. Behaviour remains in the existing modules; this
+   file owns the final geometry and visual hierarchy. */
+.immersive-page .wa-win {
+  --v4-canvas: #07090d;
+  --v4-surface: #0d1118;
+  --v4-raised: #141a23;
+  --v4-control: #1a2230;
+  --v4-border: #293445;
+  --v4-border-soft: #1a2330;
+  --v4-text: #e8edf5;
+  --v4-muted: #8290a4;
+  --v4-faint: #536075;
+  --v4-orange: #ff914d;
+  --v4-cyan: #5de4d0;
+  --v4-violet: #ad7cff;
+  --v4-blue: #61a8ff;
+  --v4-yellow: #f0c75e;
+  --v4-red: #ff6b72;
+  --v4-black: #000000;
+  color: var(--v4-text);
+  background: var(--v4-canvas) !important;
+  font-family: var(--wa-sans);
+}
+
+/* Application frame */
+.immersive-page .wa-menubar {
+  min-height: 54px !important;
+  padding: 6px 10px !important;
+  gap: 8px !important;
+  border-bottom: 1px solid var(--v4-border) !important;
+  background: var(--v4-surface) !important;
+}
+.immersive-page .wa-brand { min-width: 74px; color: var(--v4-text); letter-spacing: .13em; }
+.immersive-page .wa-project-name,
+.immersive-page .wa-lcd { height: 40px !important; border-color: var(--v4-border) !important; background: var(--v4-canvas) !important; }
+.immersive-page .wa-menu-label { min-height: 38px; padding-inline: 11px; color: var(--v4-muted); font-size: 12px; }
+.immersive-page .wa-menu-label:hover,
+.immersive-page .wa-menu[open] > .wa-menu-label { color: var(--v4-text); background: var(--v4-raised); }
+.immersive-page .wa-transport { gap: 5px; }
+.immersive-page .wa-transport .wa-btn { min-width: 38px; min-height: 38px; }
+.immersive-page .wa-save-btn { min-height: 40px !important; padding-inline: 18px !important; }
+
+.immersive-page .wa-main { background: var(--v4-canvas) !important; }
+.immersive-page .wa-modebar {
+  width: 76px !important;
+  padding: 8px !important;
+  gap: 5px !important;
+  border-right: 1px solid var(--v4-border) !important;
+  background: var(--v4-surface) !important;
+}
+.immersive-page .wa-modekey {
+  min-height: 54px !important;
+  border: 1px solid transparent !important;
+  border-radius: 6px !important;
+  color: var(--v4-muted) !important;
+  background: transparent !important;
+}
+.immersive-page .wa-modekey:hover { color: var(--v4-text) !important; background: var(--v4-raised) !important; }
+.immersive-page .wa-modekey.active {
+  color: var(--v4-text) !important;
+  border-color: var(--v4-border) !important;
+  background: var(--v4-control) !important;
+  box-shadow: inset 3px 0 var(--v4-orange) !important;
+}
+.immersive-page .wa-mode-icon { color: var(--v4-orange); font-size: 13px; }
+.immersive-page .wa-mode-label { font-size: 8px; letter-spacing: .08em; }
+.immersive-page .wa-pagehost { padding: 10px !important; background: var(--v4-canvas) !important; }
+.immersive-page .wa-page { gap: 8px !important; }
+.immersive-page .wa-panel,
+.immersive-page .wa-vblock,
+.immersive-page .wa-xy-wrap {
+  border-color: var(--v4-border) !important;
+  border-radius: 6px !important;
+  background: var(--v4-surface) !important;
+  box-shadow: none !important;
+}
+.immersive-page .wa-btn,
+.immersive-page .wa-btn-sm,
+.immersive-page select,
+.immersive-page input[type="text"],
+.immersive-page input[type="search"],
+.immersive-page input[type="number"] {
+  border-color: var(--v4-border) !important;
+  border-radius: 4px !important;
+  color: var(--v4-text) !important;
+  background: var(--v4-control) !important;
+}
+.immersive-page .wa-btn:hover,
+.immersive-page .wa-btn-sm:hover { border-color: var(--v4-muted) !important; background: var(--v4-raised) !important; }
+.immersive-page .active:not(.wa-cell):not(.wa-key) { color: var(--v4-text) !important; }
+
+/* Pads remains the benchmark; only its shell is normalised. */
+.immersive-page .wa-page-beat .wa-mpc-pads { gap: 8px !important; }
+.immersive-page .wa-page-beat .wa-mpc-pad {
+  border-color: var(--v4-border) !important;
+  border-radius: 6px !important;
+  background: var(--v4-raised) !important;
+}
+.immersive-page .wa-page-beat .wa-mpc-pad:hover { border-color: var(--v4-orange) !important; }
+
+/* Drums: compact production grid, not eight oversized cards. */
+.immersive-page .wa-page-drums { grid-template-columns: minmax(0, 1fr) 296px !important; }
+.immersive-page .wa-page-drums > .wa-panel { background: var(--v4-canvas) !important; border: 0 !important; }
+.immersive-page .wa-page-drums .wa-pat-row {
+  min-height: 46px;
+  padding: 6px 8px !important;
+  border: 1px solid var(--v4-border);
+  border-radius: 6px;
+  background: var(--v4-surface);
+}
+.immersive-page .wa-page-drums .wa-grid {
+  display: grid !important;
+  gap: 2px !important;
+  padding: 8px !important;
+  border: 1px solid var(--v4-border);
+  border-radius: 6px;
+  background: var(--v4-surface) !important;
+}
+.immersive-page .wa-page-drums .wa-row,
+.immersive-page .wa-page-drums .wa-step-ruler { min-height: 0 !important; height: 46px !important; gap: 3px !important; }
+.immersive-page .wa-page-drums .wa-drum {
+  height: 46px !important;
+  padding-inline: 12px !important;
+  border: 0 !important;
+  border-left: 3px solid var(--v4-faint) !important;
+  border-radius: 3px !important;
+  background: var(--v4-raised) !important;
+  font-size: 11px !important;
+}
+.immersive-page .wa-page-drums .wa-cell {
+  height: 46px !important;
+  border: 1px solid var(--v4-border-soft) !important;
+  border-radius: 3px !important;
+  background: var(--v4-control) !important;
+}
+.immersive-page .wa-page-drums .wa-cell.wa-beat { border-left-color: var(--v4-faint) !important; }
+.immersive-page .wa-page-drums .wa-cell.on {
+  border-color: var(--v4-orange) !important;
+  background: var(--v4-orange) !important;
+  box-shadow: inset 0 -5px color-mix(in srgb, var(--v4-black) 18%, transparent) !important;
+}
+.immersive-page .wa-page-drums .wa-drum-properties { padding: 10px !important; background: var(--v4-surface) !important; }
+.immersive-page .wa-page-drums .wa-row-tools { margin-top: 0; padding: 6px 8px; }
+
+/* Synth Essentials: visual source on the left, editing on the right. */
+.immersive-page .wa-page-synth[data-view="patch"] .wa-synth-quick {
+  display: grid !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  grid-template-columns: minmax(360px, 1.35fr) repeat(2, minmax(180px, .65fr)) !important;
+  grid-template-rows: 36px repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  padding: 8px !important;
+  background: var(--v4-canvas) !important;
+}
+.immersive-page .wa-synth-quick-head { grid-column: 1 / -1 !important; }
+.immersive-page .wa-synth-hero {
+  grid-column: 1 !important;
+  grid-row: 2 / 4 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  border-color: var(--v4-border) !important;
+  border-radius: 6px;
+  background: var(--v4-surface) !important;
+}
+.immersive-page .wa-page-synth[data-view="patch"] .wa-synth-module {
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 10px !important;
+  align-content: center !important;
+  border: 1px solid var(--v4-border) !important;
+  border-top: 3px solid var(--module-colour) !important;
+  border-radius: 6px !important;
+  background: var(--v4-raised) !important;
+}
+.immersive-page .wa-page-synth[data-view="patch"] .wa-synth-module-title { font-size: 10px; }
+.immersive-page .wa-page-synth[data-view="patch"] .wa-synth-module .wa-knob { width: 58px; height: 58px; }
+.immersive-page .wa-vpatch:not(.wa-simple) > .wa-synth-quick { display: none !important; }
+.immersive-page .wa-vpatch:not(.wa-simple) {
+  padding: 8px !important;
+  overflow: auto !important;
+  background: var(--v4-canvas) !important;
+}
+.immersive-page .wa-vpatch:not(.wa-simple) > [data-synth-bank] {
+  min-height: 100% !important;
+  height: auto !important;
+  padding: 14px !important;
+  border: 1px solid var(--v4-border) !important;
+  border-radius: 6px !important;
+  background: var(--v4-surface) !important;
+}
+.immersive-page .wa-synth-modebar {
+  min-height: 46px;
+  padding: 5px !important;
+  border: 1px solid var(--v4-border) !important;
+  border-radius: 6px;
+  background: var(--v4-surface) !important;
+}
+.immersive-page .wa-synth-bank-nav .wa-subtab { min-height: 34px; border-radius: 4px; }
+.immersive-page .wa-synth-bank-nav .wa-subtab.active { background: var(--v4-control) !important; box-shadow: inset 0 -2px var(--v4-orange) !important; }
+.immersive-page .wa-wave-mini,
+.immersive-page .wa-env-canvas,
+.immersive-page .wa-lfo-canvas { border-radius: 5px !important; background: var(--v4-canvas) !important; }
+.immersive-page .wa-vmatrix {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  align-content: start !important;
+  gap: 8px !important;
+}
+.immersive-page .wa-vmatrix > .wa-fx-title { grid-column: 1 / -1; }
+.immersive-page .wa-vmatrix-row {
+  min-height: 58px !important;
+  padding: 7px !important;
+  border: 1px solid var(--v4-border-soft);
+  border-radius: 5px;
+  background: var(--v4-raised);
+}
+.immersive-page .wa-synth-properties { width: 300px !important; padding: 12px !important; background: var(--v4-surface) !important; }
+.immersive-page .wa-property-tabs { gap: 4px; }
+.immersive-page .wa-property-tabs .wa-subtab { min-height: 38px; }
+
+/* Clip launcher fills the aperture. */
+.immersive-page .wa-page-song > .wa-panel { background: var(--v4-canvas) !important; border: 0 !important; }
+.immersive-page .wa-song-viewbar {
+  min-height: 48px;
+  padding: 6px !important;
+  border: 1px solid var(--v4-border) !important;
+  border-radius: 6px;
+  background: var(--v4-surface) !important;
+}
+.immersive-page .wa-session {
+  height: 100% !important;
+  gap: 5px !important;
+  padding: 6px !important;
+  border: 1px solid var(--v4-border) !important;
+  border-radius: 6px;
+  background: var(--v4-canvas) !important;
+}
+.immersive-page .wa-session-row {
+  height: 100% !important;
+  grid-template-rows: 64px repeat(var(--wa-visible-scenes, 16), minmax(58px, 1fr)) !important;
+  gap: 5px !important;
+}
+.immersive-page .wa-scene-rail { min-width: 52px !important; flex-basis: 52px !important; }
+.immersive-page .wa-track-column { max-width: none !important; flex: 1 1 0 !important; }
+.immersive-page .wa-clip-track-head { height: 64px !important; padding: 10px !important; border-radius: 5px !important; background: var(--v4-raised) !important; }
+.immersive-page .wa-clip {
+  height: auto !important;
+  min-height: 58px;
+  padding: 10px 9px 8px 20px !important;
+  border: 1px solid var(--v4-border) !important;
+  border-left: 3px solid var(--track-colour) !important;
+  border-radius: 5px !important;
+  background: var(--v4-surface) !important;
+}
+.immersive-page .wa-clip.has { background: color-mix(in srgb, var(--track-colour) 10%, var(--v4-raised)) !important; }
+.immersive-page .wa-clip-name { font-size: 12px !important; }
+.immersive-page .wa-clip-count { color: var(--v4-muted) !important; font-size: 8px !important; }
+
+/* Arrangement owns the full viewport height. */
+.immersive-page .wa-composer {
+  height: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) auto auto !important;
+  gap: 8px;
+  background: var(--v4-canvas) !important;
+}
+.immersive-page .wa-composer-head { min-height: 48px; padding: 6px 8px !important; border: 1px solid var(--v4-border); border-radius: 6px; background: var(--v4-surface) !important; }
+.immersive-page .wa-arrange-lanes { min-height: 0; display: flex !important; flex-direction: column; overflow: auto !important; border: 1px solid var(--v4-border); border-radius: 6px; background: var(--v4-canvas) !important; }
+.immersive-page .wa-timeline-row { flex: 0 0 34px; }
+.immersive-page .wa-arrange-lane { flex: 1 1 0; min-height: 84px !important; }
+.immersive-page .wa-arrange-lane-name { min-height: 100% !important; padding: 10px !important; background: var(--v4-surface) !important; }
+.immersive-page .wa-arrange-lane-clips { min-height: 100% !important; background-color: var(--v4-canvas) !important; }
+.immersive-page .wa-chain-block { top: 9px !important; bottom: 9px !important; height: auto !important; padding: 10px !important; border-radius: 5px !important; }
+.immersive-page .wa-fold { border: 1px solid var(--v4-border) !important; border-radius: 5px; background: var(--v4-surface) !important; }
+
+/* Mix: shorter tactile strips attached to a device chain. */
+.immersive-page .wa-page-mix { grid-template-rows: minmax(300px, 54%) minmax(0, 46%) !important; gap: 8px !important; }
+.immersive-page .wa-mix-channels { padding: 8px !important; border-radius: 6px !important; background: var(--v4-surface) !important; }
+.immersive-page .wa-mixer { gap: 6px !important; }
+.immersive-page .wa-ch { min-width: 92px !important; padding: 9px 7px !important; border: 1px solid var(--v4-border) !important; border-top: 3px solid var(--track-colour, var(--v4-cyan)) !important; border-radius: 5px !important; background: var(--v4-raised) !important; }
+.immersive-page .wa-ch-well { min-height: 150px !important; }
+.immersive-page .wa-mix-lower { gap: 8px !important; }
+.immersive-page .wa-device-dock { padding: 10px !important; border: 1px solid var(--v4-border) !important; border-radius: 6px !important; background: var(--v4-surface) !important; }
+.immersive-page .wa-device { min-height: 0 !important; border-color: var(--v4-border) !important; border-radius: 5px !important; background: var(--v4-raised) !important; }
+.immersive-page .wa-scope-well { max-width: 320px; border-radius: 6px; overflow: hidden; }
+
+/* DJ: waveform-first decks; the jog is secondary, never the composition. */
+.immersive-page .wa-dj { grid-template-rows: auto minmax(0, 1fr) !important; gap: 8px !important; }
+.immersive-page .wa-dj-library { max-height: 96px; border-radius: 6px !important; background: var(--v4-surface) !important; }
+.immersive-page .wa-dj-decks { grid-template-columns: minmax(0, 1fr) 190px minmax(0, 1fr) !important; gap: 8px !important; }
+.immersive-page .wa-dj-deck {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 112px !important;
+  grid-template-rows: auto 38px minmax(150px, .75fr) minmax(220px, 1fr) !important;
+  gap: 8px !important;
+  padding: 10px !important;
+  background: var(--v4-surface) !important;
+}
+.immersive-page .wa-dj-deck-head { grid-column: 1 / -1 !important; min-height: 36px; }
+.immersive-page .wa-dj-display { grid-column: 1 / -1 !important; grid-row: 2 !important; border-radius: 4px; }
+.immersive-page .wa-dj-waveform { grid-column: 1 / -1 !important; grid-row: 3 !important; width: 100% !important; height: 100% !important; min-height: 150px !important; border: 1px solid var(--v4-border); border-radius: 5px; }
+.immersive-page .wa-dj-turntable { grid-column: 1 !important; grid-row: 4 !important; min-height: 0 !important; display: grid !important; grid-template-columns: 150px minmax(0, 1fr) 52px !important; align-items: center; gap: 10px; background: var(--v4-canvas) !important; }
+.immersive-page .wa-dj-platter { width: 146px !important; height: 146px !important; }
+.immersive-page .wa-dj-tonearm { display: none !important; }
+.immersive-page .wa-dj-transport { grid-column: 2 !important; grid-row: 4 !important; align-self: start !important; display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 5px !important; }
+.immersive-page .wa-dj-performance { grid-column: 2 !important; grid-row: 4 !important; align-self: end !important; margin: 0 !important; }
+.immersive-page .wa-dj-controls { grid-column: 2 !important; grid-row: 3 / 5 !important; display: grid !important; grid-template-columns: 1fr !important; gap: 5px !important; }
+.immersive-page .wa-dj-controls .wa-dj-range { min-height: 48px; }
+.immersive-page .wa-dj-pitch-fader { position: static !important; width: 48px !important; height: 180px !important; justify-self: end; }
+.immersive-page .wa-dj-mixer { min-width: 0 !important; width: auto !important; padding: 8px !important; background: var(--v4-surface) !important; }
+.immersive-page .wa-dj-crossfader { min-height: 72px !important; }
+
+@media (max-width: 900px) {
+  .immersive-page .wa-pagehost { padding: 5px !important; }
+  .immersive-page .wa-page-synth[data-view="patch"] .wa-synth-quick { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; grid-template-rows: 30px 100px repeat(2, minmax(100px, 1fr)) !important; }
+  .immersive-page .wa-synth-hero { grid-column: 1 / -1 !important; grid-row: 2 !important; }
+  .immersive-page .wa-dj-deck { grid-template-columns: minmax(0, 1fr) 96px !important; }
+}

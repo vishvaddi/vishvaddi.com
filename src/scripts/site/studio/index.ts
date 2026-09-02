@@ -1,5 +1,4 @@
 import "../../../styles/studio.css";
-import "../../../styles/studio-workflow.css";
 
 // VishAmp Studio — Winamp-styled mini-DAW. Pure Web Audio, CSP-clean.
 // Session workflow: each track (drums / pads / synth) plays its own clip from
@@ -137,6 +136,8 @@ export async function initStudio(): Promise<void> {
   titleBar.append(homeLink, projectName, el("span", "wa-title-dots"), densityBtn, fsBtn, powerBtn, masterKnob.root);
   const lcd = el("div", "wa-lcd");
   const lcdBpm = el("span", "wa-lcd-seg", `${transport.bpm} BPM`);
+  const position = el("span", "wa-position", "1.1.1");
+  help(position, "Song position — bar . beat . step.");
   const lcdState = el("span", "wa-lcd-seg", "■ STOP");
   const lcdMode = el("span", "wa-lcd-seg wa-lcd-mode", "");
   const saveState = el("span", "wa-save-state", "SAVED");
@@ -144,13 +145,14 @@ export async function initStudio(): Promise<void> {
     saveState.textContent = "SAVED"; saveState.classList.add("flash");
     setTimeout(() => saveState.classList.remove("flash"), 450);
   });
-  lcd.append(lcdBpm, lcdState, lcdMode, saveState);
+  lcd.append(lcdBpm, position, lcdState, lcdMode, saveState);
   titleBar.append(lcd);
 
   // ── Transport ──
   const transportBar = el("div", "wa-transport");
-  const playBtn = btn("▶"), stopBtn = btn("■");
-  playBtn.setAttribute("aria-label", "Play"); stopBtn.setAttribute("aria-label", "Stop");
+  const playBtn = btn("▶"), stopBtn = btn("■"), recBtn = btn("●");
+  playBtn.setAttribute("aria-label", "Play"); stopBtn.setAttribute("aria-label", "Stop"); recBtn.setAttribute("aria-label", "Record");
+  help(recBtn, "Arm recording — pad hits and played keys land in the scene you're editing.");
   const bpmDown = btn("–", "wa-btn-sm"), bpmUp = btn("+", "wa-btn-sm");
   const bpmInput = document.createElement("input");
   bpmInput.type = "number"; bpmInput.min = "40"; bpmInput.max = "240"; bpmInput.value = String(transport.bpm); bpmInput.className = "wa-bpm";
@@ -200,17 +202,19 @@ export async function initStudio(): Promise<void> {
   const exportBtn = btn("SAVE / EXPORT", "wa-btn-sm wa-export-key");
   help(exportBtn, "Render the track to WAV, MP3 or stems, or save and open project files.");
   const transportCore = el("div", "wa-transport-core");
-  transportCore.append(playBtn, stopBtn, songBtn, recChip, el("span", "wa-lbl", "BPM"), bpmDown, bpmInput, bpmUp, undoBtn, redoBtn, exportBtn);
+  transportCore.append(playBtn, stopBtn, recBtn, songBtn, metroBtn, recChip, el("span", "wa-lbl", "BPM"), bpmDown, bpmInput, bpmUp, undoBtn, redoBtn, exportBtn);
   const transportTiming = el("div", "wa-transport-timing");
-  transportTiming.append(swingWrap, metroBtn, metroVolIn, countBtn);
+  transportTiming.append(swingWrap, metroVolIn, countBtn);
   const transportActions = el("div", "wa-transport-actions");
   transportActions.append(tutorialBtn);
-  const transportMore = btn("MORE", "wa-btn-sm wa-transport-more");
+  const transportMore = btn("⋯", "wa-btn-sm wa-transport-more");
+  transportMore.setAttribute("aria-label", "More transport tools");
   transportMore.setAttribute("aria-expanded", "false");
   transportMore.addEventListener("click", () => {
-    const open = transportBar.classList.toggle("show-tools");
+    const open = win.classList.toggle("wa-tools-open");
+    transportBar.classList.toggle("show-tools", open);
     transportMore.setAttribute("aria-expanded", String(open));
-    transportMore.textContent = open ? "CLOSE" : "MORE";
+    transportMore.classList.toggle("active", open);
   });
   help(transportMore, "Show timing, history, export and help controls.");
   transportBar.append(transportCore, transportTiming, transportActions, transportMore);
@@ -251,7 +255,11 @@ export async function initStudio(): Promise<void> {
   exportBtn.addEventListener("click", openProjectMenu);
 
   // ── MPC performance ── (padsui.ts — Phase 0 split)
-  const { mpcPanel, padSeqPanel, padButtons, paintMpcPads, paintEventLane, triggerPerformancePad, padGrid, eventLane, selectedPadLabel, selectedSampleEditor, loadSelectedSample } = buildPads({ renderBuffer });
+  const { mpcPanel, padSeqPanel, padButtons, paintMpcPads, paintEventLane, triggerPerformancePad, padGrid, eventLane, selectedPadLabel, selectedSampleEditor, loadSelectedSample, recordBtn: padRecordBtn } = buildPads({ renderBuffer });
+  recBtn.addEventListener("click", () => padRecordBtn.click());
+  const paintRecBtn = (): void => { recBtn.classList.toggle("active", mpc.recording); recBtn.setAttribute("aria-pressed", String(mpc.recording)); };
+  padRecordBtn.addEventListener("click", () => queueMicrotask(paintRecBtn));
+  paintRecBtn();
 
   // ── Chop / sample capture ── (chopui.ts — Phase 0 split)
   const { chop, waveform, loadBreak } = buildChop({ paintMpcPads, paintEventLane });
@@ -423,7 +431,7 @@ export async function initStudio(): Promise<void> {
   });
   // ── Transport / scheduler ── (playback.ts — Phase 0 split)
   ctx.selectScene = selectScene;
-  buildPlayback({ cells, rollPlayheadBar, launchStatus, lcdState, playBtn, stopBtn, getCountIn: () => countIn, isSynthRec: synth.isSynthRec });
+  buildPlayback({ cells, rollPlayheadBar, launchStatus, lcdState, position, playBtn, stopBtn, getCountIn: () => countIn, isSynthRec: synth.isSynthRec });
 
   // ── Keyboard ── (keymap.ts — Phase 0 split)
   bindKeyboard({ getActiveMode: layout.getActiveMode, padButtons, triggerPerformancePad, synth, playBtn, stopBtn, undoBtn, redoBtn, exportBtn, selectMode: layout.selectMode });
