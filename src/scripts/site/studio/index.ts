@@ -199,7 +199,8 @@ export async function initStudio(): Promise<void> {
   help(recChip, "Recording is armed — pad or key passes land in this scene (the one you're editing).");
   // EXPORT is a rare terminal action — a chassis key opening a modal, rather
   // than a panel holding permanent space on the MIX faceplate.
-  const exportBtn = btn("SAVE / EXPORT", "wa-btn-sm wa-export-key");
+  const exportBtn = btn("SAVE", "wa-btn-sm wa-export-key");
+  exportBtn.setAttribute("aria-label", "Save / export");
   help(exportBtn, "Render the track to WAV, MP3 or stems, or save and open project files.");
   const transportCore = el("div", "wa-transport-core");
   transportCore.append(playBtn, stopBtn, recBtn, songBtn, metroBtn, recChip, el("span", "wa-lbl", "BPM"), bpmDown, bpmInput, bpmUp, undoBtn, redoBtn, exportBtn);

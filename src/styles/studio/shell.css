@@ -24,7 +24,7 @@
 .wa-title { display: contents; }
 .wa-title-text { order: 1; flex: 0 0 auto; text-decoration: none; font: 800 var(--wa-fs-xs)/1 var(--wa-font); letter-spacing: 0.12em; color: var(--wa-text); white-space: nowrap; }
 .wa-title-text:hover { color: var(--wa-accent); }
-.wa-project-name { order: 2; flex: 0 1 180px; height: var(--wa-control-h); font-weight: 600; }
+.wa-project-name { order: 2; flex: 0 1 150px; height: var(--wa-control-h); font-weight: 600; }
 .wa-studio-menu { order: 3; display: flex; align-items: center; gap: 2px; }
 .wa-title-dots { order: 4; flex: 1 1 8px; min-width: 8px; }
 .wa-density-btn, .wa-fs-btn, .wa-power { display: none; }
@@ -33,7 +33,7 @@
 .wa-title .wa-master-knob { flex: 0 0 auto; flex-direction: row; gap: 4px; min-width: 0; padding: 0; }
 .wa-title .wa-master-knob .wa-knob { width: 28px; height: 28px; padding: 2px; }
 .wa-title .wa-master-knob .wa-knob-val { display: none; }
-.wa-title .wa-master-knob .wa-knob-lbl { font-size: 9px; }
+.wa-title .wa-master-knob .wa-knob-lbl { display: none; }
 
 /* menus */
 .wa-menu { position: relative; }
@@ -57,7 +57,7 @@
 /* transport */
 .wa-transport { order: 6; display: flex; align-items: center; gap: 10px; min-width: 0; flex: 0 0 auto; }
 .wa-transport-core { display: flex; align-items: center; gap: 4px; }
-.wa-transport-core > .wa-lbl { margin-left: 6px; }
+.wa-transport-core > .wa-lbl { display: none; }
 .wa-transport-core .wa-btn { min-width: 36px; padding: 0 10px; font-size: var(--wa-fs-md); }
 .wa-transport-core .wa-btn[aria-label="Play"] { color: var(--wa-play); }
 .wa-transport-core .wa-btn[aria-label="Play"].active { background: var(--wa-play); color: #04160b; border-color: var(--wa-play); }
@@ -66,10 +66,16 @@
 .wa-bpm { width: 58px; height: var(--wa-control-h); text-align: center; font: 700 var(--wa-fs-lg)/1 var(--wa-mono); color: var(--wa-text); padding: 0 4px; -moz-appearance: textfield; }
 .wa-bpm::-webkit-inner-spin-button, .wa-bpm::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .wa-export-key { margin-left: 6px; font-weight: 700; color: var(--wa-text); }
-.wa-transport-timing, .wa-transport-actions { display: flex; align-items: center; gap: 6px; }
+.wa-transport-timing, .wa-transport-actions { display: none; align-items: center; gap: 8px; }
+.wa-win.wa-tools-open .wa-transport-timing,
+.wa-win.wa-tools-open .wa-transport-actions {
+  display: flex; position: absolute; right: 10px; top: calc(var(--wa-appbar-h) + 4px); z-index: 300; padding: 8px 10px;
+  background: var(--wa-raised); border: 1px solid var(--wa-border); border-radius: var(--wa-radius); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+.wa-win.wa-tools-open .wa-transport-actions { top: calc(var(--wa-appbar-h) + 56px); }
 .wa-swing { display: inline-flex; align-items: center; gap: 6px; }
-.wa-swing-in { width: 72px; }
-.wa-transport-more { display: none; }
+.wa-swing-in { width: 80px; }
+.wa-transport-more { display: inline-flex; min-width: 32px; padding: 0 8px; font-size: var(--wa-fs-lg); }
 
 /* ── Rail ────────────────────────────────────────────────────────────── */
 .wa-sticky-chrome { display: contents; }
@@ -184,6 +190,7 @@
   .wa-lcd { height: 30px; padding: 0 8px; gap: 8px; }
   .wa-transport { flex: 1; order: 10; }
   .wa-transport-core .wa-btn { min-width: 36px; min-height: 32px; padding: 0 8px; }
+  .wa-transport-core .wa-btn-sm:not(.wa-history):not(.wa-export-key) { display: none; }
   .wa-transport-core .wa-bpm { height: 32px; width: 50px; }
   .wa-transport-core > .wa-lbl { display: none; }
   .wa-export-key { margin-left: auto; }

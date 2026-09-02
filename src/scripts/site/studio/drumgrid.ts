@@ -74,6 +74,7 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
   DRUMS.forEach((name, r) => {
     // Drum row — clicking the name selects the lane in the sampler sidebar
     const rowEl = el("div", "wa-row");
+    rowEl.style.setProperty("--track-colour", `var(--wa-track-${(r % 8) + 1})`);
     const lab = btn(name, "wa-drum"); lab.classList.remove("wa-btn");
     lab.addEventListener("click", () => {
       laneBtns.forEach((b, i) => b.classList.toggle("active", i === r));
@@ -180,8 +181,9 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
     ctx.paintSession();
     saveAll();
   });
-  const rowTools = el("div", "wa-row-tools"); rowTools.append(randomBtn, clearBtn);
-  beat.append(grid, rowTools);
+  randomBtn.textContent = "Random"; clearBtn.textContent = "Clear";
+  patRow.append(el("span", "wa-sep"), randomBtn, clearBtn);
+  beat.append(grid);
   paintStepPage();
 
   return { beat, cells, sceneBtns };

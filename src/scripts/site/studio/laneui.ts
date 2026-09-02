@@ -147,19 +147,17 @@ export function buildLaneInspector(): LaneInspector {
   function paintSd(): void {
     sdBlock.replaceChildren(el("div", "wa-fx-title", "SYNTH DRUM"));
     const specs = DP_SPECS[lane] ?? [];
+    const sdKnobs = el("div", "wa-lane-sd-knobs");
     specs.forEach((spec) => {
       const value = Number(dp[lane][spec.key] ?? DP_DEF[lane][spec.key] ?? spec.min);
       (dp[lane][spec.key] as number) = value;
-      const item = el("div", "wa-sd-item");
-      const inp = document.createElement("input");
-      inp.type = "range"; inp.min = String(spec.min); inp.max = String(spec.max); inp.step = String(spec.step); inp.value = String(value);
-      const vout = el("span", "wa-sd-val", `${value}${spec.unit ?? ""}`);
-      inp.addEventListener("input", () => {
-        const v = Number(inp.value); (dp[lane][spec.key] as number) = v; vout.textContent = `${v}${spec.unit ?? ""}`; saveAll(); audition();
-      });
-      item.append(el("span", "wa-sd-lbl", spec.label), inp, vout);
-      sdBlock.append(item);
+      const unit = spec.unit ?? "";
+      const k = knob(spec.label, spec.min, spec.max, value, spec.step, (v) => {
+        (dp[lane][spec.key] as number) = v; saveAll(); audition();
+      }, { fmt: (v) => `${+v.toFixed(spec.step < 1 ? 2 : 0)}${unit}` });
+      sdKnobs.append(k.root);
     });
+    sdBlock.append(sdKnobs);
     const resetBtn = btn("Reset", "wa-btn-sm");
     help(resetBtn, "Restore this lane's synthesized drum to its defaults.");
     resetBtn.addEventListener("click", () => { Object.assign(dp[lane], DP_DEF[lane]); saveAll(); paintSd(); audition(); });
