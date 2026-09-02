@@ -1,5 +1,13 @@
 # Run Log
 
+## 2026-09-02 — Studio Vital/LEADR and interaction pass
+
+- Rebuilt Synth Sound around a large wavetable display and denser four-module surface; expanded Advanced to three oscillators, wavetable warping, phase, dual filters, drawable LFOs and broader modulation.
+- Added LEADR-style chord lock, WATERFALL/up/down/up-down/random phrases, voicing spread, texture layers and two pitch-tracked sampler layers using the existing pad bank.
+- Replaced the DJ's tiny effective native sliders with full-surface pointer faders, live values, keyboard-compatible inputs and double-click reset; pitch controls now have 156–170 px vertical travel and the crossfader is usable across desktop and Android.
+- Added drag-painting to the drum sequencer, compact/all scene modes to Clips, and clip-density previews plus Fit zoom to Arrangement.
+- Updated responsive coverage for the eighth synth bank. Passed Astro check/build, Studio functional E2E, Studio density and desktop/Android responsive suites with clean browser consoles.
+
 ## 2026-08-30 — Studio visual and scrolling rebuild
 
 - Replaced the mixed faux-hardware styling with one graphite workstation system: three surface levels, restrained orange interaction state, quieter borders, consistent knobs and controls, and visible thin scrollbars.

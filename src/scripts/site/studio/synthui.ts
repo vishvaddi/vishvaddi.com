@@ -2,12 +2,12 @@
 // scope), DOM piano roll, on-screen keys, key recording. Extracted verbatim
 // from index.ts (Phase 0 split). Playhead state reads from ctx.playhead
 // (already rewired before the cut).
-import { STEPS, SCENE_LABELS, ROLL_NOTES, clip, transport, stepDur, patternStepDur, mpc, activeSynth, synthLaneNotes, patternLengths, vsynthPatch, fx } from "./state";
+import { STEPS, SCENE_LABELS, ROLL_NOTES, clip, transport, stepDur, patternStepDur, mpc, activeSynth, synthLaneNotes, patternLengths, vsynthPatch, fx, sampleBuffers } from "./state";
 import type { VNote } from "./state";
 import { ac, ensureNodes } from "./engine";
 import * as engine from "./engine";
 import { playNote, LiveVoices, PRESETS, PRESET_CATEGORIES, TABLE_NAMES, MOD_SRCS, MOD_DESTS, sampleWaveform, noteToMidi, midiToNote } from "./vsynth";
-import type { ModSlot, VPatch } from "./vsynth";
+import type { ModSlot, OscPatch, PerformancePatch, VPatch } from "./vsynth";
 import { saveAll } from "./persistence";
 import { el, btn, help, sliderRow, drawScope, drawEnvelopeShape, download, askText, SCREEN_BG, SCREEN_FG, screenRgba } from "./helpers";
 import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
@@ -48,7 +48,7 @@ export interface SynthUI {
 // perspective-offset polylines, the slice under the POSITION knob lit with a
 // phosphor halo, neighbours ghosted by distance. Pure look — audio path untouched.
 const WT_SLICES = 12;
-function drawWavetableStack(canvas: HTMLCanvasElement, table: string, pos: number): void {
+function drawWavetableStack(canvas: HTMLCanvasElement, table: string, pos: number, warp: OscPatch["warp"] = "none", warpAmount = 0, phase = 0): void {
   const scale = window.devicePixelRatio || 1, width = canvas.clientWidth || 200, height = canvas.clientHeight || 92;
   canvas.width = Math.floor(width * scale); canvas.height = Math.floor(height * scale);
   const g = canvas.getContext("2d"); if (!g) return;
@@ -59,7 +59,7 @@ function drawWavetableStack(canvas: HTMLCanvasElement, table: string, pos: numbe
   const current = Math.round(pos * (WT_SLICES - 1));
   const slice = (index: number): void => {
     const t = index / (WT_SLICES - 1);
-    const wave = sampleWaveform(table, t);
+    const wave = sampleWaveform(table, t, 256, warp, warpAmount, phase);
     const ox = 5 + t * spanX, oy = height - 8 - amp - t * spanY;
     const isCurrent = index === current;
     g.strokeStyle = isCurrent ? SCREEN_FG : screenRgba(0.08 + 0.16 * (1 - Math.abs(t - pos)));
@@ -84,6 +84,42 @@ export function buildSynth(): SynthUI {
   let modBadgeRefreshers: Array<() => void> = [];
   const synthPanel = el("div", "wa-panel");
   const liveKeys = new LiveVoices();
+  const performanceDefaults: PerformancePatch = { chord: "off", arp: "off", rate: "1/8", spread: 0, texture: "off", textureLevel: 0, samples: [-1, -1], sampleLevels: [.35, .35] };
+  const perfSettings = (): PerformancePatch => {
+    const current = (vsynthPatch.performance ??= { ...performanceDefaults });
+    current.samples ??= [-1, -1]; current.sampleLevels ??= [.35, .35]; return current;
+  };
+  const playSampleLayers = (note: string, when: number, velocity: number): void => {
+    perfSettings().samples.forEach((pad, layer) => {
+      const buffer = sampleBuffers[pad]; if (!buffer) return;
+      const source = ac().createBufferSource(), gain = ac().createGain(); source.buffer = buffer;
+      source.playbackRate.value = Math.pow(2, (noteToMidi(note) - 60) / 12);
+      gain.gain.value = perfSettings().sampleLevels[layer] * velocity / 127;
+      source.connect(gain); gain.connect(engine.synthGain!); source.start(when);
+    });
+  };
+  const performanceNotes = (root: string): string[] => {
+    const intervals: Record<PerformancePatch["chord"], number[]> = {
+      off: [0], major: [0, 4, 7], minor: [0, 3, 7], seventh: [0, 4, 7, 10], minor7: [0, 3, 7, 10],
+    };
+    const base = noteToMidi(root), spread = Math.round(perfSettings().spread * 12);
+    return intervals[perfSettings().chord].map((interval, index) => midiToNote(base + interval + (index ? spread : 0)));
+  };
+  const playPerformance = (root: string, patch: VPatch, velocity: number): void => {
+    const notes = performanceNotes(root), perf = perfSettings();
+    if (perf.arp === "off") {
+      notes.forEach((note, index) => { const when = ac().currentTime + index * perf.spread * .025; liveKeys.noteOn(ac(), engine.synthGain!, patch, note, velocity, `${root}:perf:${index}`, when); playSampleLayers(note, when, velocity); });
+      return;
+    }
+    const rate = stepDur() * ({ "1/4": 4, "1/8": 2, "1/16": 1 }[perf.rate]);
+    let order = perf.arp === "down" ? [...notes].reverse() : perf.arp === "updown" ? [...notes, ...notes.slice(1, -1).reverse()] : [...notes];
+    if (perf.arp === "waterfall") order = [...notes, ...notes.map((note) => midiToNote(noteToMidi(note) + 12))];
+    for (let index = 0; index < 8; index++) {
+      const note = perf.arp === "random" ? notes[Math.floor(Math.random() * notes.length)] : order[index % order.length];
+      const when = ac().currentTime + index * rate; playNote(ac(), engine.synthGain!, patch, note, velocity, when, rate * (perf.arp === "waterfall" ? 2.8 : .82)); playSampleLayers(note, when, velocity);
+    }
+  };
+  const releasePerformance = (root: string): void => performanceNotes(root).forEach((_, index) => liveKeys.noteOff(ac(), `${root}:perf:${index}`));
   const audition = (note: string, vel = 105, lenSteps = 2): void => {
     ensureNodes(); playNote(ac(), engine.synthGain!, vsynthPatch, note, vel, ac().currentTime, stepDur() * lenSteps);
   };
@@ -171,12 +207,17 @@ export function buildSynth(): SynthUI {
           table: pick(TABLE_NAMES), pos: Math.random(), octave: Math.round(rand(-2, 1)), semi: pick([0, 7, 12, -12] as const),
           level: rand(0.3, 0.8), unison: 1 + Math.floor(Math.random() * 3), detune: rand(0, 35),
         };
+    vsynthPatch.osc3 = Math.random() < 0.7
+      ? { table: "basic", pos: 0, octave: -1, semi: 0, level: 0, unison: 1, detune: 8, warp: "none", warpAmount: 0, phase: 0 }
+      : { table: pick(TABLE_NAMES), pos: Math.random(), octave: Math.round(rand(-2, 0)), semi: 0, level: rand(.15, .45), unison: 1, detune: rand(0, 18), warp: pick(["none", "bend", "formant", "smear"] as const), warpAmount: rand(-.6, .6), phase: Math.random() };
     vsynthPatch.noise = { level: Math.random() < 0.7 ? 0 : rand(0.05, 0.3), colour: rand(2000, 14000) };
     vsynthPatch.filter = {
       type: pick(filterTypes) as VPatch["filter"]["type"],
       cutoff: 200 * Math.pow(2, Math.random() * 6),
       res: rand(0.3, 4), env2: rand(-0.4, 0.8), track: rand(0, 0.6),
     };
+    vsynthPatch.filter2 = { enabled: Math.random() > .65, type: pick(filterTypes), cutoff: 80 * Math.pow(2, Math.random() * 7), res: rand(.3, 3), env2: rand(-.25, .35), track: rand(0, .5) };
+    vsynthPatch.filterRouting = Math.random() > .7 ? "parallel" : "serial";
     vsynthPatch.env1 = { a: Math.random() < 0.8 ? rand(0.001, 0.05) : rand(0.1, 1), d: rand(0.05, 1), s: rand(0, 1), r: rand(0.05, 1) };
     vsynthPatch.env2 = { a: rand(0.001, 0.3), d: rand(0.05, 0.8), s: Math.random() < 0.5 ? 0 : rand(0, 0.6), r: rand(0.05, 0.8) };
     vsynthPatch.lfo1 = { shape: pick(lfoShapes) as VPatch["lfo1"]["shape"], rate: rand(0.1, 8) };
@@ -229,11 +270,11 @@ export function buildSynth(): SynthUI {
   // Patch editor — rebuilt whenever a preset load replaces the patch wholesale.
   const patchBox = el("div", "wa-vpatch");
   const synthModeBar = el("div", "wa-synth-modebar");
-  type SynthBank = "osc1" | "osc2" | "noise" | "filter" | "envelopes" | "lfo" | "matrix";
+  type SynthBank = "osc1" | "osc2" | "osc3" | "noise" | "filter" | "envelopes" | "lfo" | "matrix";
   const synthBankNav = el("div", "wa-synth-bank-nav");
   const synthBankButtons: HTMLButtonElement[] = [];
   let activeSynthBank: SynthBank = (localStorage.getItem("vv_studio_synth_bank") as SynthBank | null) ?? "osc1";
-  if (!["osc1", "osc2", "noise", "filter", "envelopes", "lfo", "matrix"].includes(activeSynthBank)) activeSynthBank = "osc1";
+  if (!["osc1", "osc2", "osc3", "noise", "filter", "envelopes", "lfo", "matrix"].includes(activeSynthBank)) activeSynthBank = "osc1";
   const selectSynthBank = (bank: SynthBank): void => {
     activeSynthBank = bank;
     patchBox.dataset.bank = bank;
@@ -244,7 +285,7 @@ export function buildSynth(): SynthUI {
     });
     localStorage.setItem("vv_studio_synth_bank", bank);
   };
-  (["osc1", "osc2", "noise", "filter", "envelopes", "lfo", "matrix"] as SynthBank[]).forEach((bank) => {
+  (["osc1", "osc2", "osc3", "noise", "filter", "envelopes", "lfo", "matrix"] as SynthBank[]).forEach((bank) => {
     const button = btn(bank === "envelopes" ? "Envelopes" : bank.startsWith("osc") ? `OSC ${bank.slice(-1)}` : bank.toUpperCase(), "wa-subtab") as HTMLButtonElement;
     button.dataset.bank = bank;
     button.addEventListener("click", () => selectSynthBank(bank));
@@ -298,8 +339,11 @@ export function buildSynth(): SynthUI {
     };
     const quickBox = el("div", "wa-vblock wa-synth-quick");
     const quickHead = el("div", "wa-synth-quick-head");
-    quickHead.append(el("div", "wa-fx-title", "VV-1 SOUND SHAPER"), el("span", "wa-synth-signal", "OSC → FILTER → AMP → FX"));
-    quickBox.append(quickHead);
+    quickHead.append(el("div", "wa-fx-title", "VV-1 WAVETABLE"), el("span", "wa-synth-signal", "VOICE → FILTER → MOD → FX"));
+    const quickVisual = document.createElement("canvas"); quickVisual.className = "wa-synth-hero"; quickVisual.setAttribute("aria-label", "Current wavetable shape");
+    const redrawQuickVisual = () => drawWavetableStack(quickVisual, vsynthPatch.osc1.table, vsynthPatch.osc1.pos, vsynthPatch.osc1.warp, vsynthPatch.osc1.warpAmount, vsynthPatch.osc1.phase);
+    waveRedraws.push(redrawQuickVisual);
+    quickBox.append(quickHead, quickVisual);
     const oscillatorModule = el("section", "wa-synth-module wa-synth-module-osc");
     const filterModule = el("section", "wa-synth-module wa-synth-module-filter");
     const envelopeModule = el("section", "wa-synth-module wa-synth-module-envelope");
@@ -308,7 +352,7 @@ export function buildSynth(): SynthUI {
     filterModule.append(el("div", "wa-synth-module-title", "FILTER"));
     envelopeModule.append(el("div", "wa-synth-module-title", "ENVELOPE"));
     outputModule.append(el("div", "wa-synth-module-title", "OUTPUT"));
-    pSlider(oscillatorModule, "Shape", 0, 1, 0.01, () => vsynthPatch.osc1.pos, (v) => { vsynthPatch.osc1.pos = v; });
+    pSlider(oscillatorModule, "Shape", 0, 1, 0.01, () => vsynthPatch.osc1.pos, (v) => { vsynthPatch.osc1.pos = v; redrawQuickVisual(); });
     pSlider(oscillatorModule, "Movement", 0, 1, 0.01, () => vsynthPatch.drift ?? 0, (v) => { vsynthPatch.drift = v; });
     pSlider(filterModule, "Brightness", 0, 1, 0.01, () => Math.log(Math.max(60, vsynthPatch.filter.cutoff) / 60) / Math.log(16000 / 60), (v) => { vsynthPatch.filter.cutoff = 60 * Math.pow(16000 / 60, v); });
     pSlider(envelopeModule, "Attack", 0, 2, 0.01, () => vsynthPatch.env1.a, (v) => { vsynthPatch.env1.a = v; });
@@ -317,6 +361,7 @@ export function buildSynth(): SynthUI {
     pSlider(outputModule, "Volume", 0, 1, 0.01, () => vsynthPatch.volume, (v) => { vsynthPatch.volume = v; });
     quickBox.append(oscillatorModule, filterModule, envelopeModule, outputModule);
     patchBox.append(quickBox);
+    redrawQuickVisual();
     // Shows total incoming mod-matrix depth on the one slider it targets
     // (Vital-style knob highlight, simplified to a text badge) instead of
     // only listing it in the separate matrix table below.
@@ -330,14 +375,14 @@ export function buildSynth(): SynthUI {
       modBadgeRefreshers.push(refresh); refresh();
       return badge;
     };
-    (["osc1", "osc2"] as const).forEach((key, i) => {
+    (["osc1", "osc2", "osc3"] as const).forEach((key, i) => {
       const o = vsynthPatch[key];
       const box = el("div", "wa-vblock" + (i === 1 ? " wa-advanced-only-block" : ""));
-      box.dataset.synthBank = i === 0 ? "osc1" : "osc2";
+      box.dataset.synthBank = `osc${i + 1}`;
       box.append(el("div", "wa-fx-title", `OSC ${i + 1}`));
       const waveCanvas = document.createElement("canvas"); waveCanvas.className = "wa-wave-mini";
       box.append(waveCanvas);
-      const redrawWave = () => drawWavetableStack(waveCanvas, o.table, o.pos);
+      const redrawWave = () => drawWavetableStack(waveCanvas, o.table, o.pos, o.warp, o.warpAmount, o.phase);
       waveRedraws.push(redrawWave);
       // CV-80 quick picks: the four classic shapes are positions on the basic
       // table, so these jump straight there without leaving the wavetable model.
@@ -389,6 +434,9 @@ export function buildSynth(): SynthUI {
       pSlider(box, "Level", 0, 1, 0.01, () => o.level, (v) => { o.level = v; });
       pSlider(oscAdvanced, "Unison", 1, 8, 1, () => o.unison, (v) => { o.unison = v; });
       pSlider(oscAdvanced, "Detune", 0, 100, 1, () => o.detune, (v) => { o.detune = v; });
+      oscAdvanced.append(selRow("Warp", [["none", "NONE"], ["bend", "BEND"], ["formant", "FORMANT"], ["smear", "SMEAR"], ["sync", "SYNC"]], o.warp ?? "none", (v) => { o.warp = v as NonNullable<OscPatch["warp"]>; redrawWave(); saveAll(); }));
+      pSlider(oscAdvanced, "Warp amt", -1, 1, 0.01, () => o.warpAmount ?? 0, (v) => { o.warpAmount = v; redrawWave(); });
+      pSlider(oscAdvanced, "Phase", 0, 1, 0.01, () => o.phase ?? 0, (v) => { o.phase = v; redrawWave(); });
       box.append(oscAdvanced);
       patchBox.append(box);
       redrawWave();
@@ -412,6 +460,19 @@ export function buildSynth(): SynthUI {
     pSlider(filterAdvanced, "Key track", 0, 1, 0.05, () => vsynthPatch.filter.track, (v) => { vsynthPatch.filter.track = v; });
     filterBox.append(filterAdvanced);
     patchBox.append(filterBox);
+    const filter2 = vsynthPatch.filter2;
+    const filter2Box = el("div", "wa-vblock wa-advanced-only-block"); filter2Box.dataset.synthBank = "filter";
+    filter2Box.append(el("div", "wa-fx-title", "FILTER 2"));
+    const filter2Toggle = btn(filter2.enabled ? "ON" : "OFF", "wa-toggle wa-btn-sm" + (filter2.enabled ? " active" : ""));
+    filter2Toggle.setAttribute("aria-pressed", String(!!filter2.enabled));
+    filter2Toggle.addEventListener("click", () => { filter2.enabled = !filter2.enabled; filter2Toggle.classList.toggle("active", filter2.enabled); filter2Toggle.textContent = filter2.enabled ? "ON" : "OFF"; filter2Toggle.setAttribute("aria-pressed", String(!!filter2.enabled)); saveAll(); });
+    filter2Box.append(filter2Toggle, selRow("Routing", [["serial", "SERIAL"], ["parallel", "PARALLEL"]], vsynthPatch.filterRouting, (v) => { vsynthPatch.filterRouting = v as VPatch["filterRouting"]; saveAll(); }));
+    filter2Box.append(selRow("Type", [["lowpass", "LOW PASS"], ["highpass", "HIGH PASS"], ["bandpass", "BAND PASS"], ["notch", "NOTCH"]], filter2.type, (v) => { filter2.type = v as VPatch["filter2"]["type"]; saveAll(); }));
+    const cutoff2Row = sliderRow("Cutoff", 30, 18000, filter2.cutoff, 10, (v) => { filter2.cutoff = v; saveAll(); }); cutoff2Row.append(modBadge("cutoff2")); filter2Box.append(cutoff2Row);
+    pSlider(filter2Box, "Res", 0.1, 12, 0.1, () => filter2.res, (v) => { filter2.res = v; });
+    pSlider(filter2Box, "Env2 amt", -1, 1, 0.01, () => filter2.env2, (v) => { filter2.env2 = v; });
+    pSlider(filter2Box, "Key track", 0, 1, 0.05, () => filter2.track, (v) => { filter2.track = v; });
+    patchBox.append(filter2Box);
     // LYSERGIC voice motion (F) — always visible, these are performance knobs
     const motionBox = el("div", "wa-vblock");
     motionBox.dataset.synthBank = "filter";
@@ -478,8 +539,21 @@ export function buildSynth(): SynthUI {
       const box = el("div", "wa-vblock wa-advanced-only-block");
       box.dataset.synthBank = "lfo";
       box.append(el("div", "wa-fx-title", `LFO ${i + 1}`));
-      box.append(selRow("Shape", [["sine", "SINE"], ["triangle", "TRI"], ["sawtooth", "SAW"], ["square", "SQR"]], l.shape, (v) => { l.shape = v as VPatch["lfo1"]["shape"]; saveAll(); }));
+      const lfoCanvas = document.createElement("canvas"); lfoCanvas.className = "wa-lfo-canvas"; lfoCanvas.setAttribute("aria-label", `Draw LFO ${i + 1} shape`);
+      l.points = l.points?.length === 9 ? l.points : [0, .7, 1, .7, 0, -.7, -1, -.7, 0];
+      const redrawLfo = () => {
+        const scale = window.devicePixelRatio || 1, width = lfoCanvas.clientWidth || 280, height = lfoCanvas.clientHeight || 90;
+        lfoCanvas.width = width * scale; lfoCanvas.height = height * scale; const g = lfoCanvas.getContext("2d"); if (!g) return; g.scale(scale, scale);
+        g.fillStyle = SCREEN_BG; g.fillRect(0, 0, width, height); g.strokeStyle = screenRgba(.18); g.beginPath(); g.moveTo(0, height / 2); g.lineTo(width, height / 2); g.stroke();
+        g.strokeStyle = SCREEN_FG; g.lineWidth = 2; g.beginPath(); l.points!.forEach((point, index) => { const x = index / (l.points!.length - 1) * width, y = (1 - (point + 1) / 2) * height; if (!index) g.moveTo(x, y); else g.lineTo(x, y); }); g.stroke();
+      };
+      const drawLfoPoint = (event: PointerEvent) => { const rect = lfoCanvas.getBoundingClientRect(), x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)), y = Math.max(-1, Math.min(1, 1 - 2 * (event.clientY - rect.top) / rect.height)), index = Math.round(x * (l.points!.length - 1)); l.points![index] = y; l.shape = "custom"; redrawLfo(); };
+      lfoCanvas.addEventListener("pointerdown", (event) => { lfoCanvas.setPointerCapture(event.pointerId); drawLfoPoint(event); });
+      lfoCanvas.addEventListener("pointermove", (event) => { if (lfoCanvas.hasPointerCapture(event.pointerId)) drawLfoPoint(event); });
+      lfoCanvas.addEventListener("pointerup", () => saveAll());
+      box.append(lfoCanvas, selRow("Shape", [["sine", "SINE"], ["triangle", "TRI"], ["sawtooth", "SAW"], ["square", "SQR"], ["custom", "CUSTOM"]], l.shape, (v) => { l.shape = v as VPatch["lfo1"]["shape"]; saveAll(); redrawLfo(); }));
       pSlider(box, "Rate Hz", 0.05, 20, 0.05, () => l.rate, (v) => { l.rate = v; });
+      waveRedraws.push(redrawLfo); redrawLfo();
       patchBox.append(box);
     });
     const matrixBox = el("div", "wa-vblock wa-vmatrix wa-advanced-only-block");
@@ -524,6 +598,20 @@ export function buildSynth(): SynthUI {
     button.addEventListener("click", () => { window.dispatchEvent(new CustomEvent("vv-insert-chord", { detail: { notes } })); });
     chordRow.append(button);
   });
+  const performanceGrid = el("div", "wa-performance-grid");
+  const sampleOptions: Array<[string, string]> = [["-1", "OFF"], ...Array.from({ length: 16 }, (_, index) => [String(index), `PAD ${String(index + 1).padStart(2, "0")}`] as [string, string])];
+  performanceGrid.append(
+    selRow("Chord lock", [["off", "OFF"], ["major", "MAJOR"], ["minor", "MINOR"], ["seventh", "DOM 7"], ["minor7", "MIN 7"]], perfSettings().chord, (value) => { perfSettings().chord = value as PerformancePatch["chord"]; saveAll(); }),
+    selRow("Waterfall", [["off", "OFF"], ["up", "UP"], ["down", "DOWN"], ["updown", "UP / DOWN"], ["waterfall", "WATERFALL"], ["random", "RANDOM"]], perfSettings().arp, (value) => { perfSettings().arp = value as PerformancePatch["arp"]; saveAll(); }),
+    selRow("Rate", [["1/4", "1/4"], ["1/8", "1/8"], ["1/16", "1/16"]], perfSettings().rate, (value) => { perfSettings().rate = value as PerformancePatch["rate"]; saveAll(); }),
+    sliderRow("Voicing", 0, 2, perfSettings().spread, 1, (value) => { perfSettings().spread = value; saveAll(); }),
+    selRow("Texture", [["off", "OFF"], ["air", "AIR"], ["vinyl", "VINYL"], ["rain", "RAIN"]], perfSettings().texture, (value) => { perfSettings().texture = value as PerformancePatch["texture"]; saveAll(); }),
+    sliderRow("Texture level", 0, 1, perfSettings().textureLevel, .01, (value) => { perfSettings().textureLevel = value; saveAll(); }),
+    selRow("Sample A", sampleOptions, String(perfSettings().samples[0]), (value) => { perfSettings().samples[0] = Number(value); saveAll(); }),
+    sliderRow("A level", 0, 1, perfSettings().sampleLevels[0], .01, (value) => { perfSettings().sampleLevels[0] = value; saveAll(); }),
+    selRow("Sample B", sampleOptions, String(perfSettings().samples[1]), (value) => { perfSettings().samples[1] = Number(value); saveAll(); }),
+    sliderRow("B level", 0, 1, perfSettings().sampleLevels[1], .01, (value) => { perfSettings().sampleLevels[1] = value; saveAll(); }),
+  );
   // Piano roll v2 — canvas Cubase-style editor, extracted to roll.ts (C3).
   const roll = buildRoll({ audition, saveAll });
   const { pianoRoll, rollPlayheadBar, paintRoll } = roll;
@@ -547,12 +635,12 @@ export function buildSynth(): SynthUI {
       const patch = mods?.slide && (vsynthPatch.glide ?? 0) < 0.08
         ? { ...vsynthPatch, glide: 0.08 } as typeof vsynthPatch
         : vsynthPatch;
-      liveKeys.noteOn(ac(), engine.synthGain!, patch, n, mods?.accent ? 122 : 105);
+      playPerformance(n, patch, mods?.accent ? 122 : 105);
       recordSynthOn(n, mods);
     },
     (note) => {
       const n = midiToNote(noteToMidi(note) + octaveShift * 12);
-      liveKeys.noteOff(ac(), n);
+      releasePerformance(n);
       recordSynthOff(n);
     });
   // Live key recording — notes land in the playing synth clip's piano roll,
@@ -621,8 +709,8 @@ export function buildSynth(): SynthUI {
       access.inputs.forEach((input) => { input.onmidimessage = (event) => {
         if (!event.data) return;
         const [status, midi, velocity] = event.data, command = status & 0xf0, note = midiToNote(midi);
-        if (command === 0x90 && velocity > 0) { ensureNodes(); liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, note, velocity); recordSynthOn(note); }
-        else if (command === 0x80 || (command === 0x90 && velocity === 0)) { liveKeys.noteOff(ac(), note); recordSynthOff(note); }
+        if (command === 0x90 && velocity > 0) { ensureNodes(); playPerformance(note, vsynthPatch, velocity); recordSynthOn(note); }
+        else if (command === 0x80 || (command === 0x90 && velocity === 0)) { releasePerformance(note); recordSynthOff(note); }
       }; });
       midiBtn.classList.add("active"); midiBtn.textContent = `MIDI ${access.inputs.size}`;
     } catch { midiBtn.textContent = "MIDI blocked"; }
@@ -651,7 +739,7 @@ export function buildSynth(): SynthUI {
   const synthInspector = el("aside", "wa-synth-properties");
   synthInspector.append(el("div", "wa-inspector-title", "SYNTH PROPERTIES"), presetBrowserRow, presetRow);
   const chordPanel = el("div", "wa-xy-wrap");
-  chordPanel.append(el("div", "wa-fx-title", "CHORD PLAYER"), chordRow);
+  chordPanel.append(el("div", "wa-fx-title", "LEADR PLAY"), el("div", "wa-performance-hint", "ONE KEY → CHORD → PHRASE"), performanceGrid, el("div", "wa-performance-divider"), chordRow);
 
 
   // ── XY morph field + performance (xyfield.ts, F) ──

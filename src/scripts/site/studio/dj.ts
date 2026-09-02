@@ -88,11 +88,39 @@ const clamp = (value: number, min: number, max: number): number => Math.max(min,
 function labelledRange(label: string, min: number, max: number, value: number, step: number, onInput: (value: number) => void): HTMLElement {
   const root = el("label", "wa-dj-range");
   const caption = el("span", "wa-dj-range-label", label);
+  const readout = el("output", "wa-dj-range-value");
   const input = document.createElement("input");
   input.type = "range"; input.min = String(min); input.max = String(max); input.value = String(value); input.step = String(step);
   input.setAttribute("aria-label", label);
-  input.addEventListener("input", () => onInput(Number(input.value)));
-  root.append(caption, input);
+  const digits = step < 0.01 ? 3 : step < 0.1 ? 2 : step < 1 ? 1 : 0;
+  const paint = (notify = true) => {
+    const current = Number(input.value);
+    root.style.setProperty("--wa-fader-pct", String((current - min) / (max - min)));
+    readout.textContent = current.toFixed(digits);
+    if (notify) onInput(current);
+  };
+  const setFromPointer = (event: PointerEvent) => {
+    const rect = root.getBoundingClientRect();
+    const vertical = root.classList.contains("wa-dj-pitch-fader");
+    const raw = vertical ? 1 - (event.clientY - rect.top) / rect.height : (event.clientX - rect.left) / rect.width;
+    const bounded = Math.max(0, Math.min(1, raw));
+    const scaled = min + bounded * (max - min);
+    const snapped = Math.round(scaled / step) * step;
+    input.value = String(Math.max(min, Math.min(max, snapped)));
+    paint();
+  };
+  root.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    input.focus({ preventScroll: true });
+    event.preventDefault(); root.setPointerCapture(event.pointerId); root.classList.add("dragging"); setFromPointer(event);
+  });
+  root.addEventListener("pointermove", (event) => { if (root.hasPointerCapture(event.pointerId)) setFromPointer(event); });
+  const release = (event: PointerEvent) => { if (root.hasPointerCapture(event.pointerId)) root.releasePointerCapture(event.pointerId); root.classList.remove("dragging"); };
+  root.addEventListener("pointerup", release); root.addEventListener("pointercancel", release);
+  root.addEventListener("dblclick", (event) => { event.preventDefault(); input.value = String(value); paint(); });
+  input.addEventListener("input", () => paint());
+  root.append(caption, input, readout);
+  paint(false);
   return root;
 }
 
@@ -602,7 +630,7 @@ export function buildDj(deps: { renderStudioMix?: (mode: "pattern" | "song") => 
     const actions: Record<string, () => void> = {
       w: () => decks[0].play.click(), e: () => decks[0].cueButton.click(), r: () => decks[0].sync.click(),
       i: () => decks[1].play.click(), o: () => decks[1].cueButton.click(), p: () => decks[1].sync.click(),
-      "[": () => { crossfade = clamp(crossfade - 0.05, 0, 1); crossfaderInput.value = String(crossfade); updateCrossfade(); }, "]": () => { crossfade = clamp(crossfade + 0.05, 0, 1); crossfaderInput.value = String(crossfade); updateCrossfade(); },
+      "[": () => { crossfaderInput.value = String(clamp(crossfade - 0.05, 0, 1)); crossfaderInput.dispatchEvent(new Event("input", { bubbles: true })); }, "]": () => { crossfaderInput.value = String(clamp(crossfade + 0.05, 0, 1)); crossfaderInput.dispatchEvent(new Event("input", { bubbles: true })); },
     };
     if (actions[event.key.toLowerCase()]) { event.preventDefault(); actions[event.key.toLowerCase()](); }
   });

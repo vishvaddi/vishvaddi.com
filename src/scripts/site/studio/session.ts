@@ -79,12 +79,16 @@ export function buildSession(): SessionView {
   const sessionGrid = el("div", "wa-session");
   const sessionCells: HTMLButtonElement[][] = [];   // [scene][track]
   const sceneLaunchBtns: HTMLButtonElement[] = [];
+  let showAllScenes = localStorage.getItem("vv_studio_show_all_scenes") === "1";
   function clipActivity(track: TrackId, scene: number): number {
     if (track === "drums") return allPats[scene].reduce((total, row) => total + row.filter(Boolean).length, 0);
     if (track === "pads") return padEvents[scene].length;
     return synthLaneNotes[track][scene].length;
   }
   function paintSession(): void {
+    const lastUsed = Math.max(clip.sel, ...SCENE_LABELS.map((_, scene) => TRACKS.some((track) => clipActivity(track, scene) > 0) ? scene : -1));
+    const visibleScenes = showAllScenes ? SCENES : Math.min(SCENES, Math.max(4, lastUsed + 2));
+    sessionGrid.style.setProperty("--wa-visible-scenes", String(visibleScenes));
     sessionCells.forEach((row, scene) => row.forEach((cell, ti) => {
       const track = TRACKS[ti];
       const activity = clipActivity(track, scene);
@@ -96,8 +100,9 @@ export function buildSession(): SessionView {
       cell.classList.toggle("armed", !ctx.isPlaying() && clip.play[track] === scene);
       cell.classList.toggle("queued", clip.queued[track] === scene);
       cell.classList.toggle("sel", clip.sel === scene);
+      cell.hidden = scene >= visibleScenes;
     }));
-    sceneLaunchBtns.forEach((b, scene) => b.classList.toggle("active", clip.sel === scene));
+    sceneLaunchBtns.forEach((b, scene) => { b.classList.toggle("active", clip.sel === scene); b.hidden = scene >= visibleScenes; });
   }
   const paintScenePosition = (): void => {
     scenePosition.textContent = `${SCENES} scenes · ${TRACKS.length} tracks`;
@@ -178,7 +183,7 @@ export function buildSession(): SessionView {
   const composer = el("div", "wa-composer");
   const composerHead = el("div", "wa-composer-head");
   const chain = el("div", "wa-chainstrip wa-arrange-lanes");
-  const addBtn = btn("＋ Clip", "wa-btn-sm"), duplicateBtn = btn("Duplicate", "wa-btn-sm"), copyBtn = btn("Copy", "wa-btn-sm"), pasteBtn = btn("Paste", "wa-btn-sm"), splitBtn = btn("Split", "wa-btn-sm"), deleteBtn = btn("Delete", "wa-btn-sm"), zoomOutBtn = btn("−", "wa-btn-sm"), zoomInBtn = btn("＋", "wa-btn-sm");
+  const addBtn = btn("＋ Clip", "wa-btn-sm"), duplicateBtn = btn("Duplicate", "wa-btn-sm"), copyBtn = btn("Copy", "wa-btn-sm"), pasteBtn = btn("Paste", "wa-btn-sm"), splitBtn = btn("Split", "wa-btn-sm"), deleteBtn = btn("Delete", "wa-btn-sm"), zoomOutBtn = btn("−", "wa-btn-sm"), zoomInBtn = btn("＋", "wa-btn-sm"), fitBtn = btn("Fit", "wa-btn-sm");
   const addMidiTrackBtn = btn("＋ MIDI track", "wa-btn-sm"), addAudioTrackBtn = btn("＋ Audio track", "wa-btn-sm");
   const audioInput = document.createElement("input"); audioInput.type = "file"; audioInput.accept = "audio/*"; audioInput.hidden = true;
   const composerTitle = el("span", "wa-fx-title", "ARRANGER");
@@ -348,10 +353,11 @@ export function buildSession(): SessionView {
         item.style.left = `${block.startBar * pixelsPerBar}px`;
         item.style.width = `${Math.max(pixelsPerBar, block.bars * pixelsPerBar - 3)}px`;
         item.style.setProperty("--scene-color", SCENE_COLORS[block.scene]);
+        item.style.setProperty("--wa-clip-density", String(Math.min(1, clipActivity(track, block.scene) / 16)));
         if (block.automation?.length) item.classList.add("automated");
         item.dataset.clipId = block.id;
         const leftHandle = el("span", "wa-clip-handle wa-clip-handle-start"), rightHandle = el("span", "wa-clip-handle wa-clip-handle-end");
-        item.prepend(leftHandle); item.append(rightHandle);
+        item.prepend(leftHandle); item.append(el("span", "wa-arrange-clip-preview"), rightHandle);
         help(item, `Scene ${SCENE_LABELS[block.scene]}, bars ${block.startBar + 1}–${block.startBar + block.bars}. Drag to move; drag either edge to trim.`);
         item.addEventListener("click", () => selectBlock(track, block));
         item.addEventListener("dblclick", () => openArrangeEditor(track, block.scene));
@@ -441,6 +447,7 @@ export function buildSession(): SessionView {
   addBtn.addEventListener("click", addSelected); duplicateBtn.addEventListener("click", duplicateSelected); copyBtn.addEventListener("click", copySelected); pasteBtn.addEventListener("click", pasteSelected); splitBtn.addEventListener("click", splitSelected); deleteBtn.addEventListener("click", deleteSelected);
   const setZoom = (value: number) => { pixelsPerBar = Math.max(32, Math.min(112, value)); localStorage.setItem("vv_studio_timeline_zoom", String(pixelsPerBar)); paintChain(); };
   zoomOutBtn.addEventListener("click", () => setZoom(pixelsPerBar - 8)); zoomInBtn.addEventListener("click", () => setZoom(pixelsPerBar + 8));
+  fitBtn.addEventListener("click", () => { const visibleBars = Math.max(16, songEndBar() + 4, songLoop.endBar + 1); setZoom(Math.floor(Math.max(320, chain.clientWidth - 142) / visibleBars)); });
   loopToggle.addEventListener("click", () => { songLoop.on = !songLoop.on; loopToggle.classList.toggle("active", songLoop.on); saveAll(); paintChain(); });
   const updateLoop = () => { songLoop.startBar = Math.max(0, Number(loopStart.value) - 1 || 0); songLoop.endBar = Math.max(songLoop.startBar + 1, Number(loopEnd.value) - 1 || songLoop.startBar + 8); loopStart.value = String(songLoop.startBar + 1); loopEnd.value = String(songLoop.endBar + 1); saveAll(); paintChain(); };
   loopStart.addEventListener("change", updateLoop); loopEnd.addEventListener("change", updateLoop);
@@ -523,7 +530,7 @@ export function buildSession(): SessionView {
   const trackTools = el("div", "wa-arrange-toolgroup"); trackTools.append(addMidiTrackBtn, addAudioTrackBtn, audioInput);
   const editTools = el("div", "wa-arrange-toolgroup"); editTools.append(addBtn, duplicateBtn, copyBtn, pasteBtn, splitBtn, deleteBtn);
   const loopTools = el("div", "wa-arrange-toolgroup wa-loop-tools"); loopTools.append(loopToggle, loopStart, el("span", "wa-loop-arrow", "→"), loopEnd);
-  const zoomTools = el("div", "wa-arrange-toolgroup wa-zoom-tools"); zoomTools.append(zoomOutBtn, zoomReadout, zoomInBtn);
+  const zoomTools = el("div", "wa-arrange-toolgroup wa-zoom-tools"); zoomTools.append(zoomOutBtn, zoomReadout, zoomInBtn, fitBtn);
   composerHead.append(composerTitle, trackTools, editTools, el("span", "wa-toolbar-spacer"), loopTools, zoomTools);
   const automationFold = el("details", "wa-fold") as HTMLDetailsElement;
   const automationSummary = el("summary", "wa-fold-head", "AUTOMATION");
@@ -536,7 +543,7 @@ export function buildSession(): SessionView {
   const arrangeLanePaints: Array<() => void> = [paintChain];
   help(sessionGrid, "Each column is a track, each row a scene — launch single clips or whole scenes; changes land on the next bar so transitions stay in time.");
   const viewBar = el("div", "wa-song-viewbar");
-  const arrangeViewBtn = btn("Arrangement", "wa-subtab active"), sessionViewBtn = btn("Clip launcher", "wa-subtab"), captureBtn = btn("Capture", "wa-btn-sm"), quantizationSelect = document.createElement("select");
+  const arrangeViewBtn = btn("Arrangement", "wa-subtab active"), sessionViewBtn = btn("Clip launcher", "wa-subtab"), scenesBtn = btn(showAllScenes ? "Compact scenes" : "All scenes", "wa-btn-sm"), captureBtn = btn("Capture", "wa-btn-sm"), quantizationSelect = document.createElement("select");
   quantizationSelect.className = "wa-select wa-launch-quantization"; quantizationSelect.setAttribute("aria-label", "Clip launch quantization");
   quantizationSelect.append(new Option("Launch: Bar", "bar"), new Option("Launch: Beat", "beat"), new Option("Launch: Now", "none"));
   const savedQuantization = localStorage.getItem("vv_studio_launch_quantization");
@@ -553,6 +560,7 @@ export function buildSession(): SessionView {
   };
   sessionGrid.tabIndex = 0;
   arrangeViewBtn.addEventListener("click", () => showView("arrange", true)); sessionViewBtn.addEventListener("click", () => showView("session", true));
+  scenesBtn.addEventListener("click", () => { showAllScenes = !showAllScenes; localStorage.setItem("vv_studio_show_all_scenes", showAllScenes ? "1" : "0"); scenesBtn.textContent = showAllScenes ? "Compact scenes" : "All scenes"; paintSession(); });
   let captureArmed = false, captureOriginStep = 0;
   const capturePlaying = () => {
     const start = Math.max(0, Math.floor((playhead.absStep - captureOriginStep) / STEPS));
@@ -574,7 +582,7 @@ export function buildSession(): SessionView {
   window.addEventListener("keydown", (event) => {
     if (event.key === "Tab" && !(event.target as HTMLElement)?.matches("input, textarea, select")) { event.preventDefault(); showView(currentView === "session" ? "arrange" : "session", true); }
   });
-  viewBar.append(arrangeViewBtn, sessionViewBtn, el("span", "wa-toolbar-spacer"), quantizationSelect, captureBtn, statusRow);
+  viewBar.append(arrangeViewBtn, sessionViewBtn, scenesBtn, el("span", "wa-toolbar-spacer"), quantizationSelect, captureBtn, statusRow);
   song.append(viewBar, sessionGrid, composer, clipInspector);
   showView(localStorage.getItem("vv_studio_song_view") === "session" ? "session" : "arrange");
   requestAnimationFrame(paintScenePosition);

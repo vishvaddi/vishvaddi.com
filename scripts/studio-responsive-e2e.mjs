@@ -349,8 +349,8 @@ for (const [name, width, height] of viewports) {
     }))
     check(`${name}: synth controls use instrument density`, soundDensity.tallest <= 650, `${Math.round(soundDensity.average)}px average / ${Math.round(soundDensity.tallest)}px max`)
     await page.locator('.wa-synth-modebar button', { hasText: 'Advanced' }).click()
-    check(`${name}: advanced synth uses seven fixed banks`, await page.locator('.wa-synth-bank-nav .wa-subtab').count() === 7)
-    for (const bank of ['OSC 1', 'OSC 2', 'NOISE', 'FILTER', 'Envelopes', 'LFO', 'MATRIX']) {
+    check(`${name}: advanced synth uses eight fixed banks`, await page.locator('.wa-synth-bank-nav .wa-subtab').count() === 8)
+    for (const bank of ['OSC 1', 'OSC 2', 'OSC 3', 'NOISE', 'FILTER', 'Envelopes', 'LFO', 'MATRIX']) {
       await page.locator('.wa-synth-bank-nav .wa-subtab', { hasText: bank, exact: true }).click()
       if (name === 'landscape' && bank === 'OSC 1') await page.screenshot({ path: 'studio-synth-osc-landscape.png', fullPage: false })
       const bankFit = await page.locator('.wa-vpatch:not(.wa-simple)').evaluate((node) => {

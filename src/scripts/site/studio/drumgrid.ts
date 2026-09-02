@@ -58,6 +58,18 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
   Array.from(ruler.children).slice(1).forEach((tick, step) => { (tick as HTMLElement).dataset.stepIndex = String(step); });
   const cells: HTMLElement[][] = [];
   const laneBtns: HTMLElement[] = [];
+  let painting: { on: boolean; visited: Set<string> } | null = null;
+  let suppressClick = false;
+  const setStep = (r: number, c: number, on: boolean, audition = false) => {
+    if (allPats[clip.sel][r][c] === on) return;
+    allPats[clip.sel][r][c] = on;
+    const target = cells[r]?.[c]; if (!target) return;
+    target.classList.toggle("on", on);
+    if (on) {
+      setCellOpacity(target, allVels[clip.sel][r][c]);
+      if (audition) { ensureNodes(); playDrum(ac(), trackGain[r], r, allVels[clip.sel][r][c] / 127, ac().currentTime); }
+    } else target.style.opacity = "";
+  };
 
   DRUMS.forEach((name, r) => {
     // Drum row — clicking the name selects the lane in the sampler sidebar
@@ -75,16 +87,13 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
       const cell = el("button", "wa-cell" + (isGridLine(c) ? " wa-beat" : "")) as HTMLButtonElement;
       cell.type = "button";
       cell.dataset.stepIndex = String(c);
+      cell.dataset.laneIndex = String(r);
       cell.setAttribute("aria-label", `${name} step ${c + 1}`);
       if (allPats[clip.sel][r][c]) { cell.classList.add("on"); setCellOpacity(cell, allVels[clip.sel][r][c]); }
       cell.addEventListener("click", () => {
+        if (suppressClick) { suppressClick = false; return; }
         ctx.checkpoint();
-        allPats[clip.sel][r][c] = !allPats[clip.sel][r][c];
-        cell.classList.toggle("on", allPats[clip.sel][r][c]);
-        if (allPats[clip.sel][r][c]) {
-          setCellOpacity(cell, allVels[clip.sel][r][c]);
-          ensureNodes(); playDrum(ac(), trackGain[r], r, allVels[clip.sel][r][c] / 127, ac().currentTime);
-        } else { cell.style.opacity = ""; }
+        setStep(r, c, !allPats[clip.sel][r][c], true);
         ctx.paintSession();
         saveAll();
       });
@@ -103,6 +112,22 @@ export function buildDrumGrid(deps: { onSelectLane: (r: number) => void }): Drum
     }
     cells.push(rowCells); grid.append(rowEl);
   });
+  grid.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    const cell = (event.target as HTMLElement).closest<HTMLElement>(".wa-cell"); if (!cell || (cell as HTMLButtonElement).disabled) return;
+    event.preventDefault(); ctx.checkpoint();
+    const r = Number(cell.dataset.laneIndex), c = Number(cell.dataset.stepIndex), on = !allPats[clip.sel][r][c];
+    painting = { on, visited: new Set([`${r}:${c}`]) }; suppressClick = true;
+    grid.setPointerCapture(event.pointerId); setStep(r, c, on, true);
+  });
+  grid.addEventListener("pointermove", (event) => {
+    if (!painting) return;
+    const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>(".wa-cell"); if (!cell || !grid.contains(cell) || (cell as HTMLButtonElement).disabled) return;
+    const r = Number(cell.dataset.laneIndex), c = Number(cell.dataset.stepIndex), key = `${r}:${c}`; if (painting.visited.has(key)) return;
+    painting.visited.add(key); setStep(r, c, painting.on);
+  });
+  const finishPaint = () => { if (!painting) return; painting = null; ctx.paintSession(); saveAll(); };
+  grid.addEventListener("pointerup", finishPaint); grid.addEventListener("pointercancel", finishPaint);
   laneBtns[0]?.classList.add("active");
   let stepPage = Math.max(0, Number(localStorage.getItem("vv_studio_drum_step_page")) || 0);
   const compactSteps = window.matchMedia("(max-width: 760px), (max-height: 540px) and (pointer: coarse)");
