@@ -618,7 +618,7 @@ export function buildDj(deps: { renderStudioMix?: (mode: "pattern" | "song") => 
   const workflow = el("div", "wa-dj-workflow");
   workflow.append(el("span", "wa-dj-workflow-title", "DJ A SET"), el("span", "active", "1 CHOOSE TRACKS"), el("span", "", "2 LOAD A + B"), el("span", "", "3 MIX"), el("span", "", "4 RECORD"));
   const viewToggle = btn("VINYL VIEW", "wa-btn-sm wa-dj-view-toggle");
-  let deckView = localStorage.getItem("vv_studio_dj_view") || (matchMedia("(max-width: 760px)").matches ? "compact" : "vinyl");
+  let deckView = localStorage.getItem("vv_studio_dj_view") || "compact";
   const paintDeckView = () => { root.dataset.deckView = deckView; viewToggle.textContent = deckView === "vinyl" ? "COMPACT VIEW" : "VINYL VIEW"; };
   viewToggle.addEventListener("click", () => { deckView = deckView === "vinyl" ? "compact" : "vinyl"; localStorage.setItem("vv_studio_dj_view", deckView); paintDeckView(); }); paintDeckView();
   workflow.append(viewToggle);

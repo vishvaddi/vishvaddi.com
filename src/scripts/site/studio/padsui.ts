@@ -27,8 +27,10 @@ export interface PadsUI {
 }
 
 export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Promise<AudioBuffer> }): PadsUI {
-  const mpcPanel = el("div", "wa-panel");
+  const mpcPanel = el("div", "wa-panel wa-mpc-panel");
+  mpcPanel.dataset.track = "pads";
   const mpcToolbar = el("div", "wa-mpc-toolbar");
+  const padColour = (localPad: number): string => `var(--wa-track-${(localPad % 8) + 1})`;
   const bankButtons: HTMLButtonElement[] = [];
   const padButtons: HTMLButtonElement[] = [];
   const eventCells: HTMLButtonElement[][] = [];
@@ -36,16 +38,24 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   const eventRowLabels: HTMLElement[] = [];
   const repeatTimers = new Map<number, number>();
   const performanceStatus = el("span", "wa-status", "Ready");
-  const fullLevelBtn = btn("Full Level", "wa-toggle wa-btn-sm");
-  const levelsBtn = btn("16 Levels", "wa-toggle wa-btn-sm");
-  const repeatBtn = btn("Note Repeat", "wa-toggle wa-btn-sm");
-  const recordBtn = btn("Record", "wa-toggle wa-btn-sm");
-  const overdubBtn = btn("Overdub", "wa-toggle wa-btn-sm active");
-  const undoPassBtn = btn("Undo pass", "wa-btn-sm");
-  const rotateBtn = btn("Rotate", "wa-btn-sm"), mutateBtn = btn("Mutate", "wa-btn-sm"), fillBtn = btn("Fill", "wa-btn-sm");
-  const ghostBtn = btn("Ghosts", "wa-btn-sm"), extractGrooveBtn = btn("Extract groove", "wa-btn-sm");
-  const resampleBtn = btn("Resample → pad", "wa-btn-sm");
-  const midiBtn = btn("MIDI", "wa-toggle wa-btn-sm");
+  // Toggle row: glyph + short label on the face, full name on aria-label,
+  // explanation on data-help (help()).
+  const iconBtn = (icon: string, short: string, name: string, extra: string): HTMLButtonElement => {
+    const button = btn("", extra);
+    button.append(el("span", "wa-mpc-ico", icon), el("span", "wa-mpc-ico-lbl", short));
+    button.setAttribute("aria-label", name);
+    return button;
+  };
+  const fullLevelBtn = iconBtn("▲", "Full", "Full level", "wa-toggle wa-btn-sm");
+  const levelsBtn = iconBtn("▦", "16 Lv", "16 levels", "wa-toggle wa-btn-sm");
+  const repeatBtn = iconBtn("⟳", "Repeat", "Note repeat", "wa-toggle wa-btn-sm");
+  const recordBtn = iconBtn("●", "Rec", "Record pad events", "wa-toggle wa-btn-sm wa-mpc-rec");
+  const overdubBtn = iconBtn("⊕", "Dub", "Overdub", "wa-toggle wa-btn-sm active");
+  const undoPassBtn = iconBtn("↶", "Undo", "Undo recording pass", "wa-btn-sm");
+  const rotateBtn = iconBtn("↻", "Rotate", "Rotate pattern", "wa-btn-sm"), mutateBtn = iconBtn("⚄", "Mutate", "Mutate pattern", "wa-btn-sm"), fillBtn = iconBtn("▤", "Fill", "Write fill", "wa-btn-sm");
+  const ghostBtn = iconBtn("◌", "Ghosts", "Add ghost notes", "wa-btn-sm"), extractGrooveBtn = iconBtn("∿", "Groove", "Extract groove", "wa-btn-sm");
+  const resampleBtn = iconBtn("⤓", "Resample", "Resample pattern to pad", "wa-btn-sm");
+  const midiBtn = iconBtn("⌘", "MIDI", "Connect Web MIDI", "wa-toggle wa-btn-sm");
   help(fullLevelBtn, "Force every pad hit to maximum velocity.");
   help(levelsBtn, "Map the 16 pads across velocity, pitch, filter cutoff or sample start.");
   help(repeatBtn, "Retrigger a held pad at the division selected beside it.");
@@ -66,26 +76,34 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   });
   let recordSnapshot: PadEvent[] | null = null;
   const levelModeSel = document.createElement("select");
-  [["velocity", "16 Velocities"], ["pitch", "16 Pitches"], ["filter", "16 Filters"], ["start", "16 Starts"]].forEach(([value, label]) => {
+  levelModeSel.setAttribute("aria-label", "16 levels parameter");
+  help(levelModeSel, "Which parameter the 16 pads sweep while 16 Levels is on.");
+  [["velocity", "Velocity"], ["pitch", "Pitch"], ["filter", "Filter"], ["start", "Start"]].forEach(([value, label]) => {
     const option = document.createElement("option"); option.value = value; option.textContent = label; levelModeSel.append(option);
   });
   levelModeSel.value = mpc.levelMode;
   const repeatSel = document.createElement("select");
+  repeatSel.setAttribute("aria-label", "Note repeat rate");
+  help(repeatSel, "Note repeat rate.");
   [["2", "1/8"], ["3", "1/8T"], ["4", "1/16"], ["6", "1/16T"], ["8", "1/32"], ["16", "1/64"]].forEach(([value, label]) => {
     const option = document.createElement("option"); option.value = value; option.textContent = label; repeatSel.append(option);
   });
   repeatSel.value = String(mpc.repeatDivision);
   const quantSel = document.createElement("select");
-  [["0", "Quantise off"], ["2", "1/8"], ["3", "1/8T"], ["4", "1/16"], ["6", "1/16T"], ["8", "1/32"]].forEach(([value, label]) => {
+  quantSel.setAttribute("aria-label", "Record quantise");
+  help(quantSel, "Snap recorded pad hits to this grid.");
+  [["0", "Q off"], ["2", "Q 1/8"], ["3", "Q 1/8T"], ["4", "Q 1/16"], ["6", "Q 1/16T"], ["8", "Q 1/32"]].forEach(([value, label]) => {
     const option = document.createElement("option"); option.value = value; option.textContent = label; quantSel.append(option);
   });
   quantSel.value = String(mpc.quantize);
   mpcToolbar.append(fullLevelBtn, levelsBtn, levelModeSel, repeatBtn, repeatSel, recordBtn, overdubBtn, undoPassBtn, quantSel, rotateBtn, mutateBtn, fillBtn, ghostBtn, extractGrooveBtn, midiBtn, resampleQuality, resampleBtn, performanceStatus);
 
-  const padBankRow = el("div", "wa-pad-banks");
+  const padBankRow = el("div", "wa-pad-banks wa-subtabs");
+  padBankRow.append(el("span", "wa-lbl", "Bank"));
   ["A", "B", "C", "D"].forEach((label, bank) => {
-    const button = btn(`Bank ${label}`, "wa-pat-btn" + (mpc.bank === bank ? " active" : ""));
+    const button = btn(label, "wa-subtab wa-pat-btn" + (mpc.bank === bank ? " active" : ""));
     button.classList.remove("wa-btn");
+    button.setAttribute("aria-label", `Bank ${label}`);
     button.addEventListener("click", () => {
       mpc.bank = bank; bankButtons.forEach((item, i) => item.classList.toggle("active", i === bank)); paintMpcPads(); saveAll();
     });
@@ -141,8 +159,9 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   soloSelectedBtn.addEventListener("click", () => {
     mpc.padSolo[mpc.selectedPad] = !mpc.padSolo[mpc.selectedPad]; paintMpcPads(); saveAll();
   });
-  selectedSampleEditor.append(
-    el("div", "wa-sample-primary", "ONE-SHOT"), loadSelectedBtn, selectedFileInput,
+  const sampleKnobs = el("div", "wa-sample-knobs");
+  const sampleToggles = el("div", "wa-sample-toggles");
+  sampleKnobs.append(
     selectedParam("Tune", "tune", -24, 24, 1),
     selectedParam("Start", "start", 0, 0.95, 0.01),
     selectedParam("End", "end", 0.05, 1, 0.01),
@@ -151,17 +170,18 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
     selectedParam("Decay", "decay", 0.02, 2, 0.02),
     selectedParam("Choke", "choke", 0, 8, 1),
     selectedParam("Source BPM", "sourceBpm", 40, 240, 1),
-    reverseSelectedBtn, loopSelectedBtn, warpSelectedBtn, muteSelectedBtn, soloSelectedBtn,
   );
+  sampleToggles.append(reverseSelectedBtn, loopSelectedBtn, warpSelectedBtn, muteSelectedBtn, soloSelectedBtn);
+  selectedSampleEditor.append(el("div", "wa-sample-primary wa-lbl", "One-shot"), loadSelectedBtn, selectedFileInput, sampleKnobs, sampleToggles);
 
   // ── Poise-style layers (C4, features only): up to 3 extra samples on the
   // selected pad, dispatched by mode — velocity split / round robin / random /
   // all together. Layer audio rides in project files; autosave keeps the meta.
   const layersBlock = el("div", "wa-pad-layers");
-  layersBlock.append(el("div", "wa-fx-title", "LAYERS"));
+  layersBlock.append(el("div", "wa-fx-title", "Layers"));
   const layerModeSel = document.createElement("select");
   layerModeSel.setAttribute("aria-label", "Pad layer mode");
-  ([["velocity", "VELOCITY SPLIT"], ["roundrobin", "ROUND ROBIN"], ["random", "RANDOM"], ["layered", "LAYERED"]] as const)
+  ([["velocity", "Velocity split"], ["roundrobin", "Round robin"], ["random", "Random"], ["layered", "Layered"]] as const)
     .forEach(([v, label]) => { const o = document.createElement("option"); o.value = v; o.textContent = label; layerModeSel.append(o); });
   help(layerModeSel, "How the pad picks between its main sample and the layers: by velocity range, alternating, at random, or all at once.");
   layerModeSel.addEventListener("change", () => { padLayerMode[mpc.selectedPad] = layerModeSel.value as PadLayerMode; saveAll(); });
@@ -223,6 +243,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
       );
     });
     selectedPadLabel.textContent = `Selected: ${sampleParams[mpc.selectedPad].name || `Pad ${mpc.selectedPad + 1}`}`;
+    selectedSampleEditor.style.setProperty("--track-colour", padColour(mpc.selectedPad % PAD_BANK_SIZE));
     const selected = sampleParams[mpc.selectedPad];
     selectedInputs.forEach(({ key, set }) => set(Number(selected[key])));
     reverseSelectedBtn.classList.toggle("active", selected.reverse); loopSelectedBtn.classList.toggle("active", selected.loop);
@@ -264,6 +285,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
     const levelVelocity = 8 + localPad * 8;
     const finalVelocity = mpc.fullLevel ? 127 : (mpc.sixteenLevels && mpc.levelMode === "velocity" ? levelVelocity : velocity);
     mpc.selectedPad = pad; paintMpcPads();
+    padButtons[localPad].style.setProperty("--wa-hit", (finalVelocity / 127).toFixed(2));
     playPad(ac(), pad, finalVelocity, ac().currentTime, variationFor(localPad));
     recordPadEvent(pad, finalVelocity);
     if (rackState.devices.player && rackState.noteEcho > 0) {
@@ -300,6 +322,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
     // unchanged; only the grid placement flips.
     pad.style.gridRow = String(4 - Math.floor(localPad / 4));
     pad.style.gridColumn = String((localPad % 4) + 1);
+    pad.style.setProperty("--track-colour", padColour(localPad));
     const press = (event: PointerEvent) => {
       event.preventDefault(); pad.setPointerCapture?.(event.pointerId); pad.classList.add("down");
       const rect = pad.getBoundingClientRect();
@@ -433,6 +456,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
       rowCells.forEach((cell, step) => {
         const event = padEvents[clip.sel].find((item) => item.pad === pad && item.step === step);
         cell.classList.toggle("on", !!event);
+        cell.style.setProperty("--wa-vel", event ? (event.velocity / 127).toFixed(2) : "1");
         cell.title = event
           ? `${eventRowLabels[localPad].textContent}, step ${step + 1}: velocity ${event.velocity}, chance ${event.probability}%, ratchets ${event.ratchets}, offset ${event.offset}ms`
           : `${eventRowLabels[localPad].textContent}, step ${step + 1}`;
@@ -441,6 +465,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   }
   for (let localPad = 0; localPad < PAD_BANK_SIZE; localPad++) {
     const rowEl = el("div", "wa-row");
+    rowEl.style.setProperty("--track-colour", padColour(localPad));
     const label = el("span", "wa-drum wa-event-row-label");
     label.addEventListener("click", () => { mpc.selectedPad = selectedGlobalPad(localPad); paintMpcPads(); });
     rowEl.append(label);
@@ -507,6 +532,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   let padSequenceView = (localStorage.getItem("vv_studio_pad_sequence_view") as PadSequenceView | null) ?? "selected";
   if (padSequenceView !== "selected" && padSequenceView !== "all") padSequenceView = "selected";
   const padSeqPanel = el("div", "wa-panel wa-device-dock");
+  padSeqPanel.dataset.track = "pads";
   const selectPadSequenceView = (view: PadSequenceView): void => {
     padSequenceView = view;
     padSeqPanel.dataset.sequenceView = view;
@@ -535,7 +561,7 @@ export function buildPads(deps: { renderBuffer: (mode: "pattern" | "song") => Pr
   // in the workspace section below.
   mpcPanel.append(mpcDeck);
   const padSequenceHead = el("div", "wa-pad-sequence-head");
-  padSequenceHead.append(el("div", "wa-lbl", "PAD SEQUENCER"), buildPadViewToggle());
+  padSequenceHead.append(el("div", "wa-lbl", "Pad sequencer"), buildPadViewToggle());
   padSeqPanel.append(padSequenceHead, eventLane, eventEditor);
   selectPadSequenceView(padSequenceView);
   paintMpcPads();

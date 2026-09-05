@@ -1,1 +1,185 @@
-/* Studio v5 — dj mode. Consumes tokens.css + base.css only. */
+/* Studio v5 — DJ mode. Compact by default: flat waveform overview, a vertical
+   pitch fader, cue/loop performance pads and a performance mixer whose
+   channel strips match the Mix console. The vinyl platter is an opt-in view.
+   Consumes tokens.css + base.css only. */
+
+.wa-page-dj { overflow: hidden; }
+.wa-dj { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--wa-gap-in); color: var(--wa-text); }
+
+/* status line */
+.wa-dj-workflow { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; min-height: 32px; padding: 0 4px; }
+.wa-dj-workflow-title { font: 700 var(--wa-fs-xs)/1 var(--wa-font); color: var(--wa-text); text-transform: uppercase; letter-spacing: 0.06em; }
+.wa-dj-workflow > span:not(.wa-dj-workflow-title) { font: 500 var(--wa-fs-xs)/1 var(--wa-font); color: var(--wa-faint); }
+.wa-dj-workflow > span.active { color: var(--wa-accent); }
+.wa-dj-view-toggle { margin-left: auto; }
+
+/* library */
+.wa-dj-library { flex: 0 0 auto; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 6px 10px; max-height: 104px; overflow: hidden; }
+.wa-dj-library .wa-fx-title { margin: 0; }
+.wa-dj-library-tools { display: flex; gap: 6px; min-width: 0; }
+.wa-dj-library-search { flex: 1 1 auto; min-width: 120px; }
+.wa-dj-library-sort { width: auto; }
+.wa-dj-private { font: 600 10px/1 var(--wa-font); color: var(--wa-track-1); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+.wa-dj-library-rows { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 3px; min-height: 0; max-height: 44px; overflow-y: auto; overscroll-behavior: contain; }
+.wa-dj-library-rows .wa-help { margin: 0; font-size: var(--wa-fs-xs); color: var(--wa-faint); }
+.wa-dj-library-row { display: grid; grid-template-columns: minmax(120px, 1fr) 72px auto auto auto; gap: 6px; align-items: center; }
+.wa-dj-library-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--wa-fs-sm); }
+.wa-dj-library-bpm { font: var(--wa-fs-xs)/1 var(--wa-mono); color: var(--wa-muted); text-align: right; }
+.wa-dj-library-row .wa-btn-sm { height: 26px; padding: 0 8px; font-size: var(--wa-fs-xs); }
+.wa-dj .primary { color: #1a0d05; background: var(--wa-accent); border-color: var(--wa-accent); }
+.wa-dj .primary:hover { filter: brightness(1.08); color: #1a0d05; }
+
+/* decks host */
+.wa-dj-decks { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(300px, 1fr) 204px minmax(300px, 1fr); gap: var(--wa-gap-in); }
+.wa-dj-deck {
+  min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 72px; grid-template-rows: auto auto 120px auto minmax(0, 1fr); gap: 6px 8px;
+  overflow: hidden;
+}
+.wa-dj-deck-a { --track-colour: var(--wa-track-4); }
+.wa-dj-deck-b { --track-colour: var(--wa-track-6); }
+.wa-dj-deck.dragover { outline: 2px solid var(--wa-accent); outline-offset: -3px; }
+.wa-dj-deck-head { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+.wa-dj-deck-badge { padding: 4px 8px; border-radius: var(--wa-radius-sm); font: 700 10px/1 var(--wa-font); letter-spacing: 0.06em; color: #1a0d05; background: var(--track-colour); }
+.wa-dj-track-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 var(--wa-fs-sm)/1.2 var(--wa-font); color: var(--wa-muted); }
+.wa-dj-deck.loaded .wa-dj-track-title { color: var(--wa-text); }
+.wa-dj-display { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 4px 10px; min-height: 30px; background: var(--wa-screen); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm); font: 600 var(--wa-fs-sm)/1 var(--wa-mono); color: var(--wa-muted); }
+.wa-dj-time { font-size: var(--wa-fs-lg); color: var(--wa-text); font-variant-numeric: tabular-nums; }
+.wa-dj-deck.playing .wa-dj-time { color: var(--wa-play); }
+.wa-dj-waveform { grid-column: 1 / -1; display: block; width: 100%; height: 120px; background: var(--wa-screen); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm); cursor: crosshair; touch-action: none; }
+/* turntable column: pitch fader + start/speed — platter only in vinyl view */
+.wa-dj-turntable { grid-column: 2; grid-row: 4 / 6; position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 0; }
+.wa-dj-platter, .wa-dj-tonearm, .wa-dj-target-light, .wa-dj-strobe-dots { display: none; }
+.wa-dj-pitch-fader { flex: 1 1 auto; min-height: 140px; width: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; justify-items: center; gap: 4px; }
+.wa-dj-range.wa-dj-pitch-fader input { writing-mode: vertical-lr; direction: rtl; width: 22px; height: 100%; min-height: 110px; margin: 0; }
+.wa-dj-start { width: 100%; min-height: 40px; padding: 0 4px; font-size: 9px; letter-spacing: 0.04em; }
+.wa-dj-start.active { color: #04160b; background: var(--wa-play); border-color: var(--wa-play); }
+.wa-dj-speed { display: flex; gap: 3px; }
+.wa-dj-speed span { padding: 4px 6px; font: 700 10px/1 var(--wa-mono); color: var(--wa-faint); border: 1px solid var(--wa-border-soft); border-radius: 3px; }
+.wa-dj-speed .active { color: var(--wa-text); border-color: var(--wa-border); background: var(--wa-control); }
+.wa-dj-range { min-width: 0; display: flex; flex-direction: column; gap: 2px; font: 600 9px/1 var(--wa-font); color: var(--wa-muted); text-align: center; text-transform: uppercase; letter-spacing: 0.04em; }
+.wa-dj-range input { width: 100%; min-width: 0; height: 16px; }
+.wa-dj-range-value { font: var(--wa-fs-xs)/1 var(--wa-mono); color: var(--wa-text); }
+/* transport + performance */
+.wa-dj-transport { grid-column: 1; grid-row: 4; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; align-content: start; }
+.wa-dj-transport .wa-btn { min-height: 36px; font-size: var(--wa-fs-xs); padding: 0 6px; }
+.wa-dj-transport .wa-dj-play { grid-column: 1 / -1; }
+.wa-dj-performance { grid-column: 1; grid-row: 5; display: flex; flex-direction: column; gap: 5px; }
+.wa-dj-loopbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.wa-dj-loopbar .wa-btn-sm { padding: 0 4px; min-width: 0; }
+.wa-dj-loop-length { min-width: 0; padding-inline: 4px 18px; font-size: var(--wa-fs-xs); }
+.wa-dj-hotcues { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.wa-dj-hotcue { min-height: 40px; padding: 0; font: 700 var(--wa-fs-xs)/1 var(--wa-mono); }
+.wa-dj-hotcue.set { color: #1a0d05; background: var(--track-colour); border-color: var(--track-colour); }
+.wa-dj-clear-cues { align-self: flex-start; }
+/* the channel controls are hoisted into the mixer strips by dj.ts */
+.wa-dj-controls { display: grid; grid-template-columns: 1fr; gap: 4px; }
+
+/* performance mixer */
+.wa-dj-mixer { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto auto minmax(40px, 1fr) auto auto auto auto; gap: 5px; overflow: hidden; }
+.wa-dj-mixer .wa-fx-title { margin: 0; justify-content: center; }
+.wa-dj-channel-strips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.wa-dj-channel-strip { min-width: 0; padding: 6px 4px; background: var(--wa-raised); border: 1px solid var(--wa-border-soft); border-top: 3px solid var(--track-colour); border-radius: var(--wa-radius-sm); }
+.wa-dj-channel-strip[data-channel="A"] { --track-colour: var(--wa-track-4); }
+.wa-dj-channel-strip[data-channel="B"] { --track-colour: var(--wa-track-6); }
+.wa-dj-channel-title { display: block; margin-bottom: 4px; text-align: center; font: 700 10px/1 var(--wa-font); color: var(--wa-text); }
+.wa-dj-meters { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; min-height: 0; padding: 6px; background: var(--wa-screen); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm); }
+.wa-dj-meter { min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; font: 700 10px/1 var(--wa-mono); color: var(--wa-faint); }
+.wa-dj-meter-cells { width: 100%; flex: 1; min-height: 0; display: flex; flex-direction: column-reverse; gap: 2px; }
+.wa-dj-meter-cells span { flex: 1; min-height: 3px; border-radius: 1px; background: var(--wa-control); }
+.wa-dj-meter-cells span.lit { background: var(--wa-play); }
+.wa-dj-meter-cells span.warn.lit { background: var(--wa-warn); }
+.wa-dj-meter-cells span.peak.lit { background: var(--wa-rec); }
+.wa-dj-effects { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.wa-dj-effect-title, .wa-dj-effects .wa-dj-range { grid-column: 1 / -1; }
+.wa-dj-effects select { min-width: 0; padding-inline: 6px 18px; }
+.wa-dj-effect-title { font: 700 10px/1 var(--wa-font); color: var(--wa-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.wa-dj-effect-toggle.active { color: var(--wa-accent); background: var(--wa-accent-soft); border-color: var(--wa-accent-dim); }
+.wa-dj-crossfader { gap: 4px; }
+.wa-dj-crossfader input { height: 24px; }
+.wa-dj-record { min-height: 32px; color: var(--wa-rec); }
+.wa-dj-record.active { color: #fff; background: var(--wa-rec); border-color: var(--wa-rec); animation: wa-rec-pulse 1.2s ease-in-out infinite; }
+.wa-dj-record-status { text-align: center; font: 600 9px/1.3 var(--wa-font); color: var(--wa-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+@media (max-height: 800px) { .wa-dj-channel-strip .wa-dj-range-value, .wa-dj-record-status { display: none; } .wa-dj-mixer { grid-template-rows: auto auto minmax(36px, 1fr) auto auto auto; } }
+.wa-dj-recording-review { width: min(420px, calc(100vw - 32px)); }
+.wa-dj-recording-review .wa-kicker { font: 700 10px/1 var(--wa-font); color: var(--wa-accent); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px; }
+.wa-dj-recording-review .wa-start-title { display: block; font: 600 var(--wa-fs-lg)/1.2 var(--wa-font); margin-bottom: 12px; }
+.wa-dj-recording-review audio { width: 100%; margin-bottom: 10px; }
+.wa-dj-recording-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 12px; }
+
+/* ── Vinyl view (opt-in): a real platter with tonearm ─────────────────── */
+.wa-dj[data-deck-view="vinyl"] .wa-dj-deck { grid-template-columns: minmax(0, 1fr) 260px; grid-template-rows: auto auto 88px minmax(0, 1fr) auto; }
+.wa-dj[data-deck-view="vinyl"] .wa-dj-turntable { display: grid; grid-template-columns: 1fr 44px; grid-template-rows: 240px auto; gap: 6px; align-items: start; justify-items: stretch; }
+.wa-dj[data-deck-view="vinyl"] .wa-dj-platter {
+  display: grid; place-items: center; grid-column: 1; grid-row: 1; position: relative; width: 240px; height: 240px; justify-self: center; border-radius: 50%;
+  background: var(--wa-raised); border: 1px solid var(--wa-border); cursor: grab; touch-action: none;
+}
+.wa-dj[data-deck-view="vinyl"] .wa-dj-platter:active { cursor: grabbing; }
+.wa-dj[data-deck-view="vinyl"] .wa-dj-vinyl { display: grid; place-items: center; width: 220px; height: 220px; border-radius: 50%; background: repeating-radial-gradient(circle, #0c1016 0 2px, #141a23 2px 4px); border: 1px solid var(--wa-border-soft); }
+.wa-dj[data-deck-view="vinyl"] .wa-dj-deck.playing .wa-dj-vinyl { animation: wa-dj-spin 1.8s linear infinite; }
+@keyframes wa-dj-spin { to { transform: rotate(360deg); } }
+.wa-dj[data-deck-view="vinyl"] .wa-dj-record-label { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; background: var(--track-colour); color: #1a0d05; font: 800 var(--wa-fs-lg)/1 var(--wa-font); }
+.wa-dj[data-deck-view="vinyl"] .wa-dj-spindle { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--wa-text); }
+.wa-dj[data-deck-view="vinyl"] .wa-dj-tonearm { display: block; position: absolute; right: 44px; top: 0; width: 40px; height: 200px; pointer-events: none; }
+.wa-dj[data-deck-view="vinyl"] .wa-dj-arm-pivot { position: absolute; right: 4px; top: 6px; width: 22px; height: 22px; border-radius: 50%; background: var(--wa-control); border: 1px solid var(--wa-border); }
+.wa-dj[data-deck-view="vinyl"] .wa-dj-arm-assembly { position: absolute; right: 13px; top: 16px; width: 4px; height: 170px; transform-origin: 50% 0; transform: rotate(18deg); background: var(--wa-muted); border-radius: 2px; }
+.wa-dj[data-deck-view="vinyl"] .wa-dj-deck.playing .wa-dj-arm-assembly { transform: rotate(30deg); transition: transform 600ms ease; }
+.wa-dj[data-deck-view="vinyl"] .wa-dj-headshell { position: absolute; left: -6px; bottom: -2px; width: 16px; height: 22px; border-radius: 3px; background: var(--wa-text); }
+.wa-dj[data-deck-view="vinyl"] .wa-dj-pitch-fader { grid-column: 2; grid-row: 1; min-height: 240px; }
+.wa-dj[data-deck-view="vinyl"] .wa-dj-start { grid-column: 1; grid-row: 2; width: auto; justify-self: start; min-width: 110px; }
+.wa-dj[data-deck-view="vinyl"] .wa-dj-speed { grid-column: 1; grid-row: 2; justify-self: end; align-self: center; }
+
+/* ── Tablet ──────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) and (min-width: 701px) {
+  .wa-dj-decks { grid-template-columns: minmax(300px, 1fr) 160px minmax(300px, 1fr); }
+  .wa-dj-channel-strips { gap: 4px; }
+  .wa-dj-channel-strip { padding: 4px 3px; }
+  .wa-dj[data-deck-view="vinyl"] .wa-dj-deck { grid-template-columns: minmax(0, 1fr) 230px; }
+}
+
+/* ── Phone: decks swipe, mixer below ──────────────────────────────────── */
+@media (max-width: 700px) {
+  .wa-page-dj { overflow-y: auto; overscroll-behavior: contain; }
+  .wa-dj { flex: 0 0 auto; min-height: 100%; }
+  .wa-dj-workflow > span:not(.wa-dj-workflow-title):not(.active) { display: none; }
+  .wa-dj-library { grid-template-columns: 1fr auto; max-height: none; }
+  .wa-dj-library-tools { grid-column: 1 / -1; }
+  .wa-dj-private { grid-column: 1 / -1; }
+  .wa-dj-decks { display: flex; flex: 0 0 auto; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-inline: contain; gap: 6px; }
+  .wa-dj-deck { flex: 0 0 100%; width: 100%; scroll-snap-align: start; overflow: visible; grid-template-columns: minmax(0, 1fr) 64px; }
+  .wa-dj-mixer { order: 3; flex: 0 0 100%; width: 100%; scroll-snap-align: start; }
+  .wa-dj-deck-b { order: 2; }
+  .wa-dj-transport .wa-btn { min-height: var(--wa-touch); }
+  .wa-dj-hotcue { min-height: var(--wa-touch); }
+  .wa-dj-loopbar .wa-btn-sm { min-height: var(--wa-touch); }
+  .wa-dj-meters { min-height: 90px; }
+}
+
+/* ── Touch landscape: both decks + a narrow mixer on one surface ─────── */
+@media (max-height: 540px) and (pointer: coarse) {
+  .wa-page-dj { overflow: hidden; }
+  .wa-dj { gap: 4px; }
+  .wa-dj-workflow { min-height: 26px; }
+  .wa-dj-workflow > span:not(.wa-dj-workflow-title):not(.active) { display: none; }
+  .wa-dj-library { display: none; }
+  .wa-dj-decks { grid-template-columns: minmax(250px, 1fr) 112px minmax(250px, 1fr); gap: 4px; }
+  .wa-dj-deck { padding: 6px; gap: 4px 6px; grid-template-columns: minmax(0, 1fr) 56px; grid-template-rows: auto 60px minmax(0, 1fr) auto; overflow: hidden; }
+  .wa-dj-display { display: none; }
+  .wa-dj-waveform { height: 60px; }
+  .wa-dj-transport { grid-row: 3; }
+  .wa-dj-performance { grid-row: 4; }
+  .wa-dj-turntable { grid-row: 3 / 5; }
+  .wa-dj-pitch-fader { min-height: 90px; }
+  .wa-dj-pitch-fader input { min-height: 70px; }
+  .wa-dj-start { min-height: 32px; }
+  .wa-dj-hotcue { min-height: 30px; }
+  .wa-dj-mixer { padding: 6px 4px; gap: 4px; grid-template-rows: auto auto auto; }
+  .wa-dj-mixer .wa-fx-title, .wa-dj-meters, .wa-dj-effects, .wa-dj-record-status { display: none; }
+  .wa-dj-channel-strips { grid-template-columns: 1fr 1fr; gap: 3px; }
+  .wa-dj-channel-strip { padding: 3px 2px; }
+  .wa-dj-channel-title { margin-bottom: 2px; font-size: 9px; }
+  .wa-dj-controls { gap: 2px; }
+  .wa-dj-range { gap: 1px; font-size: 8px; }
+  .wa-dj-range input { height: 14px; }
+  .wa-dj-range-value { display: none; }
+  .wa-dj-record { min-height: 28px; }
+}

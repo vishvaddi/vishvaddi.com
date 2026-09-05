@@ -14,7 +14,7 @@ import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./c
 import { showVelocityPopup } from "./velpopup";
 import { buildKeys, setKeysLatch } from "./keys";
 import type { KeyMods } from "./keys";
-import { buildRoll } from "./roll";
+import { buildRoll, laneIdentity } from "./roll";
 import { buildXYField } from "./xyfield";
 
 export interface SynthUI {
@@ -82,6 +82,8 @@ function drawWavetableStack(canvas: HTMLCanvasElement, table: string, pos: numbe
 export function buildSynth(): SynthUI {
   let waveRedraws: Array<() => void> = [];
   let modBadgeRefreshers: Array<() => void> = [];
+  let heroRedraw: (() => void) | null = null;
+  let heroObserver: ResizeObserver | null = null;
   const synthPanel = el("div", "wa-panel");
   const liveKeys = new LiveVoices();
   const performanceDefaults: PerformancePatch = { chord: "off", arp: "off", rate: "1/8", spread: 0, texture: "off", textureLevel: 0, samples: [-1, -1], sampleLevels: [.35, .35] };
@@ -284,6 +286,7 @@ export function buildSynth(): SynthUI {
       button.setAttribute("aria-pressed", String(selected));
     });
     localStorage.setItem("vv_studio_synth_bank", bank);
+    heroRedraw?.();
   };
   (["osc1", "osc2", "osc3", "noise", "filter", "envelopes", "lfo", "matrix"] as SynthBank[]).forEach((bank) => {
     const button = btn(bank === "envelopes" ? "Envelopes" : bank.startsWith("osc") ? `OSC ${bank.slice(-1)}` : bank.toUpperCase(), "wa-subtab") as HTMLButtonElement;
@@ -303,6 +306,7 @@ export function buildSynth(): SynthUI {
     synthBankNav.hidden = simpleMode;
     simpleBtn.textContent = simpleMode ? "Advanced" : "Essentials";
     simpleBtn.classList.toggle("active", simpleMode);
+    heroRedraw?.();
   }
   help(simpleBtn, "Show the full oscillators, envelopes, LFOs and modulation matrix, or return to the essential sound controls.");
   simpleBtn.addEventListener("click", () => {
@@ -341,9 +345,20 @@ export function buildSynth(): SynthUI {
     const quickHead = el("div", "wa-synth-quick-head");
     quickHead.append(el("div", "wa-fx-title", "VV-1 WAVETABLE"), el("span", "wa-synth-signal", "VOICE → FILTER → MOD → FX"));
     const quickVisual = document.createElement("canvas"); quickVisual.className = "wa-synth-hero"; quickVisual.setAttribute("aria-label", "Current wavetable shape");
-    const redrawQuickVisual = () => drawWavetableStack(quickVisual, vsynthPatch.osc1.table, vsynthPatch.osc1.pos, vsynthPatch.osc1.warp, vsynthPatch.osc1.warpAmount, vsynthPatch.osc1.phase);
+    // v5: the hero is the top half of whichever OSC bank is open — OSC 1 in
+    // Essentials, the bank tab's oscillator in Advanced.
+    const heroOsc = (): OscPatch => (!simpleMode && activeSynthBank.startsWith("osc") ? vsynthPatch[activeSynthBank as "osc1" | "osc2" | "osc3"] : vsynthPatch.osc1);
+    const redrawQuickVisual = () => { const o = heroOsc(); drawWavetableStack(quickVisual, o.table, o.pos, o.warp, o.warpAmount, o.phase); };
     waveRedraws.push(redrawQuickVisual);
-    quickBox.append(quickHead, quickVisual);
+    heroRedraw = redrawQuickVisual;
+    // Absolutely positioned inside a sized wrap so the DPR bitmap resize can
+    // never feed back into layout; the wrap is free to flex with the aperture.
+    const heroWrap = el("div", "wa-synth-hero-wrap");
+    heroWrap.append(quickVisual);
+    heroObserver?.disconnect();
+    heroObserver = new ResizeObserver(() => redrawQuickVisual());
+    heroObserver.observe(heroWrap);
+    quickBox.append(quickHead, heroWrap);
     const oscillatorModule = el("section", "wa-synth-module wa-synth-module-osc");
     const filterModule = el("section", "wa-synth-module wa-synth-module-filter");
     const envelopeModule = el("section", "wa-synth-module wa-synth-module-envelope");
@@ -382,7 +397,7 @@ export function buildSynth(): SynthUI {
       box.append(el("div", "wa-fx-title", `OSC ${i + 1}`));
       const waveCanvas = document.createElement("canvas"); waveCanvas.className = "wa-wave-mini";
       box.append(waveCanvas);
-      const redrawWave = () => drawWavetableStack(waveCanvas, o.table, o.pos, o.warp, o.warpAmount, o.phase);
+      const redrawWave = () => { drawWavetableStack(waveCanvas, o.table, o.pos, o.warp, o.warpAmount, o.phase); if (heroOsc() === o) redrawQuickVisual(); };
       waveRedraws.push(redrawWave);
       // CV-80 quick picks: the four classic shapes are positions on the basic
       // table, so these jump straight there without leaving the wavetable model.
@@ -569,7 +584,7 @@ export function buildSynth(): SynthUI {
       MOD_DESTS.forEach((d) => { const o = document.createElement("option"); o.value = d; o.textContent = d.toUpperCase(); destSel.append(o); });
       destSel.value = slot.dest;
       destSel.addEventListener("change", () => { slot.dest = destSel.value as ModSlot["dest"]; saveAll(); modBadgeRefreshers.forEach((fn) => fn()); });
-      row.append(srcSel, el("span", "wa-lbl", "→"), destSel);
+      row.append(srcSel, el("span", "wa-lbl", "›"), destSel);
       row.append(sliderRow("Amt", -1, 1, slot.amt, 0.01, (v) => { slot.amt = v; saveAll(); modBadgeRefreshers.forEach((fn) => fn()); }));
       matrixBox.append(row);
     });
@@ -749,8 +764,12 @@ export function buildSynth(): SynthUI {
     onSilence: () => { liveKeys.releaseAll(ac()); setKeysLatch(false); },
   });
   waveRedraws.push(xy.syncFromPatch);
+  // Track colour flows from the lane being edited: the patch editor, the
+  // properties pane and the on-screen keys all carry its identity.
+  const paintLaneIdentity = (): void => { [synthPanel, synthInspector, synthKeys].forEach((node) => laneIdentity(node, activeSynth.lane)); };
+  paintLaneIdentity();
   window.addEventListener("vv-synth-lane-change", () => {
-    ensureMatrixSlots(); renderPatchEditor(); xy.syncFromPatch();
+    paintLaneIdentity(); ensureMatrixSlots(); renderPatchEditor(); xy.syncFromPatch();
   });
 
   return {

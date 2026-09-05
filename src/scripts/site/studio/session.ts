@@ -312,7 +312,7 @@ export function buildSession(): SessionView {
   };
   const paintChain = () => {
     chain.replaceChildren();
-    const visibleBars = Math.max(16, songEndBar() + 4, songLoop.endBar + 1);
+    const visibleBars = Math.max(16, songEndBar() + 8, songLoop.endBar + 1);
     const width = visibleBars * pixelsPerBar;
     zoomReadout.textContent = `${pixelsPerBar} px/bar`;
     const rulerRow = el("div", "wa-timeline-row wa-ruler-row");
@@ -347,7 +347,8 @@ export function buildSession(): SessionView {
       clips.append(loopRegion);
       const playhead = el("span", "wa-arrange-playhead"); playhead.style.left = `${songPos.bar * pixelsPerBar}px`; clips.append(playhead);
       arrangement[track].forEach((block) => {
-        const item = btn(`${SCENE_LABELS[block.scene]} · ${block.bars} bar${block.bars === 1 ? "" : "s"}`, "wa-chain-block");
+        const item = btn(SCENE_LABELS[block.scene], "wa-chain-block");
+        item.title = `Scene ${SCENE_LABELS[block.scene]} · ${block.bars} bar${block.bars === 1 ? "" : "s"}`;
         item.classList.remove("wa-btn");
         item.classList.toggle("active", block.id === selectedId);
         item.style.left = `${block.startBar * pixelsPerBar}px`;
@@ -379,7 +380,7 @@ export function buildSession(): SessionView {
       row.append(clips); chain.append(row);
     });
     audioTracks.forEach((track, trackIndex) => {
-      const row = el("div", "wa-arrange-lane wa-audio-lane");
+      const row = el("div", "wa-arrange-lane wa-audio-lane"); row.dataset.track = "audio";
       const name = btn("", "wa-arrange-lane-name"); name.classList.remove("wa-btn");
       name.append(el("span", "wa-track-colour"), el("span", "wa-arrange-track-number", String(ARRANGE_TRACKS.length + trackIndex + 1).padStart(2, "0")), el("strong", "wa-arrange-track-title", track.name), el("span", "wa-arrange-track-type", "AUDIO"));
       row.append(name);
@@ -447,7 +448,7 @@ export function buildSession(): SessionView {
   addBtn.addEventListener("click", addSelected); duplicateBtn.addEventListener("click", duplicateSelected); copyBtn.addEventListener("click", copySelected); pasteBtn.addEventListener("click", pasteSelected); splitBtn.addEventListener("click", splitSelected); deleteBtn.addEventListener("click", deleteSelected);
   const setZoom = (value: number) => { pixelsPerBar = Math.max(32, Math.min(112, value)); localStorage.setItem("vv_studio_timeline_zoom", String(pixelsPerBar)); paintChain(); };
   zoomOutBtn.addEventListener("click", () => setZoom(pixelsPerBar - 8)); zoomInBtn.addEventListener("click", () => setZoom(pixelsPerBar + 8));
-  fitBtn.addEventListener("click", () => { const visibleBars = Math.max(16, songEndBar() + 4, songLoop.endBar + 1); setZoom(Math.floor(Math.max(320, chain.clientWidth - 142) / visibleBars)); });
+  fitBtn.addEventListener("click", () => { const visibleBars = Math.max(16, songEndBar() + 8, songLoop.endBar + 1); setZoom(Math.floor(Math.max(320, chain.clientWidth - 142) / visibleBars)); });
   loopToggle.addEventListener("click", () => { songLoop.on = !songLoop.on; loopToggle.classList.toggle("active", songLoop.on); saveAll(); paintChain(); });
   const updateLoop = () => { songLoop.startBar = Math.max(0, Number(loopStart.value) - 1 || 0); songLoop.endBar = Math.max(songLoop.startBar + 1, Number(loopEnd.value) - 1 || songLoop.startBar + 8); loopStart.value = String(songLoop.startBar + 1); loopEnd.value = String(songLoop.endBar + 1); saveAll(); paintChain(); };
   loopStart.addEventListener("change", updateLoop); loopEnd.addEventListener("change", updateLoop);
@@ -538,6 +539,8 @@ export function buildSession(): SessionView {
   const libraryFold = el("details", "wa-fold") as HTMLDetailsElement;
   const librarySummary = el("summary", "wa-fold-head", "SONGS");
   libraryFold.append(librarySummary, songLibrary);
+  // Desktop: both sections stay open as a left inspector; phones keep them folded.
+  automationFold.open = libraryFold.open = window.matchMedia("(min-width: 701px) and (min-height: 541px)").matches;
   composer.append(composerHead, chain, automationFold, libraryFold); paintChain(); paintAutomation();
   window.addEventListener("vv-studio-tracks-change", () => { buildSessionGrid(); paintChain(); });
   const arrangeLanePaints: Array<() => void> = [paintChain];

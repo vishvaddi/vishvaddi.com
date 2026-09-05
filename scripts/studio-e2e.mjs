@@ -382,15 +382,16 @@ try {
   // ── S1: automation + song library fold shut by default ──
   await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Arrangement' }).click()
   await page.waitForTimeout(50)
-  check('song page: automation and library are folded',
+  // v5: on desktop both sections sit open as the arranger's left inspector.
+  check('song page: automation and library sit open in the inspector',
     await page.locator('.wa-composer').isVisible()
     && await page.locator('.wa-fold').count() === 2
-    && await page.evaluate(() => [...document.querySelectorAll('.wa-fold')].every((d) => !d.open)))
+    && await page.evaluate(() => [...document.querySelectorAll('.wa-fold')].every((d) => d.open)))
 
   // ── workflow: loading a song applies in place, no page restart ──
   page.on('dialog', (d) => d.accept())
   await page.evaluate(() => { window.__noReload = true })
-  await page.locator('.wa-fold-head', { hasText: 'SONGS' }).click()  // library folds shut by default (S1)
+  if (!(await page.locator('.wa-song-library select').isVisible())) await page.locator('.wa-fold-head', { hasText: 'SONGS' }).click()
   await page.selectOption('.wa-song-library select', 'factory:NEON HORIZON')
   await page.locator('.wa-song-library button', { hasText: 'Load' }).first().click()
   await page.waitForTimeout(700)
@@ -465,6 +466,7 @@ try {
   await page.locator('.wa-dj-deck-a .wa-dj-hotcue').first().click()
   check('dj: hot cue can be set', await page.locator('.wa-dj-deck-a .wa-dj-hotcue').first().evaluate((node) => node.classList.contains('set')))
   check('dj: local file is added to browser library', await page.locator('.wa-dj-library-row', { hasText: 'local-test.wav' }).count() === 1)
+  if ((await page.locator('.wa-dj').getAttribute('data-deck-view')) !== 'vinyl') await page.locator('.wa-dj-view-toggle').click()
   await page.locator('.wa-dj-deck-a .wa-dj-start').click()
   await page.waitForTimeout(120)
   const vinylTransformA = await page.locator('.wa-dj-deck-a .wa-dj-vinyl').evaluate((node) => getComputedStyle(node).transform)

@@ -11,7 +11,7 @@ const site = await serveBuiltSite(4411)
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'] })
 const clickIf = async (loc) => { if (await loc.count()) await loc.first().click() }
 const shots = [
-  ['pads', async (p) => { await p.locator('.wa-modekey[data-intent="make"]').click(); await p.locator('.wa-modekey[data-mode="pads"]').click(); await clickIf(p.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' })) }],
+  ['pads', async (p) => { await clickIf(p.locator('.wa-modekey[data-intent="make"]:visible')); await p.locator('.wa-modekey[data-mode="pads"]').click(); await clickIf(p.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' })) }],
   ['pads-sample', async (p) => { await clickIf(p.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Sample' })) }],
   ['drums', async (p) => { await p.locator('.wa-modekey[data-mode="drums"]').click() }],
   ['synth-notes', async (p) => { await p.locator('.wa-modekey[data-mode="synth"]').click(); await clickIf(p.locator('.wa-page-synth .wa-subtab', { hasText: 'Notes' })) }],

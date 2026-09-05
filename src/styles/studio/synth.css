@@ -1,1 +1,312 @@
-/* Studio v5 — synth mode. Consumes tokens.css + base.css only. */
+/* Studio v5 — synth mode. Consumes tokens.css + base.css only.
+   Notes: a Cubasis-style key editor — real key column, notes in the lane's
+   track colour, tool palette on the foot bar, the roll fills its aperture,
+   velocity lane fixed at 72 px. Sound: bank tabs then bank content; the VV-1
+   hero is the top half of the OSC banks, not a permanent layer. Properties:
+   Preset / Chords / Perform pane (a drawer on phones). Keyboard on demand.
+   Scroll owners: .wa-roll2-scroll, .wa-vpatch, .wa-synth-property-pane. */
+
+/* ── Page frame ──────────────────────────────────────────────────────── */
+.wa-page-synth { overflow: hidden; }
+.wa-page-synth > .wa-subtabs { flex: 0 0 auto; }
+.wa-page-synth > .wa-synth-main { flex: 1 1 0; min-height: 0; display: flex; gap: var(--wa-gap); overflow: hidden; }
+.wa-page-synth .wa-synth-viewhost { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.wa-page-synth .wa-synth-side {
+  flex: 0 0 var(--wa-inspector-w); width: var(--wa-inspector-w); min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; gap: var(--wa-gap-in); padding: var(--wa-pad);
+  background: var(--wa-surface); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius);
+  overflow: hidden; overscroll-behavior: contain;
+}
+.wa-page-synth .wa-properties-close { display: none; }
+.wa-page-synth .wa-synth-side > .wa-inspector-title { margin: 0; }
+.wa-page-synth .wa-property-tabs {
+  flex: 0 0 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; padding: 2px;
+  background: var(--wa-raised); border-radius: var(--wa-radius-sm);
+}
+.wa-page-synth .wa-synth-property-pane {
+  flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: var(--wa-gap-in);
+  overflow-y: auto; overscroll-behavior: contain;
+}
+
+/* knob labels are never clipped on this page */
+.wa-page-synth .wa-knob-row { min-width: calc(var(--wa-knob) + 16px); }
+.wa-page-synth .wa-knob-lbl { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.1; }
+
+/* ── Keyboard dock (on demand) ───────────────────────────────────────── */
+.wa-page-synth > .wa-keys-header {
+  flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: var(--wa-gap-in); padding: 4px 6px;
+  background: var(--wa-surface); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius);
+}
+.wa-page-synth .wa-keys-hint { white-space: nowrap; }
+.wa-page-synth .wa-grid-wrap { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+.wa-page-synth > .wa-keys-header .wa-status { font-family: var(--wa-mono); font-variant-numeric: tabular-nums; }
+.wa-page-synth > .wa-keys { flex: 0 0 auto; height: 120px; min-height: 0; }
+.wa-page-synth.keyboard-hidden > .wa-keys-header,
+.wa-page-synth.keyboard-hidden > .wa-keys { display: none; }
+
+/* ── Notes: piano roll ───────────────────────────────────────────────── */
+.wa-page-synth .wa-piano-roll {
+  flex: 1 1 0; min-height: 0; display: flex; flex-direction: column;
+  background: var(--wa-surface); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius); overflow: hidden;
+}
+.wa-page-synth .wa-roll-toolbar { flex: 0 0 auto; display: flex; align-items: center; gap: var(--wa-gap-in); min-width: 0; padding: 4px 6px; }
+.wa-page-synth .wa-roll-head { border-bottom: 1px solid var(--wa-border-soft); }
+.wa-page-synth .wa-roll-foot { border-top: 1px solid var(--wa-border-soft); }
+.wa-page-synth .wa-roll-spacer { flex: 1 1 8px; min-width: 4px; }
+.wa-page-synth .wa-roll-toolbar .wa-subtabs { min-height: 0; padding: 2px; gap: 2px; background: var(--wa-raised); border-color: transparent; }
+.wa-page-synth .wa-roll-toolbar .wa-subtab { min-height: 28px; padding: 0 10px; }
+.wa-page-synth .wa-roll-toolbar .wa-btn-sm { height: 28px; min-width: 28px; padding: 0 8px; }
+.wa-page-synth .wa-roll-toolbar select { height: 28px; }
+.wa-page-synth .wa-roll-lane::before { content: ""; width: 8px; height: 8px; margin-right: 6px; border-radius: 2px; background: var(--track-colour); opacity: 0.6; }
+.wa-page-synth .wa-roll-lane.active::before { opacity: 1; }
+.wa-page-synth .wa-roll-range { min-width: 6.5ch; text-align: center; font: 500 var(--wa-fs-xs)/1 var(--wa-mono); color: var(--wa-muted); font-variant-numeric: tabular-nums; }
+.wa-page-synth .wa-patternbar { display: flex; align-items: center; gap: 4px; }
+.wa-page-synth .wa-roll2-scroll {
+  position: relative; flex: 1 1 0; min-height: 0;
+  overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; background: var(--wa-screen);
+}
+.wa-page-synth .wa-roll2-canvas { display: block; width: 100%; touch-action: none; }
+.wa-page-synth .wa-roll-playhead { position: absolute; top: 0; right: 0; pointer-events: none; }
+.wa-page-synth .wa-roll-playhead-bar { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--wa-accent); display: none; }
+.wa-page-synth .wa-roll-playhead-bar.on { display: block; }
+.wa-page-synth .wa-roll2-vel { display: block; flex: 0 0 72px; width: 100%; height: 72px; border-top: 1px solid var(--wa-border); touch-action: none; }
+
+/* ── Sound: bank tabs, then bank content ─────────────────────────────── */
+.wa-page-synth .wa-sound-host { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.wa-page-synth .wa-sound-host > .wa-panel { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: var(--wa-gap-in); overflow: hidden; }
+.wa-page-synth .wa-synth-modebar { flex: 0 0 auto; display: flex; align-items: center; gap: var(--wa-gap-in); min-width: 0; }
+.wa-page-synth .wa-synth-bank-nav {
+  display: flex; gap: 2px; padding: 2px; min-width: 0; overflow-x: auto; overscroll-behavior: contain; scrollbar-width: none;
+  background: var(--wa-raised); border-radius: var(--wa-radius-sm);
+}
+.wa-page-synth .wa-synth-bank-nav::-webkit-scrollbar { display: none; }
+.wa-page-synth .wa-synth-bank-nav .wa-subtab { flex: 0 0 auto; min-height: 28px; }
+.wa-page-synth .wa-synth-modebar > .wa-btn-sm { flex: 0 0 auto; margin-left: auto; }
+.wa-page-synth .wa-vpatch {
+  flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-content: start; gap: var(--wa-gap);
+}
+
+/* bank cards */
+.wa-page-synth .wa-vblock {
+  min-width: 0; display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; gap: 4px 6px; padding: var(--wa-pad);
+  background: var(--wa-raised); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius);
+}
+.wa-page-synth .wa-vblock > .wa-fx-title { flex: 1 1 100%; margin: 0 0 2px; }
+.wa-page-synth .wa-vblock .wa-advanced-only { display: contents; }
+.wa-page-synth .wa-vblock .wa-knob-row { flex: 0 0 auto; }
+.wa-page-synth .wa-vblock .wa-wave-mini,
+.wa-page-synth .wa-vblock .wa-env-canvas,
+.wa-page-synth .wa-vblock .wa-lfo-canvas {
+  flex: 1 1 100%; display: block; width: 100%; height: 72px;
+  background: var(--wa-screen); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm); touch-action: none;
+}
+.wa-page-synth .wa-vblock .wa-waveselect { flex: 1 1 100%; display: flex; gap: 4px; }
+.wa-page-synth .wa-wbtn {
+  flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; height: var(--wa-control-h); padding: 0 6px;
+  color: var(--wa-muted); background: var(--wa-control); border: 1px solid var(--wa-border); border-radius: var(--wa-radius-sm); cursor: pointer;
+}
+.wa-page-synth .wa-wbtn svg { display: block; width: 22px; height: 14px; }
+.wa-page-synth .wa-wbtn path { fill: none; stroke: currentColor; stroke-width: 1.6; }
+.wa-page-synth .wa-wbtn:hover { color: var(--wa-text); background: var(--wa-control-hi); }
+.wa-page-synth .wa-wbtn.on { color: var(--wa-accent); background: var(--wa-accent-soft); border-color: var(--wa-accent-dim); }
+.wa-page-synth .wa-vblock .wa-slider-row:not(.wa-knob-row) { flex: 1 1 180px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.wa-page-synth .wa-vblock .wa-slider-row:not(.wa-knob-row) > .wa-lbl { flex: 0 0 auto; min-width: 52px; }
+.wa-page-synth .wa-vblock .wa-slider-row:not(.wa-knob-row) > select { flex: 1 1 auto; }
+.wa-page-synth .wa-vblock .wa-export { flex: 1 1 100%; display: flex; align-items: center; gap: 6px; }
+.wa-page-synth .wa-vblock .wa-export input { flex: 1 1 auto; }
+.wa-page-synth .wa-mod-badge { font: 600 var(--wa-fs-xs)/1 var(--wa-mono); color: var(--wa-muted); }
+.wa-page-synth .wa-mod-badge:empty { display: none; }
+.wa-page-synth .wa-mod-badge.active { color: var(--wa-text); }
+
+/* mod matrix — one line per slot: source › destination › amount */
+.wa-page-synth .wa-vmatrix { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 2px; }
+.wa-page-synth .wa-vmatrix-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 2px 0;
+  border-bottom: 1px solid var(--wa-border-soft);
+}
+.wa-page-synth .wa-vmatrix-row:last-child { border-bottom: 0; }
+.wa-page-synth .wa-vmatrix-row > .wa-lbl { text-align: center; }
+.wa-page-synth .wa-vmatrix-row select { width: 100%; }
+.wa-page-synth .wa-vmatrix-row .wa-knob-row { flex-direction: row; align-items: center; gap: 6px; min-width: 0; padding: 0; }
+.wa-page-synth .wa-vmatrix-row .wa-knob-val { min-width: 4.5ch; text-align: right; }
+
+/* Essentials: the quick box is the whole surface — head, hero, four modules */
+.wa-page-synth .wa-vpatch.wa-simple { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(auto, 1fr); align-content: stretch; }
+.wa-page-synth .wa-vpatch.wa-simple > [data-synth-bank] { display: none; }
+.wa-page-synth .wa-synth-quick {
+  grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: auto minmax(120px, 1fr) auto;
+  gap: var(--wa-gap); padding: 0; background: transparent; border: 0;
+}
+.wa-page-synth .wa-synth-quick-head { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.wa-page-synth .wa-synth-quick-head .wa-fx-title { margin: 0; }
+.wa-page-synth .wa-synth-signal { font: 500 var(--wa-fs-xs)/1 var(--wa-mono); color: var(--wa-faint); white-space: nowrap; }
+.wa-page-synth .wa-synth-hero-wrap {
+  grid-column: 1 / -1; position: relative; min-height: 120px;
+  background: var(--wa-screen); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm); overflow: hidden;
+}
+.wa-page-synth .wa-synth-hero { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.wa-page-synth .wa-synth-module {
+  min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--wa-knob) + 20px), 1fr)); grid-auto-rows: max-content;
+  align-content: start; justify-items: center; gap: 4px 6px; padding: var(--wa-pad);
+  background: var(--wa-raised); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius);
+}
+.wa-page-synth .wa-synth-module-title {
+  grid-column: 1 / -1; justify-self: stretch; padding-bottom: 6px; border-bottom: 1px solid var(--wa-border-soft);
+  font: 700 var(--wa-fs-xs)/1 var(--wa-font); color: var(--wa-muted); text-transform: uppercase; letter-spacing: 0.06em;
+}
+
+/* Advanced: only the open bank's cards; the hero rides on top of OSC banks */
+.wa-page-synth .wa-vpatch:not(.wa-simple) > .wa-synth-quick { display: none; }
+.wa-page-synth .wa-vpatch:not(.wa-simple)[data-bank^="osc"] > .wa-synth-quick { display: grid; grid-template-rows: auto clamp(120px, 30dvh, 280px); }
+.wa-page-synth .wa-vpatch:not(.wa-simple) .wa-synth-module { display: none; }
+.wa-page-synth .wa-vpatch:not(.wa-simple)[data-bank^="osc"] .wa-wave-mini { display: none; }
+.wa-page-synth .wa-vpatch:not(.wa-simple) > [data-synth-bank] { display: none; }
+.wa-page-synth .wa-vpatch:not(.wa-simple)[data-bank="osc1"] > [data-synth-bank="osc1"],
+.wa-page-synth .wa-vpatch:not(.wa-simple)[data-bank="osc2"] > [data-synth-bank="osc2"],
+.wa-page-synth .wa-vpatch:not(.wa-simple)[data-bank="osc3"] > [data-synth-bank="osc3"],
+.wa-page-synth .wa-vpatch:not(.wa-simple)[data-bank="noise"] > [data-synth-bank="noise"],
+.wa-page-synth .wa-vpatch:not(.wa-simple)[data-bank="filter"] > [data-synth-bank="filter"],
+.wa-page-synth .wa-vpatch:not(.wa-simple)[data-bank="envelopes"] > [data-synth-bank="envelopes"],
+.wa-page-synth .wa-vpatch:not(.wa-simple)[data-bank="lfo"] > [data-synth-bank="lfo"],
+.wa-page-synth .wa-vpatch:not(.wa-simple)[data-bank="matrix"] > [data-synth-bank="matrix"] { display: flex; }
+.wa-page-synth .wa-vpatch:not(.wa-simple)[data-bank^="osc"] > [data-synth-bank],
+.wa-page-synth .wa-vpatch:not(.wa-simple)[data-bank="noise"] > [data-synth-bank],
+.wa-page-synth .wa-vpatch:not(.wa-simple)[data-bank="matrix"] > [data-synth-bank] { grid-column: 1 / -1; }
+
+/* ── Properties: Preset ──────────────────────────────────────────────── */
+.wa-page-synth .wa-synth-preset-pane .wa-export { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.wa-page-synth .wa-preset-search { flex: 1 1 100%; width: 100%; }
+.wa-page-synth .wa-preset-categories { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 4px; }
+.wa-page-synth .wa-preset-categories .wa-btn-sm { height: 26px; padding: 0 8px; font-size: var(--wa-fs-xs); }
+.wa-page-synth .wa-synth-preset-pane .wa-export > .wa-lbl { flex: 1 1 100%; }
+.wa-page-synth .wa-synth-preset-pane .wa-export > select { flex: 1 1 100%; }
+.wa-page-synth .wa-synth-preset-pane .wa-export > .wa-btn-sm { flex: 1 1 calc(50% - 6px); }
+
+/* ── Properties: Chords / Perform cards ──────────────────────────────── */
+.wa-page-synth .wa-xy-wrap {
+  display: flex; flex-direction: column; gap: var(--wa-gap-in); padding: var(--wa-pad);
+  background: var(--wa-raised); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius);
+}
+.wa-page-synth .wa-xy-wrap > .wa-fx-title { margin: 0; }
+.wa-page-synth .wa-performance-hint { font: 500 var(--wa-fs-xs)/1.3 var(--wa-mono); color: var(--wa-faint); }
+.wa-page-synth .wa-performance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; align-items: end; }
+.wa-page-synth .wa-performance-grid .wa-slider-row:not(.wa-knob-row) { display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; }
+.wa-page-synth .wa-performance-grid .wa-slider-row:not(.wa-knob-row) > select { width: 100%; }
+.wa-page-synth .wa-performance-grid .wa-knob-row { justify-self: center; }
+.wa-page-synth .wa-performance-divider { height: 1px; background: var(--wa-border-soft); }
+.wa-page-synth .wa-chords { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.wa-page-synth .wa-chords .wa-btn-sm { width: 100%; padding: 0 4px; }
+.wa-page-synth .wa-field-modes { display: flex; gap: 4px; }
+.wa-page-synth .wa-field-modes .wa-btn-sm { flex: 1 1 0; }
+.wa-page-synth .wa-xy-field {
+  position: relative; aspect-ratio: 1; max-height: 260px; cursor: crosshair; overflow: hidden; touch-action: none;
+  background:
+    linear-gradient(var(--wa-border-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--wa-border-soft) 1px, transparent 1px),
+    var(--wa-screen);
+  background-size: 25% 25%, 25% 25%, auto;
+  border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm);
+}
+.wa-page-synth .wa-xy-dot { position: absolute; width: 14px; height: 14px; margin: -7px; border-radius: 50%; background: var(--track-colour); border: 2px solid var(--wa-text); pointer-events: none; }
+.wa-page-synth .wa-xy-field.orbiting .wa-xy-dot { outline: 2px solid var(--wa-accent); outline-offset: 2px; }
+.wa-page-synth .wa-xy-readout { font: 500 var(--wa-fs-xs)/1.3 var(--wa-mono); color: var(--wa-muted); text-align: center; }
+.wa-page-synth .wa-xy-perf { display: flex; gap: 6px; }
+.wa-page-synth .wa-xy-perf .wa-btn-sm { flex: 1 1 0; }
+.wa-page-synth .wa-silence { color: var(--wa-rec); border-color: color-mix(in srgb, var(--wa-rec) 40%, var(--wa-border)); }
+.wa-page-synth .wa-bandscan { position: relative; aspect-ratio: 1; max-height: 260px; outline: none; border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm); overflow: hidden; }
+.wa-page-synth .wa-bandscan:focus-visible { border-color: var(--wa-accent); }
+.wa-page-synth .wa-bandscan-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
+.wa-page-synth .wa-bandscan-tools { position: absolute; top: 6px; right: 6px; }
+.wa-page-synth .wa-scope-head { display: flex; align-items: center; gap: 4px; }
+.wa-page-synth .wa-scope-head .wa-fx-title { flex: 1 1 auto; margin: 0; }
+.wa-page-synth .wa-scope,
+.wa-page-synth .wa-orb { display: block; width: 100%; height: 110px; background: var(--wa-screen); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm); }
+
+/* ── Tablet / narrow desktop ─────────────────────────────────────────── */
+@media (max-width: 1180px) and (min-width: 701px) {
+  .wa-page-synth .wa-synth-side { flex-basis: 240px; width: 240px; }
+}
+
+/* ── Touch targets ───────────────────────────────────────────────────── */
+@media (pointer: coarse) {
+  .wa-page-synth > .wa-subtabs { min-height: 52px; }
+  .wa-page-synth > .wa-subtabs > .wa-subtab,
+  .wa-page-synth > .wa-subtabs > .wa-btn-sm,
+  .wa-page-synth .wa-roll-toolbar .wa-subtab,
+  .wa-page-synth .wa-roll-toolbar .wa-btn-sm,
+  .wa-page-synth .wa-roll-toolbar select,
+  .wa-page-synth .wa-synth-bank-nav .wa-subtab,
+  .wa-page-synth .wa-synth-modebar .wa-btn-sm,
+  .wa-page-synth .wa-property-tabs .wa-subtab,
+  .wa-page-synth > .wa-keys-header .wa-btn-sm,
+  .wa-page-synth > .wa-keys-header select,
+  .wa-page-synth .wa-wbtn { min-height: var(--wa-touch); }
+}
+
+/* ── Phone portrait ──────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .wa-page-synth > .wa-subtabs { gap: 3px; padding: 3px; }
+  .wa-page-synth > .wa-subtabs > .wa-subtab { padding: 0 8px; }
+  .wa-page-synth > .wa-subtabs > .wa-btn-sm { padding: 0 6px; font-size: var(--wa-fs-xs); }
+  .wa-page-synth .wa-synth-side { display: none; }
+  .wa-page-synth.show-inspector .wa-synth-side {
+    display: flex; position: fixed; left: 6px; right: 6px; bottom: calc(var(--wa-dock-h) + 6px); z-index: 170;
+    width: auto; max-height: min(64dvh, 540px);
+    background: var(--wa-raised); border-color: var(--wa-border); box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.6);
+  }
+  .wa-page-synth.show-inspector .wa-properties-close { display: inline-flex; align-self: flex-end; }
+  .wa-page-synth .wa-roll-toolbar { flex-wrap: wrap; }
+  .wa-page-synth .wa-roll-lanes,
+  .wa-page-synth .wa-roll-tools { flex: 1 1 100%; }
+  .wa-page-synth .wa-roll-lanes .wa-subtab,
+  .wa-page-synth .wa-roll-tools .wa-subtab { flex: 1 1 0; }
+  .wa-page-synth .wa-vpatch { grid-template-columns: minmax(0, 1fr); }
+  .wa-page-synth .wa-synth-quick { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wa-page-synth > .wa-keys { height: 96px; }
+}
+
+/* ── Touch landscape: 390 px tall — compact chrome, side pane as a sheet ── */
+@media (max-height: 540px) and (pointer: coarse) {
+  .wa-page-synth > .wa-subtabs { min-height: 36px; padding: 2px 4px; }
+  .wa-page-synth > .wa-subtabs > .wa-subtab,
+  .wa-page-synth > .wa-subtabs > .wa-btn-sm { min-height: 32px; padding: 0 8px; font-size: var(--wa-fs-xs); }
+  .wa-page-synth .wa-roll-toolbar .wa-subtab,
+  .wa-page-synth .wa-roll-toolbar .wa-btn-sm,
+  .wa-page-synth .wa-roll-toolbar select,
+  .wa-page-synth .wa-synth-bank-nav .wa-subtab,
+  .wa-page-synth .wa-synth-modebar .wa-btn-sm,
+  .wa-page-synth .wa-property-tabs .wa-subtab,
+  .wa-page-synth > .wa-keys-header .wa-btn-sm,
+  .wa-page-synth > .wa-keys-header select,
+  .wa-page-synth .wa-wbtn { min-height: 32px; }
+  .wa-page-synth .wa-roll-toolbar { flex-wrap: wrap; padding: 2px 4px; }
+  .wa-page-synth .wa-synth-side { display: none; }
+  .wa-page-synth.show-inspector .wa-synth-side {
+    display: flex; position: fixed; top: calc(var(--wa-appbar-h) + 4px); right: 4px; bottom: 4px; left: auto; z-index: 170;
+    width: min(360px, 60vw); max-height: none;
+    background: var(--wa-raised); border-color: var(--wa-border); box-shadow: -12px 0 40px rgba(0, 0, 0, 0.6);
+  }
+  .wa-page-synth.show-inspector .wa-properties-close { display: inline-flex; align-self: flex-end; }
+  .wa-page-synth > .wa-keys-header { padding: 2px 6px; gap: 4px; }
+  .wa-page-synth > .wa-keys { height: 64px; }
+  .wa-page-synth .wa-synth-quick { grid-template-rows: auto minmax(64px, 1fr) auto; }
+  .wa-page-synth .wa-synth-hero-wrap { min-height: 64px; }
+  .wa-page-synth .wa-vpatch:not(.wa-simple)[data-bank^="osc"] > .wa-synth-quick { grid-template-rows: auto 96px; }
+  .wa-page-synth .wa-vblock .wa-wave-mini,
+  .wa-page-synth .wa-vblock .wa-env-canvas,
+  .wa-page-synth .wa-vblock .wa-lfo-canvas { height: 56px; }
+  .wa-page-synth .wa-scope,
+  .wa-page-synth .wa-orb { height: 80px; }
+}
+
+/* Essentials fills its aperture: the wavetable display takes the spare height
+   instead of leaving a void between it and the module cards. */
+@media (min-width: 701px) and (min-height: 541px) {
+  .wa-page-synth .wa-vpatch.wa-simple { flex: 1 1 0; height: auto; display: flex; flex-direction: column; min-height: 0; }
+  .wa-page-synth .wa-vpatch.wa-simple > .wa-synth-quick { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+  .wa-page-synth .wa-vpatch.wa-simple .wa-synth-hero-wrap { height: 100%; }
+}
+@media (max-height: 540px) and (pointer: coarse) {
+  .wa-page-synth .wa-roll2-vel { flex-basis: 40px; height: 40px; }
+}

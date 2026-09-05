@@ -1,1 +1,242 @@
-/* Studio v5 — pads mode. Consumes tokens.css + base.css only. */
+/* Studio v5 — pads mode. Consumes tokens.css + base.css only.
+   Play: one icon-toggle row · 4×4 deck tinted per pad · selected-pad inspector
+   on the right · pad sequencer dock below (Pads / All steps). Sample: one-shot
+   editor as a 4-column knob grid with segmented toggles, layers beside it, or
+   the break chopper. The page never scrolls; each region owns its overflow. */
+
+/* ── Page frame ──────────────────────────────────────────────────────── */
+.wa-page-pads { overflow: hidden; }
+.wa-page-pads .wa-beat-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--wa-gap); }
+.wa-page-pads .wa-beat-tabs { flex: 0 0 auto; }
+.wa-page-pads .wa-beat-controls-toggle { display: none; }
+.wa-page-pads .wa-beat-view { flex: 1 1 auto; min-height: 0; height: 100%; }
+
+/* ── Play view: deck panel over the sequencer dock ───────────────────── */
+.wa-page-pads .wa-beat-play { display: grid; grid-template-rows: minmax(0, 1fr) minmax(176px, 30%); gap: var(--wa-gap); }
+.wa-win.wa-device-hidden .wa-page-pads .wa-beat-play { grid-template-rows: minmax(0, 1fr); }
+.wa-page-pads .wa-mpc-panel { display: grid; grid-template-columns: minmax(0, 1fr) var(--wa-inspector-w); gap: var(--wa-gap); overflow: hidden; }
+.wa-win.wa-inspector-hidden .wa-page-pads .wa-mpc-panel { grid-template-columns: minmax(0, 1fr); }
+.wa-page-pads .wa-mpc-deck { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--wa-gap); }
+
+/* toggle row — performance essentials in one strip above the deck; pattern
+   tools sit behind More (layout.ts toggles .condensed) */
+.wa-page-pads .wa-mpc-side { order: -1; flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: var(--wa-gap-in); }
+.wa-page-pads .wa-beat-controls-close { display: none; }
+.wa-page-pads .wa-pad-view-toggle { display: flex; gap: 2px; padding: 2px; background: var(--wa-canvas); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm); }
+.wa-page-pads .wa-pad-view-toggle .wa-subtab { min-height: 26px; padding: 0 10px; }
+.wa-page-pads .wa-mpc-toolbar { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--wa-gap-in); }
+.wa-page-pads .wa-mpc-toolbar > .wa-btn-sm { flex-direction: column; gap: 2px; min-width: 52px; padding: 0 8px; }
+.wa-page-pads .wa-mpc-ico { font-size: var(--wa-fs-sm); line-height: 1; }
+.wa-page-pads .wa-mpc-ico-lbl { font: 600 var(--wa-fs-xs)/1 var(--wa-font); }
+.wa-page-pads .wa-mpc-toolbar > select { width: auto; }
+.wa-page-pads .wa-mpc-toolbar > .wa-status { margin-left: auto; white-space: nowrap; }
+.wa-page-pads .wa-mpc-side.condensed .wa-mpc-toolbar > :nth-child(n+10):not(.wa-status) { display: none; }
+.wa-page-pads .wa-mpc-rec.active { color: var(--wa-rec); border-color: var(--wa-rec); background: color-mix(in srgb, var(--wa-rec) 16%, transparent); }
+.wa-page-pads .wa-side-more { flex: 0 0 auto; }
+
+/* deck */
+.wa-page-pads .wa-mpc-pad-area { flex: 1 1 auto; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--wa-gap); }
+.wa-page-pads .wa-pad-banks { min-height: 34px; padding: 3px 4px; }
+.wa-page-pads .wa-pad-banks > .wa-lbl { padding: 0 6px 0 4px; }
+.wa-page-pads .wa-pad-banks .wa-subtab { flex: 0 0 auto; min-width: 48px; min-height: 26px; }
+.wa-page-pads .wa-mpc-pads {
+  min-height: 0; display: grid; gap: var(--wa-gap);
+  grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr));
+}
+.wa-page-pads .wa-mpc-pad {
+  --wa-hit: 1;
+  position: relative; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start;
+  min-width: 0; min-height: 0; padding: 8px 10px; text-align: left;
+  color: var(--wa-text);
+  background: color-mix(in srgb, var(--track-colour) 16%, var(--wa-control));
+  border: 1px solid color-mix(in srgb, var(--track-colour) 40%, var(--wa-border));
+  border-radius: var(--wa-radius);
+  cursor: pointer; touch-action: none;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.wa-page-pads .wa-mpc-pad:hover { background: color-mix(in srgb, var(--track-colour) 24%, var(--wa-control)); }
+.wa-page-pads .wa-mpc-pad.selected { border-color: var(--wa-accent); box-shadow: inset 0 0 0 2px var(--wa-accent); }
+.wa-page-pads .wa-mpc-pad.down,
+.wa-page-pads .wa-mpc-pad:active {
+  background: color-mix(in srgb, var(--track-colour) calc(38% + var(--wa-hit) * 62%), var(--wa-control));
+  border-color: var(--track-colour); color: var(--wa-canvas); transition: none;
+}
+.wa-page-pads .wa-mpc-pad.down .wa-mpc-pad-number,
+.wa-page-pads .wa-mpc-pad:active .wa-mpc-pad-number { color: var(--wa-canvas); }
+.wa-page-pads .wa-mpc-pad.drop { border-style: dashed; border-color: var(--wa-warn); }
+.wa-page-pads .wa-mpc-pad-number { font: 700 var(--wa-fs-lg)/1 var(--wa-mono); color: var(--track-colour); font-variant-numeric: tabular-nums; }
+.wa-page-pads .wa-mpc-pad-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 var(--wa-fs-sm)/1.2 var(--wa-font); }
+
+/* ── Selected-pad inspector (Play: right column · Sample: inside the card) ── */
+.wa-page-pads .wa-mpc-panel > .wa-inspector { min-height: 0; background: var(--wa-raised); }
+.wa-page-pads .wa-inspector > .wa-status { font-size: var(--wa-fs-sm); color: var(--wa-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wa-page-pads .wa-selected-sample { display: flex; flex-direction: column; gap: var(--wa-gap); min-width: 0; }
+.wa-page-pads .wa-load-selected { width: 100%; }
+.wa-page-pads .wa-sample-knobs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; }
+.wa-page-pads .wa-sample-knobs .wa-knob-row { min-width: 0; padding: 4px 0; }
+.wa-page-pads .wa-knob-lbl { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.1; }
+.wa-page-pads .wa-sample-toggles { display: flex; gap: 2px; padding: 2px; background: var(--wa-canvas); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm); }
+.wa-page-pads .wa-sample-toggles .wa-toggle { flex: 1 1 0; min-width: 0; padding: 0 4px; background: transparent; border-color: transparent; }
+.wa-page-pads .wa-sample-toggles .wa-toggle:hover { background: var(--wa-raised); border-color: transparent; }
+.wa-page-pads .wa-sample-toggles .wa-toggle.active { color: var(--wa-accent); background: var(--wa-accent-soft); border-color: transparent; }
+.wa-page-pads .wa-pad-layers { display: flex; flex-direction: column; gap: var(--wa-gap-in); padding-top: var(--wa-gap); border-top: 1px solid var(--wa-border-soft); }
+.wa-page-pads .wa-pad-layers > .wa-fx-title { margin: 0; }
+.wa-page-pads .wa-pad-layers > select { width: 100%; }
+.wa-page-pads .wa-pad-layer-rows { display: flex; flex-direction: column; gap: var(--wa-gap-in); }
+.wa-page-pads .wa-pad-layer-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 6px; background: var(--wa-control); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm); }
+.wa-page-pads .wa-pad-layer-row .wa-sample-name { flex: 1 0 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: var(--wa-fs-sm); }
+.wa-page-pads .wa-pad-layer-row .wa-vel-in { width: 54px; height: 28px; padding: 0 6px; }
+.wa-page-pads .wa-pad-layer-row .wa-knob-row { padding: 0; min-width: 0; }
+.wa-page-pads .wa-pad-layer-row > .wa-btn-sm { margin-left: auto; }
+
+/* ── Pad sequencer dock ──────────────────────────────────────────────── */
+.wa-page-pads .wa-beat-play > .wa-device-dock {
+  min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--wa-gap-in) var(--wa-gap); overflow: hidden;
+}
+.wa-page-pads .wa-pad-sequence-head { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--wa-gap); }
+.wa-page-pads .wa-event-grid { grid-column: 1; grid-row: 2; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 2px; overflow: auto; overscroll-behavior: contain; }
+.wa-page-pads .wa-step-ruler,
+.wa-page-pads .wa-event-grid > .wa-row { display: flex; align-items: stretch; gap: 2px; min-width: 560px; }
+.wa-page-pads .wa-step-ruler { position: sticky; top: 0; z-index: 1; padding-bottom: 2px; background: var(--wa-surface); }
+.wa-page-pads .wa-ruler-spacer,
+.wa-page-pads .wa-event-row-label { flex: 0 0 112px; }
+.wa-page-pads .wa-step-tick { flex: 1 1 0; min-width: 22px; text-align: center; font: 500 var(--wa-fs-xs)/1.4 var(--wa-mono); color: var(--wa-faint); }
+.wa-page-pads .wa-step-tick.major { color: var(--wa-muted); }
+.wa-page-pads .wa-event-row-label {
+  display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 6px;
+  overflow: hidden; white-space: nowrap; font: 600 var(--wa-fs-xs)/1 var(--wa-font); color: var(--wa-muted);
+  border-radius: var(--wa-radius-sm); cursor: pointer;
+}
+.wa-page-pads .wa-event-row-label::before { content: ""; flex: 0 0 auto; width: 8px; height: 8px; border-radius: 2px; background: var(--track-colour); }
+.wa-page-pads .wa-row.selected .wa-event-row-label { color: var(--wa-text); background: var(--wa-control); }
+.wa-page-pads .wa-event-cell {
+  flex: 1 1 0; min-width: 22px; height: 22px; padding: 0;
+  background: var(--wa-control); border: 1px solid var(--wa-border-soft); border-radius: 3px; cursor: pointer;
+}
+/* 4-step group shading: cells are children 2–17 of the row */
+.wa-page-pads .wa-event-cell:nth-child(n+6):nth-child(-n+9),
+.wa-page-pads .wa-event-cell:nth-child(n+14):nth-child(-n+17) { background: var(--wa-raised); }
+.wa-page-pads .wa-event-cell:hover { border-color: var(--wa-muted); }
+.wa-page-pads .wa-row.selected .wa-event-cell { border-color: var(--wa-border); }
+.wa-page-pads .wa-event-cell.on { background: var(--track-colour); border-color: var(--track-colour); opacity: calc(0.4 + var(--wa-vel, 1) * 0.6); }
+.wa-page-pads .wa-event-editor { grid-column: 2; grid-row: 2; display: flex; align-items: flex-start; gap: 2px; padding-left: var(--wa-gap); border-left: 1px solid var(--wa-border-soft); }
+.wa-page-pads .wa-event-editor .wa-knob-row { padding: 0 2px; }
+
+/* All steps: the 16-lane sequencer replaces the performance surface */
+.wa-page-pads .wa-beat-play:has(> .wa-device-dock[data-sequence-view="all"]) { grid-template-rows: minmax(0, 1fr); }
+.wa-page-pads .wa-beat-play:has(> .wa-device-dock[data-sequence-view="all"]) > .wa-mpc-panel { display: none; }
+.wa-page-pads .wa-device-dock[data-sequence-view="all"] .wa-event-grid > .wa-row { flex: 1 1 0; min-height: 22px; }
+.wa-page-pads .wa-device-dock[data-sequence-view="all"] .wa-event-cell { height: auto; min-height: 22px; }
+
+/* ── Sample view ─────────────────────────────────────────────────────── */
+.wa-page-pads .wa-beat-sample { display: flex; flex-direction: column; gap: var(--wa-gap); overflow-y: auto; overscroll-behavior: contain; }
+.wa-page-pads .wa-sample-tabs { flex: 0 0 auto; display: flex; gap: 2px; width: fit-content; padding: 2px; background: var(--wa-surface); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm); }
+.wa-page-pads .wa-beat-sample > .wa-sample-card { flex: 1 0 auto; }
+.wa-page-pads .wa-sample-card > .wa-inspector { padding: 0; border: 0; background: transparent; overflow: visible; }
+.wa-page-pads .wa-beat-sample .wa-selected-sample {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 0.6fr); grid-template-rows: auto auto auto auto;
+  gap: var(--wa-gap) calc(var(--wa-gap) * 3); align-items: start;
+}
+.wa-page-pads .wa-beat-sample .wa-sample-primary { grid-column: 1; }
+.wa-page-pads .wa-beat-sample .wa-load-selected { grid-column: 1; width: auto; min-width: 200px; justify-self: start; }
+.wa-page-pads .wa-beat-sample .wa-sample-knobs { grid-column: 1; grid-template-columns: repeat(4, minmax(72px, 104px)); }
+.wa-page-pads .wa-beat-sample .wa-sample-toggles { grid-column: 1; max-width: 440px; }
+.wa-page-pads .wa-beat-sample .wa-pad-layers { grid-column: 2; grid-row: 1 / 5; padding: 0 0 0 calc(var(--wa-gap) * 2); border-top: 0; border-left: 1px solid var(--wa-border-soft); }
+
+/* chop card */
+.wa-page-pads .wa-break-card { display: flex; flex-direction: column; gap: var(--wa-gap); }
+.wa-page-pads .wa-break-card > .wa-fx-title { margin: 0; }
+.wa-page-pads .wa-break-card > .wa-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--wa-gap); padding: 0; border: 0; background: transparent; }
+.wa-page-pads .wa-chop-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--wa-gap-in); }
+.wa-page-pads .wa-chop-toolbar > .wa-status { flex: 1 1 100%; }
+.wa-page-pads .wa-chop-stage { position: relative; flex: 1 1 auto; min-height: 180px; max-height: 420px; background: var(--wa-screen); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius); overflow: hidden; }
+.wa-page-pads .wa-waveform { display: block; width: 100%; height: 100%; }
+.wa-page-pads .wa-chop-empty {
+  position: absolute; inset: var(--wa-gap); height: auto; min-height: 0; padding: var(--wa-pad);
+  color: var(--wa-muted); background: transparent; border: 1px dashed var(--wa-border); border-radius: var(--wa-radius);
+  font-weight: 500; white-space: normal;
+}
+.wa-page-pads .wa-chop-empty:hover { color: var(--wa-text); border-color: var(--wa-accent); background: var(--wa-accent-soft); }
+.wa-page-pads .wa-break-card .wa-help { margin: 0; font-size: var(--wa-fs-xs); line-height: 1.5; color: var(--wa-muted); }
+
+/* ── Touch ───────────────────────────────────────────────────────────── */
+@media (pointer: coarse) {
+  .wa-page-pads .wa-beat-tabs > button,
+  .wa-page-pads .wa-sample-tabs > button,
+  .wa-page-pads .wa-pad-banks .wa-subtab,
+  .wa-page-pads .wa-pad-view-toggle .wa-subtab,
+  .wa-page-pads .wa-sample-toggles .wa-toggle,
+  .wa-page-pads .wa-load-selected,
+  .wa-page-pads .wa-pad-layers select,
+  .wa-page-pads .wa-chop-toolbar > button,
+  .wa-page-pads .wa-chop-toolbar > select { min-height: var(--wa-touch); }
+  .wa-page-pads .wa-event-cell { min-width: 34px; height: 34px; }
+  .wa-page-pads .wa-mpc-pad { min-height: 72px; }
+}
+
+/* ── Phone portrait: the play view scrolls; controls open as a drawer ── */
+@media (max-width: 700px) {
+  .wa-page-pads .wa-beat-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; }
+  .wa-page-pads .wa-beat-tabs > button { width: 100%; min-height: var(--wa-touch); padding: 0 6px; }
+  .wa-page-pads .wa-beat-tabs .wa-toolbar-spacer,
+  .wa-page-pads .wa-beat-tabs .wa-edit-pattern { display: none; }
+  .wa-page-pads .wa-beat-controls-toggle { display: inline-flex; }
+  .wa-page-pads .wa-beat-play { display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
+  .wa-page-pads .wa-mpc-panel { flex: 0 0 auto; display: flex; flex-direction: column; overflow: visible; }
+  .wa-page-pads .wa-mpc-side { display: none; }
+  .wa-page-pads .wa-mpc-deck,
+  .wa-page-pads .wa-mpc-pad-area { flex: 0 0 auto; }
+  .wa-page-pads .wa-mpc-pads { grid-template-rows: none; aspect-ratio: 1; width: 100%; }
+  .wa-page-pads .wa-mpc-panel > .wa-inspector { overflow: visible; }
+  .wa-page-pads .wa-beat-play > .wa-device-dock { flex: 0 0 auto; display: flex; flex-direction: column; overflow: visible; }
+  .wa-page-pads .wa-event-grid { max-height: 320px; }
+  .wa-page-pads .wa-event-editor { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: var(--wa-gap) 0 0; border-left: 0; border-top: 1px solid var(--wa-border-soft); }
+  .wa-page-pads .wa-beat-play:has(> .wa-device-dock[data-sequence-view="all"]) { overflow: hidden; }
+  .wa-page-pads .wa-device-dock[data-sequence-view="all"] { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  .wa-page-pads .wa-device-dock[data-sequence-view="all"] .wa-event-grid { flex: 1 1 auto; max-height: none; }
+  .wa-page-pads .wa-beat-sample .wa-selected-sample { display: flex; align-items: stretch; }
+  .wa-page-pads .wa-beat-sample .wa-load-selected { width: 100%; }
+  .wa-page-pads .wa-beat-sample .wa-sample-knobs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .wa-page-pads .wa-beat-sample .wa-sample-toggles { max-width: none; }
+  .wa-page-pads .wa-beat-sample .wa-pad-layers { padding: var(--wa-gap) 0 0; border-left: 0; border-top: 1px solid var(--wa-border-soft); }
+  .wa-page-pads .wa-chop-stage { min-height: 150px; }
+}
+
+/* controls drawer (phone + touch landscape) */
+@media (max-width: 700px), (max-height: 540px) and (pointer: coarse) {
+  .wa-page-pads.show-controls .wa-mpc-side {
+    position: fixed; z-index: 185; display: flex; flex-direction: column; align-items: stretch; gap: var(--wa-gap);
+    padding: var(--wa-pad); overflow-y: auto; overscroll-behavior: contain;
+    background: var(--wa-raised); border: 1px solid var(--wa-border); border-radius: var(--wa-radius);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  }
+  .wa-page-pads.show-controls .wa-beat-controls-close { display: inline-flex; order: 99; flex: 0 0 auto; min-height: var(--wa-touch); }
+  .wa-page-pads.show-controls .wa-mpc-toolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--wa-gap-in); }
+  .wa-page-pads.show-controls .wa-mpc-toolbar > * { width: 100%; min-height: var(--wa-touch); }
+  .wa-page-pads.show-controls .wa-mpc-toolbar > .wa-status { grid-column: 1 / -1; min-height: 0; margin: 0; white-space: normal; }
+  .wa-page-pads.show-controls .wa-side-more { min-height: var(--wa-touch); }
+}
+@media (max-width: 700px) {
+  .wa-page-pads.show-controls .wa-mpc-side { left: 6px; right: 6px; bottom: calc(var(--wa-dock-h) + 6px); max-height: min(60dvh, 470px); }
+}
+
+/* ── Touch landscape: deck beside the dock, controls drawer from the right ── */
+@media (max-height: 540px) and (pointer: coarse) {
+  .wa-page-pads .wa-beat-controls-toggle { display: inline-flex; }
+  .wa-page-pads .wa-beat-tabs > button { min-height: 36px; }
+  .wa-page-pads .wa-beat-play { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: none; overflow-y: auto; overscroll-behavior: contain; }
+  .wa-page-pads .wa-mpc-panel { display: flex; flex-direction: column; overflow: visible; }
+  .wa-page-pads .wa-mpc-side { display: none; }
+  .wa-page-pads.show-controls .wa-mpc-side { top: calc(var(--wa-appbar-h) + 6px); right: 6px; bottom: 6px; left: auto; width: min(440px, 56vw); }
+  .wa-page-pads .wa-mpc-deck,
+  .wa-page-pads .wa-mpc-pad-area { flex: 0 0 auto; }
+  .wa-page-pads .wa-mpc-pads { grid-template-rows: repeat(4, minmax(72px, 1fr)); }
+  .wa-page-pads .wa-mpc-panel > .wa-inspector { overflow: visible; }
+  .wa-page-pads .wa-beat-play > .wa-device-dock { align-self: stretch; display: flex; flex-direction: column; overflow: hidden; max-height: none; }
+  .wa-page-pads .wa-event-grid { flex: 1 1 auto; }
+  .wa-page-pads .wa-event-editor { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: var(--wa-gap) 0 0; border-left: 0; border-top: 1px solid var(--wa-border-soft); }
+  .wa-page-pads .wa-beat-play:has(> .wa-device-dock[data-sequence-view="all"]) { grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+  .wa-page-pads .wa-device-dock[data-sequence-view="all"] { min-height: 0; }
+  .wa-page-pads .wa-chop-stage { min-height: 140px; }
+}

@@ -160,7 +160,7 @@ export async function initStudio(): Promise<void> {
   const swingIn = document.createElement("input");
   swingIn.type = "range"; swingIn.min = "0"; swingIn.max = "0.6"; swingIn.step = "0.02"; swingIn.value = "0"; swingIn.className = "wa-swing-in";
   const swingWrap = el("span", "wa-swing"); swingWrap.append(el("span", "wa-lbl", "Swing"), swingIn);
-  const metroBtn = btn("Metro", "wa-toggle"), songBtn = btn(transport.songMode ? "Song" : "Pattern", "wa-toggle");
+  const metroBtn = btn("Metro", "wa-btn-sm wa-metro"), songBtn = btn(transport.songMode ? "Song" : "Pattern", "wa-toggle");
   const countBtn = btn("Count-in", "wa-toggle");
   let countIn = localStorage.getItem("vv_studio_countin") === "1";
   countBtn.classList.toggle("active", countIn);
@@ -207,7 +207,12 @@ export async function initStudio(): Promise<void> {
   const transportTiming = el("div", "wa-transport-timing");
   transportTiming.append(swingWrap, metroVolIn, countBtn);
   const transportActions = el("div", "wa-transport-actions");
-  transportActions.append(tutorialBtn);
+  // Phone-only proxies: the core row cannot hold metronome and save at 390px,
+  // so the ⋯ sheet carries stand-ins that drive the real buttons.
+  const metroProxy = btn("Metronome", "wa-btn-sm wa-transport-proxy"), saveProxy = btn("Save / export", "wa-btn-sm wa-transport-proxy");
+  metroProxy.addEventListener("click", () => { metroBtn.click(); metroProxy.classList.toggle("active", metroBtn.classList.contains("active")); });
+  saveProxy.addEventListener("click", () => exportBtn.click());
+  transportActions.append(metroProxy, saveProxy, tutorialBtn);
   const transportMore = btn("⋯", "wa-btn-sm wa-transport-more");
   transportMore.setAttribute("aria-label", "More transport tools");
   transportMore.setAttribute("aria-expanded", "false");

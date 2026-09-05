@@ -35,3 +35,6 @@ pnpm-debug.log*
 /*.tiff
 /screenshot*
 /Pasted*
+
+# agent worktrees (Claude Code)
+.claude/worktrees/

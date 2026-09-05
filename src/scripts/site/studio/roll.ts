@@ -1,10 +1,12 @@
 // Piano roll v2 — a Cubase-Key-Editor-style canvas editor (Studio v2 C3).
-// One canvas for the note grid (key gutter drawn in), a velocity lane below,
+// One canvas for the note grid (key column drawn in), a velocity lane below,
 // and a DOM playhead overlay so playback.ts keeps its existing contract.
 // Unquantized by default: positions/lengths are float steps; snapping applies
 // only when the transport Grid selector is set (transport.quantizeGrid > 0).
+// Studio v5 (P3): tool palette (draw / select / erase) on a foot toolbar, a
+// real black/white key column, notes in the lane's track colour, and rows
+// that scale so the grid fills its aperture instead of stopping short.
 import { el, btn, help } from "./helpers";
-import { SCREEN_BG, SCREEN_FG, screenRgba } from "./helpers";
 import { ROLL_NOTES, clip, transport, activeSynth, activeSynthNotes, SYNTH_LANES, SYNTH_LANE_LABELS, synthLaneNotes, patternLengths, patternDivisions } from "./state";
 import type { VNote, SynthLane } from "./state";
 import { ctx, gridRepainters } from "./ctx";
@@ -23,11 +25,33 @@ export interface Roll {
   paintRoll: () => void;
 }
 
-const GUTTER = 37;
-const ROW_H = 16;
-const VEL_H = 52;
+const GUTTER = 48;
+const ROW_MIN = 14;
+const ROW_MAX = 22;
+const VEL_H = 72;
 const EDGE_PX = 6;
 const MIN_LEN_FREE = 0.25;
+const NAMED_TRACKS = new Set(["drums", "pads", "bass", "lead", "harmony", "audio"]);
+
+/** Track identity for a synth lane. The six named tracks resolve through
+ *  tokens.css; extra MIDI lanes cycle the eight-colour palette by index. */
+export function laneIdentity(node: HTMLElement, lane: string): void {
+  if (NAMED_TRACKS.has(lane)) { node.dataset.track = lane; node.style.removeProperty("--track-colour"); return; }
+  delete node.dataset.track;
+  node.style.setProperty("--track-colour", `var(--wa-track-${(Math.max(0, SYNTH_LANES.indexOf(lane)) % 8) + 1})`);
+}
+
+/** Canvases cannot read CSS custom properties per fill, so each paint reads
+ *  the token set once from the roll's computed style. */
+function rgba(colour: string, alpha: number): string {
+  const hex = /^#([0-9a-f]{6})$/i.exec(colour.trim());
+  if (!hex) return colour;
+  const n = parseInt(hex[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
+type Tool = "draw" | "select" | "erase";
+const CURSORS: Record<Tool, string> = { draw: "cell", select: "crosshair", erase: "pointer" };
 
 type Drag =
   | { kind: "create"; note: VNote }
@@ -35,24 +59,32 @@ type Drag =
   | { kind: "resize-l"; note: VNote; origStep: number; origLen: number }
   | { kind: "resize-r"; note: VNote; origLen: number }
   | { kind: "marquee"; startStep: number; startRow: number; step: number; row: number }
+  | { kind: "erase" }
   | null;
 
 export function buildRoll(deps: RollDeps): Roll {
   const pianoRoll = el("div", "wa-piano-roll wa-roll2");
-  const toolbar = el("div", "wa-roll-toolbar");
-  const laneGroup = el("div", "wa-roll-lanes");
+  const head = el("div", "wa-roll-toolbar wa-roll-head");
+  const foot = el("div", "wa-roll-toolbar wa-roll-foot");
+  const laneGroup = el("div", "wa-subtabs wa-roll-lanes");
   const laneButtons = new Map<SynthLane, HTMLButtonElement>();
+  const paintIdentity = (): void => {
+    laneIdentity(pianoRoll, activeSynth.lane);
+    laneButtons.forEach((item, id) => item.classList.toggle("active", id === activeSynth.lane));
+  };
   const buildLaneButtons = (): void => {
     laneButtons.clear(); laneGroup.replaceChildren();
     SYNTH_LANES.forEach((lane) => {
-      const button = btn(SYNTH_LANE_LABELS[lane], "wa-btn-sm wa-roll-lane") as HTMLButtonElement;
+      const button = btn(SYNTH_LANE_LABELS[lane], "wa-subtab wa-roll-lane") as HTMLButtonElement;
+      laneIdentity(button, lane);
       button.addEventListener("click", () => {
         activeSynth.lane = lane; selected = null; selection.clear();
-        laneButtons.forEach((item, id) => item.classList.toggle("active", id === lane));
+        paintIdentity();
         window.dispatchEvent(new CustomEvent("vv-synth-lane-change", { detail: lane })); paintRoll();
       });
       laneButtons.set(lane, button); laneGroup.append(button);
     });
+    paintIdentity();
   };
   buildLaneButtons();
   window.addEventListener("vv-studio-tracks-change", () => { buildLaneButtons(); paintRoll(); });
@@ -62,7 +94,7 @@ export function buildRoll(deps: RollDeps): Roll {
   let rollOct = Math.max(-3, Math.min(3, Number(localStorage.getItem("vv_studio_rolloct") || 0)));
   let rollNotes = ROLL_NOTES.map((n) => midiToNote(noteToMidi(n) + rollOct * 12));
   const rangeLabel = el("span", "wa-roll-range", "");
-  const octDown = btn("OCT −", "wa-btn-sm"), octUp = btn("OCT ＋", "wa-btn-sm");
+  const octDown = btn("Oct −", "wa-btn-sm"), octUp = btn("Oct +", "wa-btn-sm");
   help(octDown, "Shift the visible three octaves down.");
   help(octUp, "Shift the visible three octaves up.");
   const setRollOct = (next: number): void => {
@@ -73,35 +105,58 @@ export function buildRoll(deps: RollDeps): Roll {
   };
   octDown.addEventListener("click", () => setRollOct(rollOct - 1));
   octUp.addEventListener("click", () => setRollOct(rollOct + 1));
-  const accentBtn = btn("Note Accent", "wa-btn-sm wa-note-expression") as HTMLButtonElement;
-  const slideBtn = btn("Note Slide", "wa-btn-sm wa-note-expression") as HTMLButtonElement;
-  const selectBtn = btn("Select", "wa-btn-sm wa-toggle") as HTMLButtonElement;
+
+  // Tool palette — each tool is a mode over the behaviours the canvas already
+  // had: draw (create / move / resize), select (marquee), erase (delete).
+  const tools = el("div", "wa-subtabs wa-roll-tools");
+  const toolButtons = new Map<Tool, HTMLButtonElement>();
+  let tool: Tool = "draw";
+  const setTool = (next: Tool): void => {
+    tool = next;
+    toolButtons.forEach((button, id) => { button.classList.toggle("active", id === next); button.setAttribute("aria-pressed", String(id === next)); });
+    canvas.style.cursor = CURSORS[next];
+  };
+  ([
+    ["draw", "Draw", "Draw: click to add a note and drag its length; drag a note to move it, drag an edge to resize."],
+    ["select", "Select", "Select: drag a marquee around notes; shift-click adds to the selection."],
+    ["erase", "Erase", "Erase: click or drag across notes to delete them."],
+  ] as const).forEach(([id, label, tip]) => {
+    const button = btn(label, "wa-subtab wa-roll-tool") as HTMLButtonElement;
+    help(button, tip);
+    button.addEventListener("click", () => setTool(id));
+    toolButtons.set(id, button); tools.append(button);
+  });
+  const accentBtn = btn("Accent", "wa-btn-sm wa-note-expression") as HTMLButtonElement;
+  const slideBtn = btn("Slide", "wa-btn-sm wa-note-expression") as HTMLButtonElement;
   const selectAllBtn = btn("All", "wa-btn-sm") as HTMLButtonElement;
   const copyBtn = btn("Copy", "wa-btn-sm") as HTMLButtonElement;
   const pasteBtn = btn("Paste", "wa-btn-sm") as HTMLButtonElement;
-  let selectMode = false;
   help(accentBtn, "Toggle an accented note. Accents play louder and brighter.");
   help(slideBtn, "Glide into this note from the previous note in the lane.");
+  help(selectAllBtn, "Select every note in this lane's pattern.");
   accentBtn.addEventListener("click", () => { if (selection.size) { const on = !Array.from(selection).every((note) => note.accent); selection.forEach((note) => { note.accent = on; }); deps.saveAll(); paintRoll(); } });
   slideBtn.addEventListener("click", () => { if (selection.size) { const on = !Array.from(selection).every((note) => note.slide); selection.forEach((note) => { note.slide = on; }); deps.saveAll(); paintRoll(); } });
-  selectBtn.addEventListener("click", () => { selectMode = !selectMode; selectBtn.classList.toggle("active", selectMode); canvas.style.cursor = selectMode ? "crosshair" : "cell"; });
-  toolbar.append(laneGroup, el("span", "wa-roll-spacer"), patternBar.root, octDown, rangeLabel, octUp, selectBtn, selectAllBtn, copyBtn, pasteBtn, accentBtn, slideBtn);
+  head.append(laneGroup, el("span", "wa-roll-spacer"), patternBar.root, octDown, rangeLabel, octUp);
+  foot.append(tools, el("span", "wa-roll-spacer"), selectAllBtn, copyBtn, pasteBtn, el("span", "wa-sep"), accentBtn, slideBtn);
   const scrollWrap = el("div", "wa-roll2-scroll");
   const canvas = document.createElement("canvas");
   canvas.className = "wa-roll2-canvas";
   const rollPlayhead = el("div", "wa-roll-playhead");
+  rollPlayhead.style.left = `${GUTTER}px`;
   const rollPlayheadBar = el("div", "wa-roll-playhead-bar");
   rollPlayhead.append(rollPlayheadBar);
   scrollWrap.append(canvas, rollPlayhead);
   const velCanvas = document.createElement("canvas");
   velCanvas.className = "wa-roll2-vel";
-  pianoRoll.append(toolbar, scrollWrap, velCanvas);
+  pianoRoll.append(head, scrollWrap, velCanvas, foot);
+  setTool("draw");
 
   let selected: VNote | null = null;
   const selection = new Set<VNote>();
   let noteClipboard: VNote[] = [];
   let drag: Drag = null;
   let lastLen = 1;
+  let rowH = 16;
 
   const notes = (): VNote[] => activeSynthNotes();
   const steps = (): number => patternLengths[clip.sel];
@@ -109,80 +164,107 @@ export function buildRoll(deps: RollDeps): Roll {
   const snap = (v: number): number => { const g = grid(); return g ? Math.round(v / g) * g : v; };
   const minLen = (): number => grid() || MIN_LEN_FREE;
   const rowOf = (n: VNote): number => rollNotes.indexOf(n.note);
+  const isBlack = (note: string): boolean => note.includes("#");
+  const isC = (note: string): boolean => note.startsWith("C") && !isBlack(note);
 
   const geom = () => {
     const w = scrollWrap.clientWidth || 720;
+    const h = scrollWrap.clientHeight || 400;
+    rowH = Math.max(ROW_MIN, Math.min(ROW_MAX, Math.floor(h / rollNotes.length)));
     return { w, stepW: (w - GUTTER) / steps() };
+  };
+  const theme = () => {
+    const style = getComputedStyle(pianoRoll);
+    const read = (name: string, fallback: string): string => style.getPropertyValue(name).trim() || fallback;
+    return {
+      track: read("--track-colour", "#ff914d"),
+      accent: read("--wa-accent", "#ff914d"),
+      screen: read("--wa-screen", "#05070a"),
+      surface: read("--wa-surface", "#0d1118"),
+      canvas: read("--wa-canvas", "#07090d"),
+      border: read("--wa-border", "#293445"),
+      borderSoft: read("--wa-border-soft", "#1a2330"),
+      text: read("--wa-text", "#e8edf5"),
+      faint: read("--wa-faint", "#536075"),
+      mono: read("--wa-mono", "ui-monospace, monospace"),
+    };
   };
 
   function paintRoll(): void {
     const { w, stepW } = geom();
-    const h = rollNotes.length * ROW_H;
+    const t = theme();
+    const h = rollNotes.length * rowH;
     const scale = window.devicePixelRatio || 1;
     canvas.style.height = `${h}px`;
     rollPlayhead.style.height = `${h}px`;
     canvas.width = Math.floor(w * scale); canvas.height = Math.floor(h * scale);
     const g = canvas.getContext("2d"); if (!g) return;
     g.scale(scale, scale);
-    g.fillStyle = SCREEN_BG; g.fillRect(0, 0, w, h);
+    g.fillStyle = t.screen; g.fillRect(0, 0, w, h);
 
-    // row stripes: black-key rows darker, octave boundaries ruled
+    // row stripes: black-key rows lifted, octave boundaries ruled
     rollNotes.forEach((note, r) => {
-      const y = r * ROW_H;
-      if (note.includes("#")) { g.fillStyle = "rgba(255,255,255,0.025)"; g.fillRect(GUTTER, y, w - GUTTER, ROW_H); }
-      if (note.startsWith("C") && !note.startsWith("C#")) {
-        g.strokeStyle = screenRgba(0.18); g.lineWidth = 1;
-        g.beginPath(); g.moveTo(GUTTER, y + ROW_H + 0.5); g.lineTo(w, y + ROW_H + 0.5); g.stroke();
+      const y = r * rowH;
+      if (isBlack(note)) { g.fillStyle = "rgba(255,255,255,0.03)"; g.fillRect(GUTTER, y, w - GUTTER, rowH); }
+      if (isC(note)) {
+        g.strokeStyle = t.border; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(GUTTER, y + rowH + 0.5); g.lineTo(w, y + rowH + 0.5); g.stroke();
       }
     });
-    // vertical lines: quarters bright, grid (or 16ths) faint
+    // vertical lines: bars strongest, beats next, steps faint
+    const perBeat = patternDivisions[clip.sel] || 4;
     for (let s = 0; s <= steps(); s++) {
       const x = GUTTER + s * stepW;
-      const quarter = s % 4 === 0;
-      g.strokeStyle = quarter ? screenRgba(0.22) : screenRgba(0.07);
-      g.lineWidth = 1;
+      const bar = s % (perBeat * 4) === 0, beat = s % perBeat === 0;
+      g.strokeStyle = bar ? t.border : beat ? rgba(t.border, 0.7) : t.borderSoft;
+      g.lineWidth = bar ? 1.5 : 1;
       g.beginPath(); g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, h); g.stroke();
     }
-    // notes
+    // notes — lane colour, brightness by velocity, accent ring when selected
     notes().forEach((n) => {
       const r = rowOf(n); if (r < 0) return;
-      const x = GUTTER + n.step * stepW, y = r * ROW_H + 1.5;
-      const nw = Math.max(3, n.len * stepW - 1), nh = ROW_H - 3;
+      const x = GUTTER + n.step * stepW, y = r * rowH + 1.5;
+      const nw = Math.max(3, n.len * stepW - 1), nh = rowH - 3;
       const sel = selection.has(n);
-      g.shadowBlur = sel ? 8 : 0; g.shadowColor = SCREEN_FG;
-      g.fillStyle = screenRgba(0.35 + 0.55 * (n.vel / 127));
+      g.fillStyle = rgba(t.track, 0.45 + 0.55 * (n.vel / 127));
       g.beginPath(); g.roundRect(x, y, nw, nh, 3); g.fill();
       if (n.accent || n.slide) {
-        g.fillStyle = "rgba(255,255,255,.92)"; g.font = "8px monospace";
-        g.fillText(`${n.accent ? "A" : ""}${n.slide ? "↗" : ""}`, x + 3, y + 9);
+        g.fillStyle = "rgba(0,0,0,0.85)"; g.font = `700 8px ${t.mono}`;
+        g.fillText(`${n.accent ? "A" : ""}${n.slide ? "↗" : ""}`, x + 3, y + nh / 2 + 3);
       }
-      g.shadowBlur = 0;
-      g.strokeStyle = sel ? "#ffffff" : "rgba(0,0,0,0.55)";
-      g.lineWidth = sel ? 1.4 : 1;
+      g.strokeStyle = sel ? t.accent : "rgba(0,0,0,0.55)";
+      g.lineWidth = sel ? 1.5 : 1;
       g.beginPath(); g.roundRect(x, y, nw, nh, 3); g.stroke();
     });
     if (drag?.kind === "marquee") {
       const left = GUTTER + Math.min(drag.startStep, drag.step) * stepW;
-      const top = Math.min(drag.startRow, drag.row) * ROW_H;
+      const top = Math.min(drag.startRow, drag.row) * rowH;
       const width = Math.abs(drag.step - drag.startStep) * stepW;
-      const height = (Math.abs(drag.row - drag.startRow) + 1) * ROW_H;
-      g.fillStyle = "rgba(95,217,217,.12)"; g.fillRect(left, top, width, height);
-      g.strokeStyle = "rgba(95,217,217,.9)"; g.strokeRect(left + .5, top + .5, width, height);
+      const height = (Math.abs(drag.row - drag.startRow) + 1) * rowH;
+      g.fillStyle = rgba(t.accent, 0.14); g.fillRect(left, top, width, height);
+      g.strokeStyle = t.accent; g.lineWidth = 1; g.strokeRect(left + 0.5, top + 0.5, width, height);
     }
-    // key gutter on top
-    g.fillStyle = "#0a0f13"; g.fillRect(0, 0, GUTTER, h);
+    // key column: white keys span the gutter, black keys sit short and dark
+    // on top; separators only where two white keys meet (E|F, B|C)
+    const blackW = Math.round(GUTTER * 0.58);
+    g.fillStyle = t.text; g.fillRect(0, 0, GUTTER, h);
     rollNotes.forEach((note, r) => {
-      const y = r * ROW_H;
-      const black = note.includes("#");
-      g.fillStyle = black ? "#11161b" : "#e8ecef";
-      g.fillRect(0, y + 1, GUTTER - 6, ROW_H - 2);
-      if (note.startsWith("C") && !note.startsWith("C#")) {
-        g.fillStyle = black ? "#9aa5ad" : "#41505b"; g.font = "9px monospace";
-        g.fillText(note, 3, y + ROW_H - 5);
+      const y = r * rowH;
+      if (isBlack(note)) {
+        g.fillStyle = t.canvas; g.fillRect(0, y, blackW, rowH);
+        g.fillStyle = "rgba(255,255,255,0.10)"; g.fillRect(0, y + rowH - 1, blackW, 1);
+      } else if (r + 1 < rollNotes.length && !isBlack(rollNotes[r + 1])) {
+        g.fillStyle = t.border; g.fillRect(0, y + rowH - 1, GUTTER, 1);
+      }
+      if (isC(note)) {
+        g.fillStyle = t.faint; g.font = `600 9px ${t.mono}`; g.textAlign = "right";
+        g.fillText(note, GUTTER - 4, y + rowH - Math.max(2, (rowH - 9) / 2));
+        g.textAlign = "left";
       }
     });
+    g.fillStyle = t.border; g.fillRect(GUTTER - 1, 0, 1, h);
     paintVel();
-    laneButtons.forEach((item, id) => item.classList.toggle("active", id === activeSynth.lane));
+    paintIdentity();
     patternBar.sync();
     accentBtn.classList.toggle("active", selection.size > 0 && Array.from(selection).every((note) => note.accent));
     slideBtn.classList.toggle("active", selection.size > 0 && Array.from(selection).every((note) => note.slide));
@@ -192,24 +274,27 @@ export function buildRoll(deps: RollDeps): Roll {
 
   function paintVel(): void {
     const { w, stepW } = geom();
+    const t = theme();
     const scale = window.devicePixelRatio || 1;
     velCanvas.width = Math.floor(w * scale); velCanvas.height = Math.floor(VEL_H * scale);
     const g = velCanvas.getContext("2d"); if (!g) return;
     g.scale(scale, scale);
-    g.fillStyle = SCREEN_BG; g.fillRect(0, 0, w, VEL_H);
-    g.fillStyle = "#0a0f13"; g.fillRect(0, 0, GUTTER, VEL_H);
-    g.fillStyle = "#41505b"; g.font = "8px monospace"; g.fillText("VEL", 6, VEL_H / 2 + 3);
-    for (let s = 0; s <= steps(); s += 4) {
+    g.fillStyle = t.screen; g.fillRect(0, 0, w, VEL_H);
+    g.fillStyle = t.surface; g.fillRect(0, 0, GUTTER, VEL_H);
+    g.fillStyle = t.border; g.fillRect(GUTTER - 1, 0, 1, VEL_H);
+    g.fillStyle = t.faint; g.font = `600 9px ${t.mono}`; g.fillText("VEL", 6, VEL_H / 2 + 3);
+    const perBeat = patternDivisions[clip.sel] || 4;
+    for (let s = 0; s <= steps(); s += perBeat) {
       const x = GUTTER + s * stepW;
-      g.strokeStyle = screenRgba(0.12);
+      g.strokeStyle = s % (perBeat * 4) === 0 ? t.border : t.borderSoft;
       g.beginPath(); g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, VEL_H); g.stroke();
     }
     notes().forEach((n) => {
       const x = GUTTER + n.step * stepW;
-      const bh = Math.max(2, (n.vel / 127) * (VEL_H - 6));
+      const bh = Math.max(2, (n.vel / 127) * (VEL_H - 8));
       const sel = selection.has(n);
-      g.fillStyle = sel ? "#ffffff" : screenRgba(0.4 + 0.5 * (n.vel / 127));
-      g.fillRect(x, VEL_H - 3 - bh, 5, bh);
+      g.fillStyle = sel ? t.accent : rgba(t.track, 0.45 + 0.55 * (n.vel / 127));
+      g.fillRect(x, VEL_H - 4 - bh, 5, bh);
     });
   }
 
@@ -219,7 +304,7 @@ export function buildRoll(deps: RollDeps): Roll {
     const { stepW } = geom();
     return {
       step: (ev.clientX - rect.left - GUTTER) / stepW,
-      row: Math.floor((ev.clientY - rect.top) / ROW_H),
+      row: Math.floor((ev.clientY - rect.top) / rowH),
       px: ev.clientX - rect.left,
     };
   };
@@ -241,10 +326,14 @@ export function buildRoll(deps: RollDeps): Roll {
     }
     return null;
   };
+  const deleteNote = (target: VNote): void => {
+    synthLaneNotes[activeSynth.lane][clip.sel] = notes().filter((n) => n !== target);
+    selection.delete(target); if (selected === target) selected = null;
+  };
 
   canvas.addEventListener("pointermove", (ev) => {
     if (drag) return;
-    if (selectMode) { canvas.style.cursor = "crosshair"; return; }
+    if (tool !== "draw") { canvas.style.cursor = CURSORS[tool]; return; }
     const found = hit(ev);
     canvas.style.cursor = !found ? "cell" : found.zone === "body" ? "move" : "ew-resize";
   });
@@ -254,6 +343,13 @@ export function buildRoll(deps: RollDeps): Roll {
     ev.preventDefault();
     const found = hit(ev);
     const { step, row } = pos(ev);
+    if (tool === "erase") {
+      if (!found) return;
+      ctx.checkpoint(); deleteNote(found.note);
+      drag = { kind: "erase" };
+      canvas.setPointerCapture(ev.pointerId);
+      paintRoll(); ctx.paintSession(); return;
+    }
     if (found) {
       selected = found.note;
       if (ev.shiftKey || ev.ctrlKey || ev.metaKey) {
@@ -267,7 +363,7 @@ export function buildRoll(deps: RollDeps): Roll {
       else drag = { kind: "resize-r", note: found.note, origLen: found.note.len };
     } else {
       if (row < 0 || row >= rollNotes.length || step < 0 || step >= steps()) return;
-      if (selectMode) {
+      if (tool === "select") {
         if (!ev.shiftKey) selection.clear();
         selected = null;
         drag = { kind: "marquee", startStep: step, startRow: row, step, row };
@@ -288,6 +384,11 @@ export function buildRoll(deps: RollDeps): Roll {
   canvas.addEventListener("pointermove", (ev) => {
     if (!drag) return;
     const { step, row } = pos(ev);
+    if (drag.kind === "erase") {
+      const found = hit(ev);
+      if (found) { deleteNote(found.note); paintRoll(); ctx.paintSession(); }
+      return;
+    }
     if (drag.kind === "marquee") {
       drag.step = Math.max(0, Math.min(steps(), step)); drag.row = Math.max(0, Math.min(rollNotes.length - 1, row));
       const minStep = Math.min(drag.startStep, drag.step), maxStep = Math.max(drag.startStep, drag.step);
@@ -327,8 +428,7 @@ export function buildRoll(deps: RollDeps): Roll {
     const found = hit(ev);
     if (!found) return;
     ctx.checkpoint();
-    synthLaneNotes[activeSynth.lane][clip.sel] = notes().filter((n) => n !== found.note);
-    selection.delete(found.note); if (selected === found.note) selected = null;
+    deleteNote(found.note);
     paintRoll(); ctx.paintSession(); deps.saveAll();
   });
 
@@ -402,7 +502,7 @@ export function buildRoll(deps: RollDeps): Roll {
   const applyVel = (ev: PointerEvent) => {
     const n = velAt(ev); if (!n) return;
     const rect = velCanvas.getBoundingClientRect();
-    n.vel = Math.max(1, Math.min(127, Math.round(127 * (1 - (ev.clientY - rect.top - 3) / (VEL_H - 6)))));
+    n.vel = Math.max(1, Math.min(127, Math.round(127 * (1 - (ev.clientY - rect.top - 4) / (VEL_H - 8)))));
     selected = n;
     paintRoll();
   };
@@ -416,7 +516,7 @@ export function buildRoll(deps: RollDeps): Roll {
   new ResizeObserver(() => paintRoll()).observe(scrollWrap);
   gridRepainters.push(paintRoll);
   // start the scroll centred on the melodic middle rather than B5
-  requestAnimationFrame(() => { scrollWrap.scrollTop = Math.max(0, rollNotes.length * ROW_H * 0.4 - scrollWrap.clientHeight / 2); });
+  requestAnimationFrame(() => { geom(); scrollWrap.scrollTop = Math.max(0, rollNotes.length * rowH * 0.4 - scrollWrap.clientHeight / 2); });
 
   return { pianoRoll, rollPlayheadBar, paintRoll };
 }

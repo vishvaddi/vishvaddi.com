@@ -24,6 +24,10 @@ function mixChannel(
   meterOf: () => AnalyserNode | null, strips: Strip[],
 ): HTMLElement {
   const ch = el("div", "wa-ch");
+  if (idx >= 0) {
+    ch.dataset.track = "drums";
+    ch.style.setProperty("--track-colour", `var(--wa-track-${(idx % 8) + 1})`);
+  }
   ch.append(el("span", "wa-ch-name", name));
 
   if (idx >= 0) {
@@ -76,7 +80,9 @@ export function buildMixer(onMasterChange: (value: number) => void): MixerView {
     name, mixState.channelLevels[i], (v) => { mixState.channelLevels[i] = v; ensureNodes(); trackGain[i].gain.value = v; saveAll(); }, i,
     () => trackMeters[i] ?? null, strips,
   )));
-  mixGrid.append(mixChannel("Synth", mixState.synthLevel, (v) => { mixState.synthLevel = v; ensureNodes(); engine.synthGain!.gain.value = v; saveAll(); }, -1, () => synthMeter, strips));
+  const synth = mixChannel("Synth", mixState.synthLevel, (v) => { mixState.synthLevel = v; ensureNodes(); engine.synthGain!.gain.value = v; saveAll(); }, -1, () => synthMeter, strips);
+  synth.dataset.track = "lead";
+  mixGrid.append(synth);
   const master = mixChannel("Master", mixState.masterLevel, (v) => { onMasterChange(v); }, -1, () => masterAnalyser, strips);
   master.classList.add("wa-ch-master");
   mixGrid.append(master);
@@ -86,7 +92,9 @@ export function buildMixer(onMasterChange: (value: number) => void): MixerView {
   // One rAF loop drives every ladder — peak per channel, decayed so the
   // meters trickle rather than strobe.
   const peaks = new Float32Array(strips.length);
-  const buf = new Uint8Array(256);
+  // Sized for the master analyser (fftSize 2048): a 256-byte buffer read up
+  // to fftSize yields undefined samples, and one NaN poisons the peak forever.
+  const buf = new Uint8Array(2048);
   function paintMeters(): void {
     requestAnimationFrame(paintMeters);
     if (!mixer.isConnected || !mixer.offsetParent) return;
@@ -94,8 +102,9 @@ export function buildMixer(onMasterChange: (value: number) => void): MixerView {
       const an = strip.meter();
       let peak = 0;
       if (an) {
-        an.getByteTimeDomainData(buf.subarray(0, an.fftSize));
-        for (let s = 0; s < an.fftSize; s += 2) peak = Math.max(peak, Math.abs((buf[s] - 128) / 128));
+        const n = Math.min(an.fftSize, buf.length);
+        an.getByteTimeDomainData(buf.subarray(0, n));
+        for (let s = 0; s < n; s += 2) peak = Math.max(peak, Math.abs((buf[s] - 128) / 128));
       }
       peaks[i] = Math.max(peak, peaks[i] * 0.88);
       const lit = Math.round(peaks[i] * LADDER);

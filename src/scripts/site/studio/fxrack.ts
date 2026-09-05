@@ -178,7 +178,7 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
     { id: "limiter", key: "limiter", label: "LIMITER", elx: limiterDevice },
   ];
   const browser = el("div", "wa-devbrowser");
-  const tabList = el("div", "wa-devtabs");
+  const tabList = el("div", "wa-devtabs wa-subtabs");
   const detail = el("div", "wa-devdetail");
   const tabs: HTMLButtonElement[] = [];
   let sel = localStorage.getItem("vv_studio_device") || "eq";
@@ -194,7 +194,7 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
   };
   refreshTabs = paintTabs;
   sections.forEach((s) => {
-    const tab = el("button", "wa-devtab") as HTMLButtonElement;
+    const tab = el("button", "wa-devtab wa-subtab") as HTMLButtonElement;
     tab.type = "button";
     tab.append(el("span", "wa-modekey-led" + (s.key ? "" : " wa-led-none")), document.createTextNode(s.label));
     help(tab, s.key ? `Show the ${s.label.toLowerCase()} — the dot lights when it's in the chain.` : "Combinator macros — four knobs that drive whole groups of parameters.");

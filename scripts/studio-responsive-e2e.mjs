@@ -23,7 +23,9 @@ const modeRoute = {
 }
 const openMode = async (page, mode) => {
   const [key] = modeRoute[mode]
-  if (['DRUMS', 'PADS', 'SYNTH', 'MIX'].includes(mode)) await page.locator('.wa-modekey[data-intent="make"]').click()
+  // v5 shell: the phone dock lists the four instruments directly and hides MAKE.
+  const makeKey = page.locator('.wa-modekey[data-intent="make"]')
+  if (['DRUMS', 'PADS', 'SYNTH', 'MIX'].includes(mode) && await makeKey.isVisible()) await makeKey.click()
   await page.locator(`.wa-modekey[data-mode="${key}"]`).click()
   if (mode === 'PADS') await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' }).click()
 }
@@ -164,10 +166,17 @@ for (const [name, width, height] of viewports) {
             (detail.scrollHeight <= detail.clientHeight + 1 || ['auto', 'scroll'].includes(overflow))
         })
         check(`${name}: complete device controls remain reachable`, mixEnd)
-        const orb = await page.locator('.wa-page-mix .wa-orb[data-visualizer="lysergic-sphere"]').evaluate((node) => {
+        // v5: the sphere lives on the dock's Scope tab, not in permanent real estate
+        const orbSize = () => page.locator('.wa-page-mix .wa-orb[data-visualizer="lysergic-sphere"]').evaluate((node) => {
           const rect = node.getBoundingClientRect(); return { visible: node.checkVisibility(), width: rect.width, height: rect.height }
         })
-        check(`${name}: Lysergic sphere is permanently visible`, orb.visible && orb.width >= 240 && orb.height >= 180, `${Math.round(orb.width)}×${Math.round(orb.height)}px`)
+        check(`${name}: Lysergic sphere is off screen until Scope is selected`, !(await orbSize()).visible)
+        await page.locator('.wa-mix-tabs .wa-subtab', { hasText: 'Scope' }).click()
+        const orb = await orbSize()
+        check(`${name}: Scope tab shows the Lysergic sphere`, orb.visible && orb.width >= 240 && orb.height >= 180, `${Math.round(orb.width)}×${Math.round(orb.height)}px`)
+        check(`${name}: Scope replaces the device dock in place`, !await page.locator('.wa-page-mix .wa-mix-flex').isVisible() && await page.locator('.wa-page-mix .wa-mix-channels').isVisible())
+        await page.locator('.wa-mix-tabs .wa-subtab', { hasText: 'Devices' }).click()
+        check(`${name}: Devices tab restores the device dock`, await page.locator('.wa-page-mix .wa-mix-flex').isVisible() && !(await orbSize()).visible)
         check(`${name}: MIX uses the single Lysergic sphere`, await page.locator('.wa-page-mix .wa-orb[data-visualizer="lysergic-sphere"]').count() === 1 && await page.locator('.wa-page-mix .wa-spectral, .wa-page-mix .wa-master-scope').count() === 0)
         if (name === 'desktop') await page.screenshot({ path: 'studio-mix-desktop.png', fullPage: false })
         await page.locator('.wa-devtab', { hasText: 'MACROS' }).click()
@@ -294,12 +303,22 @@ for (const [name, width, height] of viewports) {
         })
         check(`${name}: DJ exposes two usable decks`, djLayout.widths.length === 2 && djLayout.widths.every((width) => width >= (name === 'desktop' || name === 'laptop' ? 260 : 300)), djLayout.widths.join('/'))
         check(`${name}: DJ crossfader is usable`, djLayout.crossfader >= 90, `${Math.round(djLayout.crossfader)}px`)
+        // v5: compact is the default everywhere; the vinyl platter is an opt-in view.
+        check(`${name}: compact DJ view removes the decorative platter`, djLayout.platter === 0)
         if (name === 'desktop' || name === 'laptop' || name === 'tablet') {
-          check(`${name}: DJ platter is turntable-sized`, djLayout.platter >= 220, `${Math.round(djLayout.platter)}px`)
-          check(`${name}: DJ platter clears 33/45 and start controls`, djLayout.platterControlsClear)
-          check(`${name}: quartz badge clears the platter`, djLayout.quartzClear, `${Math.round(djLayout.quartzGap)}px gap`)
           check(`${name}: DJ pitch control is vertical`, djLayout.pitchHeight > djLayout.pitchWidth * 2, `${Math.round(djLayout.pitchWidth)}×${Math.round(djLayout.pitchHeight)}px`)
-        } else check(`${name}: compact DJ view removes the decorative platter`, djLayout.platter === 0)
+          await page.locator('.wa-dj-view-toggle').click()
+          const vinylLayout = await page.evaluate(() => {
+            const platter = document.querySelector('.wa-dj-platter')?.getBoundingClientRect()
+            const start = document.querySelector('.wa-dj-deck-a .wa-dj-start')?.getBoundingClientRect()
+            const speed = document.querySelector('.wa-dj-deck-a .wa-dj-speed')?.getBoundingClientRect()
+            const intersects = (a, b) => !!a && !!b && a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1
+            return { platter: platter?.width ?? 0, clear: !intersects(platter, start) && !intersects(platter, speed) }
+          })
+          check(`${name}: vinyl view shows a turntable-sized platter`, vinylLayout.platter >= 220, `${Math.round(vinylLayout.platter)}px`)
+          check(`${name}: vinyl platter clears 33/45 and start controls`, vinylLayout.clear)
+          await page.locator('.wa-dj-view-toggle').click()
+        }
         check(`${name}: DJ performance buttons do not squash`, djLayout.performanceButtons.length > 0 && djLayout.performanceButtons.every((button) => button.width >= 28 && button.height >= 30 && !button.clipped), `${Math.round(Math.min(...djLayout.performanceButtons.map((button) => button.width)))}×${Math.round(Math.min(...djLayout.performanceButtons.map((button) => button.height)))}px min`)
         check(`${name}: DJ mixer needs no internal scroll`, djLayout.mixerScroll <= 1 && djLayout.recordBottom <= djLayout.mixerBottom + 1, `${Math.round(djLayout.mixerScroll)}px overflow`)
         if (name === 'phone') {
@@ -410,7 +429,9 @@ for (const [name, width, height] of viewports) {
       const composer = document.querySelector('.wa-composer')
       const composerScrolls = composer ? ['auto', 'scroll'].includes(getComputedStyle(composer).overflowY) : false
       return {
-        overlap: synth && automation ? Math.max(0, synth.bottom - automation.top) : 999,
+        // v5: automation sits in a left inspector beside the lanes, so only a real
+        // rectangle intersection counts as overlap.
+        overlap: synth && automation && synth.left < automation.right - 1 && synth.right > automation.left + 1 ? Math.max(0, synth.bottom - automation.top) : 0,
         composerScrolls,
       }
     })
@@ -436,14 +457,14 @@ for (const [name, width, height] of viewports) {
     await page.screenshot({ path: `studio-arrange-${name}.png`, fullPage: false })
 
     if (name === 'phone' || name === 'landscape') {
-      const targets = await page.locator('.wa-primary-nav .wa-modekey').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height))
+      const targets = await page.locator('.wa-modebar .wa-modekey').evaluateAll((nodes) => nodes.filter((node) => node.checkVisibility()).map((node) => node.getBoundingClientRect().height))
       check(`${name}: mode targets are touch-sized`, targets.every((size) => size >= 44), targets.join(','))
       const headerCollisions = await page.evaluate(() => {
         const lcd = document.querySelector('.wa-lcd')?.getBoundingClientRect()
         if (!lcd) return ['missing LCD']
         return [...document.querySelectorAll('.wa-title > *')].filter((node) => {
           const style = getComputedStyle(node)
-          if (style.display === 'none' || style.visibility === 'hidden') return false
+          if (node.classList.contains('wa-lcd') || style.display === 'none' || style.display === 'contents' || style.visibility === 'hidden') return false
           const r = node.getBoundingClientRect()
           return r.width > 0 && r.height > 0 && r.left < lcd.right - 1 && r.right > lcd.left + 1 && r.top < lcd.bottom - 1 && r.bottom > lcd.top + 1
         }).map((node) => node.className || node.tagName)
@@ -462,6 +483,7 @@ for (const [name, width, height] of viewports) {
       }))
       check(`${name}: mode keys stay inside the viewport`, keyBounds.length === 3 && keyBounds.every((r) => r.top >= 0 && r.left >= 0 && r.right <= width + 1 && r.bottom <= height + 1), `${keyBounds.length} keys`)
       await openMode(page, 'CLIPS')
+      if (!(await page.locator('.wa-studio-menu').isVisible())) await page.locator('.wa-transport-more').click()
       await page.locator('.wa-menu > summary', { hasText: 'Help' }).click()
       await page.locator('.wa-menu[open] .wa-studio-menu-body button', { hasText: 'Help & shortcuts' }).click()
       const tutorialTop = await page.evaluate(() => {
@@ -471,6 +493,7 @@ for (const [name, width, height] of viewports) {
       })
       check(`${name}: tutorial card stays above its target`, tutorialTop)
       await page.locator('.wa-tutorial-card button', { hasText: 'Close' }).click()
+      if (await page.locator('.wa-win').evaluate((node) => node.classList.contains('wa-tools-open'))) await page.locator('.wa-transport-more').click()
     }
     await page.screenshot({ path: `studio-${name}.png`, fullPage: false })
     await openMode(page, 'DJ')

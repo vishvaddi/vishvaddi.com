@@ -1,1 +1,246 @@
-/* Studio v5 — mix mode. Consumes tokens.css + base.css only. */
+/* Studio v5 — mix mode. Consumes tokens.css + base.css only.
+   MixConsole: one row of channel strips filling the width (colour header ·
+   pan · M/S · fader beside a ladder meter · dB), a device dock below with
+   segmented device tabs, and the Lysergic sphere demoted to a Scope tab that
+   swaps into the dock. Phones and touch landscape turn the three surfaces
+   into in-place pages via [data-mobile-view]; the Channels page scrolls
+   horizontally with snap. Scroll owners: .wa-mix-channels (phone, x), the
+   visible .wa-device / .wa-combinator (y). Nothing else scrolls. */
+
+/* ── Page frame ─────────────────────────────────────────────────────── */
+.wa-page-mix { overflow: hidden; }
+.wa-page-mix > .wa-mix-channels {
+  order: 0; flex: 1 1 0; min-height: 0; min-width: 0;
+  display: flex; flex-direction: column; padding: var(--wa-gap-in);
+  overflow: hidden;
+}
+.wa-page-mix > .wa-mix-tabs {
+  order: 1; flex: 0 0 auto; display: flex; align-items: center; gap: 4px;
+  min-height: 34px; padding: 3px 6px 0;
+  background: var(--wa-surface); border: 1px solid var(--wa-border-soft); border-bottom: 0;
+  border-radius: var(--wa-radius) var(--wa-radius) 0 0;
+  margin-bottom: calc(-1 * var(--wa-gap));
+}
+.wa-page-mix > .wa-mix-tabs::before {
+  content: "Dock"; margin: 0 8px 0 4px;
+  font: 600 var(--wa-fs-xs)/1 var(--wa-font); color: var(--wa-faint); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.wa-page-mix > .wa-mix-tabs > .wa-subtab { height: auto; min-height: 28px; }
+/* desktop: Channels are always on screen, so the first tab has no job */
+.wa-page-mix > .wa-mix-tabs > .wa-subtab:first-child { display: none; }
+/* desktop default view is "channels", which for the dock means Devices */
+.wa-page-mix:not([data-mobile-view="scope"]) > .wa-mix-tabs > .wa-subtab:nth-child(2) {
+  color: var(--wa-text); background: var(--wa-control); border-color: var(--wa-border); box-shadow: inset 0 -2px 0 var(--wa-accent);
+}
+.wa-page-mix > .wa-mix-lower {
+  order: 2; flex: 0 0 clamp(200px, 34%, 420px); min-height: 0; min-width: 0;
+  display: flex; gap: var(--wa-gap);
+}
+.wa-page-mix > .wa-mix-lower > .wa-panel {
+  flex: 1 1 auto; min-width: 0; min-height: 0; padding: var(--wa-gap);
+  display: flex; flex-direction: column; gap: var(--wa-gap-in);
+  border-top-left-radius: 0; border-top-right-radius: 0;
+}
+.wa-page-mix:not([data-mobile-view="scope"]) > .wa-mix-lower > .wa-mix-scope { display: none; }
+.wa-page-mix[data-mobile-view="scope"] > .wa-mix-lower > .wa-mix-flex { display: none; }
+
+/* ── Channel strips ─────────────────────────────────────────────────── */
+.wa-page-mix .wa-mixer {
+  flex: 1 1 auto; min-height: 0; min-width: 0;
+  display: flex; align-items: stretch; gap: var(--wa-gap-in);
+}
+.wa-page-mix .wa-ch {
+  flex: 1 1 0; min-width: 72px; min-height: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(var(--wa-fader-travel), 1fr) auto;
+  gap: 4px; padding: 0 4px 4px;
+  background: var(--wa-raised); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm);
+  overflow: hidden;
+}
+.wa-page-mix .wa-ch-master {
+  --track-colour: var(--wa-muted);
+  flex-grow: 1.25; margin-left: var(--wa-gap-in);
+  background: var(--wa-control); border-color: var(--wa-border);
+}
+.wa-page-mix .wa-ch-name {
+  display: block; margin: 0 -4px; padding: 5px 4px 4px;
+  font: 600 var(--wa-fs-xs)/1 var(--wa-font); color: var(--wa-text); text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: color-mix(in srgb, var(--track-colour) 26%, var(--wa-raised));
+  border-top: 3px solid var(--track-colour);
+}
+.wa-page-mix .wa-ch-master .wa-ch-name { font-weight: 700; }
+/* explicit rows: Synth and Master have no pan / M·S, and auto-placement
+   would otherwise drop their fader into the short second row */
+.wa-page-mix .wa-ch-name { grid-row: 1; }
+.wa-page-mix .wa-ch-pan { grid-row: 2; justify-self: center; min-width: 0; padding: 2px 0; }
+.wa-page-mix .wa-ms { grid-row: 3; display: flex; gap: 4px; }
+.wa-page-mix .wa-ch-well { grid-row: 4; }
+.wa-page-mix .wa-ch-db { grid-row: 5; }
+.wa-page-mix .wa-mute,
+.wa-page-mix .wa-solo {
+  flex: 1 1 0; min-width: 0; height: 26px; padding: 0;
+  font: 700 var(--wa-fs-xs)/1 var(--wa-font); color: var(--wa-muted);
+  background: var(--wa-control); border: 1px solid var(--wa-border); border-radius: var(--wa-radius-sm);
+  cursor: pointer;
+}
+.wa-page-mix .wa-mute:hover, .wa-page-mix .wa-solo:hover { color: var(--wa-text); background: var(--wa-control-hi); }
+.wa-page-mix .wa-mute.active { color: var(--wa-accent); background: var(--wa-accent-soft); border-color: var(--wa-accent-dim); }
+.wa-page-mix .wa-solo.active { color: var(--wa-canvas); background: var(--wa-warn); border-color: var(--wa-warn); }
+
+/* fader + meter: the well is a size container so the rotated range can be
+   exactly as tall as the well (100cqh) and as wide as its lane column
+   (100cqw minus the meter) whatever size flex hands it — the whole lane is
+   the drag target, the cap is the visible part */
+.wa-page-mix .wa-ch-well {
+  container-type: size; min-height: var(--wa-fader-travel); min-width: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) 16px; grid-template-rows: minmax(0, 1fr);
+  align-items: center; column-gap: 6px;
+}
+/* three classes: base.css sizes every range input at 18 px via
+   .wa-win input[type="range"], which outranks a two-class page rule */
+.wa-page-mix .wa-ch .wa-fader {
+  grid-column: 1; grid-row: 1; justify-self: center; align-self: center;
+  width: 100cqh; height: calc(100cqw - 22px); margin: 0; padding: 0;
+  transform: rotate(-90deg);
+  -webkit-appearance: none; appearance: none; cursor: ns-resize; touch-action: none;
+  background: var(--wa-canvas); border: 1px solid var(--wa-border-soft); border-radius: 3px;
+}
+.wa-page-mix .wa-fader::-webkit-slider-runnable-track { height: 4px; background: var(--wa-control); border: 1px solid var(--wa-border); border-radius: 2px; }
+.wa-page-mix .wa-fader::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 18px; height: 44px; margin-top: -21px;
+  background: var(--wa-control-hi); border: 1px solid var(--wa-text); border-radius: 3px;
+}
+.wa-page-mix .wa-fader::-moz-range-track { height: 4px; background: var(--wa-control); border: 1px solid var(--wa-border); border-radius: 2px; }
+.wa-page-mix .wa-fader::-moz-range-thumb { width: 18px; height: 44px; background: var(--wa-control-hi); border: 1px solid var(--wa-text); border-radius: 3px; }
+.wa-page-mix .wa-ch-master .wa-fader::-webkit-slider-thumb { background: var(--wa-muted); }
+.wa-page-mix .wa-ch-master .wa-fader::-moz-range-thumb { background: var(--wa-muted); }
+.wa-page-mix .wa-fader:focus-visible { outline: 2px solid var(--wa-accent); outline-offset: 0; }
+.wa-page-mix .wa-meter {
+  grid-column: 2; grid-row: 1; align-self: stretch;
+  display: flex; flex-direction: column; gap: 1px; padding: 1px;
+  background: var(--wa-canvas); border: 1px solid var(--wa-border-soft); border-radius: 2px;
+}
+.wa-page-mix .wa-meter-seg { flex: 1 1 0; min-height: 0; border-radius: 1px; background: var(--wa-control); }
+.wa-page-mix .wa-meter-seg.warm { background: color-mix(in srgb, var(--wa-warn) 18%, var(--wa-control)); }
+.wa-page-mix .wa-meter-seg.hot { background: color-mix(in srgb, var(--wa-rec) 18%, var(--wa-control)); }
+.wa-page-mix .wa-meter-seg.lit { background: var(--wa-play); }
+.wa-page-mix .wa-meter-seg.warm.lit { background: var(--wa-warn); }
+.wa-page-mix .wa-meter-seg.hot.lit { background: var(--wa-rec); }
+.wa-page-mix .wa-ch-db {
+  text-align: center; font: 500 var(--wa-fs-xs)/1 var(--wa-mono); color: var(--wa-text);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* ── Device dock ────────────────────────────────────────────────────── */
+.wa-page-mix .wa-mix-flex > .wa-help { margin: 0; font: var(--wa-fs-xs)/1.3 var(--wa-font); color: var(--wa-faint); }
+.wa-page-mix .wa-devbrowser { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: var(--wa-gap-in); }
+.wa-page-mix .wa-devtabs { flex: 0 0 auto; flex-wrap: wrap; min-height: 36px; padding: 2px 4px; }
+.wa-page-mix .wa-devtab { flex: 1 1 auto; gap: 6px; min-height: 28px; padding: 0 10px; }
+.wa-page-mix .wa-modekey-led { width: 6px; height: 6px; border-radius: 50%; background: var(--wa-border); }
+.wa-page-mix .wa-modekey-led.lit { background: var(--wa-accent); }
+.wa-page-mix .wa-led-none { visibility: hidden; }
+.wa-page-mix .wa-devdetail { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.wa-page-mix .wa-devdetail > .wa-device,
+.wa-page-mix .wa-devdetail > .wa-combinator {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--wa-gap-in); background: var(--wa-raised); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm);
+}
+.wa-page-mix .wa-devdetail > .wa-device { display: flex; flex-wrap: wrap; align-content: flex-start; align-items: flex-start; gap: var(--wa-gap-in) var(--wa-gap); }
+.wa-page-mix .wa-device-header { flex: 1 0 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: var(--wa-control-h); }
+.wa-page-mix .wa-device-title { font: 700 var(--wa-fs-xs)/1 var(--wa-font); color: var(--wa-text); text-transform: uppercase; letter-spacing: 0.06em; }
+.wa-page-mix .wa-device-title::before { content: ""; display: inline-block; width: 3px; height: 12px; margin-right: 8px; vertical-align: -2px; border-radius: 2px; background: var(--wa-accent); }
+.wa-page-mix .wa-export { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--wa-gap-in); margin: 0; }
+.wa-page-mix .wa-export input[type="number"] { width: 64px; }
+.wa-page-mix .wa-knob-lbl { white-space: normal; line-height: 1.1; overflow: visible; text-overflow: clip; }
+.wa-page-mix .wa-knob-row { min-width: calc(var(--wa-knob) + 24px); }
+
+/* macros */
+.wa-page-mix .wa-combinator {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas: "title patch" "intro intro" "grid grid"; align-items: center; gap: 4px var(--wa-gap);
+}
+.wa-page-mix .wa-combinator > .wa-fx-title { grid-area: title; margin: 0; }
+.wa-page-mix .wa-combinator > .wa-export { grid-area: patch; flex: 0 0 auto; }
+.wa-page-mix .wa-macro-intro { grid-area: intro; margin: 0; font: var(--wa-fs-xs)/1.3 var(--wa-font); color: var(--wa-muted); }
+.wa-page-mix .wa-macro-grid { grid-area: grid; align-self: start; min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--wa-gap-in); }
+.wa-page-mix .wa-macro-card {
+  min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px var(--wa-gap-in);
+  padding: var(--wa-gap-in); background: var(--wa-surface); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm);
+}
+.wa-page-mix .wa-macro-head { display: contents; }
+.wa-page-mix .wa-macro-main { grid-column: 1; grid-row: 1; }
+.wa-page-mix .wa-macro-identity { grid-column: 2; grid-row: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.wa-page-mix .wa-macro-name { font: 700 var(--wa-fs-md)/1 var(--wa-font); color: var(--wa-text); text-transform: none; }
+.wa-page-mix .wa-macro-copy { font: var(--wa-fs-xs)/1.25 var(--wa-font); color: var(--wa-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wa-page-mix .wa-macro-details { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding-top: 4px; border-top: 1px solid var(--wa-border-soft); }
+.wa-page-mix .wa-macro-detail { min-width: 0; padding: 2px 0; }
+@media (max-height: 760px) { .wa-page-mix .wa-macro-copy { display: none; } }
+
+/* ── Scope ──────────────────────────────────────────────────────────── */
+.wa-page-mix .wa-mix-scope > .wa-fx-title { flex: 0 0 auto; margin: 0; }
+.wa-page-mix .wa-orb {
+  flex: 1 1 0; min-height: 0; width: 100%; display: block;
+  background: var(--wa-screen); border: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius-sm);
+}
+
+/* ── Phone + touch landscape: three in-place pages ──────────────────── */
+@media (max-width: 700px), (max-height: 540px) and (pointer: coarse) {
+  .wa-page-mix > .wa-mix-tabs {
+    order: 0; min-height: 40px; padding: 4px 6px; margin-bottom: 0;
+    border-bottom: 1px solid var(--wa-border-soft); border-radius: var(--wa-radius);
+  }
+  .wa-page-mix > .wa-mix-tabs::before { display: none; }
+  .wa-page-mix > .wa-mix-tabs > .wa-subtab { flex: 1 1 0; min-height: var(--wa-touch); }
+  .wa-page-mix > .wa-mix-tabs > .wa-subtab:first-child { display: inline-flex; }
+  .wa-page-mix:not([data-mobile-view="scope"]) > .wa-mix-tabs > .wa-subtab:nth-child(2) {
+    color: var(--wa-muted); background: transparent; border-color: transparent; box-shadow: none;
+  }
+  .wa-page-mix > .wa-mix-tabs > .wa-subtab.active { color: var(--wa-text); background: var(--wa-control); border-color: var(--wa-border); box-shadow: inset 0 -2px 0 var(--wa-accent); }
+  .wa-page-mix[data-mobile-view="channels"] > .wa-mix-tabs::after {
+    content: "swipe ↔"; flex: 0 0 auto; margin-left: 4px; padding-right: 4px;
+    font: 600 var(--wa-fs-xs)/1 var(--wa-font); color: var(--wa-muted); white-space: nowrap;
+  }
+  .wa-page-mix > .wa-mix-channels,
+  .wa-page-mix > .wa-mix-lower { order: 1; flex: 1 1 auto; }
+  .wa-page-mix:not([data-mobile-view="channels"]) > .wa-mix-channels { display: none; }
+  .wa-page-mix[data-mobile-view="channels"] > .wa-mix-lower { display: none; }
+  .wa-page-mix > .wa-mix-lower > .wa-panel { border-radius: var(--wa-radius); padding: var(--wa-gap-in); }
+
+  /* Channels page: one horizontal scroller with snap */
+  .wa-page-mix > .wa-mix-channels {
+    overflow-x: auto; overflow-y: hidden; overscroll-behavior: contain;
+    scroll-snap-type: x mandatory; scrollbar-gutter: stable; scroll-padding: var(--wa-gap-in);
+  }
+  .wa-page-mix .wa-mixer { width: max-content; min-width: 100%; }
+  .wa-page-mix .wa-ch { flex: 0 0 104px; scroll-snap-align: start; }
+  .wa-page-mix .wa-ch-master { flex-basis: 112px; }
+  .wa-page-mix .wa-mute, .wa-page-mix .wa-solo { height: var(--wa-touch); }
+
+  .wa-page-mix .wa-macro-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wa-page-mix .wa-macro-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wa-page-mix .wa-combinator { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "intro" "grid" "patch"; }
+}
+
+/* ── Touch landscape: pan and M/S side by side so the fader keeps as much
+   travel as a 390 px viewport allows (the well compresses before it clips) */
+@media (max-height: 540px) and (pointer: coarse) {
+  .wa-page-mix > .wa-mix-tabs { min-height: 36px; padding: 2px 4px; }
+  .wa-page-mix > .wa-mix-tabs > .wa-subtab { min-height: 30px; }
+  .wa-page-mix .wa-ch {
+    flex-basis: 124px; gap: 3px;
+    grid-template-columns: minmax(0, 1fr) 48px;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "name name" "pan ms" "well well" "db db";
+  }
+  .wa-page-mix .wa-ch-well { min-height: 96px; }
+  .wa-page-mix .wa-ch-pan { padding: 0; gap: 2px; }
+  .wa-page-mix .wa-ch-master { flex-basis: 124px; }
+  .wa-page-mix .wa-ch-name { grid-area: name; }
+  .wa-page-mix .wa-ch-pan { grid-area: pan; }
+  .wa-page-mix .wa-ms { grid-area: ms; flex-direction: column; justify-content: center; }
+  .wa-page-mix .wa-mute, .wa-page-mix .wa-solo { flex: 0 0 32px; height: 32px; }
+  .wa-page-mix .wa-ch-well { grid-area: well; }
+  .wa-page-mix .wa-ch-db { grid-area: db; }
+  .wa-page-mix .wa-macro-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
