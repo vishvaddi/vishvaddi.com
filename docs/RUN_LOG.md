@@ -1,5 +1,11 @@
 # Run Log
 
+## 2026-09-06 — Studio demo songs: BLOCK PARTY and HAZARD LINES
+
+- Replaced the three near-identical factory songs with two written demos in `src/scripts/site/studio/demos.ts`: BLOCK PARTY (boom-bap hip hop, 90 BPM, A minor, 7 scenes, 28 bars) and HAZARD LINES (jungle, 172 BPM, D minor, 8 scenes, 40 bars). MIDNIGHT ACID stays in the library; BLOCK PARTY is the first-boot project.
+- Each uses the full project format: 32-step scenes with accent/ghost velocities and fills, per-lane polymeter (triplet rim, 1/32T hats), pad events with ratchets and probability, three synth lanes with their own patches, slides and accents, drum-synth voicing per kit, lane sends, master chain settings, and arrangements with cutoff, reverb and master-volume automation.
+- Verified by loading both through the real engine in headless Chrome (title, tempo, block and automation counts, song-mode bar advance, velocity spread) and by all three studio harnesses: functional 86/86, responsive 375/375, density 48/48. The timeline drag check now scrolls home first and tracks the topmost stacked clip.
+
 ## 2026-09-03 — Studio v5: one skin, six modes rebuilt (deployed `1996fcb9`)
 
 - Replaced three stacked studio stylesheets (`studio.css` 5,658 lines, `studio-workflow.css`, Codex's uncommitted `studio-redesign.css`; 417 `!important`, 89 media queries) with one token layer plus nine partials under `src/styles/studio/` (1,809 lines, 24 media queries, two `!important` guards). Legacy files parked under `src/styles/_legacy/`, not imported.

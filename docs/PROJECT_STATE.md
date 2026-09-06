@@ -1,6 +1,6 @@
 # Project State
 
-_Last updated: 2026-09-03 — Studio v5 skin shipped: one token-driven stylesheet, six modes rebuilt on Cubasis / FL Studio Mobile conventions._
+_Last updated: 2026-09-06 — Two written demo songs (BLOCK PARTY hip hop, HAZARD LINES jungle) replace the old factory loops; Studio v5 skin shipped: one token-driven stylesheet, six modes rebuilt on Cubasis / FL Studio Mobile conventions._
 
 ## Current Position
 
