@@ -4,6 +4,8 @@
 // Usage: node scripts/studio-e2e.mjs [baseURL]   (default http://localhost:4321)
 import { chromium } from 'playwright-core'
 import { serveBuiltSite } from './serve-built-site.mjs'
+import { parseSmf } from './smf-parse.mjs'
+import { readFileSync } from 'node:fs'
 
 const builtSite = process.argv[2] === 'dist' ? await serveBuiltSite(4399) : null
 const BASE = builtSite?.base ?? process.argv[2] ?? 'http://localhost:4321'
@@ -29,37 +31,6 @@ async function openMode(page, mode) {
   if (['DRUMS', 'PADS', 'SYNTH', 'MIX'].includes(mode)) await page.locator('.wa-modekey[data-intent="make"]').click()
   await page.locator(`.wa-modekey[data-mode="${modeRoute[mode]}"]`).click()
   if (mode === 'PADS') await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' }).click()
-}
-
-function parseSmf(bytes) {
-  const str = (o, n) => String.fromCharCode(...bytes.slice(o, o + n))
-  if (bytes.length < 14 || str(0, 4) !== 'MThd') return { ok: false, tracks: [] }
-  const u16 = (o) => (bytes[o] << 8) | bytes[o + 1], u32 = (o) => ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0
-  const format = u16(8), ntrks = u16(10), ppq = u16(12)
-  let pos = 14, bpm = null
-  const tracks = []
-  for (let t = 0; t < ntrks && pos + 8 <= bytes.length; t++) {
-    if (str(pos, 4) !== 'MTrk') return { ok: false, tracks }
-    const len = u32(pos + 4), end = pos + 8 + len
-    let p = pos + 8, name = '', noteOns = 0, noteOffs = 0, status = 0
-    const channels = []
-    const vlq = () => { let v = 0, b; do { b = bytes[p++]; v = (v << 7) | (b & 0x7f) } while (b & 0x80); return v }
-    while (p < end) {
-      vlq()
-      let b = bytes[p]
-      if (b === 0xff) { const type = bytes[p + 1]; p += 2; const l = vlq(); if (type === 0x03) name = String.fromCharCode(...bytes.slice(p, p + l)); if (type === 0x51) bpm = 60_000_000 / ((bytes[p] << 16) | (bytes[p + 1] << 8) | bytes[p + 2]); p += l; continue }
-      if (b === 0xf0 || b === 0xf7) { p++; p += vlq(); continue }
-      if (b & 0x80) { status = b; p++ }
-      const kind = status & 0xf0, ch = status & 0x0f
-      if (kind === 0x90) { const vel = bytes[p + 1]; if (vel > 0) { noteOns++; channels.push(ch) } else noteOffs++; p += 2 }
-      else if (kind === 0x80) { noteOffs++; p += 2 }
-      else if (kind === 0xc0 || kind === 0xd0) p += 1
-      else p += 2
-    }
-    tracks.push({ name, noteOns, noteOffs, channels })
-    pos = end
-  }
-  return { ok: true, format, ppq, bpm, tracks }
 }
 
 function check(name, ok, detail = '') {
@@ -196,7 +167,6 @@ try {
   await page.click('button:has-text("Export MIDI")')
   const midiDownload = await midiDl
   const midiPath = midiDownload ? await midiDownload.path() : null
-  const { readFileSync } = await import('node:fs')
   const midi = midiPath ? new Uint8Array(readFileSync(midiPath)) : new Uint8Array()
   const smf = parseSmf(midi)
   check('midi: file is a type-1 SMF', smf.ok && smf.format === 1, smf.ok ? `format ${smf.format}, ${smf.tracks.length} tracks, ppq ${smf.ppq}` : 'unparseable')
@@ -466,6 +436,52 @@ try {
   await page.waitForTimeout(700)
   const inPlace = await page.evaluate(() => ({ survived: window.__noReload === true, bpm: document.querySelector('.wa-bpm')?.value }))
   check('workflow: song loads without reloading the page', inPlace.survived, `bpm now ${inPlace.bpm}`)
+
+  // ── v22 FX parity: rack controls exist and the loudness target moves the master ──
+  await openMode(page, 'MIX')
+  const devTab = async (label) => { await page.locator('.wa-devtab', { hasText: label }).click(); await page.waitForTimeout(80) }
+  await devTab('TAPE ECHO')
+  check('fx: echo has sync, ping-pong, duck and roll', await page.locator('.wa-device:visible select option[value="1/8D"]').count() === 1 && await page.locator('.wa-device:visible button', { hasText: 'PING-PONG' }).count() === 1 && await page.locator('.wa-device:visible button', { hasText: 'ROLL' }).count() === 1)
+  await devTab('DRIVE')
+  check('fx: drive has damage types and body', await page.locator('.wa-device:visible select option[value="fold"]').count() === 1 && /BODY/.test((await page.locator('.wa-device:visible').first().textContent()) ?? ''))
+  await devTab('SPACE')
+  check('fx: space has a type library and IR loading', await page.locator('.wa-device:visible select option[value="spring"]').count() === 1 && await page.locator('.wa-device:visible button', { hasText: 'Load IR' }).count() === 1)
+  await devTab('LIMITER')
+  check('fx: limiter shows a gain-reduction meter and soft clip', await page.locator('.wa-device:visible .wa-gr-meter').count() === 1 && await page.locator('.wa-device:visible button', { hasText: 'SOFT CLIP' }).count() === 1)
+  const masterBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').mix?.masterLevel)
+  await page.locator('.wa-device:visible button', { hasText: 'Master to target' }).click()
+  await page.waitForFunction(() => /LUFS|measure|failed/.test([...document.querySelectorAll('.wa-device .wa-status')].map((n) => n.textContent).join(' ')), null, { timeout: 90000 })
+  const targetText = await page.locator('.wa-device:visible .wa-status', { hasText: /LUFS|measure|failed/ }).first().textContent()
+  // autosave is debounced 400 ms — wait for the fader move to land
+  await page.waitForFunction((before) => JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').mix?.masterLevel !== before, masterBefore, { timeout: 5000 }).catch(() => null)
+  const masterAfter = await page.evaluate(() => JSON.parse(localStorage.getItem('vv_studio_v2') ?? '{}').mix?.masterLevel)
+  check('fx: master-to-target measured the render and moved the fader', /Was -?\d+\.\d LUFS/.test(targetText ?? '') && masterAfter !== masterBefore, `${targetText} (${masterBefore} → ${masterAfter})`)
+
+  // ── v22 sections: a named flag on the ruler that persists and exports as a MIDI marker ──
+  await openMode(page, 'CLIPS')
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Arrangement' }).click()
+  await page.locator('.wa-arrange-toolgroup button', { hasText: 'Section' }).click()
+  await page.waitForSelector('.wa-name-dialog[open] input')
+  await page.fill('.wa-name-dialog[open] input', 'Intro')
+  await page.locator('.wa-name-dialog[open] button', { hasText: 'Save' }).click()
+  await page.waitForTimeout(200)
+  check('sections: flag appears on the ruler', (await page.locator('.wa-section-flag').allTextContents()).join() === 'Intro')
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.wa-transport', { timeout: 15000 })
+  await openMode(page, 'CLIPS')
+  await page.locator('.wa-song-viewbar button.wa-subtab', { hasText: 'Arrangement' }).click()
+  check('sections: flag survives reload', await page.locator('.wa-section-flag', { hasText: 'Intro' }).count() === 1)
+  await page.locator('.wa-menu > summary', { hasText: 'File' }).click()
+  await page.locator('.wa-studio-menu-body button', { hasText: 'Project & export' }).click()
+  await page.waitForTimeout(300)
+  await page.evaluate(() => { const s = [...document.querySelectorAll('.wa-export')].find((row) => [...row.querySelectorAll('button')].some((b) => (b.textContent || '').includes('Export MIDI'))).querySelector('select'); s.value = 'song'; s.dispatchEvent(new Event('change', { bubbles: true })) })
+  const markerDl = page.waitForEvent('download', { timeout: 20000 }).catch(() => null)
+  await page.click('button:has-text("Export MIDI")')
+  const markerDownload = await markerDl
+  const markerSmf = parseSmf(markerDownload ? new Uint8Array(readFileSync(await markerDownload.path())) : new Uint8Array())
+  check('sections: song MIDI carries the marker', markerSmf.ok && markerSmf.tracks[0]?.markers?.some((m) => m.name === 'Intro'), JSON.stringify(markerSmf.tracks[0]?.markers ?? []))
+  await page.click('.wa-export-dialog-head button:has-text("Close")')
+  await page.waitForTimeout(200)
 
   // ── reach: controls have accessible names ──
   await openMode(page, 'DRUMS')

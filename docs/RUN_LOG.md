@@ -8,6 +8,16 @@
 - Position counter fix: a song "bar" is one pattern cycle, so a 32-step scene spans two real bars; the app bar counter now shows real bars. The timeline ruler still numbers cycles.
 - Harness: the autosave check re-selects the scene it edited before reading the step back (a clip launch in between moves the edited scene). Gates: functional 86/86, responsive 375/375, density 48/48; both demos probed through the engine.
 
+## 2026-09-07 — Studio FX parity: Echo, Scream, RV7000, Maximizer ideas + song sections (Claude, branch `audio-hub`)
+
+- **TAPE ECHO**: tempo SYNC (1/16 … 1/4 dotted, re-applied when the BPM changes), PING-PONG (a second delay hangs off the first and the feedback closes through it, so repeats alternate L/R), DUCK (live-only envelope follower on the pre-echo bus pulls the wet down under the track), momentary ROLL (feedback pushed past unity while held).
+- **DRIVE**: five Scream-style damage shapes (tube, tape, fuzz, warp/fold, digital) and a BODY knob (resonant peak after the shaper).
+- **SPACE**: impulse library (hall, plate, room with early reflections, spring chirps) plus **Load IR** for a user WAV (persisted in the project as a data URL, reused by the offline render), and a TONE low-pass on the return.
+- **LIMITER**: SOFT CLIP (tanh knee at the ceiling, 4× oversampled), a live gain-reduction meter, and **Master to target** — renders the song offline, measures BS.1770 integrated loudness, moves the master fader to −14/−16/−9/−7 LUFS with the ceiling at −1 and soft clip on, and says when the fader ran out.
+- **Song sections** (Reason Blocks / DAW markers): "＋ Section" names the bar under the playhead; flags sit on the arrangement ruler (click to jump, double-click to rename or clear), persist with the project, and export as SMF marker meta events in song-mode MIDI.
+- All new fields are optional on `FxState`; pre-v22 projects sound identical. Chain order is unchanged apart from the body filter inside DRIVE and the soft clip after the limiter.
+- Gates: `astro check` 0 · studio e2e green with seven new checks (rack controls per device, master-to-target moves the fader after an offline measurement, section flag on the ruler, survives reload, exports as a MIDI marker) · studio density and responsive gates re-run.
+
 ## 2026-09-07 — Sample Prep + chopper slice quantise (Claude, branch `audio-hub`)
 
 - `/audio/prep` — batch sample preparation with one recipe applied to every dropped file: trim silence (threshold), DC removal, **centre-channel vocal remover** (L−R with the mid kept below a chosen Hz), fold to mono, WSOLA time-stretch by percent or *to a target BPM from each file's detected tempo*, pitch shift (length kept, or varispeed), reverse, fades, gain, normalise to peak or to LUFS (peak-clamped), sample-rate conversion (Catmull-Rom), WAV 16/24/32f or MP3 192 kbps out, per-file A/B audition, download one or all. Pure DSP in `src/scripts/site/audio/process.ts`, encoders in `wav.ts`.

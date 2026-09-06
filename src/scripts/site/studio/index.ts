@@ -249,6 +249,7 @@ export async function initStudio(): Promise<void> {
     demo: () => factorySong("WESTSIDE"),
   });
   ctx.renderSel = renderSel;
+  ctx.renderBuffer = (mode) => renderBuffer(mode);
   // Export panel re-housed into a modal (same <dialog> idiom as askText).
   const exportDialog = document.createElement("dialog");
   exportDialog.className = "wa-export-dialog";
@@ -408,7 +409,7 @@ export async function initStudio(): Promise<void> {
   });
   function setBpm(v: number): void {
     transport.bpm = Math.max(40, Math.min(240, Math.round(v) || transport.bpm));
-    bpmInput.value = String(transport.bpm); lcdBpm.textContent = `${transport.bpm} BPM`; saveAll();
+    bpmInput.value = String(transport.bpm); lcdBpm.textContent = `${transport.bpm} BPM`; engine.applyFxState(); saveAll();
   }
   ctx.setBpm = setBpm;
   bpmDown.addEventListener("click", () => setBpm(transport.bpm - 1));

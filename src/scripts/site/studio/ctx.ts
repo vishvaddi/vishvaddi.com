@@ -16,6 +16,8 @@ export interface StudioCtx {
   /** Repaint every editor from current state — lets a library load apply in
    *  place rather than restarting the page. */
   refreshVisibleState: () => void
+  /** Offline render of the launched clips or the song — the limiter's loudness target uses it. */
+  renderBuffer?: (mode: "pattern" | "song") => Promise<AudioBuffer>
   /** Repaint the transport's recording-target chip (REC → scene). */
   updateRecChip: () => void
   /** FLM rule: the clip decides the editor. Select the scene and open the

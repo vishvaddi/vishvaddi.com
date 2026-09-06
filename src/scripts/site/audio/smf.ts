@@ -23,11 +23,14 @@ function trackBytes(track: MidiTrack): number[] {
   return [0x4d, 0x54, 0x72, 0x6b, (len >>> 24) & 0xff, (len >>> 16) & 0xff, (len >>> 8) & 0xff, len & 0xff, ...body];
 }
 
-export function encodeMidi(tracks: MidiTrack[], bpm: number, title: string): Uint8Array {
+export interface MidiMarker { tick: number; name: string }
+
+export function encodeMidi(tracks: MidiTrack[], bpm: number, title: string, markers: MidiMarker[] = []): Uint8Array {
   const usPerBeat = Math.round(60_000_000 / bpm);
   const conductor: MidiTrack = { name: title, events: [
     { tick: 0, order: 0, bytes: [0xff, 0x51, 0x03, (usPerBeat >>> 16) & 0xff, (usPerBeat >>> 8) & 0xff, usPerBeat & 0xff] },
     { tick: 0, order: 1, bytes: [0xff, 0x58, 0x04, 4, 2, 24, 8] },
+    ...markers.map((m, i) => ({ tick: Math.max(0, Math.round(m.tick)), order: 2 + i, bytes: text(0x06, m.name) })),
   ] };
   const all = [conductor, ...tracks];
   const header = [0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 1, (all.length >>> 8) & 0xff, all.length & 0xff, (PPQ >>> 8) & 0xff, PPQ & 0xff];

@@ -95,6 +95,7 @@ export interface HistoryState {
   padLayers?: PadLayer[][];
   padLayerMode?: PadLayerMode[];
   arrangement: Record<ArrangeTrackId, ArrangeBlock[]>;
+  sections?: SongSection[];
   audioTracks?: AudioArrangeTrack[];
   fx: FxState;
   rackState: RackState;
@@ -126,6 +127,18 @@ export interface FxState {
   echoDamp?: number;
   echoWow?: number;
   spaceSize?: number;
+  // FX parity pass (v22): Reason The Echo / Scream 4 / RV7000 / MClass ideas.
+  // All optional so pre-v22 projects sound exactly as before.
+  echoSync?: "free" | "1/16" | "1/8T" | "1/8" | "1/8D" | "1/4" | "1/4D";
+  echoPingPong?: boolean;
+  echoDuck?: number;        // 0–1, live playback only (needs an envelope follower)
+  driveType?: "tube" | "tape" | "fuzz" | "fold" | "digital";
+  driveBody?: number;       // 0–1 resonant body after the shaper
+  spaceType?: "hall" | "plate" | "room" | "spring" | "file";
+  spaceTone?: number;       // low-pass on the wet return, Hz
+  spaceIr?: string | null;  // uploaded impulse as a data URL when spaceType is "file"
+  spaceIrName?: string;
+  limiterSoft?: boolean;    // tanh soft clip at the ceiling after the limiter
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -242,6 +255,9 @@ export const arrangement: Record<ArrangeTrackId, ArrangeBlock[]> = { drums: [], 
 export const audioTracks: AudioArrangeTrack[] = [];
 export const songPos = { bar: 0 };
 export const songLoop = { on: false, startBar: 0, endBar: 8 };
+/** Named song sections (Reason Blocks / DAW markers): a flag on a bar of the arrangement. */
+export interface SongSection { bar: number; name: string }
+export const sections: SongSection[] = [];
 export function blockAt(track: ArrangeTrackId, bar: number): ArrangeBlock | null {
   let active: ArrangeBlock | null = null;
   arrangement[track].forEach((block) => {
@@ -328,6 +344,7 @@ export const fx: FxState = {
   compThreshold: -18, compRatio: 3, limiter: -1,
   reverb: 0, delayTime: 0.25, delayFeedback: 0.25, delayMix: 0,
   drive: 0, echoDamp: 2200, echoWow: 0.25, spaceSize: 2.2,
+  echoSync: "free", echoPingPong: false, echoDuck: 0, driveType: "tube", driveBody: 0, spaceType: "hall", spaceTone: 9000, spaceIr: null, spaceIrName: "", limiterSoft: false,
 };
 
 // ─── Synth ───────────────────────────────────────────────────────────────────

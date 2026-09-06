@@ -6,7 +6,7 @@
 // ignored; swing is kept because it is a fixed setting, not a dice roll.
 import {
   ARRANGE_TRACKS, SYNTH_LANES, SYNTH_LANE_LABELS, DRUMS, clip, transport, song,
-  allPats, allVels, synthLaneNotes, patternLengths, patternDivisions, laneLength, laneRate, padEvents, blockAt, songEndBar,
+  allPats, allVels, synthLaneNotes, patternLengths, patternDivisions, laneLength, laneRate, padEvents, blockAt, songEndBar, sections,
 } from "./state";
 import type { ArrangeTrackId } from "./state";
 import { noteToMidi } from "./vsynth";
@@ -100,5 +100,6 @@ export function buildMidi(mode: "pattern" | "song"): { bytes: Uint8Array; summar
     });
   }
   const tracks = [drums, pads, ...synths.values(), master].filter((t) => t.events.length);
-  return { bytes: encodeMidi(tracks, transport.bpm, song.title || "VishAmp"), summary: { bars, notes } };
+  const markers = mode === "song" ? sections.filter((s) => s.bar < bars).map((s) => ({ tick: barStart[s.bar], name: s.name })) : [];
+  return { bytes: encodeMidi(tracks, transport.bpm, song.title || "VishAmp", markers), summary: { bars, notes } };
 }

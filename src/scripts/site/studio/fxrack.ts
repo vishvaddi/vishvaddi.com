@@ -2,11 +2,12 @@
 // EQ / compressor / delay / reverb / limiter device cards. Extracted verbatim
 // from index.ts (Phase 0 split). (Combinator deletion is a Phase 2 item —
 // kept as-is here.)
-import { clip, mpc, rackState, fx, sampleParams, padEvents, patternLengths } from "./state";
-import { ensureNodes, applyFxState, initReverb, initDelay, refreshSpaceSize } from "./engine";
+import { clip, mpc, rackState, fx, sampleParams, padEvents, patternLengths, mixState, transport } from "./state";
+import { ensureNodes, applyFxState, initReverb, initDelay, refreshSpaceSize, refreshSpace, setEchoRoll, setSpaceIr, masterReduction } from "./engine";
+import { loudness } from "../audio/dsp";
 import { saveAll } from "./persistence";
 import { ctx } from "./ctx";
-import { el, btn, help, sliderRow, euclideanPattern } from "./helpers";
+import { el, btn, help, sliderRow, euclideanPattern, readAsDataUrl } from "./helpers";
 import { knob } from "./knob";
 
 export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLElement {
@@ -14,6 +15,21 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
   let refreshTabs = (): void => {};   // assigned once the device tab list exists (D3)
   const fxSlider = (label: string, min: number, max: number, value: number, step: number, apply: (v: number) => void) =>
     sliderRow(label, min, max, value, step, (v) => { ensureNodes(); apply(v); applyFxState(); saveAll(); });
+  const fxSelect = (label: string, options: Array<[string, string]>, value: string, apply: (v: string) => void): HTMLElement => {
+    const row = el("div", "wa-export wa-fx-select-row");
+    const select = document.createElement("select");
+    options.forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; select.append(o); });
+    select.value = value;
+    select.addEventListener("change", () => { ensureNodes(); apply(select.value); applyFxState(); saveAll(); });
+    row.append(el("span", "wa-lbl", label), select);
+    return row;
+  };
+  const fxToggle = (label: string, get: () => boolean, set: (v: boolean) => void): HTMLButtonElement => {
+    const button = btn(label, "wa-toggle wa-btn-sm");
+    button.classList.toggle("active", get());
+    button.addEventListener("click", () => { ensureNodes(); set(!get()); button.classList.toggle("active", get()); applyFxState(); saveAll(); });
+    return button;
+  };
   const deviceHeader = (key: string, label: string): HTMLElement => {
     const header = el("div", "wa-device-header");
     const bypass = btn(rackState.devices[key] ? "ON" : "BYPASS", "wa-toggle wa-btn-sm");
@@ -144,8 +160,19 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
   const driveDevice = el("div", "wa-device");
   driveDevice.append(
     deviceHeader("drive", "DRIVE · master saturation"),
+    fxSelect("TYPE", [["tube", "TUBE"], ["tape", "TAPE"], ["fuzz", "FUZZ"], ["fold", "WARP"], ["digital", "DIGITAL"]], fx.driveType ?? "tube", (v) => { fx.driveType = v as typeof fx.driveType; }),
     fxSlider("AMT", 0, 1, fx.drive ?? 0, 0.01, (v) => { fx.drive = v; }),
+    fxSlider("BODY", 0, 1, fx.driveBody ?? 0, 0.01, (v) => { fx.driveBody = v; }),
   );
+  const echoModeRow = el("div", "wa-export");
+  const pingPongBtn = fxToggle("PING-PONG", () => !!fx.echoPingPong, (v) => { fx.echoPingPong = v; });
+  help(pingPongBtn, "Alternate repeats left and right instead of stacking them in the centre.");
+  const rollBtn = btn("ROLL", "wa-btn-sm");
+  help(rollBtn, "Hold: the echo feeds back past unity and self-oscillates. Release: back to the REGEN setting.");
+  const rollOn = (event: Event) => { event.preventDefault(); ensureNodes(); setEchoRoll(true); rollBtn.classList.add("active"); };
+  const rollOff = () => { setEchoRoll(false); rollBtn.classList.remove("active"); };
+  rollBtn.addEventListener("pointerdown", rollOn); rollBtn.addEventListener("pointerup", rollOff); rollBtn.addEventListener("pointerleave", rollOff); rollBtn.addEventListener("pointercancel", rollOff);
+  echoModeRow.append(pingPongBtn, rollBtn);
   const delayDevice = el("div", "wa-device");
   delayDevice.append(
     deviceHeader("delay", "TAPE ECHO · damped feedback return"),
@@ -154,18 +181,81 @@ export function buildDeviceRack(deps: { paintEventLane: () => void }): HTMLEleme
     fxSlider("MIX", 0, 0.6, fx.delayMix, 0.02, (v) => { fx.delayMix = v; }),
     fxSlider("TONE", 600, 8000, fx.echoDamp ?? 2200, 50, (v) => { fx.echoDamp = v; }),
     fxSlider("WOW", 0, 1, fx.echoWow ?? 0.25, 0.01, (v) => { fx.echoWow = v; }),
+    fxSelect("SYNC", [["free", "FREE (TIME)"], ["1/16", "1/16"], ["1/8T", "1/8 T"], ["1/8", "1/8"], ["1/8D", "1/8 D"], ["1/4", "1/4"], ["1/4D", "1/4 D"]], fx.echoSync ?? "free", (v) => { fx.echoSync = v as typeof fx.echoSync; }),
+    fxSlider("DUCK", 0, 1, fx.echoDuck ?? 0, 0.01, (v) => { fx.echoDuck = v; }),
+    echoModeRow,
   );
+  const irRow = el("div", "wa-export");
+  const irInput = document.createElement("input"); irInput.type = "file"; irInput.accept = "audio/*,.wav,.aif,.aiff,.flac"; irInput.hidden = true; irInput.dataset.ir = "1";
+  const irBtn = btn("Load IR", "wa-btn-sm"), irClearBtn = btn("Clear IR", "wa-btn-sm"), irStatus = el("span", "wa-status", fx.spaceIrName ? `IR: ${fx.spaceIrName}` : "");
+  help(irBtn, "Use your own impulse response — any short WAV of a real room, plate or spring — as the SPACE reverb.");
+  irBtn.addEventListener("click", () => irInput.click());
+  irInput.addEventListener("change", async () => {
+    const file = irInput.files?.[0]; if (!file) return;
+    if (file.size > 4 * 1024 * 1024) { irStatus.textContent = "IR too large (4 MB max)"; irInput.value = ""; return; }
+    try { ensureNodes(); await setSpaceIr(await readAsDataUrl(file), file.name); irStatus.textContent = `IR: ${file.name}`; spaceTypeSelect().value = "file"; applyFxState(); saveAll(); }
+    catch { irStatus.textContent = "Could not decode that file"; }
+    irInput.value = "";
+  });
+  irClearBtn.addEventListener("click", () => { void setSpaceIr(null); irStatus.textContent = ""; spaceTypeSelect().value = "hall"; applyFxState(); saveAll(); });
+  irRow.append(irBtn, irClearBtn, irInput, irStatus);
   const reverbDevice = el("div", "wa-device");
+  const spaceTypeSelect = (): HTMLSelectElement => reverbDevice.querySelector("select") as HTMLSelectElement;
+  if (fx.spaceType === "file" && fx.spaceIr) void setSpaceIr(fx.spaceIr, fx.spaceIrName ?? "").catch(() => { irStatus.textContent = "Saved IR could not be decoded"; });
   reverbDevice.append(
     deviceHeader("reverb", "SPACE · convolution return"),
+    fxSelect("TYPE", [["hall", "HALL"], ["plate", "PLATE"], ["room", "ROOM"], ["spring", "SPRING"], ["file", "IMPULSE FILE"]], fx.spaceType ?? "hall", (v) => { fx.spaceType = v as typeof fx.spaceType; if (v === "file" && !fx.spaceIr) irStatus.textContent = "Load an impulse response (WAV) below"; refreshSpace(); }),
     fxSlider("MIX", 0, 0.6, fx.reverb, 0.02, (v) => { fx.reverb = v; initReverb(v); }),
     fxSlider("SIZE", 0.4, 5, fx.spaceSize ?? 2.2, 0.1, (v) => { fx.spaceSize = v; refreshSpaceSize(); }),
+    fxSlider("TONE", 1500, 16000, fx.spaceTone ?? 9000, 100, (v) => { fx.spaceTone = v; }),
+    irRow,
   );
+  const limiterRow = el("div", "wa-export");
+  const softBtn = fxToggle("SOFT CLIP", () => !!fx.limiterSoft, (v) => { fx.limiterSoft = v; });
+  help(softBtn, "Round off anything the limiter lets through with a tanh knee at the ceiling — louder without hard edges.");
+  limiterRow.append(softBtn);
+  const grMeter = el("div", "wa-gr-meter"), grTrack = el("div", "wa-gr-track"), grFill = el("div", "wa-gr-fill"), grText = el("span", "wa-gr-text", "GR 0.0 dB");
+  grTrack.append(grFill); grMeter.append(grTrack, grText);
+  const targetRow = el("div", "wa-export");
+  const targetSelect = document.createElement("select");
+  [["-14", "−14 LUFS · Spotify / YouTube"], ["-16", "−16 LUFS · Apple Music"], ["-9", "−9 LUFS · loud"], ["-7", "−7 LUFS · club"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; targetSelect.append(o); });
+  const targetBtn = btn("Master to target", "wa-btn-sm"), targetStatus = el("span", "wa-status");
+  help(targetBtn, "Renders the song offline, measures integrated loudness (BS.1770) and moves the master fader to hit the chosen target with the ceiling at −1 dBTP and soft clip on.");
+  targetBtn.addEventListener("click", async () => {
+    if (!ctx.renderBuffer) { targetStatus.textContent = "Renderer not ready"; return; }
+    targetBtn.setAttribute("disabled", "1"); targetStatus.textContent = "Rendering…";
+    try {
+      const buffer = await ctx.renderBuffer(transport.songMode ? "song" : "pattern");
+      const channels = Array.from({ length: Math.min(2, buffer.numberOfChannels) }, (_, c) => buffer.getChannelData(c));
+      const measured = loudness(channels, buffer.sampleRate).integrated;
+      if (!Number.isFinite(measured)) { targetStatus.textContent = "Nothing to measure — add some clips first"; return; }
+      const target = Number(targetSelect.value), gainDb = target - measured;
+      const nextLevel = Math.max(0.05, Math.min(1, mixState.masterLevel * Math.pow(10, gainDb / 20)));
+      const applied = 20 * Math.log10(nextLevel / mixState.masterLevel);
+      ctx.checkpoint();
+      mixState.masterLevel = nextLevel; fx.limiter = -1; fx.limiterSoft = true; rackState.devices.limiter = true;
+      softBtn.classList.add("active"); applyFxState(); saveAll(); ctx.refreshVisibleState();
+      targetStatus.textContent = `Was ${measured.toFixed(1)} LUFS — master ${applied >= 0 ? "+" : ""}${applied.toFixed(1)} dB${Math.abs(applied - gainDb) > 0.2 ? ` (fader maxed; ${(gainDb - applied).toFixed(1)} dB short — raise the mix)` : ""}, ceiling −1 dBTP, soft clip on.`;
+    } catch { targetStatus.textContent = "Render failed"; }
+    finally { targetBtn.removeAttribute("disabled"); }
+  });
+  targetRow.append(targetSelect, targetBtn, targetStatus);
   const limiterDevice = el("div", "wa-device");
   limiterDevice.append(
     deviceHeader("limiter", "MASTER LIMITER"),
     fxSlider("CEILING", -12, 0, fx.limiter, 0.5, (v) => { fx.limiter = v; }),
+    limiterRow,
+    grMeter,
+    targetRow,
   );
+  // Gain-reduction meter: the ladder fills as the limiter works, readout in dB.
+  const paintGr = (): void => {
+    const gr = Math.min(0, masterReduction());
+    grFill.style.width = `${Math.min(100, (-gr / 12) * 100)}%`;
+    grText.textContent = `GR ${gr.toFixed(1)} dB`;
+    requestAnimationFrame(paintGr);
+  };
+  requestAnimationFrame(paintGr);
   // ── Device browser (D3): side tab per device, one detail pane ──
   const sections: Array<{ id: string; key: string | null; label: string; elx: HTMLElement }> = [
     { id: "macros", key: null, label: "MACROS", elx: combinator },

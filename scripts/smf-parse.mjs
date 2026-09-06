@@ -12,12 +12,12 @@ export function parseSmf(bytes) {
     if (str(pos, 4) !== 'MTrk') return { ok: false, tracks }
     const len = u32(pos + 4), end = pos + 8 + len
     let p = pos + 8, name = '', noteOns = 0, noteOffs = 0, status = 0, lastTick = 0, tick = 0
-    const channels = []
+    const channels = [], markers = []
     const vlq = () => { let v = 0, b; do { b = bytes[p++]; v = (v << 7) | (b & 0x7f) } while (b & 0x80); return v }
     while (p < end) {
       tick += vlq()
       const b = bytes[p]
-      if (b === 0xff) { const type = bytes[p + 1]; p += 2; const l = vlq(); if (type === 0x03) name = String.fromCharCode(...bytes.slice(p, p + l)); if (type === 0x51) bpm = 60_000_000 / ((bytes[p] << 16) | (bytes[p + 1] << 8) | bytes[p + 2]); p += l; continue }
+      if (b === 0xff) { const type = bytes[p + 1]; p += 2; const l = vlq(); if (type === 0x03) name = String.fromCharCode(...bytes.slice(p, p + l)); if (type === 0x06) markers.push({ tick, name: String.fromCharCode(...bytes.slice(p, p + l)) }); if (type === 0x51) bpm = 60_000_000 / ((bytes[p] << 16) | (bytes[p + 1] << 8) | bytes[p + 2]); p += l; continue }
       if (b === 0xf0 || b === 0xf7) { p++; p += vlq(); continue }
       if (b & 0x80) { status = b; p++ }
       const kind = status & 0xf0, ch = status & 0x0f
@@ -26,7 +26,7 @@ export function parseSmf(bytes) {
       else if (kind === 0xc0 || kind === 0xd0) p += 1
       else p += 2
     }
-    tracks.push({ name, noteOns, noteOffs, channels, lastNoteTick: lastTick })
+    tracks.push({ name, noteOns, noteOffs, channels, lastNoteTick: lastTick, markers })
     pos = end
   }
   return { ok: true, format, ppq, bpm, tracks }

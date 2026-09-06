@@ -244,3 +244,10 @@
   .wa-page-mix .wa-ch-db { grid-area: db; }
   .wa-page-mix .wa-macro-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+/* v22 rack additions: select rows, GR meter */
+.wa-page-mix .wa-fx-select-row select { min-height: var(--wa-control-h); padding: 0 8px; border: 1px solid var(--wa-line); border-radius: 4px; background: var(--wa-well); color: var(--wa-text); font: 600 var(--wa-fs-xs)/1 var(--wa-font); text-transform: uppercase; letter-spacing: 0.04em; }
+.wa-page-mix .wa-gr-meter { flex: 1 0 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.wa-page-mix .wa-gr-track { height: 8px; border-radius: 4px; background: var(--wa-well); border: 1px solid var(--wa-line); overflow: hidden; }
+.wa-page-mix .wa-gr-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--wa-accent), #ff6a4a); transition: width 60ms linear; }
+.wa-page-mix .wa-gr-text { font: 600 var(--wa-fs-xs)/1 var(--wa-mono, var(--wa-font)); color: var(--wa-text-dim, var(--wa-text)); min-width: 6.5em; text-align: right; }

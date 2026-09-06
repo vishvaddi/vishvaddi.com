@@ -179,3 +179,7 @@
   .wa-arrange-selection { left: 6px; right: 6px; bottom: 6px; width: auto; }
   .wa-arrange-selection-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+/* v22 section flags on the ruler */
+.wa-section-flag { position: absolute; top: 0; height: 100%; padding: 0 6px 0 8px; border: 0; border-left: 2px solid var(--wa-accent); border-radius: 0 4px 4px 0; background: color-mix(in srgb, var(--wa-accent) 22%, transparent); color: var(--wa-text); font: 700 var(--wa-fs-xs)/1 var(--wa-font); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; cursor: pointer; z-index: 2; }
+.wa-section-flag:hover { background: color-mix(in srgb, var(--wa-accent) 38%, transparent); }

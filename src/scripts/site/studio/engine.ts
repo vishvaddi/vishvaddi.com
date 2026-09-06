@@ -29,8 +29,12 @@ export interface MasterChain {
   compressor: DynamicsCompressorNode; limiter: DynamicsCompressorNode;
   echoDelay: DelayNode; echoFb: GainNode; echoDamp: BiquadFilterNode; echoWet: GainNode;
   echoWowDepth: GainNode;
-  spaceHp: BiquadFilterNode; spaceConv: ConvolverNode; spaceWet: GainNode;
-  spaceSeconds: number;
+  // v22: ping-pong second delay + its own feedback return, per-mode output gains
+  echoDelayR: DelayNode; echoFbPing: GainNode; echoWetMono: GainNode; echoWetL: GainNode; echoWetR: GainNode;
+  driveBody: BiquadFilterNode;
+  spaceHp: BiquadFilterNode; spaceConv: ConvolverNode; spaceWet: GainNode; spaceLp: BiquadFilterNode;
+  spaceSeconds: number; spaceKey: string;
+  softClip: WaveShaperNode;
 }
 
 /** tanh saturation, blended against dry so amount 0 is an exact bypass. */
@@ -42,14 +46,77 @@ export function makeDriveCurve(amount: number, blend = 1) {
   }
   return curve;
 }
-function makeImpulse(a: BaseAudioContext, seconds: number): AudioBuffer {
+function makeImpulse(a: BaseAudioContext, seconds: number, type: NonNullable<typeof fx.spaceType> = "hall"): AudioBuffer {
   const sr = a.sampleRate, len = Math.max(1, Math.floor(sr * seconds));
   const ir = a.createBuffer(2, len, sr);
   for (let c = 0; c < 2; c++) {
     const d = ir.getChannelData(c);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 4.0);
+    if (type === "room") {
+      // short, with a handful of discrete early reflections before a fast tail
+      const roomLen = Math.min(len, Math.floor(sr * Math.max(0.25, seconds * 0.35)));
+      for (let i = 0; i < roomLen; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / roomLen, 6);
+      [0.007, 0.013, 0.021, 0.029, 0.037].forEach((t, k) => { const i = Math.floor(t * sr * (c ? 1.07 : 1)); if (i < len) d[i] += (k % 2 ? -1 : 1) * (0.7 - k * 0.1); });
+    } else if (type === "plate") {
+      // dense from the first sample, bright, and the top end dies faster than the body
+      let lp = 0;
+      for (let i = 0; i < len; i++) { const n = Math.random() * 2 - 1, t = i / len; const cut = 0.15 + 0.8 * (1 - t); lp += (n - lp) * cut; d[i] = (n * (1 - t) + lp * t) * Math.pow(1 - t, 3); }
+    } else if (type === "spring") {
+      // a few dispersive chirps (high partials arrive first) plus a thin noise bed
+      for (let i = 0; i < len; i++) {
+        const t = i / sr, env = Math.pow(1 - i / len, 5);
+        let v = (Math.random() * 2 - 1) * 0.12 * env;
+        for (let k = 0; k < 4; k++) { const start = k * 0.055 * (c ? 1.05 : 1); if (t < start) continue; const dt = t - start; v += Math.sin(2 * Math.PI * (2600 * Math.exp(-dt * 9) + 180) * dt) * Math.exp(-dt * 7) * (0.5 - k * 0.1); }
+        d[i] = v;
+      }
+    } else {
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 4.0);
+    }
   }
   return ir;
+}
+/** Uploaded impulse (spaceType "file"). AudioBuffers are context-independent, so the offline render reuses it. */
+export let customIr: AudioBuffer | null = null;
+export async function setSpaceIr(dataUrl: string | null, name = ""): Promise<void> {
+  if (!dataUrl) { customIr = null; fx.spaceIr = null; fx.spaceIrName = ""; if (fx.spaceType === "file") fx.spaceType = "hall"; refreshSpace(); return; }
+  const decoded = await ac().decodeAudioData(dataUrlToBytes(dataUrl));
+  customIr = decoded; fx.spaceIr = dataUrl; fx.spaceIrName = name; fx.spaceType = "file"; refreshSpace();
+}
+function spaceImpulse(a: BaseAudioContext, seconds: number): AudioBuffer {
+  if (fx.spaceType === "file" && customIr) return customIr;
+  return makeImpulse(a, seconds, fx.spaceType === "file" ? "hall" : (fx.spaceType ?? "hall"));
+}
+const spaceKeyOf = (): string => `${fx.spaceType ?? "hall"}:${(fx.spaceSize ?? 2.2).toFixed(2)}:${fx.spaceType === "file" ? fx.spaceIrName ?? "" : ""}`;
+
+/** Scream-style damage: five shapes, all blended against dry so 0 is bypass. */
+export function makeDamageCurve(type: NonNullable<typeof fx.driveType>, amount: number) {
+  const n = 2048, curve = new Float32Array(n), a = Math.max(0, Math.min(1, amount)), k = 1 + a * 15;
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    let y: number;
+    switch (type) {
+      case "tape": y = Math.tanh(x * k * 0.6) * 0.9 + x * 0.1; break;
+      case "fuzz": y = Math.max(-1, Math.min(1, x * k * 1.5)) * 0.8; break;
+      case "fold": y = Math.sin(x * (0.5 + a * 2.5) * Math.PI / 2); break;
+      case "digital": { const steps = Math.pow(2, 8 - a * 6); y = Math.tanh(Math.round(x * steps) / steps * k * 0.5); break; }
+      default: y = (Math.tanh((x + 0.12) * k) - Math.tanh(0.12 * k)) * 0.86; // tube: asymmetric, even harmonics
+    }
+    curve[i] = x * (1 - a) + y * a;
+  }
+  return curve;
+}
+/** MClass-style soft clip: linear below the ceiling, tanh above it, never past 0 dBFS. */
+export function makeSoftClipCurve(ceilingDb: number) {
+  const n = 2048, curve = new Float32Array(n), t = Math.pow(10, Math.min(-0.1, ceilingDb) / 20);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1, ax = Math.abs(x);
+    curve[i] = ax <= t ? x : Math.sign(x) * (t + (1 - t) * Math.tanh((ax - t) / (1 - t)));
+  }
+  return curve;
+}
+const ECHO_SYNC: Record<string, number> = { "1/16": 0.25, "1/8T": 1 / 3, "1/8": 0.5, "1/8D": 0.75, "1/4": 1, "1/4D": 1.5 };
+export function echoSeconds(): number {
+  const mult = ECHO_SYNC[fx.echoSync ?? "free"];
+  return mult ? Math.min(2, (60 / transport.bpm) * mult) : fx.delayTime;
 }
 
 export function buildMasterChain(a: BaseAudioContext, dest: AudioNode): MasterChain {
@@ -60,9 +127,12 @@ export function buildMasterChain(a: BaseAudioContext, dest: AudioNode): MasterCh
   const eqMid = a.createBiquadFilter(); eqMid.type = "peaking"; eqMid.frequency.value = 1200; eqMid.Q.value = 0.8;
   const eqHigh = a.createBiquadFilter(); eqHigh.type = "highshelf"; eqHigh.frequency.value = 6500;
   const compressor = a.createDynamicsCompressor(), limiter = a.createDynamicsCompressor();
-  bus.connect(drivePre); drivePre.connect(driveShaper); driveShaper.connect(drivePost);
+  // Scream-style body: a narrow peak after the shaper that the BODY knob raises.
+  const driveBody = a.createBiquadFilter(); driveBody.type = "peaking"; driveBody.frequency.value = 900; driveBody.Q.value = 5; driveBody.gain.value = 0;
+  bus.connect(drivePre); drivePre.connect(driveShaper); driveShaper.connect(driveBody); driveBody.connect(drivePost);
   drivePost.connect(eqLow); eqLow.connect(eqMid); eqMid.connect(eqHigh);
-  eqHigh.connect(compressor); compressor.connect(limiter); limiter.connect(dest);
+  const softClip = a.createWaveShaper(); softClip.oversample = "4x";
+  eqHigh.connect(compressor); compressor.connect(limiter); limiter.connect(softClip); softClip.connect(dest);
 
   // TAPE ECHO — the damping filter sits INSIDE the feedback loop, so each
   // repeat loses top end the way tape does; a slow LFO on delayTime is wow.
@@ -70,22 +140,34 @@ export function buildMasterChain(a: BaseAudioContext, dest: AudioNode): MasterCh
   const echoDamp = a.createBiquadFilter(); echoDamp.type = "lowpass";
   const echoWow = a.createOscillator(); echoWow.type = "sine"; echoWow.frequency.value = 0.6;
   const echoWowDepth = a.createGain();
+  // Two loop shapes share the nodes and are selected with gains: mono
+  // (delay → damp → back into itself) or ping-pong (delay → damp → second
+  // delay → back into the first), so repeats alternate left/right.
+  const echoDelayR = a.createDelay(2), echoFbPing = a.createGain(), echoWetMono = a.createGain(), echoWetL = a.createGain(), echoWetR = a.createGain();
+  const echoPanL = a.createStereoPanner(), echoPanR = a.createStereoPanner(); echoPanL.pan.value = -1; echoPanR.pan.value = 1;
   drivePost.connect(echoDelay);
-  echoDelay.connect(echoDamp); echoDamp.connect(echoFb); echoFb.connect(echoDelay);
-  echoDelay.connect(echoWet); echoWet.connect(eqLow);
-  echoWow.connect(echoWowDepth); echoWowDepth.connect(echoDelay.delayTime);
+  echoDelay.connect(echoDamp);
+  echoDamp.connect(echoFb); echoFb.connect(echoDelay);
+  echoDamp.connect(echoDelayR); echoDelayR.connect(echoFbPing); echoFbPing.connect(echoDelay);
+  echoDelay.connect(echoWetMono); echoWetMono.connect(echoWet);
+  echoDelay.connect(echoWetL); echoWetL.connect(echoPanL); echoPanL.connect(echoWet);
+  echoDelayR.connect(echoWetR); echoWetR.connect(echoPanR); echoPanR.connect(echoWet);
+  echoWet.connect(eqLow);
+  echoWow.connect(echoWowDepth); echoWowDepth.connect(echoDelay.delayTime); echoWowDepth.connect(echoDelayR.delayTime);
   echoWow.start(0);
 
   // SPACE — highpassed before the convolver so lows stay dry and defined.
   const spaceSeconds = Math.max(0.3, fx.spaceSize ?? 2.2);
   const spaceHp = a.createBiquadFilter(); spaceHp.type = "highpass"; spaceHp.frequency.value = 380;
-  const spaceConv = a.createConvolver(); spaceConv.buffer = makeImpulse(a, spaceSeconds);
+  const spaceConv = a.createConvolver(); spaceConv.buffer = spaceImpulse(a, spaceSeconds);
+  const spaceLp = a.createBiquadFilter(); spaceLp.type = "lowpass"; spaceLp.frequency.value = fx.spaceTone ?? 9000;
   const spaceWet = a.createGain();
-  drivePost.connect(spaceHp); spaceHp.connect(spaceConv); spaceConv.connect(spaceWet); spaceWet.connect(eqLow);
+  drivePost.connect(spaceHp); spaceHp.connect(spaceConv); spaceConv.connect(spaceLp); spaceLp.connect(spaceWet); spaceWet.connect(eqLow);
 
   const chain: MasterChain = {
     bus, drivePre, driveShaper, drivePost, eqLow, eqMid, eqHigh, compressor, limiter,
-    echoDelay, echoFb, echoDamp, echoWet, echoWowDepth, spaceHp, spaceConv, spaceWet, spaceSeconds,
+    echoDelay, echoFb, echoDamp, echoWet, echoWowDepth, echoDelayR, echoFbPing, echoWetMono, echoWetL, echoWetR, driveBody,
+    spaceHp, spaceConv, spaceWet, spaceLp, spaceSeconds, spaceKey: spaceKeyOf(), softClip,
   };
   applyChainParams(chain);
   return chain;
@@ -93,8 +175,10 @@ export function buildMasterChain(a: BaseAudioContext, dest: AudioNode): MasterCh
 
 export function applyChainParams(chain: MasterChain): void {
   const d = rackState.devices.drive === false ? 0 : Math.max(0, Math.min(1, fx.drive ?? 0));
-  chain.driveShaper.curve = makeDriveCurve(1 + d * 15, d);
+  chain.driveShaper.curve = makeDamageCurve(fx.driveType ?? "tube", d);
   chain.drivePost.gain.value = 1 - d * 0.35;
+  const body = rackState.devices.drive === false ? 0 : Math.max(0, Math.min(1, fx.driveBody ?? 0));
+  chain.driveBody.gain.value = body * 14; chain.driveBody.frequency.value = 500 + body * 900;
   chain.eqLow.gain.value = rackState.devices.eq ? fx.low : 0;
   chain.eqMid.gain.value = rackState.devices.eq ? fx.mid : 0;
   chain.eqHigh.gain.value = rackState.devices.eq ? fx.high : 0;
@@ -104,12 +188,45 @@ export function applyChainParams(chain: MasterChain): void {
   chain.limiter.threshold.value = rackState.devices.limiter ? fx.limiter : 0;
   chain.limiter.ratio.value = rackState.devices.limiter ? 20 : 1;
   chain.limiter.attack.value = 0.001; chain.limiter.release.value = 0.08; chain.limiter.knee.value = 0;
-  chain.echoDelay.delayTime.value = fx.delayTime;
-  chain.echoFb.gain.value = fx.delayFeedback;
+  const seconds = echoSeconds(), pingPong = !!fx.echoPingPong;
+  chain.echoDelay.delayTime.value = seconds; chain.echoDelayR.delayTime.value = seconds;
+  chain.echoFb.gain.value = pingPong ? 0 : fx.delayFeedback;
+  chain.echoFbPing.gain.value = pingPong ? fx.delayFeedback : 0;
+  chain.echoWetMono.gain.value = pingPong ? 0 : 1; chain.echoWetL.gain.value = pingPong ? 1 : 0; chain.echoWetR.gain.value = pingPong ? 1 : 0;
   chain.echoDamp.frequency.value = fx.echoDamp ?? 2200;
   chain.echoWowDepth.gain.value = (fx.echoWow ?? 0.25) * 0.0022;
   chain.echoWet.gain.value = rackState.devices.delay ? fx.delayMix : 0;
   chain.spaceWet.gain.value = rackState.devices.reverb ? fx.reverb : 0;
+  chain.spaceLp.frequency.value = fx.spaceTone ?? 9000;
+  chain.softClip.curve = rackState.devices.limiter && fx.limiterSoft ? makeSoftClipCurve(fx.limiter) : null;
+}
+/** Momentary "roll": push the active feedback path past unity so the echo self-oscillates while held. */
+export function setEchoRoll(on: boolean): void {
+  if (!liveChain) return;
+  if (!on) { applyChainParams(liveChain); return; }
+  const target = fx.echoPingPong ? liveChain.echoFbPing : liveChain.echoFb;
+  target.gain.value = 1.04; liveChain.echoWet.gain.value = Math.max(liveChain.echoWet.gain.value, 0.35);
+}
+/** Limiter gain reduction in dB (negative), for the rack meter. */
+export function masterReduction(): number { return liveChain?.limiter.reduction ?? 0; }
+// Echo ducking is live-only: an envelope of the pre-echo bus pulls the wet
+// return down while the track plays and lets it bloom in the gaps. Offline
+// renders skip it — there is no clock to follow there.
+let duckAnalyser: AnalyserNode | null = null, duckEnv = 0, duckTimer = 0;
+function startDucking(): void {
+  if (!AC || !liveChain || duckTimer) return;
+  duckAnalyser = AC.createAnalyser(); duckAnalyser.fftSize = 512; liveChain.drivePost.connect(duckAnalyser);
+  const samples = new Float32Array(duckAnalyser.fftSize);
+  duckTimer = window.setInterval(() => {
+    const amount = Math.max(0, Math.min(1, fx.echoDuck ?? 0));
+    if (!liveChain || !duckAnalyser || amount <= 0) return;
+    duckAnalyser.getFloatTimeDomainData(samples);
+    let sum = 0; for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+    const rms = Math.sqrt(sum / samples.length);
+    duckEnv = rms > duckEnv ? rms : duckEnv * 0.86;
+    const mix = rackState.devices.delay ? fx.delayMix : 0;
+    liveChain.echoWet.gain.value = mix * (1 - amount * Math.min(1, duckEnv * 6));
+  }, 25);
 }
 
 export function ac(): AudioContext {
@@ -117,6 +234,7 @@ export function ac(): AudioContext {
     AC = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     liveChain = buildMasterChain(AC, AC.destination);
     master = liveChain.bus;
+    startDucking();
     // Post-limiter taps: a summed analyser for scopes and meters, plus a
     // channel split so the vectorscope can plot true L against R.
     masterAnalyser = AC.createAnalyser(); masterAnalyser.fftSize = 2048; masterAnalyser.smoothingTimeConstant = 0.7;
@@ -189,14 +307,16 @@ export function initDelay(): void { ac(); applyFxState(); }
 export function applyFxState(): void {
   if (liveChain) applyChainParams(liveChain);
 }
-/** Rebuild the SPACE impulse after a size change (the buffer is baked, not a param). */
-export function refreshSpaceSize(): void {
+/** Rebuild the SPACE impulse after a size, type or IR change (the buffer is baked, not a param). */
+export function refreshSpace(): void {
   if (!liveChain || !AC) return;
+  const key = spaceKeyOf();
+  if (key === liveChain.spaceKey) return;
   const seconds = Math.max(0.3, fx.spaceSize ?? 2.2);
-  if (Math.abs(seconds - liveChain.spaceSeconds) < 0.01) return;
-  liveChain.spaceConv.buffer = makeImpulse(AC, seconds);
-  liveChain.spaceSeconds = seconds;
+  liveChain.spaceConv.buffer = spaceImpulse(AC, seconds);
+  liveChain.spaceSeconds = seconds; liveChain.spaceKey = key;
 }
+export const refreshSpaceSize = refreshSpace;
 
 // ─── Drum synthesis ──────────────────────────────────────────────────────────
 function noiseSrc(a: BaseAudioContext, dur: number): AudioBufferSourceNode {

@@ -1,6 +1,7 @@
 // Session view + per-track arrangement lanes — extracted verbatim from
 // index.ts (Phase 0 split). Cross-section wiring goes through ctx.
 import {
+  sections,
   TRACKS, TRACK_LABELS, ARRANGE_TRACKS, ARRANGE_TRACK_LABELS, SCENE_LABELS, SCENES, STEPS, clip, transport, song as songState,
   allPats, synthLaneNotes, SYNTH_LANES, activeSynth, padEvents, arrangement, createArrangeBlock, songLoop, songPos, songEndBar,
   audioTracks, addSynthLane, addAudioTrack,
@@ -325,6 +326,16 @@ export function buildSession(): SessionView {
       const mark = el("span", "wa-ruler-mark", String(bar + 1)); mark.style.left = `${bar * pixelsPerBar}px`; ruler.append(mark);
     }
     ruler.addEventListener("click", (event) => { songPos.bar = Math.max(0, Math.floor((event.clientX - ruler.getBoundingClientRect().left) / pixelsPerBar)); paintChain(); });
+    // Section flags sit on the ruler: click jumps there, double-click renames (empty name deletes).
+    sections.forEach((section) => {
+      const flag = btn(section.name, "wa-section-flag");
+      flag.classList.remove("wa-btn");
+      flag.style.left = `${section.bar * pixelsPerBar}px`;
+      flag.title = `${section.name} — bar ${section.bar + 1}. Double-click to rename or clear.`;
+      flag.addEventListener("click", (event) => { event.stopPropagation(); songPos.bar = section.bar; paintChain(); });
+      flag.addEventListener("dblclick", (event) => { event.stopPropagation(); void editSection(section.bar); });
+      ruler.append(flag);
+    });
     rulerRow.append(ruler); chain.append(rulerRow);
     if (ARRANGE_TRACKS.every((track) => !arrangement[track].length)) chain.append(el("span", "wa-chain-empty", "Choose a scene, then add or drag clips onto the timeline."));
     ARRANGE_TRACKS.forEach((track, trackIndex) => {
@@ -531,7 +542,20 @@ export function buildSession(): SessionView {
   refreshSongs();
   songLibrary.append(el("span", "wa-lbl", "SONGS"), songSel, loadSongBtn, saveSongBtn, deleteSongBtn, exportSongBtn, importSongBtn, songInput);
 
-  const trackTools = el("div", "wa-arrange-toolgroup"); trackTools.append(addMidiTrackBtn, addAudioTrackBtn, audioInput);
+  const sectionBtn = btn("＋ Section", "wa-btn-sm");
+  help(sectionBtn, "Name this bar of the song — Intro, Drop, Break. Flags show on the ruler; click one to jump there.");
+  sectionBtn.addEventListener("click", () => { void editSection(songPos.bar); });
+  async function editSection(bar: number): Promise<void> {
+    const existing = sections.find((section) => section.bar === bar);
+    const name = await askText(existing ? `Section at bar ${bar + 1}` : `New section at bar ${bar + 1}`, existing?.name ?? "Drop");
+    if (name === null && !existing) return;
+    ctx.checkpoint();
+    const rest = sections.filter((section) => section.bar !== bar);
+    sections.splice(0, sections.length, ...rest, ...(name ? [{ bar, name }] : []));
+    sections.sort((a, b) => a.bar - b.bar);
+    saveAll(); paintChain();
+  }
+  const trackTools = el("div", "wa-arrange-toolgroup"); trackTools.append(addMidiTrackBtn, addAudioTrackBtn, audioInput, sectionBtn);
   const editTools = el("div", "wa-arrange-toolgroup"); editTools.append(addBtn, duplicateBtn, copyBtn, pasteBtn, splitBtn, deleteBtn);
   const loopTools = el("div", "wa-arrange-toolgroup wa-loop-tools"); loopTools.append(loopToggle, loopStart, el("span", "wa-loop-arrow", "→"), loopEnd);
   const zoomTools = el("div", "wa-arrange-toolgroup wa-zoom-tools"); zoomTools.append(zoomOutBtn, zoomReadout, zoomInBtn, fitBtn);
