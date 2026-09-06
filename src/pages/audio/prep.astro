@@ -1,0 +1,85 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+import "../../styles/audio.css";
+---
+
+<Base
+  title="Sample Prep — Trim, Normalise, Stretch, Convert, Vocal Remover"
+  description="Batch-prepare samples in your browser: trim silence, normalise to a peak or LUFS target, fade, reverse, pitch-shift, time-stretch to a BPM, remove the centre channel for a quick instrumental, fold to mono, convert sample rate and export WAV or MP3. Nothing is uploaded."
+  audioNav
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/audio" style="color:inherit;text-decoration:none">Audio</a> / Sample prep</p>
+    <h1>Sample Prep</h1>
+    <p>
+      Set the recipe once, drop in as many files as you like, and every one
+      comes out trimmed, levelled, stretched and converted the same way. Audio
+      is decoded and processed in this tab and never leaves it.
+    </p>
+
+    <div class="au-drop" id="pp-drop">
+      <p><strong>Drop samples here</strong><br /><span class="au-muted">WAV, MP3, FLAC, OGG, M4A — many at once is fine</span></p>
+      <div class="btn-row"><label class="btn">Choose files<input id="pp-input" type="file" multiple accept="audio/*,.wav,.mp3,.flac,.ogg,.oga,.m4a,.aac,.aif,.aiff" hidden /></label></div>
+    </div>
+
+    <h2>Recipe</h2>
+    <div class="pp-recipe">
+      <fieldset class="pp-group">
+        <legend>Clean</legend>
+        <label class="pp-check"><input type="checkbox" id="pp-trim" /> Trim silence below <input type="number" id="pp-trim-db" value="-50" step="1" class="pp-num" /> dB</label>
+        <label class="pp-check"><input type="checkbox" id="pp-dc" /> Remove DC offset</label>
+        <label class="pp-check"><input type="checkbox" id="pp-centre" /> Remove centre (quick vocal remover), keep sub below <input type="number" id="pp-keep" value="150" step="10" class="pp-num" /> Hz</label>
+        <label class="pp-check"><input type="checkbox" id="pp-mono" /> Fold to mono</label>
+      </fieldset>
+      <fieldset class="pp-group">
+        <legend>Time and pitch</legend>
+        <label class="pp-field">Stretch
+          <select id="pp-stretch-mode"><option value="pct">by percent</option><option value="bpm">to a BPM</option></select>
+        </label>
+        <span id="pp-stretch-pct-wrap"><label class="pp-field">Length <input type="number" id="pp-stretch" value="100" min="25" max="400" step="1" class="pp-num" /> %</label></span>
+        <span id="pp-stretch-bpm-wrap" hidden><label class="pp-field">Target <input type="number" id="pp-target-bpm" value="140" min="40" max="240" step="0.5" class="pp-num" /> BPM (from each file's detected tempo)</label></span>
+        <label class="pp-field">Pitch <input type="number" id="pp-pitch" value="0" min="-24" max="24" step="1" class="pp-num" /> semitones
+          <select id="pp-pitch-mode"><option value="keep">keep length</option><option value="varispeed">varispeed (tape)</option></select>
+        </label>
+        <label class="pp-check"><input type="checkbox" id="pp-reverse" /> Reverse</label>
+      </fieldset>
+      <fieldset class="pp-group">
+        <legend>Level and shape</legend>
+        <label class="pp-field">Fade in <input type="number" id="pp-fade-in" value="0" min="0" step="1" class="pp-num" /> ms · out <input type="number" id="pp-fade-out" value="0" min="0" step="1" class="pp-num" /> ms</label>
+        <label class="pp-field">Gain <input type="number" id="pp-gain" value="0" min="-24" max="24" step="0.5" class="pp-num" /> dB</label>
+        <label class="pp-field">Normalise
+          <select id="pp-norm"><option value="off">off</option><option value="peak">to peak</option><option value="lufs">to loudness</option></select>
+        </label>
+        <span id="pp-peak-wrap" hidden><label class="pp-field">Peak <input type="number" id="pp-peak-db" value="-1" max="0" step="0.1" class="pp-num" /> dBFS</label></span>
+        <span id="pp-lufs-wrap" hidden><label class="pp-field">Loudness <input type="number" id="pp-lufs" value="-14" step="0.5" class="pp-num" /> LUFS</label></span>
+      </fieldset>
+      <fieldset class="pp-group">
+        <legend>Output</legend>
+        <label class="pp-field">Sample rate <select id="pp-rate"><option value="0">keep</option><option value="44100">44.1 kHz</option><option value="48000">48 kHz</option><option value="22050">22.05 kHz</option></select></label>
+        <label class="pp-field">Format <select id="pp-format"><option value="wav">WAV</option><option value="mp3">MP3 192 kbps</option></select></label>
+        <label class="pp-field">WAV depth <select id="pp-depth"><option value="16">16-bit</option><option value="24">24-bit</option><option value="32">32-bit float</option></select></label>
+      </fieldset>
+    </div>
+
+    <div class="btn-row" id="pp-actions" hidden>
+      <button type="button" class="btn" id="pp-process">Process all</button>
+      <button type="button" class="btn btn-ghost" id="pp-download-all">Download all</button>
+      <button type="button" class="btn btn-ghost" id="pp-clear">Clear list</button>
+    </div>
+    <p class="au-muted" id="pp-status"></p>
+
+    <div class="pp-list" id="pp-list"></div>
+
+    <p class="note-foot">
+      Centre removal is arithmetic (left minus right), so it also thins anything else mixed dead centre and does nothing to a vocal that was panned or widened. Proper stem separation is a later, model-based tool.
+      Stretch is WSOLA: clean on drums and loops at 50–200 %, smeary beyond. Pitch with "keep length" is stretch plus resample; varispeed changes length like tape.
+      Downloads come one at a time; the browser may ask to allow multiple downloads on "Download all".
+    </p>
+  </div>
+
+  <script>
+    import { initPrep } from "../../scripts/site/audio/prep";
+    initPrep();
+  </script>
+</Base>

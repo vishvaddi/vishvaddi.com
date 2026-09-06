@@ -132,6 +132,8 @@ export function buildChop(deps: { paintMpcPads: () => void; paintEventLane: () =
       Object.assign(sampleParams[pad], {
         name: `${chopName} ${i + 1}`, start: snappedStart, end: Math.min(1, snappedEnd),
         reverse: false, loop: false, sourceBpm: chopBpm ? Math.round(chopBpm) : transport.bpm,
+        // A break with a known tempo stretches to the project BPM so quantised slices stay in time.
+        warp: !!chopBpm && Math.abs(chopBpm - transport.bpm) > 0.5,
       });
     });
     deps.paintMpcPads(); saveAll(); chopStatus.textContent = `${Math.min(16, slices.length)} slices assigned to Bank ${"ABCD"[mpc.bank]}`;
@@ -140,14 +142,22 @@ export function buildChop(deps: { paintMpcPads: () => void; paintEventLane: () =
   assignSlicesBtn.addEventListener("click", () => { assignSlices(); });
   patternBtn.addEventListener("click", () => {
     if (!assignSlices()) return;
-    // Replay the break in slice order across the scene, ReCycle-style: each
-    // slice lands on its grid position and rings until the next one.
+    // Replay the break ReCycle-style: each slice is quantised to the step
+    // nearest its real position in the break (not spaced evenly by index), so
+    // transient slices keep the original groove. Bars come from the detected
+    // tempo; a break longer than the pattern wraps.
     const bankStart = mpc.bank * PAD_BANK_SIZE;
     const count = Math.min(PAD_BANK_SIZE, slices.length);
-    padEvents[clip.sel] = Array.from({ length: count }, (_, i) => ({
-      pad: bankStart + i, step: Math.round((i * patternLengths[clip.sel]) / count) % patternLengths[clip.sel],
-      velocity: 110, offset: 0, probability: 100, ratchets: 1,
-    }));
+    const steps = patternLengths[clip.sel];
+    const bars = chopBuffer && chopBpm ? Math.max(1, Math.round((chopBuffer.duration * chopBpm) / 240)) : 1;
+    const stepsPerBar = Math.max(1, Math.round(steps / Math.max(1, Math.round(steps / 16))));
+    const seen = new Set<number>();
+    padEvents[clip.sel] = slices.slice(0, count).flatMap(([start], i) => {
+      const step = Math.round(start * bars * stepsPerBar) % steps;
+      if (seen.has(step)) return [];
+      seen.add(step);
+      return [{ pad: bankStart + i, step, velocity: 110, offset: 0, probability: 100, ratchets: 1 }];
+    });
     if (clip.play.pads === null) clip.play.pads = clip.sel;
     deps.paintEventLane(); ctx.paintSession(); saveAll();
     chopStatus.textContent = `Break assigned to Bank ${"ABCD"[mpc.bank]} and written to scene ${SCENE_LABELS[clip.sel]}`;

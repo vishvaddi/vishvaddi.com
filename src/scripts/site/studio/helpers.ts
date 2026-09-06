@@ -1,5 +1,6 @@
 // Pure helpers — no shared studio state.
 import { knob as knobCtor } from "./knob";
+import { encodeMp3 as encodeMp3Channels } from "../audio/mp3";
 
 // ─── DOM ─────────────────────────────────────────────────────────────────────
 export const el = (tag: string, cls?: string, text?: string): HTMLElement => {
@@ -196,19 +197,7 @@ export function floatTo16(f: Float32Array): Int16Array {
   return out;
 }
 export async function encodeMp3(buf: AudioBuffer): Promise<Blob> {
-  const mod = (await import("lamejs")) as unknown as { Mp3Encoder?: unknown; default?: unknown };
-  const Enc = (mod.Mp3Encoder ?? (mod.default as { Mp3Encoder?: unknown })?.Mp3Encoder ?? mod.default) as new (...a: unknown[]) => {
-    encodeBuffer(l: Int16Array, r: Int16Array): Uint8Array;
-    flush(): Uint8Array;
-  };
-  const enc = new Enc(2, buf.sampleRate, 192);
-  const l = floatTo16(buf.getChannelData(0));
-  const r = floatTo16(buf.numberOfChannels > 1 ? buf.getChannelData(1) : buf.getChannelData(0));
-  const block = 1152, data: Uint8Array[] = [];
-  for (let i = 0; i < l.length; i += block) {
-    const mp3 = enc.encodeBuffer(l.subarray(i, i + block), r.subarray(i, i + block));
-    if (mp3.length) data.push(new Uint8Array(mp3));
-  }
-  const end = enc.flush(); if (end.length) data.push(new Uint8Array(end));
-  return new Blob(data as BlobPart[], { type: "audio/mpeg" });
+  // Shared loader — see audio/mp3.ts for why lamejs cannot be bundled.
+  const channels = Array.from({ length: Math.min(2, buf.numberOfChannels) }, (_, c) => buf.getChannelData(c));
+  return encodeMp3Channels(channels.length === 1 ? [channels[0], channels[0]] : channels, buf.sampleRate, 192);
 }

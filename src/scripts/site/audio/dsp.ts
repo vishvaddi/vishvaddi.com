@@ -63,6 +63,11 @@ export function highPass(fs: number, f0: number, Q: number): Biquad {
   const b0 = (1 + cw) / 2, b1 = -(1 + cw), b2 = (1 + cw) / 2, a0 = 1 + alpha, a1 = -2 * cw, a2 = 1 - alpha;
   return { b0: b0 / a0, b1: b1 / a0, b2: b2 / a0, a1: a1 / a0, a2: a2 / a0 };
 }
+export function lowPass(fs: number, f0: number, Q: number): Biquad {
+  const w0 = (2 * Math.PI * f0) / fs, cw = Math.cos(w0), alpha = Math.sin(w0) / (2 * Q);
+  const b0 = (1 - cw) / 2, b1 = 1 - cw, b2 = (1 - cw) / 2, a0 = 1 + alpha, a1 = -2 * cw, a2 = 1 - alpha;
+  return { b0: b0 / a0, b1: b1 / a0, b2: b2 / a0, a1: a1 / a0, a2: a2 / a0 };
+}
 /** ITU-R BS.1770 K-weighting: pre-filter shelf then RLB high-pass, any sample rate. */
 export function kWeighting(fs: number): [Biquad, Biquad] {
   return [highShelf(fs, 1681.974450955533, 3.999843853973347, 0.7071752369554196), highPass(fs, 38.13547087602444, 0.5003270373238773)];

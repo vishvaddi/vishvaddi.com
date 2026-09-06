@@ -6,6 +6,7 @@
 import { chromium } from 'playwright-core'
 import { serveBuiltSite } from './serve-built-site.mjs'
 import { parseSmf } from './smf-parse.mjs'
+import { readFileSync } from 'node:fs'
 
 const builtSite = process.argv[2] === 'dist' ? await serveBuiltSite(4403) : null
 const BASE = builtSite?.base ?? process.argv[2] ?? 'http://localhost:4321'
@@ -27,6 +28,33 @@ function makeWav({ seconds = 24, rate = 44100, bpm = 132, rootMidi = 62, peakDb 
     peak = Math.max(peak, Math.abs(l[i]), Math.abs(r[i]))
   }
   const gain = Math.pow(10, peakDb / 20) / peak
+  const out = Buffer.alloc(44 + n * 4)
+  out.write('RIFF', 0); out.writeUInt32LE(36 + n * 4, 4); out.write('WAVEfmt ', 8)
+  out.writeUInt32LE(16, 16); out.writeUInt16LE(1, 20); out.writeUInt16LE(2, 22)
+  out.writeUInt32LE(rate, 24); out.writeUInt32LE(rate * 4, 28); out.writeUInt16LE(4, 32); out.writeUInt16LE(16, 34)
+  out.write('data', 36); out.writeUInt32LE(n * 4, 40)
+  for (let i = 0; i < n; i++) { out.writeInt16LE(Math.round(l[i] * gain * 32767), 44 + i * 4); out.writeInt16LE(Math.round(r[i] * gain * 32767), 46 + i * 4) }
+  return out
+}
+
+// Reads a 16-bit PCM WAV download back into channels for assertions.
+function readWav(bytes) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const channels = dv.getUint16(22, true), rate = dv.getUint32(24, true), bits = dv.getUint16(34, true)
+  let p = 12
+  while (p < bytes.length - 8) { const id = String.fromCharCode(...bytes.slice(p, p + 4)), len = dv.getUint32(p + 4, true); if (id === 'data') { p += 8; break } p += 8 + len }
+  const frames = Math.floor((bytes.length - p) / (channels * bits / 8))
+  const out = Array.from({ length: channels }, () => new Float32Array(frames))
+  for (let i = 0; i < frames; i++) for (let c = 0; c < channels; c++) { out[c][i] = dv.getInt16(p, true) / 32768; p += 2 }
+  return { channels: out, rate, frames }
+}
+const goertzel = (x, rate, hz) => { const w = 2 * Math.PI * hz / rate, c = 2 * Math.cos(w); let s0 = 0, s1 = 0, s2 = 0; for (let i = 0; i < x.length; i++) { s0 = x[i] + c * s1 - s2; s2 = s1; s1 = s0 } return s1 * s1 + s2 * s2 - c * s1 * s2 }
+const peakDb = (chs) => { let p = 0; for (const x of chs) for (let i = 0; i < x.length; i++) p = Math.max(p, Math.abs(x[i])); return 20 * Math.log10(p) }
+// Stereo WAV: 1 kHz tone dead centre + 3 kHz tone in anti-phase (pure side), 1 s of silence either end, peak −6 dBFS.
+function makeCentreWav(rate = 44100, seconds = 6) {
+  const n = rate * seconds, l = new Float64Array(n), r = new Float64Array(n)
+  for (let i = rate; i < n - rate; i++) { const t = i / rate, centre = Math.sin(2 * Math.PI * 1000 * t) * 0.5, side = Math.sin(2 * Math.PI * 3000 * t) * 0.25; l[i] = centre + side; r[i] = centre - side }
+  const peak = 0.75, gain = Math.pow(10, -6 / 20) / peak
   const out = Buffer.alloc(44 + n * 4)
   out.write('RIFF', 0); out.writeUInt32LE(36 + n * 4, 4); out.write('WAVEfmt ', 8)
   out.writeUInt32LE(16, 16); out.writeUInt16LE(1, 20); out.writeUInt16LE(2, 22)
@@ -62,7 +90,7 @@ try {
   await page.fill('#site-hub-search', 'zzzz')
   check('hub: search empties the grid', await page.locator('#site-search-empty').isVisible())
   await page.fill('#site-hub-search', 'lufs')
-  check('hub: search finds by alias', await page.locator('[data-tool-item]:not([hidden])').count() === 1)
+  check('hub: search finds by alias', await page.locator('[data-tool-item]:not([hidden]) .tool-card[data-tool="/audio/analyser"]').count() === 1 && await page.locator('[data-tool-item]:not([hidden])').count() < 4)
 
   // ── analyser: rail + file path ──
   await page.goto(`${BASE}/audio/analyser/`, { waitUntil: 'domcontentloaded' })
@@ -127,12 +155,60 @@ try {
   const chordDl = page.waitForEvent('download', { timeout: 10000 })
   await page.click('#ch-midi')
   const chordFile = await chordDl
-  const { readFileSync } = await import('node:fs')
   const smf = parseSmf(new Uint8Array(readFileSync(await chordFile.path())))
   const chordsTrack = smf.tracks.find((t) => t.name === 'Chords'), bassTrack = smf.tracks.find((t) => t.name === 'Bass')
   check('chords: MIDI has 12 chord notes and 4 bass notes at 120 BPM', smf.ok && chordsTrack?.noteOns === 12 && bassTrack?.noteOns === 4 && Math.abs((smf.bpm ?? 0) - 120) < 0.5, `${chordsTrack?.noteOns}/${bassTrack?.noteOns} @ ${smf.bpm}`)
   await page.reload({ waitUntil: 'domcontentloaded' })
   check('chords: progression survives reload', await page.locator('.ch-slot').count() === 4)
+
+  // ── sample prep ──
+  await page.goto(`${BASE}/audio/prep/`, { waitUntil: 'domcontentloaded' })
+  await page.setInputFiles('#pp-input', { name: 'centre.wav', mimeType: 'audio/wav', buffer: makeCentreWav() })
+  await page.waitForFunction(() => /BPM/.test(document.querySelector('.pp-item-meta')?.textContent ?? ''), null, { timeout: 30000 })
+  check('prep: file decodes and reports level', /6\.00 s .* peak -6\.\d dBFS/.test((await page.locator('.pp-item-meta').textContent()) ?? ''), await page.locator('.pp-item-meta').textContent())
+  // recipe 1: trim + fade + peak normalise to −1 dB
+  await page.check('#pp-trim'); await page.fill('#pp-fade-in', '50'); await page.fill('#pp-fade-out', '50')
+  await page.selectOption('#pp-norm', 'peak'); await page.fill('#pp-peak-db', '-1')
+  await page.click('#pp-process')
+  await page.waitForFunction(() => /Done/.test(document.getElementById('pp-status')?.textContent ?? ''), null, { timeout: 60000 })
+  let ppDl = page.waitForEvent('download', { timeout: 15000 })
+  await page.locator('.pp-item .btn', { hasText: 'Download' }).click()
+  let ppWav = readWav(new Uint8Array(readFileSync(await (await ppDl).path())))
+  check('prep: trim removes the two seconds of silence', Math.abs(ppWav.frames / ppWav.rate - 4) < 0.05, `${(ppWav.frames / ppWav.rate).toFixed(3)} s`)
+  check('prep: peak normalised to −1 dBFS', Math.abs(peakDb(ppWav.channels) + 1) < 0.15, peakDb(ppWav.channels).toFixed(2))
+  check('prep: fade-in starts quiet', Math.abs(ppWav.channels[0][40]) < 0.05, String(ppWav.channels[0][40]))
+  const decodedHz = Number(/(\d+) Hz/.exec((await page.locator('.pp-item-meta').textContent()) ?? '')?.[1])
+  check('prep: download keeps the decoded sample rate', ppWav.rate === decodedHz, `${ppWav.rate} vs decoded ${decodedHz}`)
+  // recipe 2: centre removal only
+  await page.uncheck('#pp-trim'); await page.fill('#pp-fade-in', '0'); await page.fill('#pp-fade-out', '0'); await page.selectOption('#pp-norm', 'off')
+  await page.check('#pp-centre')
+  await page.click('#pp-process')
+  await page.waitForFunction(() => /Done/.test(document.getElementById('pp-status')?.textContent ?? ''), null, { timeout: 60000 })
+  ppDl = page.waitForEvent('download', { timeout: 15000 })
+  await page.locator('.pp-item .btn', { hasText: 'Download' }).click()
+  ppWav = readWav(new Uint8Array(readFileSync(await (await ppDl).path())))
+  const mid = ppWav.channels[0].subarray(ppWav.rate * 2, ppWav.rate * 3)
+  const centreLeft = goertzel(mid, ppWav.rate, 1000), sideLeft = goertzel(mid, ppWav.rate, 3000)
+  check('prep: centre removal kills the 1 kHz centre tone and keeps the 3 kHz side tone', sideLeft > 0 && centreLeft / sideLeft < 0.01, `ratio ${(centreLeft / sideLeft).toExponential(2)}`)
+  // recipe 3: stretch to 150 % (length only)
+  await page.uncheck('#pp-centre'); await page.fill('#pp-stretch', '150')
+  await page.click('#pp-process')
+  await page.waitForFunction(() => /Done/.test(document.getElementById('pp-status')?.textContent ?? ''), null, { timeout: 60000 })
+  ppDl = page.waitForEvent('download', { timeout: 15000 })
+  await page.locator('.pp-item .btn', { hasText: 'Download' }).click()
+  ppWav = readWav(new Uint8Array(readFileSync(await (await ppDl).path())))
+  check('prep: 150 % stretch lengthens by half', Math.abs(ppWav.frames / ppWav.rate - 9) < 0.15, `${(ppWav.frames / ppWav.rate).toFixed(3)} s`)
+  const stretched = ppWav.channels[0].subarray(ppWav.rate * 3, ppWav.rate * 4)
+  check('prep: stretch keeps pitch (1 kHz still dominant over 1.5 kHz)', goertzel(stretched, ppWav.rate, 1000) > 20 * goertzel(stretched, ppWav.rate, 1500), '')
+  // recipe 4: MP3 output
+  await page.fill('#pp-stretch', '100'); await page.selectOption('#pp-format', 'mp3')
+  await page.click('#pp-process')
+  await page.waitForFunction(() => /Done/.test(document.getElementById('pp-status')?.textContent ?? ''), null, { timeout: 60000 })
+  ppDl = page.waitForEvent('download', { timeout: 30000 })
+  await page.locator('.pp-item .btn', { hasText: 'Download' }).click()
+  const mp3 = await ppDl
+  const mp3Bytes = readFileSync(await mp3.path())
+  check('prep: MP3 export produces an MPEG stream', /\.mp3$/.test(mp3.suggestedFilename()) && mp3Bytes.length > 20_000 && (mp3Bytes[0] === 0xff || mp3Bytes.toString('latin1', 0, 3) === 'ID3'), `${mp3.suggestedFilename()} ${mp3Bytes.length} bytes`)
 
   // ── phone layout ──
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
@@ -147,6 +223,7 @@ try {
 } catch (err) {
   failed++
   results.push(`  ✗ harness crashed — ${err?.stack ?? err}`)
+  if (consoleErrors.length) results.push(`  console: ${consoleErrors.slice(0, 3).join(' | ')}`)
 } finally {
   console.log(results.join('\n'))
   console.log(failed ? `\n${failed} FAILED` : '\nall green')
