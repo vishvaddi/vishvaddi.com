@@ -11,6 +11,7 @@ const routes = [
   '/site/calc/', '/site/notepad/', '/site/convert/', '/site/materials/', '/site/geometry/', '/site/rate/',
   '/site/charge-rate/', '/site/prices/', '/site/programme/', '/site/cut-list/', '/site/lattice/', '/site/span/',
   '/site/records/', '/site/voice/', '/site/sketch/', '/site/gauges/', '/site/pdf/', '/site/quickref/', '/site/resources/',
+  '/audio/analyser/',
 ]
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true })

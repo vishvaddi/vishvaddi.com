@@ -8,6 +8,14 @@
 - Position counter fix: a song "bar" is one pattern cycle, so a 32-step scene spans two real bars; the app bar counter now shows real bars. The timeline ruler still numbers cycles.
 - Harness: the autosave check re-selects the scene it edited before reading the step back (a clip launch in between moves the edited scene). Gates: functional 86/86, responsive 375/375, density 48/48; both demos probed through the engine.
 
+## 2026-09-07 — /audio hub + Track Analyser (Claude, branch `audio-hub`)
+
+- New `/audio` hub for producer and DJ tools, built on the `/site` shell: `src/data/audio-tools.ts` catalogue, `src/pages/audio/index.astro`, rail + phone picker now render either catalogue (`Base.astro` gained an `audioNav` prop; `/site` output unchanged, responsive gate 119/119 across both hubs). "Audio" added to the More menu. `chrome.js`/`site-hub.js` keep separate recents per hub.
+- `/audio/analyser` — Track Analyser: drop a file, get BPM (spectral-flux onset autocorrelation with a log-normal prior and half/double alternatives), key + Camelot (interpolated-peak chroma → Krumhansl–Kessler correlation, top-3 with confidence and compatible codes), integrated / short-term / momentary LUFS and LRA (BS.1770-4 K-weighting at any sample rate, R128 gating, EBU 3342 range), true peak (4× polyphase, only near-peak regions interpolated), clipped runs, stereo correlation / width / balance / DC, average spectrum and six-band tonal balance with tilt and centroid, and a targets table (Spotify, Apple, YouTube, Amazon, Tidal, club) with gain-to-target and limiter warnings. Copy-as-Markdown and JSON download. Pure maths in `src/scripts/site/audio/dsp.ts`, UI in `analyser.ts`.
+- Known limit: browsers resample on decode, so the page reports the analysis rate ("decoded at 48000 Hz"), not the file's.
+- Gates: `astro check` 0 errors · new `scripts/audio-tools-e2e.mjs` 25/25 (synthetic 132 BPM D-minor WAV through the real decoder: tempo ±1, key, Camelot, true peak ±0.6 dB, Spotify gain arithmetic; built-in 128 BPM A-minor tone; JSON download; phone layout) · site-tools responsive 119/119 · studio functional all green (shared layout blast radius).
+- Not deployed by decision: the whole /audio programme ships as one deploy at the end.
+
 ## 2026-09-06 — Studio demo songs: MIDNIGHT ACID gone, jungle → 2562-style dubstep, Burial-style third song
 
 - `DEMO_TITLES` is now WESTSIDE · FLIGHT PATH · SODIUM LIGHT. MIDNIGHT ACID is deleted (the legacy generator in `session.ts` no longer special-cases it). HAZARD LINES (jungle) is replaced.

@@ -1,0 +1,89 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+import "../../styles/audio.css";
+---
+
+<Base
+  title="Track Analyser — BPM, Key, LUFS & True Peak"
+  description="Drop a track and read its tempo, key and Camelot code, integrated and short-term loudness (LUFS), true peak, loudness range, stereo width and tonal balance, with the gain needed for Spotify, Apple Music, YouTube and club targets. Runs entirely in your browser."
+  audioNav
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/audio" style="color:inherit;text-decoration:none">Audio</a> / Track analyser</p>
+    <h1>Track Analyser</h1>
+    <p>
+      Tempo, key, loudness, peaks, width and tonal balance from one file, plus how
+      far it sits from each streaming and club target. The audio is decoded and
+      measured in this tab and never uploaded.
+    </p>
+
+    <div class="au-drop" id="au-drop">
+      <p><strong>Drop an audio file here</strong><br /><span class="au-muted">WAV, MP3, FLAC, OGG, M4A — anything your browser can decode</span></p>
+      <div class="btn-row">
+        <label class="btn">Choose file<input id="au-file-input" type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.oga,.m4a,.aac,.aif,.aiff" hidden /></label>
+        <button type="button" class="btn btn-ghost" id="au-demo">Analyse a test tone</button>
+      </div>
+    </div>
+
+    <div class="au-progress" id="au-progress" hidden>
+      <div class="au-progress-track"><div class="au-progress-bar" id="au-progress-bar"></div></div>
+      <span class="au-muted" id="au-status"></span>
+    </div>
+
+    <section id="au-results" class="result" hidden>
+      <p class="au-file" id="au-file"></p>
+      <div class="stat-grid au-stats">
+        <div class="stat"><div class="n" id="au-bpm">—</div><div class="l">BPM</div><div class="au-sub" id="au-bpm-sub"></div></div>
+        <div class="stat"><div class="n" id="au-key">—</div><div class="l">Key</div><div class="au-sub" id="au-key-sub"></div></div>
+        <div class="stat"><div class="n" id="au-camelot">—</div><div class="l">Camelot</div><div class="au-sub" id="au-camelot-sub"></div></div>
+        <div class="stat"><div class="n" id="au-lufs">—</div><div class="l">LUFS</div><div class="au-sub" id="au-lufs-sub"></div></div>
+        <div class="stat"><div class="n" id="au-tp">—</div><div class="l">dBTP</div><div class="au-sub" id="au-tp-sub"></div></div>
+        <div class="stat"><div class="n" id="au-lra">—</div><div class="l">Range</div><div class="au-sub" id="au-lra-sub"></div></div>
+        <div class="stat"><div class="n" id="au-st">—</div><div class="l">Short-term</div><div class="au-sub" id="au-st-sub"></div></div>
+        <div class="stat"><div class="n" id="au-mom">—</div><div class="l">Momentary</div><div class="au-sub" id="au-mom-sub"></div></div>
+        <div class="stat"><div class="n" id="au-corr">—</div><div class="l">Correlation</div><div class="au-sub" id="au-corr-sub"></div></div>
+        <div class="stat"><div class="n" id="au-width">—</div><div class="l">Width</div><div class="au-sub" id="au-width-sub"></div></div>
+        <div class="stat"><div class="n" id="au-tilt">—</div><div class="l">Tilt</div><div class="au-sub" id="au-tilt-sub"></div></div>
+      </div>
+
+      <h2>Waveform and short-term loudness</h2>
+      <canvas class="au-canvas au-wave" id="au-wave" aria-label="Waveform with short-term loudness trace"></canvas>
+
+      <h2>Average spectrum</h2>
+      <canvas class="au-canvas au-spec" id="au-spectrum" aria-label="Average spectrum, 20 Hz to 20 kHz"></canvas>
+
+      <h2>Tonal balance</h2>
+      <div class="au-bands" id="au-bands"></div>
+
+      <h2>Streaming and club targets</h2>
+      <div class="au-table-wrap">
+        <table class="au-table">
+          <thead><tr><th>Platform</th><th>Loudness</th><th>Ceiling</th><th>Gain to target</th><th>Verdict</th></tr></thead>
+          <tbody id="au-targets"></tbody>
+        </table>
+      </div>
+
+      <div id="au-notes-wrap" hidden>
+        <h2>Notes</h2>
+        <ul class="au-notes" id="au-notes"></ul>
+      </div>
+
+      <div class="btn-row no-print">
+        <button type="button" class="btn" id="au-copy">Copy report</button>
+        <button type="button" class="btn btn-ghost" id="au-json">Download JSON</button>
+      </div>
+
+      <p class="note-foot">
+        Loudness follows ITU-R BS.1770-4 with EBU R128 gating; range follows EBU Tech 3342; true peak is 4× oversampled.
+        Key uses Krumhansl–Kessler profile correlation on a chroma of the whole track, so modulating songs report the dominant key.
+        Platform figures are the published normalisation references; the club row is convention, not a standard.
+      </p>
+    </section>
+  </div>
+
+  <script>
+    import { initAnalyser } from "../../scripts/site/audio/analyser";
+    initAnalyser();
+  </script>
+</Base>

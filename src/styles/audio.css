@@ -1,0 +1,47 @@
+/* /audio tool pages. Extends the blueprint skin from site.css; prefix au- so
+   nothing here leaks into /site. */
+
+.au-muted { color: var(--muted); font-size: 0.85rem; }
+.au-drop {
+  margin: 1.25rem 0 1rem; padding: 1.4rem 1.2rem; text-align: center;
+  border: 2px dashed var(--site-line-strong); border-radius: 10px; background: color-mix(in srgb, var(--site-accent) 4%, transparent);
+  transition: border-color 0.15s, background 0.15s;
+}
+.au-drop.over { border-color: var(--site-accent); background: color-mix(in srgb, var(--site-accent) 12%, transparent); }
+.au-drop .btn-row { justify-content: center; margin-bottom: 0; }
+.au-drop .btn { display: inline-flex; align-items: center; min-height: 44px; }
+
+.au-progress { display: grid; gap: 0.35rem; margin: 0.5rem 0 1rem; }
+.au-progress-track { height: 6px; border-radius: 3px; background: var(--site-line); overflow: hidden; }
+.au-progress-bar { height: 100%; width: 0; background: var(--site-accent); transition: width 0.12s linear; }
+
+.au-file { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); margin: 0 0 0.75rem; overflow-wrap: anywhere; }
+.au-stats { grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); }
+.au-stats .stat .n { font-size: 1.15rem; overflow-wrap: anywhere; }
+.au-sub { font-size: 0.7rem; color: var(--muted); margin-top: 0.15rem; min-height: 1em; }
+
+.au-canvas { display: block; width: 100%; border: 1px solid var(--site-line); border-radius: 6px; background: var(--code-bg); }
+.au-wave { height: 120px; }
+.au-spec { height: 170px; }
+
+.au-bands { display: grid; gap: 0.35rem; margin: 0.5rem 0 1rem; }
+.au-band { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) 3.5rem; align-items: center; gap: 0.6rem; font-size: 0.85rem; }
+.au-band-name { color: var(--muted); }
+.au-band-bar { height: 12px; border-radius: 3px; background: var(--site-line); overflow: hidden; }
+.au-band-bar > span { display: block; height: 100%; background: var(--site-accent); }
+.au-band-pct { font-family: var(--font-mono); font-size: 0.78rem; text-align: right; }
+
+.au-table-wrap { overflow-x: auto; margin: 0.5rem 0 1rem; }
+.au-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; min-width: 34rem; }
+.au-table th, .au-table td { text-align: left; padding: 0.45rem 0.55rem; border-bottom: 1px solid var(--site-line); vertical-align: top; }
+.au-table th { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.au-table td small { color: var(--muted); }
+.au-table .au-ok { color: #1f9d4d; font-weight: 600; }
+:root[data-theme="dark"] .au-table .au-ok, :root:not([data-theme="light"]) .au-table .au-ok { color: #5fd08a; }
+
+.au-notes { padding-left: 1.1rem; font-size: 0.9rem; }
+.au-notes li { margin: 0.3rem 0; }
+
+@media (max-width: 480px) {
+  .au-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

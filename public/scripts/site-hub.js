@@ -7,7 +7,7 @@
 
   var recents;
   try {
-    recents = JSON.parse(localStorage.getItem("vv_site_recents") || "[]");
+    recents = JSON.parse(localStorage.getItem(location.pathname.indexOf("/audio") === 0 ? "vv_audio_recents" : "vv_site_recents") || "[]");
   } catch (e) {
     recents = [];
   }

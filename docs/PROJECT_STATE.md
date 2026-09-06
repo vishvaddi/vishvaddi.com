@@ -4,6 +4,7 @@ _Last updated: 2026-09-06 — Radio discovery, construction PDF comparison, task
 
 ## Current Position
 
+- `/audio/` is a second tool hub (same shell and rail as `/site`) for producer and DJ utilities that run entirely in the browser. First tool: `/audio/analyser/` (tempo, key + Camelot, LUFS / true peak / LRA, stereo, tonal balance, platform targets). Programme and ownership: `docs/AUDIO_HUB_PLAN.md`.
 - `/radio/` now saves station favourites locally, filters to them and chooses a random station from the active search/filter result.
 - `/site/pdf/` adds estimator issue-stamp presets, visible export preflight, local two-drawing opacity/difference comparison and flattened comparison export. `/site/` cards state each tool's problem, outcome and local privacy boundary.
 - `/prepping/gear/` has five failure-specific readiness loadouts with local progress. `/prepping/knots/` teaches eight core knots with original step-controlled SVG animations, reduced-motion support and explicit non-life-support warnings.

@@ -36,8 +36,9 @@
   // can surface them. Stays in this browser.
   try {
     var p = location.pathname.replace(/\/+$/, "");
-    if (/^\/site\/[^/]+$/.test(p)) {
-      var key = "vv_site_recents";
+    var hub = /^\/(site|audio)\/[^/]+$/.exec(p);
+    if (hub) {
+      var key = hub[1] === "audio" ? "vv_audio_recents" : "vv_site_recents";
       var arr = JSON.parse(localStorage.getItem(key) || "[]");
       if (!Array.isArray(arr)) arr = [];
       arr = arr.filter(function (x) { return x !== p; });

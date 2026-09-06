@@ -1,6 +1,7 @@
 ---
 import "../styles/global.css";
 import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../data/site-tools";
+import { AUDIO_TOOLS, AUDIO_TOOL_CATEGORIES } from "../data/audio-tools";
 
 interface Props {
   title?: string;
@@ -8,6 +9,7 @@ interface Props {
   ogImage?: string;
   updatedDate?: Date;
   siteNav?: boolean;
+  audioNav?: boolean;
   noindex?: boolean;
   immersive?: boolean;
   workspace?: boolean;
@@ -19,6 +21,7 @@ const {
   ogImage = "/og/index.png",
   updatedDate,
   siteNav = false,
+  audioNav = false,
   noindex = false,
   immersive = false,
   workspace = false,
@@ -26,7 +29,11 @@ const {
 
 const here = Astro.url.pathname.replace(/\/$/, "");
 const activeToolHref = here === "/site/sheet" ? "/site/cut-list" : here;
-const currentTool = SITE_TOOLS.find((tool) => tool.href === activeToolHref);
+// One rail component, two catalogues: /site tools and /audio tools share the markup.
+const rail = audioNav
+  ? { tools: AUDIO_TOOLS as readonly { href: string; title: string; shortTitle: string; aliases: string; category: string }[], categories: AUDIO_TOOL_CATEGORIES as readonly string[], hub: "/audio", title: "Audio tools" }
+  : { tools: SITE_TOOLS as readonly { href: string; title: string; shortTitle: string; aliases: string; category: string }[], categories: SITE_TOOL_CATEGORIES as readonly string[], hub: "/site", title: "Site tools" };
+const currentTool = rail.tools.find((tool) => tool.href === activeToolHref);
 
 const navPrimary: [string, string][] = [
   ["/site", "Tools"],
@@ -34,6 +41,7 @@ const navPrimary: [string, string][] = [
 ];
 const navMore: [string, string][] = [
   ["/notes", "Notes"],
+  ["/audio", "Audio"],
   ["/radio", "Radio"],
   ["/feeds", "Feeds"],
   ["/reader", "Reader"],
@@ -51,7 +59,7 @@ const isActive = (href: string) => {
   return here === path || here.startsWith(path + "/");
 };
 const moreActive = navMore.some(([href]) => isActive(href));
-const showRail = siteNav && here !== "/site";
+const showRail = (siteNav && here !== "/site") || (audioNav && here !== "/audio");
 const workspacePage = workspace || showRail;
 
 const fullTitle = title === "Vish Vaddi" ? title : `${title} · Vish Vaddi`;
@@ -131,20 +139,20 @@ const updatedFmt = updatedDate
     <main>
       {showRail && (
         <>
-          <nav class="site-rail" aria-label="Site tools">
+          <nav class="site-rail" aria-label={rail.title}>
             <div class="site-nav-head">
-              <span class="rail-title">Site tools</span>
-              <a href="/site" class="site-nav-all">All</a>
+              <span class="rail-title">{rail.title}</span>
+              <a href={rail.hub} class="site-nav-all">All</a>
             </div>
             <label class="site-tool-search-label">
               <span class="sr-only">Find a tool</span>
               <input class="site-tool-search" type="search" placeholder="Find a tool…" autocomplete="off" data-site-tool-search />
             </label>
             <div class="site-nav-groups">
-              {SITE_TOOL_CATEGORIES.map((category) => (
+              {rail.categories.filter((category) => rail.tools.some((tool) => tool.category === category)).map((category) => (
                 <section class="site-nav-group" data-site-tool-group>
                   <span class="site-nav-category">{category}</span>
-                  {SITE_TOOLS.filter((tool) => tool.category === category).map((tool) => (
+                  {rail.tools.filter((tool) => tool.category === category).map((tool) => (
                     <a
                       href={tool.href}
                       class={activeToolHref === tool.href ? "active" : ""}
@@ -159,19 +167,19 @@ const updatedFmt = updatedDate
           </nav>
           <details class="site-picker">
             <summary><span>Tools</span><strong>{currentTool?.shortTitle ?? "Choose a tool"}</strong></summary>
-            <nav class="site-picker-panel" aria-label="Site tools">
+            <nav class="site-picker-panel" aria-label={rail.title}>
               <div class="site-picker-top">
-                <a href="/site">All tools</a>
+                <a href={rail.hub}>All tools</a>
                 <label class="site-tool-search-label">
                   <span class="sr-only">Find a tool</span>
                   <input class="site-tool-search" type="search" placeholder="Find a tool…" autocomplete="off" data-site-tool-search />
                 </label>
               </div>
-              {SITE_TOOL_CATEGORIES.map((category) => (
+              {rail.categories.filter((category) => rail.tools.some((tool) => tool.category === category)).map((category) => (
                 <section class="site-nav-group" data-site-tool-group>
                   <span class="site-nav-category">{category}</span>
                   <div class="site-picker-links">
-                    {SITE_TOOLS.filter((tool) => tool.category === category).map((tool) => (
+                    {rail.tools.filter((tool) => tool.category === category).map((tool) => (
                       <a
                         href={tool.href}
                         class={activeToolHref === tool.href ? "active" : ""}
