@@ -207,7 +207,7 @@ try {
   check('midi: synth lanes export as their own tracks with notes', synthTracks.length >= 2 && synthTracks.every((t) => t.noteOns > 0), synthTracks.map((t) => `${t.name}:${t.noteOns}`).join(' '))
   check('midi: every note-on has a matching note-off', smf.tracks.every((t) => t.noteOns === t.noteOffs), smf.tracks.map((t) => `${t.noteOns}/${t.noteOffs}`).join(' '))
   // song mode walks every arranged bar, so it must carry more notes than one clip cycle
-  await page.selectOption('.wa-export select', 'song')
+  await page.evaluate(() => { const s = document.querySelector('.wa-export select'); s.value = 'song'; s.dispatchEvent(new Event('change', { bubbles: true })) })
   const songDl = page.waitForEvent('download', { timeout: 20000 }).catch(() => null)
   await page.click('button:has-text("Export MIDI")')
   const songDownload = await songDl
@@ -215,7 +215,7 @@ try {
   const clipNotes = smf.tracks.reduce((a, t) => a + t.noteOns, 0), songNotes = songSmf.tracks.reduce((a, t) => a + t.noteOns, 0)
   check('midi: song export covers the arrangement', songSmf.ok && songNotes > clipNotes, `${songNotes} song notes vs ${clipNotes} clip notes`)
   check('midi: song export carries automation as CC on its own track', songSmf.ok && songSmf.tracks.some((t) => t.name === 'Master automation'), songSmf.tracks.map((t) => t.name).join(' | '))
-  await page.selectOption('.wa-export select', 'pattern')
+  await page.evaluate(() => { const s = document.querySelector('.wa-export select'); s.value = 'pattern'; s.dispatchEvent(new Event('change', { bubbles: true })) })
   check('midi: status line reports the note count', /MIDI saved — \d+ notes/.test((await page.locator('.wa-export:has(button:has-text("Export MIDI")) .wa-status').textContent()) ?? ''))
   await page.click('.wa-export-dialog-head button:has-text("Close")')
   await page.waitForTimeout(200)
