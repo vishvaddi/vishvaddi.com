@@ -39,7 +39,7 @@ export function quickBeatProject(): Record<string, unknown> {
   return state;
 }
 
-/** A complete demo project. Also seeds an empty first run — see index.ts. */
+/** Demo projects live in demos.ts; this legacy generator only backs QUICK BEAT now. */
 export function factorySong(name: string): Record<string, unknown> {
   const demo = buildDemo(name, JSON.parse(FACTORY_BASE) as Record<string, unknown>);
   if (demo) return demo;
@@ -53,7 +53,7 @@ export function factorySong(name: string): Record<string, unknown> {
   state.padEvents = Array.from({ length: SCENES }, () => []);
   const put = (scene: number, row: number, steps: number[]) => steps.forEach((step) => { state.pats[scene][row][step] = 1; });
   [0, 1, 2, 3].forEach((scene) => {
-    put(scene, 0, name === "MIDNIGHT ACID" ? [0, 4, 8, 12] : [0, 6, 8, 14]);
+    put(scene, 0, [0, 6, 8, 14]);
     put(scene, 1, [4, 12]); put(scene, 2, [2, 6, 10, 14]);
     if (scene % 2) put(scene, 3, [7, 15]);
   });
@@ -65,12 +65,12 @@ export function factorySong(name: string): Record<string, unknown> {
   state.synthLaneNotes.harmony[3] = [note("C4", 0, 16)];
   const makeBlocks = () => [0, 1, 2, 3].map((scene, index) => ({
     id: `factory-${name.toLowerCase().replace(/\s+/g, "-")}-${index}-${Math.random().toString(36).slice(2, 7)}`,
-    scene, bars: name === "NEON HORIZON" ? 2 : 1, startBar: index * (name === "NEON HORIZON" ? 2 : 1),
+    scene, bars: 1, startBar: index,
     offset: 0, loop: true,
     automation: index === 2 ? [{ lane: "lead" as const, param: "cutoff" as const, from: .2, to: .9 }] : [],
   }));
   state.arrangement = { drums: makeBlocks(), pads: makeBlocks(), bass: makeBlocks(), lead: makeBlocks(), harmony: makeBlocks() };
-  state.bpm = name === "MIDNIGHT ACID" ? 122 : name === "NEON HORIZON" ? 138 : 92;
+  state.bpm = 92;
   return state;
 }
 

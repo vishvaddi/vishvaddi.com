@@ -68,7 +68,7 @@ try {
   check('first run: demo content is loaded', cold.seeded > 0, `${cold.seeded} steps`)
   check('first run: no start screen interrupts the workspace', !cold.startScreen)
   check('first run: non-modal hint is shown', cold.hint)
-  check('first run: demo has its real title', cold.title === 'BLOCK PARTY', String(cold.title))
+  check('first run: demo has its real title', cold.title === 'WESTSIDE', String(cold.title))
   check('first run: the MPC pads are the opening screen', await page.locator('.wa-page-pads').isVisible())
   check('first run: three primary intents replace six tools', await page.locator('.wa-primary-nav .wa-modekey').count() === 3)
   await openMode(page, 'SYNTH')
@@ -90,6 +90,7 @@ try {
   const drumGeometry = await page.locator('.wa-page-drums .wa-row').first().evaluate((row) => ({ height: row.getBoundingClientRect().height, inspector: !!document.querySelector('.wa-drums-workspace > .wa-lane-aside')?.checkVisibility() }))
   check('drums: rows are not squashed and properties stay visible', drumGeometry.height >= 38 && drumGeometry.inspector, JSON.stringify(drumGeometry))
   const cell = page.locator('.wa-grid .wa-row .wa-cell').nth(0)
+  const editedScene = await page.locator('.wa-page-drums .wa-pat-btn.active').textContent()
   const wasOn = await cell.evaluate((n) => n.classList.contains('on'))
   await cell.click()
   check('grid: step toggles', await cell.evaluate((n) => n.classList.contains('on')) !== wasOn, wasOn ? 'on→off' : 'off→on')
@@ -141,6 +142,9 @@ try {
   await page.waitForTimeout(900) // autosave debounce
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.wa-transport', { timeout: 15000 })
+  // Clip launches in between may have moved the edited scene; read the step back in the scene it was toggled in.
+  await openMode(page, 'DRUMS')
+  await page.locator('.wa-page-drums .wa-pat-btn', { hasText: editedScene ?? 'A' }).first().click()
   const cellAfter = page.locator('.wa-grid .wa-row .wa-cell').nth(0)
   check('autosave: step survives reload', await cellAfter.evaluate((n) => n.classList.contains('on')) !== wasOn)
 
@@ -400,7 +404,7 @@ try {
   page.on('dialog', (d) => d.accept())
   await page.evaluate(() => { window.__noReload = true })
   if (!(await page.locator('.wa-song-library select').isVisible())) await page.locator('.wa-fold-head', { hasText: 'SONGS' }).click()
-  await page.selectOption('.wa-song-library select', 'factory:HAZARD LINES')
+  await page.selectOption('.wa-song-library select', 'factory:FLIGHT PATH')
   await page.locator('.wa-song-library button', { hasText: 'Load' }).first().click()
   await page.waitForTimeout(700)
   const inPlace = await page.evaluate(() => ({ survived: window.__noReload === true, bpm: document.querySelector('.wa-bpm')?.value }))

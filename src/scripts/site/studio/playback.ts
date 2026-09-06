@@ -67,7 +67,8 @@ export function buildPlayback(deps: PlaybackDeps): void {
     }
     playhead.lastStepStartedMs = performance.now();
     playhead.lastHi = s; deps.lcdState.textContent = `▶ ${String(s + 1).padStart(2, "0")}`;
-    const bar = (arrangedBar ?? Math.floor(playhead.absStep / 16)) + 1;
+    // A song "bar" is one pattern cycle; a 32-step scene spans two real bars.
+    const bar = (arrangedBar !== null ? arrangedBar * Math.max(1, Math.ceil(arrangedCycleLength / 16)) + Math.floor(s / 16) : Math.floor(playhead.absStep / 16)) + 1;
     deps.position.textContent = `${bar}.${Math.floor((s % 16) / 4) + 1}.${(s % 4) + 1}`;
   }
   function scheduleStep(s: number, baseWhen: number): void {
