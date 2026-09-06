@@ -1,5 +1,20 @@
 # Run Log
 
+## 2026-09-06 — Demo songs re-cut to reference styles; MIDNIGHT ACID removed
+
+- WESTSIDE replaces BLOCK PARTY as the first-boot project: G-funk at 92 BPM in G minor — long 808-style kick, clap doubling every snare, straight 8th hats with an open-hat lift, sub bass on the chord roots with octave bounces, off-beat Keys stabs, and a sine whistle lead with slow portamento and delayed vibrato. Seven scenes, 32 cycles (64 real bars).
+- HAZARD LINES re-cut for the 1995 Metalheadz sound at 160 BPM in F minor — rolling chopped break with ghost snares and ratcheted snare rolls into each drop, a near-sine sub holding the roots, Fm9 / Dbmaj7 pad atmosphere, sparse echoed plucks, a half-time switch and a breakdown. No hoover, no glitch lane. Eight scenes, 48 cycles (96 real bars).
+- MIDNIGHT ACID and the legacy generator's demo branches removed; the generator now only backs QUICK BEAT. Library shows exactly the two demos.
+- Position counter fix: a song "bar" is one pattern cycle, so a 32-step scene spans two real bars; the app bar counter now shows real bars. The timeline ruler still numbers cycles.
+- Harness: the autosave check re-selects the scene it edited before reading the step back (a clip launch in between moves the edited scene). Gates: functional 86/86, responsive 375/375, density 48/48; both demos probed through the engine.
+
+## 2026-09-06 — Studio demo songs: MIDNIGHT ACID gone, jungle → 2562-style dubstep, Burial-style third song
+
+- `DEMO_TITLES` is now WESTSIDE · FLIGHT PATH · SODIUM LIGHT. MIDNIGHT ACID is deleted (the legacy generator in `session.ts` no longer special-cases it). HAZARD LINES (jungle) is replaced.
+- FLIGHT PATH — halfstep dub techno after 2562's *Aerial*: 140 BPM, G minor, kick on the one and snare on the three with swung syncopated rims and hats, an 18-step triplet rim lane, dub chord stabs into a dotted-eighth echo, a sliding sine sub, metallic bandpass pings, one four-to-the-floor stepper scene. Eight scenes, 48 bars.
+- SODIUM LIGHT — after Burial's *Untrue*: 136 BPM, E minor, swung two-step with `grooveRandom 7` for off-grid timing, shell-click rim and woodblock tom, papery snare in a long room, vinyl-crackle texture bound to the drowned pads, rain hiss under a pitched-up sliding "vocal" lead, sine sub, heavy echo wow. Seven scenes, 48 bars.
+- Gates: `astro check` 0 errors; functional harness all green on the built site; each song loaded through the real engine in headless Chrome (title, tempo, blocks, Song-mode playhead advance, master meter lit, console clean). Not deployed.
+
 ## 2026-09-06 — Studio demo songs: BLOCK PARTY and HAZARD LINES
 
 - Replaced the three near-identical factory songs with two written demos in `src/scripts/site/studio/demos.ts`: BLOCK PARTY (boom-bap hip hop, 90 BPM, A minor, 7 scenes, 28 bars) and HAZARD LINES (jungle, 172 BPM, D minor, 8 scenes, 40 bars). MIDNIGHT ACID stays in the library; BLOCK PARTY is the first-boot project.
