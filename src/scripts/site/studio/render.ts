@@ -41,7 +41,7 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
   help(loadProjectBtn, "Open a previously saved editable Studio project.");
   const projectInput = document.createElement("input"); projectInput.type = "file"; projectInput.accept = ".json,application/json"; projectInput.hidden = true;
   help(newProjectBtn, "Replace the current project with a clean blank studio.");
-  help(demoProjectBtn, "Reload the editable MIDNIGHT ACID starter project.");
+  help(demoProjectBtn, "Reload the editable BLOCK PARTY starter project.");
   projectRow.append(quickProjectBtn, newProjectBtn, demoProjectBtn, saveProjectBtn, loadProjectBtn, projectInput);
   exp.append(
     el("p", "wa-help", "Audio export includes drums and sequenced synth. Project files preserve editable patterns, song order, sounds and tempo."),
@@ -181,7 +181,7 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
   };
   quickProjectBtn.addEventListener("click", () => replaceProject(projects.quick(), "Start a quick beat"));
   newProjectBtn.addEventListener("click", () => replaceProject(projects.blank(), "Start a new song"));
-  demoProjectBtn.addEventListener("click", () => replaceProject(projects.demo(), "Reload MIDNIGHT ACID"));
+  demoProjectBtn.addEventListener("click", () => replaceProject(projects.demo(), "Reload BLOCK PARTY"));
   loadProjectBtn.addEventListener("click", () => projectInput.click());
   projectInput.addEventListener("change", async () => {
     const file = projectInput.files?.[0]; if (!file) return;

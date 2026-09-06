@@ -9,6 +9,7 @@ import type { TrackId, ArrangeTrackId, ArrangeBlock, AudioArrangeClip, Automatio
 import { saveAll, projectState, applyProject } from "./persistence";
 import { el, btn, help, download, askText, readAsDataUrl } from "./helpers";
 import { ctx, playhead, SCENE_COLORS } from "./ctx";
+import { buildDemo, DEMO_TITLES } from "./demos";
 
 export interface SessionView {
   song: HTMLElement;
@@ -40,6 +41,8 @@ export function quickBeatProject(): Record<string, unknown> {
 
 /** A complete demo project. Also seeds an empty first run — see index.ts. */
 export function factorySong(name: string): Record<string, unknown> {
+  const demo = buildDemo(name, JSON.parse(FACTORY_BASE) as Record<string, unknown>);
+  if (demo) return demo;
   const state = JSON.parse(FACTORY_BASE) as Record<string, unknown> & {
     pats: number[][][]; vels: number[][][]; synthLaneNotes: Record<string, Array<Array<Record<string, unknown>>>>;
     arrangement: Record<string, ArrangeBlock[]>; bpm: number; title: string; padEvents: Array<Array<Record<string, unknown>>>;
@@ -485,7 +488,7 @@ export function buildSession(): SessionView {
   const songLibrary = el("div", "wa-song-library");
   const songKey = "vv_studio_user_songs"; let songs: Record<string, Record<string, unknown>> = {};
   try { songs = JSON.parse(localStorage.getItem(songKey) || "{}"); } catch { songs = {}; }
-  const factorySongs = ["MIDNIGHT ACID", "NEON HORIZON", "DUST BREAK"];
+  const factorySongs = [...DEMO_TITLES];
   const songSel = document.createElement("select"); songSel.setAttribute("aria-label", "Saved song");
   const refreshSongs = () => {
     const current = songSel.value; songSel.replaceChildren();

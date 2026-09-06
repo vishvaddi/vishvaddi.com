@@ -68,7 +68,7 @@ try {
   check('first run: demo content is loaded', cold.seeded > 0, `${cold.seeded} steps`)
   check('first run: no start screen interrupts the workspace', !cold.startScreen)
   check('first run: non-modal hint is shown', cold.hint)
-  check('first run: demo has its real title', cold.title === 'MIDNIGHT ACID', String(cold.title))
+  check('first run: demo has its real title', cold.title === 'BLOCK PARTY', String(cold.title))
   check('first run: the MPC pads are the opening screen', await page.locator('.wa-page-pads').isVisible())
   check('first run: three primary intents replace six tools', await page.locator('.wa-primary-nav .wa-modekey').count() === 3)
   await openMode(page, 'SYNTH')
@@ -351,16 +351,24 @@ try {
   await page.waitForTimeout(300)
 
   // ── v16: clips occupy real timeline positions and can leave gaps ──
+  // Track the dragged clip by id: an earlier paste can leave two clips at bar 1,
+  // so "first block" is not stable across the re-render that follows a drop.
   const movable = page.locator('.wa-arrange-lane').first().locator('.wa-chain-block').first()
-  const beforeMove = await movable.evaluate((node) => parseFloat(node.style.left))
+  await page.locator('.wa-arrange-lanes').evaluate((node) => { node.scrollLeft = 0 })  // earlier edits leave the timeline scrolled to the song end
   const box = await movable.boundingBox()
+  // The clip under the pointer is the one that moves (a pasted copy may sit on top of the original).
+  const movableId = await movable.evaluate((node) => {
+    const stacked = [...node.parentElement.querySelectorAll('.wa-chain-block')].filter((other) => other.style.left === node.style.left)
+    return stacked[stacked.length - 1].dataset.clipId
+  })
+  const beforeMove = await page.locator(`.wa-chain-block[data-clip-id="${movableId}"]`).first().evaluate((node) => parseFloat(node.style.left))
   if (box) {
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
     await page.mouse.down()
     await page.mouse.move(box.x + box.width / 2 + 112, box.y + box.height / 2, { steps: 8 })
     await page.mouse.up()
   }
-  const afterMove = await page.locator('.wa-arrange-lane').first().locator('.wa-chain-block').first().evaluate((node) => parseFloat(node.style.left))
+  const afterMove = await page.locator(`.wa-chain-block[data-clip-id="${movableId}"]`).first().evaluate((node) => parseFloat(node.style.left))
   check('timeline: clip drag preserves a free start position', afterMove >= beforeMove + 50, `${beforeMove}→${afterMove}px`)
   await page.locator('.wa-transport button[aria-label="Undo"]').click({ timeout: 5000 })
   await page.waitForTimeout(300)
@@ -392,7 +400,7 @@ try {
   page.on('dialog', (d) => d.accept())
   await page.evaluate(() => { window.__noReload = true })
   if (!(await page.locator('.wa-song-library select').isVisible())) await page.locator('.wa-fold-head', { hasText: 'SONGS' }).click()
-  await page.selectOption('.wa-song-library select', 'factory:NEON HORIZON')
+  await page.selectOption('.wa-song-library select', 'factory:HAZARD LINES')
   await page.locator('.wa-song-library button', { hasText: 'Load' }).first().click()
   await page.waitForTimeout(700)
   const inPlace = await page.evaluate(() => ({ survived: window.__noReload === true, bpm: document.querySelector('.wa-bpm')?.value }))

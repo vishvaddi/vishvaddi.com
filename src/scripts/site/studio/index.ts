@@ -68,7 +68,7 @@ export async function initStudio(): Promise<void> {
   const hasSaved = !!(localStorage.getItem("vv_studio_v2") || localStorage.getItem("vv_studio_pattern"));
   if (pending) applyProject(pending);
   else if (hasSaved) loadAll();
-  else applyProject(factorySong("MIDNIGHT ACID"));
+  else applyProject(factorySong("BLOCK PARTY"));
   sampleData.forEach((data, r) => { if (data) void hydrateSample(r); });
 
   // ── Tooltips ── delegated hover/focus rendering of [data-help] — see tooltip.ts
@@ -246,7 +246,7 @@ export async function initStudio(): Promise<void> {
   const { panel: exp, renderSel, renderBuffer } = buildProjectExport({
     blank: blankProject,
     quick: quickBeatProject,
-    demo: () => factorySong("MIDNIGHT ACID"),
+    demo: () => factorySong("BLOCK PARTY"),
   });
   ctx.renderSel = renderSel;
   // Export panel re-housed into a modal (same <dialog> idiom as askText).
