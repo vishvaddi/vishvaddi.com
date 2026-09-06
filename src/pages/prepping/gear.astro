@@ -60,6 +60,14 @@ const bags: Bag[] = [
     ],
   },
 ];
+
+const loadouts = [
+  { id: "blackout", title: "Blackout · 24 hours", items: ["Headtorch + spare batteries", "Power banks charged", "Battery radio", "Drinking water", "No-cook food", "Manual can opener", "Cash", "Medication"] },
+  { id: "evacuate", title: "Evacuate · 15 minutes", items: ["Go bag", "Phones + chargers", "Wallet, keys and documents", "Medication", "Water", "Protective clothing", "Pet carriers and supplies", "Bushfire or flood route checked"] },
+  { id: "vehicle", title: "Vehicle breakdown", items: ["Water", "First-aid kit", "Hi-vis vest", "Torch", "Warning triangle", "Tyre inflator + gauge", "Jump starter", "Paper map", "Sun and rain protection"] },
+  { id: "daywalk", title: "Remote day walk", items: ["PLB", "Offline map + compass", "2 L water + treatment", "Food + reserve snack", "First-aid and snake bandages", "Headtorch", "Warm and waterproof layers", "Sun protection", "Emergency shelter"] },
+  { id: "home72", title: "Shelter at home · 72 hours", items: ["9 L water per person minimum", "Three days shelf-stable food", "First-aid and medication", "Lighting", "Radio", "Charged power banks", "Hygiene supplies", "Cash", "Written contacts"] },
+];
 ---
 
 <Base
@@ -76,6 +84,7 @@ const bags: Bag[] = [
     <a href="/prepping/fitness">Fitness</a>
     <a href="/prepping/planting">Planting</a>
     <a href="/prepping/howto">How-to</a>
+    <a href="/prepping/knots">Knots</a>
   </nav>
 
   <article>
@@ -91,6 +100,29 @@ const bags: Bag[] = [
     <nav class="bag-jump">
       {bags.map((b) => <a href={`#${b.id}`}>{b.title}</a>)}
     </nav>
+
+    <section class="reveal loadout-builder" aria-labelledby="loadout-title">
+      <p class="eyebrow">Task loadouts</p>
+      <h2 id="loadout-title">Pack for the failure, not the fantasy</h2>
+      <p>Select a scenario, then mark what is actually ready. Progress is stored only in this browser.</p>
+      <label class="loadout-select">Scenario
+        <select id="loadout-select">
+          {loadouts.map((loadout) => <option value={loadout.id}>{loadout.title}</option>)}
+        </select>
+      </label>
+      <p class="loadout-progress" id="loadout-progress" aria-live="polite"></p>
+      <div id="loadout-lists">
+        {loadouts.map((loadout) => (
+          <fieldset class="loadout-list" data-loadout={loadout.id} hidden={loadout.id !== loadouts[0].id}>
+            <legend>{loadout.title}</legend>
+            {loadout.items.map((item, index) => (
+              <label><input type="checkbox" data-item={`${loadout.id}:${index}`} /> <span>{item}</span></label>
+            ))}
+          </fieldset>
+        ))}
+      </div>
+      <button class="loadout-reset" id="loadout-reset" type="button">Clear this scenario</button>
+    </section>
 
     {bags.map((b) => (
       <section class="reveal bag-group" id={b.id}>
@@ -118,5 +150,46 @@ const bags: Bag[] = [
     .gear-list { list-style: none; padding: 0; margin: 0.75rem 0 0; }
     .gear-list li { padding: 0.6rem 0; border-bottom: 1px solid var(--rule); }
     .gear-why { display: block; color: var(--muted); font-size: 0.92rem; margin-top: 0.15rem; }
+    .loadout-builder { margin: 2rem 0 2.5rem; padding: 1rem; border: 1px solid var(--rule); border-radius: 10px; }
+    .loadout-builder h2 { margin-top: 0; }
+    .loadout-select { display: grid; gap: 0.3rem; max-width: 28rem; font-weight: 600; }
+    .loadout-select select { min-height: 44px; padding: 0.55rem; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--fg); }
+    .loadout-progress { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); }
+    .loadout-list { display: grid; gap: 0.4rem; margin: 0 0 0.8rem; padding: 0.8rem; border: 1px solid var(--rule); border-radius: 7px; }
+    .loadout-list[hidden] { display: none; }
+    .loadout-list label { display: flex; gap: 0.6rem; align-items: center; min-height: 40px; }
+    .loadout-list input { width: 20px; height: 20px; }
+    .loadout-list input:checked + span { color: var(--muted); text-decoration: line-through; }
+    .loadout-reset { min-height: 40px; padding: 0.45rem 0.7rem; border: 1px solid var(--rule); border-radius: 6px; background: transparent; color: var(--fg); cursor: pointer; }
   </style>
+
+  <script>
+    const select = document.getElementById("loadout-select") as HTMLSelectElement | null;
+    const progress = document.getElementById("loadout-progress");
+    const lists = Array.from(document.querySelectorAll<HTMLElement>("[data-loadout]"));
+    const storageKey = "vv_prepping_loadouts_v1";
+    let state: Record<string, boolean> = {};
+    try { state = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch { state = {}; }
+    const update = () => {
+      const active = select?.value || "blackout";
+      lists.forEach((list) => { list.hidden = list.dataset.loadout !== active; });
+      const checks = Array.from(document.querySelectorAll<HTMLInputElement>(`[data-loadout="${active}"] input`));
+      checks.forEach((check) => { check.checked = !!state[check.dataset.item || ""]; });
+      const ready = checks.filter((check) => check.checked).length;
+      if (progress) progress.textContent = `${ready} / ${checks.length} ready · ${checks.length - ready} missing`;
+    };
+    document.querySelectorAll<HTMLInputElement>("[data-item]").forEach((check) => check.addEventListener("change", () => {
+      state[check.dataset.item || ""] = check.checked;
+      localStorage.setItem(storageKey, JSON.stringify(state));
+      update();
+    }));
+    select?.addEventListener("change", update);
+    document.getElementById("loadout-reset")?.addEventListener("click", () => {
+      const prefix = `${select?.value}:`;
+      Object.keys(state).filter((key) => key.startsWith(prefix)).forEach((key) => delete state[key]);
+      localStorage.setItem(storageKey, JSON.stringify(state));
+      update();
+    });
+    update();
+  </script>
 </Base>

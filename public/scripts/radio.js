@@ -40,6 +40,8 @@ var spTrigger = document.getElementById("sp-trigger");
 var spList = document.getElementById("sp-list");
 var trackIdTitle = document.getElementById("track-id-title");
 var trackIdBtn = document.getElementById("track-id-btn");
+var favouriteBtn = document.getElementById("favourite-btn");
+var randomStationBtn = document.getElementById("random-station-btn");
 
 var currentStation = null;
 var currentUrl = null;
@@ -48,6 +50,20 @@ var activeFilter = "all";
 var eqRunning = false;
 var eqRaf = null;
 var trackTimer = null;
+var favouriteUrls = loadFavouriteUrls();
+
+function loadFavouriteUrls() {
+  try {
+    var saved = JSON.parse(localStorage.getItem("vv_radio_favourites_v1") || "[]");
+    return new Set(Array.isArray(saved) ? saved : []);
+  } catch (_) {
+    return new Set();
+  }
+}
+
+function saveFavouriteUrls() {
+  try { localStorage.setItem("vv_radio_favourites_v1", JSON.stringify(Array.from(favouriteUrls))); } catch (_) {}
+}
 
 audio.volume = parseFloat(volumeSlider.value);
 
@@ -221,6 +237,7 @@ function normaliseKey(value) {
 
 function stationMatches(station, query) {
   if (activeFilter === "preset" && !station.preset) return false;
+  if (activeFilter === "favourite" && !favouriteUrls.has(normaliseKey(station.url))) return false;
   if (activeFilter === "au" && !station.isAu) return false;
   if (["music", "talk", "chill"].includes(activeFilter) && station.category !== activeFilter) return false;
   if (!query) return true;
@@ -297,10 +314,17 @@ function syncStationDisplay() {
   if (!currentStation) {
     spTrigger.textContent = "SELECT STATION";
     stationToggle.classList.remove("has-station");
+    if (favouriteBtn) { favouriteBtn.textContent = "♡"; favouriteBtn.setAttribute("aria-pressed", "false"); }
     return;
   }
   spTrigger.textContent = currentStation.name.toUpperCase();
   stationToggle.classList.add("has-station");
+  if (favouriteBtn) {
+    var saved = favouriteUrls.has(normaliseKey(currentStation.url));
+    favouriteBtn.textContent = saved ? "♥" : "♡";
+    favouriteBtn.setAttribute("aria-pressed", saved ? "true" : "false");
+    favouriteBtn.setAttribute("aria-label", saved ? "Remove current station from favourites" : "Add current station to favourites");
+  }
 }
 
 function updateActiveItems() {
@@ -413,6 +437,31 @@ audio.addEventListener("error", showAudioError);
 
 if (trackIdBtn) {
   trackIdBtn.addEventListener("click", function() { identifyTrack(true); });
+}
+
+if (favouriteBtn) {
+  favouriteBtn.addEventListener("click", function() {
+    if (!currentStation) { setDirectoryOpen(true); return; }
+    var key = normaliseKey(currentStation.url);
+    if (favouriteUrls.has(key)) favouriteUrls.delete(key);
+    else favouriteUrls.add(key);
+    saveFavouriteUrls();
+    syncStationDisplay();
+    renderStationList();
+  });
+}
+
+if (randomStationBtn) {
+  randomStationBtn.addEventListener("click", function() {
+    var query = stationSearch.value.trim().toLowerCase();
+    var candidates = getStations().filter(function(station) { return stationMatches(station, query) && station.url !== currentUrl; });
+    if (!candidates.length) {
+      lcdStatus.textContent = "NO MATCH";
+      setDirectoryOpen(true);
+      return;
+    }
+    play(candidates[Math.floor(Math.random() * candidates.length)]);
+  });
 }
 
 /* ── Preset buttons ── */

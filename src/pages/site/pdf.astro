@@ -40,6 +40,7 @@ import "../../styles/site.css";
       <div class="calc-fields">
       <div class="field"><label for="pdf-footer">Footer text (optional)</label><input type="text" id="pdf-footer" maxlength="80" placeholder="e.g. Job 2604 — for review" /></div>
       <div class="field"><label for="pdf-stamp">Stamp / watermark (optional)</label><input type="text" id="pdf-stamp" maxlength="30" placeholder="e.g. DRAFT" /></div>
+      <div class="field"><label for="pdf-stamp-preset">Estimator stamp preset</label><select id="pdf-stamp-preset"><option value="">Custom / none</option><option>TENDER</option><option>FOR REVIEW</option><option>FOR CONSTRUCTION</option><option>SUPERSEDED</option><option>NOT FOR CONSTRUCTION</option><option>PRICING ONLY</option></select></div>
       <div class="field"><label for="pdf-sign">Signature / approval text</label><input type="text" id="pdf-sign" maxlength="60" placeholder="Signed: Vish Vaddi · 9 Aug 2026" /></div>
       <div class="field"><label for="pdf-title">Document title</label><input type="text" id="pdf-title" maxlength="100" /></div>
       <div class="field"><label for="pdf-author">Author</label><input type="text" id="pdf-author" maxlength="80" /></div>
@@ -54,6 +55,20 @@ import "../../styles/site.css";
       <p class="calc-blurb">Marks and crop apply to selected pages, or every page when none are selected. Raster compression reduces scan-heavy files but removes searchable text and links.</p>
     </details>
 
+    <details class="pdf-options no-print" id="pdf-compare-panel">
+      <summary>Overlay and compare two drawings</summary>
+      <p class="calc-blurb">Use one loaded page as the base, then add a second PDF. Normal mode overlays revisions; Difference mode makes changed pixels stand out.</p>
+      <div class="calc-fields">
+        <div class="field"><label for="pdf-compare-base">Base page</label><select id="pdf-compare-base"></select></div>
+        <div class="field"><label for="pdf-compare-file">Comparison PDF</label><input type="file" id="pdf-compare-file" accept="application/pdf" /></div>
+        <div class="field"><label for="pdf-compare-page">Comparison page</label><select id="pdf-compare-page"></select></div>
+        <div class="field"><label for="pdf-compare-mode">Blend mode</label><select id="pdf-compare-mode"><option value="source-over">Normal overlay</option><option value="difference">Difference</option></select></div>
+        <div class="field"><label for="pdf-compare-opacity">Top drawing opacity <output id="pdf-compare-opacity-out">50%</output></label><input type="range" id="pdf-compare-opacity" min="10" max="90" value="50" /></div>
+      </div>
+      <div class="btn-row"><button type="button" class="btn btn-ghost" id="pdf-compare-render" disabled>Render comparison</button><button type="button" class="btn btn-ghost" id="pdf-compare-export" disabled>Export flattened comparison</button></div>
+      <canvas id="pdf-compare-canvas" class="pdf-compare-canvas" aria-label="Drawing comparison preview"></canvas>
+    </details>
+
     <h2 style="font-size:1rem;margin-top:1.5rem;">Pages</h2>
     <div id="pdf-pages"></div>
 
@@ -64,6 +79,11 @@ import "../../styles/site.css";
       <button type="button" class="btn btn-ghost" id="pdf-images" disabled>Selected pages to PNG ZIP</button>
       <span id="pdf-status" style="align-self:center;font-size:0.85rem;color:var(--muted)"></span>
     </div>
+
+    <section class="pdf-preflight no-print" aria-labelledby="pdf-preflight-title">
+      <h2 id="pdf-preflight-title">Export preflight</h2>
+      <ul id="pdf-preflight"><li>Add pages to run checks.</li></ul>
+    </section>
 
     <p class="disclosure">Your files are read in the browser and never uploaded. Password removal, encryption and OCR are not faked here: they require specialist engines not currently bundled. Encrypted PDFs must be unlocked before opening.</p>
     <p class="note-foot"><a href="/site">← all tools</a></p>
@@ -83,3 +103,11 @@ import "../../styles/site.css";
     });
   </script>
 </Base>
+
+<style>
+  .pdf-compare-canvas { display: none; width: 100%; height: auto; margin-top: 1rem; border: 1px solid var(--site-line-strong); background: #fff; }
+  .pdf-compare-canvas.ready { display: block; }
+  .pdf-preflight { margin: 1rem 0; padding: 0.8rem 1rem; border: 1px solid var(--site-line-strong); border-radius: 8px; }
+  .pdf-preflight h2 { margin: 0; font-size: 0.95rem; }
+  .pdf-preflight ul { margin: 0.5rem 0 0; padding-left: 1.2rem; color: var(--muted); font-size: 0.85rem; }
+</style>

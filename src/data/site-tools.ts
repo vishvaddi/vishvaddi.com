@@ -13,12 +13,15 @@ export interface SiteTool {
   shortTitle: string
   icon: string
   description: string
+  problem: string
+  promise: string
+  privacy: string
   category: SiteToolCategory
   aliases: string
   quick?: boolean
 }
 
-export const SITE_TOOLS: SiteTool[] = [
+const RAW_SITE_TOOLS: Omit<SiteTool, 'problem' | 'promise' | 'privacy'>[] = [
   { href: '/site/calc', title: 'Calculator', shortTitle: 'Calculator', icon: '🧮', description: 'Expressions, functions, constants, variables and history.', category: 'Estimate & price', aliases: 'maths arithmetic percentage formula', quick: true },
   { href: '/site/notepad', title: 'Calculation Notepad', shortTitle: 'Calc Notepad', icon: '🧾', description: 'Takeoff notes with variables, GST, currency and metric units.', category: 'Estimate & price', aliases: 'soulver takeoff estimate notes' },
   { href: '/site/convert', title: 'Unit Converter', shortTitle: 'Converter', icon: '🔁', description: 'Metric, imperial, pressure, data and live currency conversion.', category: 'Estimate & price', aliases: 'mm inches metres feet aud usd temperature', quick: true },
@@ -39,3 +42,32 @@ export const SITE_TOOLS: SiteTool[] = [
   { href: '/site/quickref', title: 'Site Quick Reference', shortTitle: 'Quick Reference', icon: '📐', description: 'Searchable site dimensions and rules of thumb.', category: 'Documents & reference', aliases: 'stairs barriers heights falls courses' },
   { href: '/site/resources', title: 'Resources', shortTitle: 'Resources', icon: '📋', description: 'Standards, NCC links and construction references.', category: 'Documents & reference', aliases: 'ncc standards australia links reference' },
 ]
+
+const POSITIONING: Record<string, [problem: string, promise: string]> = {
+  '/site/calc': ['Site maths gets lost across separate calculator steps.', 'Keep complete expressions and reusable results in one history.'],
+  '/site/notepad': ['Takeoff workings are hard to audit after the estimate.', 'Turn written calculations into traceable totals as you type.'],
+  '/site/convert': ['Unit and currency conversions interrupt estimating flow.', 'Convert construction units and live currencies in one place.'],
+  '/site/materials': ['Manual quantity formulas invite omissions and rework.', 'Calculate common trade materials with practical waste allowances.'],
+  '/site/geometry': ['Setout geometry is slow and error-prone by hand.', 'Resolve construction dimensions with purpose-built calculators.'],
+  '/site/rate': ['Unit rates hide their labour, plant and margin assumptions.', 'Build an auditable rate from its cost components.'],
+  '/site/charge-rate': ['A wage is not a sustainable billable rate.', 'Include employment costs, overhead and margin in one calculation.'],
+  '/site/prices': ['Old price intuition can distort a current estimate.', 'Check broad material and currency movements before pricing risk.'],
+  '/site/programme': ['Dependencies and procurement risks disappear in simple task lists.', 'Build a critical-path programme with readable Gantt exports.'],
+  '/site/cut-list': ['Ad-hoc cutting creates avoidable waste and missed pieces.', 'Generate practical stock and sheet cutting plans.'],
+  '/site/lattice': ['Complex scopes become unreadable in flat spreadsheets.', 'Nest work, notes and costs while retaining roll-up totals.'],
+  '/site/span': ['Finding indicative timber spans is slower than the early decision needs.', 'Get a cautious first-pass span reference before engineering.'],
+  '/site/records': ['Site events are forgotten before they reach the commercial record.', 'Capture variations, defects, deliveries and diary entries consistently.'],
+  '/site/voice': ['Typing site notes with occupied hands loses detail.', 'Record speech and turn it into editable notes.'],
+  '/site/sketch': ['A photo or plan often needs one quick explanatory mark-up.', 'Draw, annotate and export a clean PNG without another app.'],
+  '/site/gauges': ['Basic site checks should not require carrying another gadget.', 'Use supported phone sensors for quick indicative checks.'],
+  '/site/pdf': ['Issuing and comparing drawings usually means uploading sensitive documents.', 'Organise, stamp, compare and export PDFs entirely in-browser.'],
+  '/site/quickref': ['Common dimensions and rules of thumb are scattered across references.', 'Search a compact field reference when you need an indicative answer.'],
+  '/site/resources': ['Authoritative Australian construction links are easy to lose.', 'Keep the main standards and code sources in one launch point.'],
+}
+
+export const SITE_TOOLS: SiteTool[] = RAW_SITE_TOOLS.map((tool) => ({
+  ...tool,
+  problem: POSITIONING[tool.href][0],
+  promise: POSITIONING[tool.href][1],
+  privacy: 'Runs on this device; no account or upload.',
+}))

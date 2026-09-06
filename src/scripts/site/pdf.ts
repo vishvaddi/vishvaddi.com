@@ -16,6 +16,9 @@ export function initPdf() {
 
   const srcs: Src[] = []
   let pages: PageRef[] = []
+  let compareSource: number | null = null
+  let comparePageCount = 0
+  let comparisonCanvas: HTMLCanvasElement | null = null
   let PL: any = null
   let PDFJS: any = null
   const lib = async () => (PL ||= await import('pdf-lib'))
@@ -35,6 +38,44 @@ export function initPdf() {
     for (const id of ['pdf-extract', 'pdf-split', 'pdf-images']) {
       const button = byId<HTMLButtonElement>(id); if (button) button.disabled = !some
     }
+    const compareRender = byId<HTMLButtonElement>('pdf-compare-render')
+    if (compareRender) compareRender.disabled = !any || compareSource === null
+    updateCompareBaseOptions()
+    updatePreflight()
+  }
+
+  function updateCompareBaseOptions() {
+    const select = byId<HTMLSelectElement>('pdf-compare-base')
+    if (!select) return
+    const chosen = select.value
+    select.textContent = ''
+    pages.forEach((ref, index) => {
+      const option = document.createElement('option'); option.value = ref.id; option.textContent = `${index + 1}. ${srcs[ref.src].name} · p${ref.page + 1}`; select.append(option)
+    })
+    if (pages.some((page) => page.id === chosen)) select.value = chosen
+  }
+
+  function updatePreflight() {
+    const list = byId<HTMLUListElement>('pdf-preflight')
+    if (!list) return
+    const messages: string[] = []
+    if (!pages.length) messages.push('Add pages to run checks.')
+    else {
+      const sizes = new Set(pages.map((ref) => {
+        const sourcePage = srcs[ref.src].pdf.getPage(ref.page); const size = sourcePage.getSize()
+        const rotated = ref.rot % 180 !== 0
+        return `${Math.round(rotated ? size.height : size.width)}×${Math.round(rotated ? size.width : size.height)}`
+      }))
+      if (sizes.size > 1) messages.push(`Check mixed page sizes: ${sizes.size} formats detected.`)
+      if (pages.some((page) => page.rot)) messages.push('Rotation changes are queued for export.')
+      if (byId<HTMLInputElement>('pdf-raster')?.checked) messages.push('Raster output removes searchable text, vectors and live links.')
+      if (Number(byId<HTMLInputElement>('pdf-crop')?.value || 0) > 0) messages.push('Crop applies to selected pages, or all pages when none are selected.')
+      if (!byId<HTMLInputElement>('pdf-title')?.value.trim()) messages.push('Document title metadata is blank.')
+      if (!byId<HTMLInputElement>('pdf-stamp')?.value.trim() && !byId<HTMLInputElement>('pdf-footer')?.value.trim()) messages.push('No issue stamp or footer is set.')
+      if (!messages.length) messages.push('No obvious export issues detected. Visually check the downloaded PDF before issue.')
+    }
+    list.textContent = ''
+    messages.forEach((message) => { const item = document.createElement('li'); item.textContent = message; list.append(item) })
   }
 
   async function renderSource(src: number) {
@@ -122,6 +163,56 @@ export function initPdf() {
       } catch { setStatus(`Could not open ${file.name}. It may be encrypted or damaged.`) }
     }
     fileIn.value = ''; render()
+  })
+
+  byId<HTMLSelectElement>('pdf-stamp-preset')?.addEventListener('change', (event) => {
+    const stamp = byId<HTMLInputElement>('pdf-stamp'); if (stamp) stamp.value = (event.target as HTMLSelectElement).value
+    updatePreflight()
+  })
+  for (const id of ['pdf-footer', 'pdf-stamp', 'pdf-title', 'pdf-crop', 'pdf-raster']) byId<HTMLElement>(id)?.addEventListener('input', updatePreflight)
+
+  byId<HTMLInputElement>('pdf-compare-file')?.addEventListener('change', async (event) => {
+    const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer()); const L = await lib(); const pdf = await L.PDFDocument.load(bytes)
+      compareSource = srcs.push({ name: file.name, bytes, pdf }) - 1; comparePageCount = pdf.getPageCount()
+      const select = byId<HTMLSelectElement>('pdf-compare-page'); if (select) {
+        select.textContent = ''
+        for (let index = 0; index < comparePageCount; index++) { const option = document.createElement('option'); option.value = String(index); option.textContent = `Page ${index + 1}`; select.append(option) }
+      }
+      setStatus(`${file.name} ready to compare.`); updateButtons()
+    } catch { setStatus(`Could not open ${file.name}.`) }
+  })
+
+  async function renderComparison() {
+    if (compareSource === null || !pages.length) return
+    const baseId = byId<HTMLSelectElement>('pdf-compare-base')?.value
+    const base = pages.find((page) => page.id === baseId) || pages[0]
+    const comparePage = Math.min(comparePageCount - 1, Number(byId<HTMLSelectElement>('pdf-compare-page')?.value || 0))
+    const top: PageRef = { id: 'compare', src: compareSource, page: comparePage, rot: 0, selected: false }
+    setStatus('Rendering comparison…')
+    const [baseCanvas, topCanvas] = await Promise.all([renderPage(base, 1.35), renderPage(top, 1.35)])
+    const canvas = byId<HTMLCanvasElement>('pdf-compare-canvas'); if (!canvas) return
+    canvas.width = Math.max(baseCanvas.width, topCanvas.width); canvas.height = Math.max(baseCanvas.height, topCanvas.height)
+    const context = canvas.getContext('2d')!; context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height)
+    context.drawImage(baseCanvas, 0, 0, canvas.width, canvas.height)
+    context.globalAlpha = Number(byId<HTMLInputElement>('pdf-compare-opacity')?.value || 50) / 100
+    context.globalCompositeOperation = (byId<HTMLSelectElement>('pdf-compare-mode')?.value || 'source-over') as GlobalCompositeOperation
+    context.drawImage(topCanvas, 0, 0, canvas.width, canvas.height)
+    context.globalAlpha = 1; context.globalCompositeOperation = 'source-over'; canvas.classList.add('ready'); comparisonCanvas = canvas
+    const exportCompare = byId<HTMLButtonElement>('pdf-compare-export'); if (exportCompare) exportCompare.disabled = false
+    setStatus(`Compared base page with ${srcs[compareSource].name} · p${comparePage + 1}.`)
+  }
+
+  byId<HTMLButtonElement>('pdf-compare-render')?.addEventListener('click', () => void renderComparison())
+  byId<HTMLInputElement>('pdf-compare-opacity')?.addEventListener('input', (event) => {
+    const output = byId<HTMLOutputElement>('pdf-compare-opacity-out'); if (output) output.value = `${(event.target as HTMLInputElement).value}%`
+  })
+  byId<HTMLButtonElement>('pdf-compare-export')?.addEventListener('click', async () => {
+    if (!comparisonCanvas) return
+    const L = await lib(); const out = await L.PDFDocument.create(); const png = await out.embedPng(comparisonCanvas.toDataURL('image/png'))
+    const page = out.addPage([comparisonCanvas.width / 1.35, comparisonCanvas.height / 1.35]); page.drawImage(png, { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() })
+    const data = await out.save(); download(`drawing-comparison-${new Date().toISOString().slice(0, 10)}.pdf`, URL.createObjectURL(new Blob([data.buffer as ArrayBuffer], { type: 'application/pdf' })))
   })
 
   function parseRange(value: string): Set<number> {

@@ -78,6 +78,8 @@ import Base from "../layouts/Base.astro";
         aria-label="Volume"
       />
       <button id="play-pause-btn" class="play-btn" aria-label="Play/pause">&#9654;</button>
+      <button id="favourite-btn" class="radio-action-btn" type="button" aria-label="Add current station to favourites" aria-pressed="false">♡</button>
+      <button id="random-station-btn" class="radio-action-btn" type="button" aria-label="Play a random station matching the current filters">↝</button>
     </div>
 
     <div class="track-id-row" aria-live="polite">
@@ -128,6 +130,7 @@ import Base from "../layouts/Base.astro";
       <div class="station-filters" aria-label="Filter stations">
         <button class="station-filter active" type="button" data-filter="all">ALL</button>
         <button class="station-filter" type="button" data-filter="preset">PRESETS</button>
+        <button class="station-filter" type="button" data-filter="favourite">FAVOURITES</button>
         <button class="station-filter" type="button" data-filter="au">AU</button>
         <button class="station-filter" type="button" data-filter="music">MUSIC</button>
         <button class="station-filter" type="button" data-filter="talk">TALK</button>
@@ -487,6 +490,26 @@ import Base from "../layouts/Base.astro";
     border-color: #ffb432;
     color: #ffb432;
     box-shadow: 0 0 8px rgba(255,180,50,0.3);
+  }
+
+  .radio-action-btn {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    border: 1px solid #573004;
+    border-radius: 7px;
+    background: linear-gradient(180deg, #2c1905, #130b02);
+    color: rgba(255,180,50,0.78);
+    cursor: pointer;
+    font: 700 1rem/1 monospace;
+  }
+  .radio-action-btn:hover,
+  .radio-action-btn:focus-visible,
+  .radio-action-btn[aria-pressed="true"] {
+    border-color: #a85d0b;
+    color: #ffd17a;
+    outline: none;
+    box-shadow: 0 0 8px rgba(255,180,50,0.2);
   }
 
   /* ── Tune row ── */

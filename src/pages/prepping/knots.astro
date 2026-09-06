@@ -1,0 +1,144 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/prepping.css";
+
+const knots = [
+  {
+    id: "figure-eight", name: "Figure Eight", job: "Stop a rope running through a hole or device.", caution: "Leave a tail at least ten rope diameters long.",
+    steps: [
+      ["Make a bight and cross the working end over the standing part.", "M22 92 C72 92 76 30 126 42 C164 50 142 90 108 80"],
+      ["Take the working end behind the standing part.", "M22 92 C72 92 76 30 126 42 C174 52 142 104 96 78 C72 64 94 42 124 56"],
+      ["Pass the working end through the first loop and dress the knot.", "M22 92 C72 92 76 30 126 42 C174 52 142 104 96 78 C66 60 96 30 140 68 C156 82 168 88 190 88"],
+    ],
+  },
+  {
+    id: "bowline", name: "Bowline", job: "Make a fixed loop for shelter lines, hauling or rescue equipment.", caution: "Not a climbing tie-in. Add a backup stopper when cyclic loading could shake it loose.",
+    steps: [
+      ["Form a small loop with the working end on top.", "M22 92 L112 92 C152 92 152 38 112 38 C82 38 78 70 104 82"],
+      ["Bring the working end up through the loop and around the standing part.", "M22 92 L112 92 C152 92 152 38 112 38 C82 38 78 70 104 82 C144 112 176 76 150 48"],
+      ["Return through the small loop, hold the loop size and dress firmly.", "M22 92 L112 92 C152 92 152 38 112 38 C82 38 78 70 104 82 C144 112 176 76 150 48 C138 30 126 44 130 68 C136 100 170 112 194 94"],
+    ],
+  },
+  {
+    id: "sheet-bend", name: "Sheet Bend", job: "Join two ropes, including ropes of unequal diameter.", caution: "Put the thinner rope around the thicker rope’s bight; use a double sheet bend when security matters.",
+    steps: [
+      ["Make a bight in the thicker rope.", "M24 34 C90 34 90 108 24 108"],
+      ["Pass the thinner rope up through the bight and around both legs.", "M24 34 C90 34 90 108 24 108 M190 104 C138 104 120 78 126 56 C132 34 154 34 174 34"],
+      ["Tuck the thinner working end beneath itself; both tails finish on the same side.", "M24 34 C90 34 90 108 24 108 M190 104 C138 104 120 78 126 56 C132 34 174 32 174 58 C174 78 148 82 134 68"],
+    ],
+  },
+  {
+    id: "round-turn", name: "Round Turn + Two Half Hitches", job: "Secure a loaded line to a post, tree or ring with controlled tension.", caution: "Protect living trees from rope damage and inspect the hitches after loading.",
+    steps: [
+      ["Take a full round turn around the anchor.", "M18 92 C68 92 74 28 120 28 C166 28 166 106 120 106 C88 106 80 72 102 54"],
+      ["Wrap the working end around the standing part and through to form a half hitch.", "M18 92 C68 92 74 28 120 28 C166 28 166 106 120 106 C88 106 80 72 102 54 C122 38 144 56 132 74"],
+      ["Repeat beside the first hitch and pull both snug.", "M18 92 C68 92 74 28 120 28 C166 28 166 106 120 106 C88 106 80 72 102 54 C122 38 144 56 132 74 C120 94 152 110 190 92"],
+    ],
+  },
+  {
+    id: "adjustable-grip", name: "Adjustable Grip Hitch", job: "Tension a tent guyline, ridge line or clothesline, then slide to adjust.", caution: "Test it on your actual cord; slick modern line may need an extra wrap.",
+    steps: [
+      ["Run the working end around the anchor and back beside the standing part.", "M18 42 L194 42 M190 108 C150 108 132 78 144 42"],
+      ["Wrap twice around the standing part, working towards the anchor.", "M18 42 L194 42 M190 108 C150 108 132 78 144 42 C150 26 170 28 168 44 C166 60 140 62 138 44"],
+      ["Add a final wrap outside the first two, tuck through and dress. Slide unloaded; grip under load.", "M18 42 L194 42 M190 108 C150 108 132 78 144 42 C150 26 170 28 168 44 C166 60 140 62 138 44 C136 24 112 24 112 44 C112 66 136 78 154 90"],
+    ],
+  },
+  {
+    id: "truckers-hitch", name: "Trucker’s Hitch", job: "Create mechanical advantage for tarps and securing non-critical loads.", caution: "High tension can damage rope and anchors. Use rated restraints for road cargo.",
+    steps: [
+      ["Form a fixed loop in the standing part away from the anchor.", "M18 38 L102 38 C132 38 132 76 104 76 C82 76 82 54 100 50"],
+      ["Take the working end around the anchor and back through the loop.", "M18 38 L102 38 C132 38 132 76 104 76 C82 76 82 54 100 50 M190 104 C148 104 142 54 118 54"],
+      ["Haul the free end to tension, then lock it with two half hitches.", "M18 38 L102 38 C132 38 132 76 104 76 C82 76 82 54 100 50 M190 104 C148 104 142 54 118 54 C144 54 154 82 136 92 C122 102 148 110 174 94"],
+    ],
+  },
+  {
+    id: "alpine-butterfly", name: "Alpine Butterfly", job: "Make a strong fixed loop in the middle of a rope, loadable in three directions.", caution: "Dress the two shoulders symmetrically before loading.",
+    steps: [
+      ["Make two overlapping turns in a bight.", "M18 74 C62 74 66 34 104 34 C142 34 148 76 112 82 C80 88 72 52 98 48"],
+      ["Fold the outer loop behind the crossing turns.", "M18 74 C62 74 66 34 104 34 C142 34 148 76 112 82 C80 88 72 52 98 48 C126 44 158 64 146 92"],
+      ["Bring that loop up through the centre and pull all three parts to dress.", "M18 74 C62 74 66 34 104 34 C142 34 148 76 112 82 C80 88 72 52 98 48 C126 44 158 64 146 92 C134 116 102 110 106 80 C110 58 150 42 194 74"],
+    ],
+  },
+  {
+    id: "square-lashing", name: "Square Lashing", job: "Bind two poles crossing at roughly a right angle for a shelter or frame.", caution: "Start and finish with secure hitches; frapping turns provide the final stiffness.",
+    support: true,
+    steps: [
+      ["Start with a clove hitch on the upright and trap the tail.", "M38 104 C58 84 60 48 82 42 C104 36 114 58 98 70"],
+      ["Take three firm wrapping turns around both poles.", "M38 104 C58 84 60 48 82 42 C104 36 114 58 98 70 C78 86 116 108 140 88 C162 68 146 38 122 46"],
+      ["Add two tight frapping turns between the poles, then finish with a clove hitch.", "M38 104 C58 84 60 48 82 42 C104 36 114 58 98 70 C78 86 116 108 140 88 C162 68 146 38 122 46 C94 56 94 94 126 96 C162 98 170 66 194 52"],
+    ],
+  },
+];
+---
+
+<Base title="Essential Survival Knots" description="An offline-capable, animated guide to eight practical knots for shelter, joining, tensioning and hauling.">
+  <nav class="prep-modes" aria-label="Prepping sections">
+    <a href="/prepping">Guide</a><a href="/prepping/gear">Gear</a><a href="/prepping/health">Health</a><a href="/prepping/tools">Field tools</a><a href="/prepping/pack">Pack list</a><a href="/prepping/science">Science</a><a href="/prepping/fitness">Fitness</a><a href="/prepping/planting">Planting</a><a href="/prepping/howto">How-to</a><a href="/prepping/knots" class="active">Knots</a>
+  </nav>
+
+  <article class="knots-guide">
+    <p class="eyebrow">Field skills / original diagrams</p>
+    <h1>Eight knots worth knowing cold</h1>
+    <p>Choose by job, practise with real cord, then test close to the ground. The animation shows rope path and sequence; it cannot verify your finished knot.</p>
+    <aside class="knot-warning"><strong>Not for climbing or life support.</strong> Knots reduce rope strength and can fail when poorly dressed, shock-loaded or tied in unsuitable cord. Use rated equipment and qualified instruction where failure could injure someone.</aside>
+
+    <div class="knot-index" aria-label="Jump to knot">
+      {knots.map((knot) => <a href={`#${knot.id}`}>{knot.name}</a>)}
+    </div>
+
+    <div class="knot-grid">
+      {knots.map((knot) => (
+        <section class="knot-card" id={knot.id} data-knot={knot.id}>
+          <header><div><h2>{knot.name}</h2><p>{knot.job}</p></div><span class="knot-count">1 / {knot.steps.length}</span></header>
+          <div class="knot-stage">
+            {knot.support && <svg class="knot-support" viewBox="0 0 212 136" aria-hidden="true"><path d="M24 68 H192 M106 14 V122" /></svg>}
+            <svg class="knot-svg" viewBox="0 0 212 136" role="img" aria-label={`${knot.name} animated rope diagram`}><path class="rope-shadow" d={knot.steps[0][1]} /><path class="rope" d={knot.steps[0][1]} /></svg>
+          </div>
+          <p class="knot-step" aria-live="polite">{knot.steps[0][0]}</p>
+          <div class="knot-controls">
+            <button type="button" data-action="prev" aria-label={`Previous ${knot.name} step`}>←</button>
+            <button type="button" data-action="play" aria-label={`Play ${knot.name} animation`}>Play</button>
+            <button type="button" data-action="next" aria-label={`Next ${knot.name} step`}>→</button>
+            <label>Speed <select data-speed><option value="1800">Slow</option><option value="1100" selected>Normal</option><option value="650">Fast</option></select></label>
+          </div>
+          <p class="knot-caution"><strong>Check:</strong> {knot.caution}</p>
+        </section>
+      ))}
+    </div>
+
+    <h2>Fast selection</h2>
+    <ul><li><strong>Stop:</strong> Figure Eight.</li><li><strong>Fixed loop:</strong> Bowline; Alpine Butterfly in the middle of a rope.</li><li><strong>Join:</strong> Sheet Bend.</li><li><strong>Anchor:</strong> Round Turn + Two Half Hitches.</li><li><strong>Adjust:</strong> Adjustable Grip Hitch.</li><li><strong>Tension:</strong> Trucker’s Hitch.</li><li><strong>Build:</strong> Square Lashing.</li></ul>
+    <p class="knot-source">Technique cross-checked against <a href="https://www.animatedknots.com/" rel="external">Animated Knots by Grog</a>. Their illustrations are copyrighted; every diagram and animation on this page is an original, simplified teaching graphic.</p>
+  </article>
+
+  <script type="application/json" id="knot-data" set:html={JSON.stringify(knots)}></script>
+  <script src="/scripts/prepping-knots.js" defer></script>
+</Base>
+
+<style>
+  .knots-guide { max-width: 56rem; margin-inline: auto; }
+  .knot-warning { margin: 1rem 0; padding: 0.9rem 1rem; border-left: 4px solid #b42318; background: color-mix(in srgb, #b42318 8%, transparent); }
+  .knot-index { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 1.2rem 0; }
+  .knot-index a { padding: 0.35rem 0.6rem; border: 1px solid var(--rule); border-radius: 999px; color: var(--fg); text-decoration: none; font-size: 0.82rem; }
+  .knot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: 1rem; }
+  .knot-card { scroll-margin-top: 1rem; padding: 1rem; border: 1px solid var(--rule); border-radius: 10px; }
+  .knot-card header { display: flex; justify-content: space-between; gap: 1rem; }
+  .knot-card h2 { margin: 0; font-size: 1.15rem; }
+  .knot-card header p { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.9rem; }
+  .knot-count { flex: 0 0 auto; font: 0.75rem var(--font-mono); color: var(--muted); }
+  .knot-stage { position: relative; margin: 0.8rem 0; border-radius: 8px; overflow: hidden; background: color-mix(in srgb, var(--fg) 5%, transparent); }
+  .knot-svg, .knot-support { display: block; width: 100%; aspect-ratio: 212 / 136; }
+  .knot-support { position: absolute; inset: 0; }
+  .knot-support path { fill: none; stroke: color-mix(in srgb, var(--fg) 32%, transparent); stroke-width: 13; stroke-linecap: round; }
+  .rope-shadow, .rope { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rope-shadow { stroke: color-mix(in srgb, var(--bg) 92%, #000); stroke-width: 13; }
+  .rope { stroke: #e26731; stroke-width: 8; }
+  .knot-card.animating .rope { animation: draw-rope var(--draw-speed, 1.1s) ease both; }
+  @keyframes draw-rope { from { stroke-dasharray: 1000; stroke-dashoffset: 1000; } to { stroke-dasharray: 1000; stroke-dashoffset: 0; } }
+  .knot-step { min-height: 3.2em; font-size: 0.92rem; }
+  .knot-controls { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+  .knot-controls button, .knot-controls select { min-height: 40px; padding: 0.4rem 0.65rem; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--fg); }
+  .knot-controls label { margin-left: auto; color: var(--muted); font-size: 0.8rem; }
+  .knot-caution, .knot-source { color: var(--muted); font-size: 0.84rem; }
+  @media (prefers-reduced-motion: reduce) { .knot-card.animating .rope { animation: none; } }
+</style>

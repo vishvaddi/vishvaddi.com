@@ -451,3 +451,11 @@
 - Added Daily run seeding for repeatable roguelike deals.
 - Added a feedback packet panel with current game state, hand, pile, mode, seed, run state and browser details.
 - Added the minimum viable project memory spine: `PROJECT_STATE.md`, `RUN_LOG.md`, `DECISIONS/` protocol and `AGENTS.md` pointer.
+## 2026-09-06 — Radio, PDF and preparedness feature package
+
+- Added filter-aware radio shuffle, local favourites and a favourites directory filter.
+- Added PDF overlay/difference comparison, flattened comparison export, construction stamp presets and export preflight.
+- Reframed all Site Tools cards around problem, outcome and device-local privacy.
+- Added five task-based readiness loadouts and a new eight-knot guide using original animated SVG paths.
+- Added focused browser coverage for the new radio, gear, knots, site-hub and PDF workflows.
+- Verified `npm run check` (0 errors), `npm run build` and `node scripts/feature-upgrades-e2e.mjs` with a clean browser console.

@@ -1,8 +1,12 @@
 # Project State
 
-_Last updated: 2026-09-06 — Three written demo songs (WESTSIDE g-funk, FLIGHT PATH 2562-style dubstep, SODIUM LIGHT Burial-style two-step) replace the old factory loops; Studio v5 skin shipped: one token-driven stylesheet, six modes rebuilt on Cubasis / FL Studio Mobile conventions._
+_Last updated: 2026-09-06 — Radio discovery, construction PDF comparison, task-based preparedness loadouts and an original animated survival-knot guide are implemented and verified locally._
 
 ## Current Position
+
+- `/radio/` now saves station favourites locally, filters to them and chooses a random station from the active search/filter result.
+- `/site/pdf/` adds estimator issue-stamp presets, visible export preflight, local two-drawing opacity/difference comparison and flattened comparison export. `/site/` cards state each tool's problem, outcome and local privacy boundary.
+- `/prepping/gear/` has five failure-specific readiness loadouts with local progress. `/prepping/knots/` teaches eight core knots with original step-controlled SVG animations, reduced-motion support and explicit non-life-support warnings.
 
 - `/studio/` runs on the v5 skin: one token layer (`src/styles/studio/tokens.css`) feeding primitives, a shell and one partial per mode — no `!important` cascade, legacy skins parked in `src/styles/_legacy/`. Orange means interaction state only; eight track colours carry identity across pads, steps, notes, clips and mixer strips; signal colours cover play/record/warn. The app bar holds a bar.beat.step position counter, Record and Metronome; phones get one bottom dock; touch landscape a 48 px rail. Drums are an FL-style lit-step sequencer; Pads an FLM deck; Synth a Cubasis key editor with a two-level Sound page; Arrange a Cubasis project window with a left inspector; Mix a MixConsole with the sphere on a Scope tab; DJ is compact by default with vinyl as an opt-in view.
 - `/studio/` is an immersive, viewport-filling browser workstation with three outcome-led primary destinations: Make, Arrange and DJ. It opens directly on Pads without a Start screen; Make reveals Pads, Drums, Synth and Mix contextually, while the transport keeps Pattern/Song and Save/Export visible.

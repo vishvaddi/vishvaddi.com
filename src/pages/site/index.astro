@@ -36,7 +36,9 @@ import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../../data/site-tools";
               <a class="tool-card" href={tool.href} data-tool={tool.href}>
                 <span class="tool-ico" aria-hidden="true">{tool.icon}</span>
                 <span class="t">{tool.title}</span>
-                <span class="d">{tool.description}</span>
+                <span class="d"><strong>Problem:</strong> {tool.problem}</span>
+                <span class="d"><strong>Does:</strong> {tool.promise}</span>
+                <span class="tool-privacy">Private · {tool.privacy}</span>
               </a>
             </li>
           ))}

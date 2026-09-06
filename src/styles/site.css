@@ -105,6 +105,8 @@
 .tool-card[aria-disabled="true"] { opacity: 0.5; pointer-events: none; }
 .tool-card .t { font-family: var(--font-sans); font-weight: 600; display: block; }
 .tool-card .d { font-size: 0.85rem; color: var(--muted); margin-top: 0.2rem; display: block; }
+.tool-card .d strong { color: var(--fg); font-weight: 600; }
+.tool-card .tool-privacy { display: block; margin-top: 0.55rem; color: var(--site-accent); font: 0.68rem var(--font-mono); }
 .tool-card .tag {
   font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.1em;
   text-transform: uppercase; color: var(--site-accent);
