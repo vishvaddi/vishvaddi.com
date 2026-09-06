@@ -91,6 +91,40 @@
 .pp-item-body .btn-row { margin: 0.4rem 0 0; }
 .pp-result { font-family: var(--font-mono); font-size: 0.75rem; color: var(--site-accent); margin: 0.4rem 0 0; overflow-wrap: anywhere; }
 
+/* bpm maths */
+.bm-tempo { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem 0.9rem; margin: 1rem 0 1.25rem; }
+.bm-tempo label, .bm-field { display: grid; gap: 0.25rem; font-size: 0.78rem; color: var(--muted); font-family: var(--font-sans); }
+.bm-tempo input, .bm-tempo select, .bm-field input, .bm-field select { min-height: 42px; padding: 0.35rem 0.5rem; border: 1px solid var(--site-line-strong); border-radius: 6px; background: var(--bg); color: var(--fg); font: 1rem var(--font-mono); }
+.bm-tempo #bm-bpm { width: 6.5rem; font-size: 1.3rem; }
+.bm-table { min-width: 28rem; }
+.bm-table td:not(:first-child) { font-family: var(--font-mono); }
+.bm-hz { color: var(--muted); }
+.bm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.75rem; margin: 0.5rem 0 1rem; }
+.bm-field output { font: 0.8rem var(--font-mono); color: var(--site-accent); min-height: 1.2em; overflow-wrap: anywhere; }
+.bm-pitch input { font-family: var(--font-sans); }
+
+/* metronome + tuner */
+.mt-block { margin: 1.25rem 0; }
+.mt-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem 0.9rem; margin: 0.5rem 0 1rem; }
+.mt-controls label { display: grid; gap: 0.25rem; font-size: 0.78rem; color: var(--muted); font-family: var(--font-sans); }
+.mt-controls input, .mt-controls select { min-height: 42px; padding: 0.35rem 0.5rem; border: 1px solid var(--site-line-strong); border-radius: 6px; background: var(--bg); color: var(--fg); font: 1rem var(--font-mono); }
+.mt-controls #mt-bpm { width: 6rem; font-size: 1.3rem; }
+.mt-controls input[type="range"] { min-height: 0; padding: 0; border: 0; width: 8rem; }
+.mt-dots { display: flex; gap: 0.6rem; margin: 0.5rem 0 1rem; }
+.mt-dot { width: 22px; height: 22px; border-radius: 50%; background: var(--site-line-strong); transition: transform 0.05s, background 0.05s; }
+.mt-dot.accent { border: 2px solid var(--site-accent); }
+.mt-dot.on { background: var(--site-accent); transform: scale(1.25); }
+.tn-ref { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
+.tn-ref input { width: 4.5rem; min-height: 40px; padding: 0.3rem 0.4rem; border: 1px solid var(--site-line-strong); border-radius: 6px; background: var(--bg); color: var(--fg); font: 0.95rem var(--font-mono); }
+.tn-dial { position: relative; height: 120px; margin: 0.75rem auto; max-width: 420px; border-bottom: 2px solid var(--site-line-strong); overflow: hidden; }
+.tn-scale { position: absolute; inset: auto 0 0.3rem; display: flex; justify-content: space-between; font: 0.7rem var(--font-mono); color: var(--muted); padding: 0 0.3rem; }
+.tn-needle { position: absolute; bottom: 0; left: 50%; width: 3px; height: 110px; background: var(--fg); transform-origin: bottom center; transform: translateX(-50%) rotate(0deg); border-radius: 2px; transition: transform 0.08s; }
+.tn-dial.in-tune .tn-needle { background: #1f9d4d; }
+.tn-read { display: flex; align-items: baseline; justify-content: center; gap: 1rem; }
+.tn-note { font: 700 2.6rem var(--font-sans); }
+.tn-cents { font: 1.1rem var(--font-mono); color: var(--muted); }
+.tn-hz { font: 0.85rem var(--font-mono); color: var(--muted); }
+
 @media (max-width: 480px) {
   .au-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

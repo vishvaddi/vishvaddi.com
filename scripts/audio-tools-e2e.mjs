@@ -64,7 +64,7 @@ function makeCentreWav(rate = 44100, seconds = 6) {
   return out
 }
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'] })
+const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] })
 const ctx = await browser.newContext({ viewport: { width: 1400, height: 950 } })
 const page = await ctx.newPage()
 const consoleErrors = []
@@ -209,6 +209,40 @@ try {
   const mp3 = await ppDl
   const mp3Bytes = readFileSync(await mp3.path())
   check('prep: MP3 export produces an MPEG stream', /\.mp3$/.test(mp3.suggestedFilename()) && mp3Bytes.length > 20_000 && (mp3Bytes[0] === 0xff || mp3Bytes.toString('latin1', 0, 3) === 'ID3'), `${mp3.suggestedFilename()} ${mp3Bytes.length} bytes`)
+
+  // ── bpm maths ──
+  await page.goto(`${BASE}/audio/bpm/`, { waitUntil: 'domcontentloaded' })
+  await page.fill('#bm-bpm', '120'); await page.dispatchEvent('#bm-bpm', 'input')
+  const quarter = await page.locator('#bm-notes tr').nth(2).locator('td').allTextContents()
+  check('bpm: quarter note at 120 is 500 / 750 / 333.3 ms and 2 Hz', quarter[1] === '500.0 ms' && quarter[2] === '750.0 ms' && quarter[3] === '333.3 ms' && quarter[4] === '2.000 Hz', quarter.join(' | '))
+  await page.fill('#bm-bars', '8'); await page.dispatchEvent('#bm-bars', 'input')
+  check('bpm: eight bars of 4/4 at 120 is 16 s', /^16\.00 s · 0:16 · 705,600 samples/.test((await page.locator('#bm-bars-out').textContent()) ?? ''), await page.locator('#bm-bars-out').textContent())
+  await page.selectOption('#bm-sig', '3/4'); await page.dispatchEvent('#bm-sig', 'input')
+  check('bpm: 3/4 shortens the bar', /^12\.00 s/.test((await page.locator('#bm-bars-out').textContent()) ?? ''), await page.locator('#bm-bars-out').textContent())
+  await page.fill('#bm-pitch', 'A1'); await page.dispatchEvent('#bm-pitch', 'input')
+  check('bpm: A1 converts to 55 Hz, MIDI 33', /55\.00 Hz · A1 \+0 ¢ · MIDI 33/.test((await page.locator('#bm-pitch-out').textContent()) ?? ''), await page.locator('#bm-pitch-out').textContent())
+  await page.fill('#bm-pitch', '446'); await page.dispatchEvent('#bm-pitch', 'input')
+  check('bpm: 446 Hz reads as A4 +23 cents', /A4 \+23 ¢/.test((await page.locator('#bm-pitch-out').textContent()) ?? ''), await page.locator('#bm-pitch-out').textContent())
+  for (let i = 0; i < 5; i++) { await page.click('#bm-tap'); if (i < 4) await page.waitForTimeout(400) }
+  const tapped = Number(await page.inputValue('#bm-bpm'))
+  check('bpm: tap tempo lands near 150 for 400 ms taps', tapped > 135 && tapped < 165, String(tapped))
+
+  // ── tuner & metronome ──
+  await page.goto(`${BASE}/audio/metronome/`, { waitUntil: 'domcontentloaded' })
+  check('metronome: tempo is shared with BPM maths', Math.abs(Number(await page.inputValue('#mt-bpm')) - tapped) < 1, await page.inputValue('#mt-bpm'))
+  await page.fill('#mt-bpm', '240'); await page.dispatchEvent('#mt-bpm', 'input')
+  await page.selectOption('#mt-beats', '3')
+  check('metronome: dots follow the time signature', await page.locator('.mt-dot').count() === 3 && await page.locator('.mt-dot.accent').count() === 1)
+  await page.click('#mt-play')
+  await page.waitForTimeout(700)
+  const lit = await page.evaluate(() => [...document.querySelectorAll('.mt-dot')].findIndex((d) => d.classList.contains('on')))
+  check('metronome: running and lighting beats', (await page.locator('#mt-play').getAttribute('aria-pressed')) === 'true' && lit >= 0, `lit ${lit}`)
+  await page.click('#mt-play')
+  await page.click('#tn-enable')
+  await page.waitForTimeout(800)
+  const tunerStatus = await page.locator('#tn-status').textContent()
+  check('tuner: microphone path opens (fake device)', /Listening/.test(tunerStatus ?? ''), tunerStatus)
+  await page.click('#tn-enable')
 
   // ── phone layout ──
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })

@@ -1,0 +1,57 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+import "../../styles/audio.css";
+---
+
+<Base
+  title="Tuner & Metronome — Polyrhythms, Subdivisions, Tap Tempo"
+  description="A chromatic tuner using your microphone with cents readout and a reference tone, plus a metronome with accents, subdivisions, polyrhythm layers and tap tempo. Runs in your browser, nothing is recorded."
+  audioNav
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/audio" style="color:inherit;text-decoration:none">Audio</a> / Tuner &amp; metronome</p>
+    <h1>Tuner &amp; Metronome</h1>
+    <p>
+      Two things every practice session needs and every phone app buries under
+      ads. The metronome schedules clicks on the audio clock so it does not
+      drift; the tuner listens on the microphone and never records.
+    </p>
+
+    <section class="mt-block">
+      <h2>Metronome</h2>
+      <div class="mt-controls">
+        <label>Tempo <input id="mt-bpm" type="number" min="20" max="400" step="1" value="120" inputmode="numeric" /></label>
+        <button type="button" class="btn btn-ghost" id="mt-tap">Tap</button>
+        <label>Beats per bar <select id="mt-beats"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>9</option><option>12</option></select></label>
+        <label>Subdivide <select id="mt-sub"><option value="1">off</option><option value="2">eighths</option><option value="3">triplets</option><option value="4">sixteenths</option></select></label>
+        <label>Polyrhythm <select id="mt-poly"><option value="0">off</option><option value="2">2 per bar</option><option value="3">3 per bar</option><option value="5">5 per bar</option><option value="7">7 per bar</option></select></label>
+        <label>Volume <input id="mt-vol" type="range" min="0" max="1" step="0.01" value="0.8" /></label>
+      </div>
+      <div class="mt-dots" id="mt-dots" aria-hidden="true"></div>
+      <div class="btn-row"><button type="button" class="btn" id="mt-play" aria-pressed="false">▶ Start</button></div>
+      <p class="au-muted">Beat one is accented. A polyrhythm lays its hits evenly across the bar on a lower voice — 3 per bar against 4 beats is the classic three-against-four.</p>
+    </section>
+
+    <section class="mt-block">
+      <h2>Tuner</h2>
+      <div class="btn-row">
+        <button type="button" class="btn" id="tn-enable">Enable microphone</button>
+        <button type="button" class="btn btn-ghost" id="tn-play-ref">▶ Reference tone</button>
+        <label class="tn-ref">A4 <input id="tn-ref" type="number" min="415" max="466" step="1" value="440" inputmode="numeric" /> Hz</label>
+      </div>
+      <p class="au-muted" id="tn-status">Off</p>
+      <div class="tn-dial">
+        <div class="tn-scale"><span>−50</span><span>0</span><span>+50</span></div>
+        <div class="tn-needle" id="tn-needle"></div>
+      </div>
+      <div class="tn-read"><span class="tn-note" id="tn-note">—</span><span class="tn-cents" id="tn-cents"></span><span class="tn-hz" id="tn-hz"></span></div>
+      <p class="note-foot">Play one note at a time. The needle holds the last confident reading for a second so it does not flicker between plucks. Reference tone plays the nearest note when a reading is held, otherwise A4.</p>
+    </section>
+  </div>
+
+  <script>
+    import { initMetronome } from "../../scripts/site/audio/metronome";
+    initMetronome();
+  </script>
+</Base>

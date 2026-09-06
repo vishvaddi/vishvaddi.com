@@ -8,6 +8,12 @@
 - Position counter fix: a song "bar" is one pattern cycle, so a 32-step scene spans two real bars; the app bar counter now shows real bars. The timeline ruler still numbers cycles.
 - Harness: the autosave check re-selects the scene it edited before reading the step back (a clip launch in between moves the edited scene). Gates: functional 86/86, responsive 375/375, density 48/48; both demos probed through the engine.
 
+## 2026-09-07 — BPM Maths + Tuner & Metronome (Claude, branch `audio-hub`)
+
+- `/audio/bpm` — tempo (typed, tapped, ½× / 2×) and time signature → every note value straight / dotted / triplet in ms with the matching LFO rate in Hz, reverb pre-delay and decay starting points in bars, bars ↔ seconds ↔ samples at 44.1 / 48 / 96 kHz, and a pitch converter that accepts Hz, note names or MIDI numbers (note, cents, MIDI, period, wavelength). Tempo is remembered and shared with the metronome.
+- `/audio/metronome` — audio-clock-scheduled metronome with accented downbeat, 2–12 beats, subdivisions (8ths / triplets / 16ths) and a polyrhythm voice (2, 3, 5 or 7 per bar); chromatic tuner on the microphone (McLeod-style normalised autocorrelation with parabolic refinement, `src/scripts/site/audio/pitch.ts`) with cents needle, one-second hold, adjustable A4 and a reference tone. Nothing is recorded.
+- Gates: `astro check` 0 · audio-tools-e2e green (500 / 750 / 333.3 ms table, bar and signature maths, A1 → 55 Hz, 446 Hz → A4 +23 ¢, tap tempo, shared tempo, dots and running state, fake-device mic path) · `scripts/audio-pitch-check.mjs` node unit run green (55 Hz–1 kHz within 0.3 %, silence and noise rejected) · responsive green.
+
 ## 2026-09-07 — Studio FX parity: Echo, Scream, RV7000, Maximizer ideas + song sections (Claude, branch `audio-hub`)
 
 - **TAPE ECHO**: tempo SYNC (1/16 … 1/4 dotted, re-applied when the BPM changes), PING-PONG (a second delay hangs off the first and the feedback closes through it, so repeats alternate L/R), DUCK (live-only envelope follower on the pre-echo bus pulls the wet down under the track), momentary ROLL (feedback pushed past unity while held).
