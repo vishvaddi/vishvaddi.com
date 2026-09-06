@@ -31,6 +31,37 @@ async function openMode(page, mode) {
   if (mode === 'PADS') await page.locator('.wa-beat-tabs .wa-subtab', { hasText: 'Play' }).click()
 }
 
+function parseSmf(bytes) {
+  const str = (o, n) => String.fromCharCode(...bytes.slice(o, o + n))
+  if (bytes.length < 14 || str(0, 4) !== 'MThd') return { ok: false, tracks: [] }
+  const u16 = (o) => (bytes[o] << 8) | bytes[o + 1], u32 = (o) => ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0
+  const format = u16(8), ntrks = u16(10), ppq = u16(12)
+  let pos = 14, bpm = null
+  const tracks = []
+  for (let t = 0; t < ntrks && pos + 8 <= bytes.length; t++) {
+    if (str(pos, 4) !== 'MTrk') return { ok: false, tracks }
+    const len = u32(pos + 4), end = pos + 8 + len
+    let p = pos + 8, name = '', noteOns = 0, noteOffs = 0, status = 0
+    const channels = []
+    const vlq = () => { let v = 0, b; do { b = bytes[p++]; v = (v << 7) | (b & 0x7f) } while (b & 0x80); return v }
+    while (p < end) {
+      vlq()
+      let b = bytes[p]
+      if (b === 0xff) { const type = bytes[p + 1]; p += 2; const l = vlq(); if (type === 0x03) name = String.fromCharCode(...bytes.slice(p, p + l)); if (type === 0x51) bpm = 60_000_000 / ((bytes[p] << 16) | (bytes[p + 1] << 8) | bytes[p + 2]); p += l; continue }
+      if (b === 0xf0 || b === 0xf7) { p++; p += vlq(); continue }
+      if (b & 0x80) { status = b; p++ }
+      const kind = status & 0xf0, ch = status & 0x0f
+      if (kind === 0x90) { const vel = bytes[p + 1]; if (vel > 0) { noteOns++; channels.push(ch) } else noteOffs++; p += 2 }
+      else if (kind === 0x80) { noteOffs++; p += 2 }
+      else if (kind === 0xc0 || kind === 0xd0) p += 1
+      else p += 2
+    }
+    tracks.push({ name, noteOns, noteOffs, channels })
+    pos = end
+  }
+  return { ok: true, format, ppq, bpm, tracks }
+}
+
 function check(name, ok, detail = '') {
   results.push(`${ok ? '  ✓' : '  ✗'} ${name}${detail ? ` — ${detail}` : ''}`)
   if (!ok) failed++
@@ -160,6 +191,32 @@ try {
   const { statSync } = await import('node:fs')
   const size = path ? statSync(path).size : 0
   check('export: WAV download > 10KB', size > 10_000, `${size} bytes`)
+  // ── MIDI export: a real type-1 SMF with a tempo, drums on channel 10 and synth notes ──
+  const midiDl = page.waitForEvent('download', { timeout: 20000 }).catch(() => null)
+  await page.click('button:has-text("Export MIDI")')
+  const midiDownload = await midiDl
+  const midiPath = midiDownload ? await midiDownload.path() : null
+  const { readFileSync } = await import('node:fs')
+  const midi = midiPath ? new Uint8Array(readFileSync(midiPath)) : new Uint8Array()
+  const smf = parseSmf(midi)
+  check('midi: file is a type-1 SMF', smf.ok && smf.format === 1, smf.ok ? `format ${smf.format}, ${smf.tracks.length} tracks, ppq ${smf.ppq}` : 'unparseable')
+  check('midi: tempo matches the transport', Math.abs((smf.bpm ?? 0) - 92) < 0.5, String(smf.bpm))
+  const drumTrack = smf.tracks.find((t) => t.name === 'Drum Rack')
+  check('midi: drum rack notes sit on channel 10', !!drumTrack && drumTrack.noteOns > 0 && drumTrack.channels.every((c) => c === 9), drumTrack ? `${drumTrack.noteOns} notes ch ${[...new Set(drumTrack.channels)].join(',')}` : 'no drum track')
+  const synthTracks = smf.tracks.filter((t) => ['Bass', 'Lead', 'Harmony'].includes(t.name))
+  check('midi: synth lanes export as their own tracks with notes', synthTracks.length >= 2 && synthTracks.every((t) => t.noteOns > 0), synthTracks.map((t) => `${t.name}:${t.noteOns}`).join(' '))
+  check('midi: every note-on has a matching note-off', smf.tracks.every((t) => t.noteOns === t.noteOffs), smf.tracks.map((t) => `${t.noteOns}/${t.noteOffs}`).join(' '))
+  // song mode walks every arranged bar, so it must carry more notes than one clip cycle
+  await page.selectOption('.wa-export select', 'song')
+  const songDl = page.waitForEvent('download', { timeout: 20000 }).catch(() => null)
+  await page.click('button:has-text("Export MIDI")')
+  const songDownload = await songDl
+  const songSmf = parseSmf(songDownload ? new Uint8Array(readFileSync(await songDownload.path())) : new Uint8Array())
+  const clipNotes = smf.tracks.reduce((a, t) => a + t.noteOns, 0), songNotes = songSmf.tracks.reduce((a, t) => a + t.noteOns, 0)
+  check('midi: song export covers the arrangement', songSmf.ok && songNotes > clipNotes, `${songNotes} song notes vs ${clipNotes} clip notes`)
+  check('midi: song export carries automation as CC on its own track', songSmf.ok && songSmf.tracks.some((t) => t.name === 'Master automation'), songSmf.tracks.map((t) => t.name).join(' | '))
+  await page.selectOption('.wa-export select', 'pattern')
+  check('midi: status line reports the note count', /MIDI saved — \d+ notes/.test((await page.locator('.wa-export:has(button:has-text("Export MIDI")) .wa-status').textContent()) ?? ''))
   await page.click('.wa-export-dialog-head button:has-text("Close")')
   await page.waitForTimeout(200)
 

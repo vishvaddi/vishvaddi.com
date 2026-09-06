@@ -13,6 +13,7 @@ import { playNote } from "./vsynth";
 import { projectState, applyProject, saveAll } from "./persistence";
 import { el, btn, help, download, encodeWav, encodeMp3, dataUrlToBytes } from "./helpers";
 import { ctx } from "./ctx";
+import { buildMidi } from "./midiexport";
 
 export interface ProjectExport {
   panel: HTMLElement;
@@ -29,11 +30,12 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
     const o = document.createElement("option"); o.value = v; o.textContent = l; renderSel.append(o);
   });
   renderSel.value = transport.songMode ? "song" : "pattern";
-  const wavBtn = btn("Export WAV"), mp3Btn = btn("Export MP3"), stemsBtn = btn("Export stems"), expStatus = el("span", "wa-status");
+  const wavBtn = btn("Export WAV"), mp3Btn = btn("Export MP3"), stemsBtn = btn("Export stems"), midiBtn = btn("Export MIDI"), expStatus = el("span", "wa-status");
   help(wavBtn, "Render the launched clips or full song as lossless WAV.");
   help(mp3Btn, "Render and encode the launched clips or full song as 192 kbps MP3.");
   help(stemsBtn, "Render separate drums, pads and synth WAV files for mixing in another DAW.");
-  expRow.append(el("span", "wa-lbl", "Render"), renderSel, wavBtn, mp3Btn, stemsBtn, expStatus);
+  help(midiBtn, "Save the launched clips or full song as a multitrack .mid: drums and pads on channel 10 (GM map), one track per synth lane, automation as CC. Every lane is included, mute and probability are ignored.");
+  expRow.append(el("span", "wa-lbl", "Render"), renderSel, wavBtn, mp3Btn, stemsBtn, midiBtn, expStatus);
   const projectRow = el("div", "wa-export");
   const saveProjectBtn = btn("Save project"), loadProjectBtn = btn("Open project");
   const quickProjectBtn = btn("Quick beat", "wa-btn-sm"), newProjectBtn = btn("New song", "wa-btn-sm"), demoProjectBtn = btn("Starter song", "wa-btn-sm");
@@ -162,6 +164,14 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
     }
   }
   wavBtn.addEventListener("click", () => doExport("wav"));
+  midiBtn.addEventListener("click", () => {
+    try {
+      const { bytes, summary } = buildMidi(renderSel.value as "pattern" | "song");
+      const total = Object.values(summary.notes).reduce((a, b) => a + b, 0);
+      download(`${(transport.songMode || renderSel.value === "song" ? "song" : "clips")}-${transport.bpm}bpm.mid`, new Blob([bytes as BlobPart], { type: "audio/midi" }));
+      expStatus.textContent = `MIDI saved — ${total} notes over ${summary.bars} bar${summary.bars === 1 ? "" : "s"}.`;
+    } catch { expStatus.textContent = "MIDI export failed."; }
+  });
   mp3Btn.addEventListener("click", () => doExport("mp3"));
   stemsBtn.addEventListener("click", async () => {
     stemsBtn.setAttribute("disabled", "1"); expStatus.textContent = "Rendering stems…";

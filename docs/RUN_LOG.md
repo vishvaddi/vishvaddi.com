@@ -8,6 +8,12 @@
 - Position counter fix: a song "bar" is one pattern cycle, so a 32-step scene spans two real bars; the app bar counter now shows real bars. The timeline ruler still numbers cycles.
 - Harness: the autosave check re-selects the scene it edited before reading the step back (a clip launch in between moves the edited scene). Gates: functional 86/86, responsive 375/375, density 48/48; both demos probed through the engine.
 
+## 2026-09-07 — Studio MIDI export (Claude, branch `audio-hub`)
+
+- "Export MIDI" joins WAV / MP3 / stems in the Project & export modal and follows the same Launched clips / Full arrangement selector. Type-1 SMF at 480 PPQ with tempo and 4/4 meta: Drum Rack on channel 10 with a GM map (36 38 42 46 39 45 37 49), Pads on a second channel-10 track (36 + pad), one track per synth lane (channels skip 10), accent = ×1.22 velocity, slide = legato overlap, block automation as CC (cutoff 74, volume 7, reverb 91; master ramps on channel 16 in a "Master automation" track). Bars follow the render.ts timeline (longest scene per bar, minimum four beats). Swing is applied; probability, groove random, glitch and mute are ignored so the file is reproducible.
+- Writer split out as `src/scripts/site/audio/smf.ts` for reuse by the /audio chord lab; the studio walker is `src/scripts/site/studio/midiexport.ts`.
+- Gates: `astro check` 0 · studio functional all green including eight new checks that parse the downloaded file (format, tempo, channel 10, per-lane tracks, on/off pairing, song > clip note count, automation track, status line).
+
 ## 2026-09-07 — /audio hub + Track Analyser (Claude, branch `audio-hub`)
 
 - New `/audio` hub for producer and DJ tools, built on the `/site` shell: `src/data/audio-tools.ts` catalogue, `src/pages/audio/index.astro`, rail + phone picker now render either catalogue (`Base.astro` gained an `audioNav` prop; `/site` output unchanged, responsive gate 119/119 across both hubs). "Audio" added to the More menu. `chrome.js`/`site-hub.js` keep separate recents per hub.
