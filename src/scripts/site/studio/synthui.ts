@@ -16,6 +16,7 @@ import { buildKeys, setKeysLatch } from "./keys";
 import type { KeyMods } from "./keys";
 import { buildRoll, laneIdentity } from "./roll";
 import { buildXYField } from "./xyfield";
+import { SCALES, NOTE_NAMES as THEORY_NOTE_NAMES, quantiseToScale, diatonicChordFrom, invert as invertChord } from "../audio/theory";
 
 export interface SynthUI {
   synthPanel: HTMLElement;
@@ -27,6 +28,9 @@ export interface SynthUI {
   renderPatchEditor: () => void;
   recordSynthOn: (n: string) => void;
   recordSynthOff: (n: string) => void;
+  /** one key → scale-locked chord/phrase; the QWERTY and MIDI paths share it with the on-screen keys */
+  playPerformance: (root: string, patch: VPatch, velocity: number) => void;
+  releasePerformance: (root: string) => void;
   isSynthRec: () => boolean;
   setOctaveShift: (v: number) => void;
   getOctaveShift: () => number;
@@ -104,8 +108,14 @@ export function buildSynth(): SynthUI {
     const intervals: Record<PerformancePatch["chord"], number[]> = {
       off: [0], major: [0, 4, 7], minor: [0, 3, 7], seventh: [0, 4, 7, 10], minor7: [0, 3, 7, 10],
     };
-    const base = noteToMidi(root), spread = Math.round(perfSettings().spread * 12);
-    return intervals[perfSettings().chord].map((interval, index) => midiToNote(base + interval + (index ? spread : 0)));
+    const perf = perfSettings(), spread = Math.round(perf.spread * 12);
+    const locked = !!perf.scale && perf.scale !== "off";
+    const base = locked ? quantiseToScale(noteToMidi(root), perf.scaleRoot ?? 0, perf.scale as string) : noteToMidi(root);
+    let notes = locked && perf.diatonic && perf.chord !== "off"
+      ? diatonicChordFrom(base, perf.scaleRoot ?? 0, perf.scale as string, perf.chord === "seventh" || perf.chord === "minor7" ? 4 : 3)
+      : intervals[perf.chord].map((interval) => base + interval);
+    if (perf.inversion) notes = invertChord(notes, perf.inversion);
+    return notes.map((midi, index) => midiToNote(midi + (index ? spread : 0)));
   };
   const playPerformance = (root: string, patch: VPatch, velocity: number): void => {
     const notes = performanceNotes(root), perf = perfSettings();
@@ -617,6 +627,10 @@ export function buildSynth(): SynthUI {
   const sampleOptions: Array<[string, string]> = [["-1", "OFF"], ...Array.from({ length: 16 }, (_, index) => [String(index), `PAD ${String(index + 1).padStart(2, "0")}`] as [string, string])];
   performanceGrid.append(
     selRow("Chord lock", [["off", "OFF"], ["major", "MAJOR"], ["minor", "MINOR"], ["seventh", "DOM 7"], ["minor7", "MIN 7"]], perfSettings().chord, (value) => { perfSettings().chord = value as PerformancePatch["chord"]; saveAll(); }),
+    selRow("Scale lock", [["off", "OFF"], ...SCALES.map((s) => [s.id, s.name.toUpperCase()] as [string, string])], perfSettings().scale ?? "off", (value) => { perfSettings().scale = value; saveAll(); }),
+    selRow("Scale root", THEORY_NOTE_NAMES.map((n, i) => [String(i), n] as [string, string]), String(perfSettings().scaleRoot ?? 0), (value) => { perfSettings().scaleRoot = Number(value); saveAll(); }),
+    selRow("Chord follows", [["off", "FIXED SHAPE"], ["on", "SCALE DEGREE"]], perfSettings().diatonic ? "on" : "off", (value) => { perfSettings().diatonic = value === "on"; saveAll(); }),
+    selRow("Inversion", [["0", "ROOT"], ["1", "1ST"], ["2", "2ND"], ["3", "3RD"]], String(perfSettings().inversion ?? 0), (value) => { perfSettings().inversion = Number(value); saveAll(); }),
     selRow("Waterfall", [["off", "OFF"], ["up", "UP"], ["down", "DOWN"], ["updown", "UP / DOWN"], ["waterfall", "WATERFALL"], ["random", "RANDOM"]], perfSettings().arp, (value) => { perfSettings().arp = value as PerformancePatch["arp"]; saveAll(); }),
     selRow("Rate", [["1/4", "1/4"], ["1/8", "1/8"], ["1/16", "1/16"]], perfSettings().rate, (value) => { perfSettings().rate = value as PerformancePatch["rate"]; saveAll(); }),
     sliderRow("Voicing", 0, 2, perfSettings().spread, 1, (value) => { perfSettings().spread = value; saveAll(); }),
@@ -774,7 +788,7 @@ export function buildSynth(): SynthUI {
 
   return {
     synthPanel, synthInspector, synthKeys, liveKeys, rollPlayheadBar, paintRoll, renderPatchEditor,
-    recordSynthOn, recordSynthOff,
+    recordSynthOn, recordSynthOff, playPerformance, releasePerformance,
     isSynthRec: () => synthRec,
     setOctaveShift, getOctaveShift: () => octaveShift,
     waveRedraws: () => waveRedraws,

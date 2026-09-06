@@ -31,6 +31,11 @@ export interface PerformancePatch {
   textureLevel: number;
   samples: [number, number];
   sampleLevels: [number, number];
+  // Scales & Chords-style key lock (v21). Older patches lack these — treat undefined as off.
+  scale?: string;        // theory.ts scale id, or "off"
+  scaleRoot?: number;    // pitch class 0–11
+  diatonic?: boolean;    // chord lock follows the scale degree instead of a fixed shape
+  inversion?: number;    // 0–3
 }
 export interface VPatch {
   osc1: OscPatch;

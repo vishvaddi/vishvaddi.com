@@ -86,7 +86,8 @@ export function bindKeyboard(deps: KeyboardDeps): void {
     const n0 = keyMap[key];
     if (!n0 || downMap.has(key) || ev.metaKey || ev.ctrlKey) return;
     const n = midiToNote(noteToMidi(n0) + deps.synth.getOctaveShift() * 12);
-    downMap.set(key, n); ensureNodes(); deps.synth.liveKeys.noteOn(ac(), engine.synthGain!, vsynthPatch, n); highlightKey(deps.synth.synthKeys, n0, true);
+    // Same route as the on-screen keys and MIDI in, so chord/scale lock applies to typing too.
+    downMap.set(key, n); ensureNodes(); deps.synth.playPerformance(n, vsynthPatch, 105); highlightKey(deps.synth.synthKeys, n0, true);
     deps.synth.recordSynthOn(n);
   });
   window.addEventListener("keyup", (ev) => {
@@ -96,7 +97,7 @@ export function bindKeyboard(deps: KeyboardDeps): void {
     // release the voice, or the note sticks on forever.
     const key = ev.key.toLowerCase();
     const n = downMap.get(key); if (!n) return;
-    downMap.delete(key); deps.synth.liveKeys.noteOff(ac(), n); highlightKey(deps.synth.synthKeys, keyMap[key], false);
+    downMap.delete(key); deps.synth.releasePerformance(n); highlightKey(deps.synth.synthKeys, keyMap[key], false);
     deps.synth.recordSynthOff(n);
   });
 

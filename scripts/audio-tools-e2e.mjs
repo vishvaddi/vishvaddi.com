@@ -5,6 +5,7 @@
 // Usage: node scripts/audio-tools-e2e.mjs [baseURL|dist]   (default http://localhost:4321)
 import { chromium } from 'playwright-core'
 import { serveBuiltSite } from './serve-built-site.mjs'
+import { parseSmf } from './smf-parse.mjs'
 
 const builtSite = process.argv[2] === 'dist' ? await serveBuiltSite(4403) : null
 const BASE = builtSite?.base ?? process.argv[2] ?? 'http://localhost:4321'
@@ -99,6 +100,39 @@ try {
   await page.click('#au-json')
   const file = await dl
   check('export: JSON download is offered', /analysis\.json$/.test(file.suggestedFilename()), file.suggestedFilename())
+
+  // ── chord lab ──
+  await page.goto(`${BASE}/audio/chords/`, { waitUntil: 'domcontentloaded' })
+  await page.evaluate(() => localStorage.removeItem('vv_audio_chords_v1'))
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.selectOption('#ch-root', '9')
+  await page.selectOption('#ch-scale', 'minor')
+  const symbols = await page.locator('#ch-chords .ch-symbol').allTextContents()
+  check('chords: A minor lists seven diatonic triads', symbols.join(' ') === 'Am Bdim C Dm Em F G', symbols.join(' '))
+  const numerals = await page.locator('#ch-chords .ch-numeral').allTextContents()
+  check('chords: numerals carry quality', numerals.join(' ') === 'i ii° III iv v VI VII', numerals.join(' '))
+  check('chords: key line shows Camelot 8A and the relative major', /8A.*C major.*8B/.test((await page.locator('#ch-key-meta').textContent()) ?? ''), await page.locator('#ch-key-meta').textContent())
+  check('chords: keyboard highlights seven scale tones per octave', await page.locator('#ch-keys .ch-key.on').count() === 14, String(await page.locator('#ch-keys .ch-key.on').count()))
+  await page.selectOption('#ch-size', '4')
+  const sevenths = await page.locator('#ch-chords .ch-symbol').allTextContents()
+  check('chords: sevenths rename the chords', sevenths[0] === 'Am7' && sevenths[1] === 'Bm7♭5' && sevenths[2] === 'Cmaj7' && sevenths[4] === 'Em7', sevenths.join(' '))
+  await page.selectOption('#ch-size', '3')
+  await page.selectOption('#ch-preset', '6') // Andalusian i VII VI V
+  const slots = await page.locator('.ch-slot strong').allTextContents()
+  check('chords: preset builds the progression', slots.join(' ') === 'Am G F Em', slots.join(' '))
+  await page.click('#ch-play')
+  await page.waitForTimeout(600)
+  check('chords: playback runs and lights the current chord', (await page.locator('#ch-play').getAttribute('aria-pressed')) === 'true' && await page.locator('.ch-slot.playing').count() === 1)
+  await page.click('#ch-play')
+  const chordDl = page.waitForEvent('download', { timeout: 10000 })
+  await page.click('#ch-midi')
+  const chordFile = await chordDl
+  const { readFileSync } = await import('node:fs')
+  const smf = parseSmf(new Uint8Array(readFileSync(await chordFile.path())))
+  const chordsTrack = smf.tracks.find((t) => t.name === 'Chords'), bassTrack = smf.tracks.find((t) => t.name === 'Bass')
+  check('chords: MIDI has 12 chord notes and 4 bass notes at 120 BPM', smf.ok && chordsTrack?.noteOns === 12 && bassTrack?.noteOns === 4 && Math.abs((smf.bpm ?? 0) - 120) < 0.5, `${chordsTrack?.noteOns}/${bassTrack?.noteOns} @ ${smf.bpm}`)
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  check('chords: progression survives reload', await page.locator('.ch-slot').count() === 4)
 
   // ── phone layout ──
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })

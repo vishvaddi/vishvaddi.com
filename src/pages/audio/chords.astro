@@ -1,0 +1,72 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+import "../../styles/audio.css";
+---
+
+<Base
+  title="Chord & Scale Lab — Diatonic Chords, Progressions, MIDI"
+  description="Pick a key and scale, see and hear every diatonic chord with Roman numerals and Camelot code, build a progression from presets or by hand with inversions and voicings, loop it and export it as a MIDI file. Runs entirely in your browser."
+  audioNav
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/audio" style="color:inherit;text-decoration:none">Audio</a> / Chord &amp; scale lab</p>
+    <h1>Chord &amp; Scale Lab</h1>
+    <p>
+      Every chord that lives in a key, with the numerals producers talk in.
+      Tap to hear them, stack a progression, loop it at tempo, then drag the
+      MIDI into your DAW. Nothing leaves this tab.
+    </p>
+
+    <div class="ch-controls">
+      <label>Root <select id="ch-root"></select></label>
+      <label>Scale <select id="ch-scale"></select></label>
+      <label>Register <select id="ch-octave"></select></label>
+      <label>Tempo <input id="ch-bpm" type="number" min="40" max="240" step="1" inputmode="numeric" /></label>
+      <label>Chords <select id="ch-size"><option value="3">Triads</option><option value="4">Sevenths</option></select></label>
+      <label>Voicing <select id="ch-voicing"><option value="close">Close</option><option value="open">Open</option><option value="drop2">Drop 2</option><option value="spread">Spread</option></select></label>
+    </div>
+
+    <section class="ch-block">
+      <p class="ch-key-meta" id="ch-key-meta"></p>
+      <p class="ch-scale-notes" id="ch-scale-notes"></p>
+      <svg id="ch-keys" class="ch-keys" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label="Two octaves of piano keys with the scale highlighted"></svg>
+      <div class="btn-row"><button type="button" class="btn btn-ghost btn-sm" id="ch-play-scale">▶ Play scale</button></div>
+    </section>
+
+    <section class="ch-block">
+      <h2>Diatonic chords</h2>
+      <div class="au-table-wrap">
+        <table class="au-table ch-table">
+          <thead><tr><th>Degree</th><th>Chord</th><th>Notes</th><th></th></tr></thead>
+          <tbody id="ch-chords"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="ch-block">
+      <h2>Progression</h2>
+      <div class="ch-prog-bar">
+        <select id="ch-preset" aria-label="Progression presets"></select>
+        <button type="button" class="btn" id="ch-play" aria-pressed="false">▶ Play</button>
+        <button type="button" class="btn btn-ghost" id="ch-clear">Clear</button>
+      </div>
+      <p class="au-muted" id="ch-empty">Add chords with ＋ above, or pick a preset.</p>
+      <div class="ch-slots" id="ch-slots"></div>
+      <p class="ch-progression-text" id="ch-progression-text"></p>
+      <div class="btn-row no-print">
+        <button type="button" class="btn" id="ch-midi">Download MIDI</button>
+        <button type="button" class="btn btn-ghost" id="ch-copy">Copy as text</button>
+      </div>
+      <p class="note-foot">
+        The MIDI file has a Chords track and a root-note Bass track at the tempo shown, 480 ticks per beat.
+        Presets switch the scale to major or minor when they need to; numerals follow the scale's own chord qualities, so a pentatonic "chord" is whatever stacking every other scale tone gives you.
+      </p>
+    </section>
+  </div>
+
+  <script>
+    import { initChordLab } from "../../scripts/site/audio/chords";
+    initChordLab();
+  </script>
+</Base>
