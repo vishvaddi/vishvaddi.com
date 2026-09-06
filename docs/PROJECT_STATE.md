@@ -1,9 +1,10 @@
 # Project State
 
-_Last updated: 2026-09-02 — Studio interaction and Vital/LEADR synth pass completed._
+_Last updated: 2026-09-03 — Studio v5 skin shipped: one token-driven stylesheet, six modes rebuilt on Cubasis / FL Studio Mobile conventions._
 
 ## Current Position
 
+- `/studio/` runs on the v5 skin: one token layer (`src/styles/studio/tokens.css`) feeding primitives, a shell and one partial per mode — no `!important` cascade, legacy skins parked in `src/styles/_legacy/`. Orange means interaction state only; eight track colours carry identity across pads, steps, notes, clips and mixer strips; signal colours cover play/record/warn. The app bar holds a bar.beat.step position counter, Record and Metronome; phones get one bottom dock; touch landscape a 48 px rail. Drums are an FL-style lit-step sequencer; Pads an FLM deck; Synth a Cubasis key editor with a two-level Sound page; Arrange a Cubasis project window with a left inspector; Mix a MixConsole with the sphere on a Scope tab; DJ is compact by default with vinyl as an opt-in view.
 - `/studio/` is an immersive, viewport-filling browser workstation with three outcome-led primary destinations: Make, Arrange and DJ. It opens directly on Pads without a Start screen; Make reveals Pads, Drums, Synth and Mix contextually, while the transport keeps Pattern/Song and Save/Export visible.
 - Studio now uses one restrained graphite workstation language across every mode: flat layered surfaces, orange interaction state, track colours for musical identity, quieter borders, consistent control geometry and visible thin scrollbars. Variable content has an explicit scroll owner rather than being clipped by the fixed shell.
 - Studio supports 4–32-step straight/triplet patterns; drums and sliced/recorded samples; addable independent MIDI synth tracks; addable local audio tracks; accent/slide; Web MIDI; patch, kit and song libraries; clip launching; automation; effects; Morph/Terrain performance; project persistence; WAV/MP3 and per-track stem export. DJ adds a searchable, sortable local library with explicit Load A/Load B and queue actions, two local-file decks, compact/vinyl views, waveform seeking, BPM analysis, pitch, cues, loops, slip, sync, master tempo, a central mixer, equal-power crossfade, eight audible master effects and a review-before-download recording flow.

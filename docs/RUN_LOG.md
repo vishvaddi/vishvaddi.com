@@ -1,5 +1,18 @@
 # Run Log
 
+## 2026-09-03 — Studio v5: one skin, six modes rebuilt (deployed `1996fcb9`)
+
+- Replaced three stacked studio stylesheets (`studio.css` 5,658 lines, `studio-workflow.css`, Codex's uncommitted `studio-redesign.css`; 417 `!important`, 89 media queries) with one token layer plus nine partials under `src/styles/studio/` (1,809 lines, 24 media queries, two `!important` guards). Legacy files parked under `src/styles/_legacy/`, not imported.
+- Shell: single 48 px app bar with a bar.beat.step position counter, Record and Metronome in the core transport, Save demoted to a secondary key, timing extras behind a ⋯ sheet; two-level desktop rail (MAKE with its four instruments indented, ARRANGE, DJ); one bottom dock on phones; 48 px rail in touch landscape. First-run demo hint is a banner strip, not a floating toast.
+- Drums: colour-chipped lanes, steps lit in lane colour with velocity as opacity, 4-step group shading, synth-drum sliders replaced with the shared knob, Random/Clear moved into the toolbar.
+- Pads: FL Studio Mobile deck — tinted pads that light on hit, icon toggle row above the deck, 4-column sample editor, layers section.
+- Synth: real black/white keyboard column, notes in track colour, Draw / Select / Erase palette, velocity lane fixed at 72 px; Sound page is two levels (bank tabs → bank content) with the wavetable display filling the aperture; every knob label visible.
+- Arrange: Cubasis project window — colour tag · number · name · type headers, clips in track colour with a scene stripe and name-only labels, timeline to song end + 8 bars, Automation and Songs as an open left inspector on desktop. Clip launcher kept, restyled.
+- Mix: MixConsole strips with colour headers, pan, M/S, fader + meter; master `NaN` fixed; Lysergic sphere moved to a Scope tab.
+- DJ: compact view by default (vinyl view opt-in), vertical pitch fader, performance mixer strips matching Mix, CROSSFADER/FX overlap and phone crossfader-over-hot-cues fixed.
+- Harness checks rewritten only where behaviour deliberately changed (sphere on Scope tab, folds open on desktop, automation inspector beside lanes, vinyl checks run only in vinyl view). Gates: responsive 375/375, functional 86/86, density 48/48, `astro check` 0 errors. Added `scripts/studio-shots.mjs` for before/after mode screenshots.
+- Process note: Pads, Synth and Mix were rewritten by three parallel agents in worktrees; all three hit a session rate limit before committing, their diffs were salvaged and applied by hand, then verified.
+
 ## 2026-09-02 — Site tools: Construction Master Pro parity
 
 - Audited the Calculated Industries Construction Master Pro 4065 feature list against `/site/geometry` and `/site/materials`; 13 functions were already covered, 11 were not.
