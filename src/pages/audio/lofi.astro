@@ -1,0 +1,53 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+import "../../styles/audio.css";
+---
+
+<Base
+  title="Lo-fi Processor — VHS, Tape, Vinyl, Radio, Telephone, 8-bit"
+  description="Sixteen one-knob retro transforms for any sample: VHS, tape, cassette, vinyl, FM and AM radio, telephone, walkie-talkie, megaphone, underwater, 8-bit, sample crush, old film, lo-fi hip hop, detune drift and backwards swell, with amount and dry/wet. Runs entirely in your browser."
+  audioNav
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/audio" style="color:inherit;text-decoration:none">Audio</a> / Lo-fi processor</p>
+    <h1>Lo-fi Processor</h1>
+    <p>
+      Pick a character, turn one knob, blend it in. Each transform is a fixed
+      chain of filters, saturation, wobble and noise tuned to sound like the
+      thing on the tin. The file never leaves this tab.
+    </p>
+
+    <div class="au-drop" id="lf-drop">
+      <p><strong>Drop a sample or a whole track</strong><br /><span class="au-muted">WAV, MP3, FLAC, OGG, M4A</span></p>
+      <div class="btn-row"><label class="btn">Choose file<input id="lf-input" type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.oga,.m4a,.aac,.aif,.aiff" hidden /></label></div>
+    </div>
+    <p class="au-file" id="lf-file"></p>
+
+    <div class="lf-grid" id="lf-grid"></div>
+
+    <div class="lf-knobs">
+      <label>Amount <input id="lf-amount" type="range" min="0" max="1" step="0.01" value="0.6" /><output id="lf-amount-out"></output></label>
+      <label>Dry / wet <input id="lf-wet" type="range" min="0" max="1" step="0.01" value="1" /><output id="lf-wet-out"></output></label>
+      <label>Output gain <input id="lf-gain" type="range" min="-12" max="12" step="0.5" value="0" /><output id="lf-gain-out"></output></label>
+    </div>
+    <p class="au-muted" id="lf-status">Load a file to begin.</p>
+
+    <div class="btn-row" id="lf-actions" hidden>
+      <button type="button" class="btn btn-ghost" id="lf-play-dry">▶ Dry</button>
+      <button type="button" class="btn" id="lf-play-wet">▶ Processed</button>
+      <button type="button" class="btn btn-ghost" id="lf-stop">■</button>
+      <select id="lf-format" aria-label="Download format"><option value="wav">WAV</option><option value="mp3">MP3</option></select>
+      <button type="button" class="btn" id="lf-download">Download</button>
+    </div>
+
+    <p class="note-foot">
+      Noise and crackle are seeded, so the same file with the same settings renders the same bytes every time. Peaks over full scale are pulled back to −0.2 dBFS after the output gain.
+    </p>
+  </div>
+
+  <script>
+    import { initLofi } from "../../scripts/site/audio/lofi";
+    initLofi();
+  </script>
+</Base>

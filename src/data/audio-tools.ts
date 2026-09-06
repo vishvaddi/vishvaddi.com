@@ -28,6 +28,7 @@ const RAW_AUDIO_TOOLS: Omit<AudioTool, 'problem' | 'promise' | 'privacy'>[] = [
   { href: '/audio/prep', title: 'Sample Prep', shortTitle: 'Sample prep', icon: '✂️', description: 'Batch trim, normalise, fade, reverse, pitch, stretch to BPM, centre-channel vocal remover, mono, resample, WAV/MP3.', category: 'Prepare & convert', aliases: 'trim normalise normalize lufs fade reverse pitch stretch bpm vocal remover karaoke instrumental mono convert resample wav mp3 batch', quick: true },
   { href: '/audio/bpm', title: 'BPM Maths', shortTitle: 'BPM maths', icon: '⏱️', description: 'Note values in ms and Hz, reverb times, bars to seconds and samples, Hz to note and MIDI, tap tempo.', category: 'Prepare & convert', aliases: 'delay time ms lfo hz reverb predelay decay bars seconds samples tap tempo hz note midi cents', quick: true },
   { href: '/audio/metronome', title: 'Tuner & Metronome', shortTitle: 'Tuner', icon: '🎚️', description: 'Chromatic mic tuner with cents and a reference tone; metronome with accents, subdivisions and polyrhythms.', category: 'Learn', aliases: 'tuner pitch cents metronome click polyrhythm subdivision practice tap tempo' },
+  { href: '/audio/lofi', title: 'Lo-fi Processor', shortTitle: 'Lo-fi', icon: '📼', description: 'Sixteen one-knob retro transforms: VHS, tape, vinyl, radio, telephone, 8-bit, old film, lo-fi hip hop and more, with dry/wet.', category: 'Prepare & convert', aliases: 'lofi lo-fi vhs tape cassette vinyl radio telephone walkie megaphone underwater bitcrush 8-bit crush film drift reverse audiomatic retro' },
   { href: '/audio/analyser', title: 'Track Analyser', shortTitle: 'Analyser', icon: '📊', description: 'BPM, key and Camelot, LUFS, true peak, loudness range, stereo width and streaming targets.', category: 'Analyse', aliases: 'bpm key camelot lufs loudness true peak lra spectrum mastering spotify apple youtube club', quick: true },
 ]
 
@@ -36,6 +37,7 @@ const POSITIONING: Record<string, [problem: string, promise: string]> = {
   '/audio/prep': ['Every sample needs the same five fixes before it is usable, and a DAW makes you do them one at a time.', 'Set the recipe once and run every file through it, then download WAV or MP3.'],
   '/audio/bpm': ['Delay, LFO and reverb times get worked out on a phone calculator mid-session.', 'Type or tap a tempo and read every note value, reverb starting point and length conversion at once.'],
   '/audio/metronome': ['Practice tools on phones come wrapped in ads and drift.', 'A sample-accurate metronome with polyrhythms and a tuner that never records.'],
+  '/audio/lofi': ['Getting a sample to sound like an old tape or a phone means stacking five plugins by hand.', 'Pick a character, turn one knob, blend it in, download.'],
   '/audio/analyser': ['Mastering decisions get made on meters you have to pay for or plugins you have to open a DAW to see.', 'Drop a file and read tempo, key, loudness, peaks, width and how far you are from each platform target.'],
 }
 

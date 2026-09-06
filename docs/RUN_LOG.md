@@ -8,6 +8,11 @@
 - Position counter fix: a song "bar" is one pattern cycle, so a 32-step scene spans two real bars; the app bar counter now shows real bars. The timeline ruler still numbers cycles.
 - Harness: the autosave check re-selects the scene it edited before reading the step back (a clip launch in between moves the edited scene). Gates: functional 86/86, responsive 375/375, density 48/48; both demos probed through the engine.
 
+## 2026-09-07 — Lo-fi Processor (Claude, branch `audio-hub`)
+
+- `/audio/lofi` — sixteen Audiomatic-style one-knob transforms rendered offline on a dropped file with Amount, Dry/wet and Output gain: VHS, Tape, Cassette, Vinyl, FM radio, AM radio, Telephone, Walkie-talkie, Megaphone, Underwater, 8-bit, Sample crush, Old film, Lo-fi hip hop, Detune drift, Backwards swell. Built from small primitives in `src/scripts/site/audio/lofi.ts` (cascaded biquads, tanh shaper with asymmetry, seeded white/pink/hum noise, seeded crackle, modulated-delay wow/flutter, bit and sample-rate reduction, gate, comb reverb). Noise is seeded so renders are reproducible; peaks over full scale are pulled to −0.2 dBFS. A/B audition, WAV or MP3 download.
+- Gates: `astro check` 0 · audio-tools-e2e green (16 cards; telephone keeps 1 kHz and removes 8 kHz by > 23 dB; underwater drops 1 kHz > 17 dB; dry/wet 0 returns the input within 0.2 dB; 8-bit alters the waveform; output ≤ 0 dBFS) · responsive green.
+
 ## 2026-09-07 — BPM Maths + Tuner & Metronome (Claude, branch `audio-hub`)
 
 - `/audio/bpm` — tempo (typed, tapped, ½× / 2×) and time signature → every note value straight / dotted / triplet in ms with the matching LFO rate in Hz, reverb pre-delay and decay starting points in bars, bars ↔ seconds ↔ samples at 44.1 / 48 / 96 kHz, and a pitch converter that accepts Hz, note names or MIDI numbers (note, cents, MIDI, period, wavelength). Tempo is remembered and shared with the metronome.

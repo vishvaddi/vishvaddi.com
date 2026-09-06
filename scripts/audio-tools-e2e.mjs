@@ -244,6 +244,33 @@ try {
   check('tuner: microphone path opens (fake device)', /Listening/.test(tunerStatus ?? ''), tunerStatus)
   await page.click('#tn-enable')
 
+  // ── lo-fi processor ──
+  await page.goto(`${BASE}/audio/lofi/`, { waitUntil: 'domcontentloaded' })
+  check('lofi: sixteen transform cards', await page.locator('.lf-card').count() === 16)
+  // a two-tone file: 1 kHz + 8 kHz, so band-limiting transforms are measurable
+  const twoTone = (() => { const rate = 44100, n = rate * 3, out = Buffer.alloc(44 + n * 2); out.write('RIFF', 0); out.writeUInt32LE(36 + n * 2, 4); out.write('WAVEfmt ', 8); out.writeUInt32LE(16, 16); out.writeUInt16LE(1, 20); out.writeUInt16LE(1, 22); out.writeUInt32LE(rate, 24); out.writeUInt32LE(rate * 2, 28); out.writeUInt16LE(2, 32); out.writeUInt16LE(16, 34); out.write('data', 36); out.writeUInt32LE(n * 2, 40); for (let i = 0; i < n; i++) out.writeInt16LE(Math.round((Math.sin(2 * Math.PI * 1000 * i / rate) * 0.3 + Math.sin(2 * Math.PI * 8000 * i / rate) * 0.3) * 32767), 44 + i * 2); return out })()
+  await page.setInputFiles('#lf-input', { name: 'twotone.wav', mimeType: 'audio/wav', buffer: twoTone })
+  await page.waitForFunction(() => !document.getElementById('lf-actions')?.hidden, null, { timeout: 30000 })
+  const grab = async () => { const d = page.waitForEvent('download', { timeout: 20000 }); await page.click('#lf-download'); return readWav(new Uint8Array(readFileSync(await (await d).path()))) }
+  const band = (w, hz) => goertzel(w.channels[0].subarray(w.rate, w.rate * 2), w.rate, hz)
+  await page.locator('.lf-card[data-id="telephone"]').click(); await page.waitForTimeout(600)
+  const tel = await grab()
+  check('lofi: telephone keeps 1 kHz and kills 8 kHz', band(tel, 1000) > 200 * band(tel, 8000), `ratio ${(band(tel, 1000) / band(tel, 8000)).toFixed(0)}`)
+  await page.locator('.lf-card[data-id="underwater"]').click(); await page.waitForTimeout(600)
+  const uw = await grab()
+  check('lofi: underwater drops the 1 kHz tone hard', band(tel, 1000) > 50 * band(uw, 1000), `ratio ${(band(tel, 1000) / band(uw, 1000)).toFixed(0)}`)
+  await page.locator('.lf-card[data-id="bitcrush"]').click()
+  await page.fill('#lf-wet', '0'); await page.dispatchEvent('#lf-wet', 'input'); await page.waitForTimeout(600)
+  const dry = await grab()
+  const dryPeak = peakDb(dry.channels), inputPeak = Number(/peak (-?[\d.]+) dBFS/.exec((await page.locator('#lf-file').textContent()) ?? '')?.[1])
+  check('lofi: dry/wet at zero returns the decoded input untouched', Math.abs(dryPeak - inputPeak) < 0.05, `${dryPeak.toFixed(2)} vs decoded ${inputPeak.toFixed(2)} dBFS`)
+  await page.fill('#lf-wet', '1'); await page.dispatchEvent('#lf-wet', 'input')
+  await page.fill('#lf-amount', '1'); await page.dispatchEvent('#lf-amount', 'input'); await page.waitForTimeout(600)
+  const crushed = await grab()
+  let diff = 0; for (let i = 0; i < 20000; i++) diff = Math.max(diff, Math.abs(crushed.channels[0][i] - dry.channels[0][i]))
+  check('lofi: 4-bit crush changes the waveform', diff > 0.02, `max diff ${diff.toFixed(3)}`)
+  check('lofi: output stays under full scale', peakDb(crushed.channels) <= 0, peakDb(crushed.channels).toFixed(2))
+
   // ── phone layout ──
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   const p2 = await phone.newPage()
