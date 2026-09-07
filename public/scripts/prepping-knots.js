@@ -35,8 +35,12 @@
     var practice = card.querySelector('[data-action="practice"]');
     var correct = card.querySelector('[data-action="correct"]');
     var reveal = card.querySelector('[data-action="reveal"]');
+    var speed = card.querySelector('[data-knot-speed]');
+    var seek = card.querySelector('[data-knot-seek]');
+    var status = card.querySelector('[data-playback-status]');
 
     function stop() {
+      animation.pause();
       playButton.textContent = "Play step";
     }
 
@@ -44,13 +48,33 @@
       index = (next + knot.steps.length) % knot.steps.length;
       copy.textContent = knot.steps[index][0];
       count.textContent = (index + 1) + " / " + knot.steps.length;
-      animation.src = "/media/knots/" + knot.id + "-step-" + (index + 1) + ".webp";
+      var base = "/media/knots/" + knot.id + "-step-" + (index + 1);
+      animation.poster = base + ".webp";
+      animation.src = base + ".mp4";
+      animation.setAttribute("aria-label", knot.name + ", step " + (index + 1) + ". " + knot.steps[index][0]);
+      seek.value = "0";
+      status.textContent = "Paused. Play when your rope is ready.";
     }
 
     card.querySelector('[data-action="prev"]').addEventListener("click", function () { stop(); show(index - 1); });
     card.querySelector('[data-action="next"]').addEventListener("click", function () { stop(); show(index + 1); });
     playButton.addEventListener("click", function () {
-      animation.src = "/media/knots/" + knot.id + "-step-" + (index + 1) + ".webp?replay=" + Date.now();
+      if (!animation.paused) { stop(); return; }
+      document.querySelectorAll('[data-knot-animation]').forEach(function (other) { if (other !== animation) other.pause(); });
+      if (animation.ended) animation.currentTime = 0;
+      animation.playbackRate = Number(speed.value);
+      animation.play().catch(function () { status.textContent = "Could not play this clip. Read the step and use the technique reference below."; });
+    });
+    animation.addEventListener("play", function () { playButton.textContent = "Pause"; status.textContent = "Follow the highlighted working end."; });
+    animation.addEventListener("pause", function () { playButton.textContent = animation.ended ? "Replay step" : "Play step"; });
+    animation.addEventListener("ended", function () { status.textContent = "Step complete. Check your rope, then choose the next step."; });
+    animation.addEventListener("timeupdate", function () { if (animation.duration) seek.value = String(100 * animation.currentTime / animation.duration); });
+    animation.addEventListener("error", function () { status.textContent = "Clip unavailable. The still and written step remain available."; });
+    speed.addEventListener("change", function () { animation.playbackRate = Number(speed.value); });
+    seek.addEventListener("input", function () {
+      stop();
+      if (Number.isFinite(animation.duration)) animation.currentTime = animation.duration * Number(seek.value) / 100;
+      else { animation.preload = "metadata"; animation.load(); }
     });
     practice.addEventListener("click", function () {
       stop();
@@ -71,6 +95,9 @@
       record.due = Date.now() + intervals[record.streak - 1] * DAY;
       mastery[knot.id] = record; saveMastery();
     });
+  });
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) document.querySelectorAll('[data-knot-animation]').forEach(function (video) { video.pause(); });
   });
   document.getElementById("knot-test-me").addEventListener("click", function () {
     var candidates = knots.filter(function (knot) { return due(mastery[knot.id]); });

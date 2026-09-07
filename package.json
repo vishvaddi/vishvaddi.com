@@ -9,6 +9,8 @@
     "dev": "astro dev",
     "build": "astro build && node scripts/optimize-og.mjs && node scripts/generate-sw.mjs",
     "check": "astro check",
+    "test:release-gate": "node --test scripts/release-check.test.mjs",
+    "release:check": "node scripts/release-check.mjs",
     "test:deep-swarm": "node scripts/deep-swarm-e2e.mjs",
     "test:deep-swarm-junction": "node scripts/deep-swarm-junction.mjs",
     "test:deep-swarm-sync": "node scripts/deep-swarm-sync.mjs",

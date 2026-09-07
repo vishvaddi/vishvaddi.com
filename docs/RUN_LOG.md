@@ -534,3 +534,12 @@
 - Added guided local photo capture, coverage prompts, photo notes and manifest export to Voice Notes without claiming photogrammetric accuracy.
 - Kept TV/audio synchronisation parked because lawful synchronisation sources have not been established.
 - Verified `npm run check` (0 errors), `npm run build`, the 228-test QuoteTools suite and the expanded feature browser harness with a clean console.
+
+## 2026-09-07 — Knot clips rebuilt in Blender; release gate script
+
+- Replaced the three-second looping WebP knot animations with per-step MP4 clips (720×480, 24 fps, 8 s: 1 s pause, 5 s eased reveal, 2 s hold) rendered by `scripts/generate-knot-videos.py` from `scripts/knot-models.py`, where each knot is one continuous rope path with explicit depth at every crossing. The script audits rope/rope, rope/second-rope and rope/anchor clearance and refuses to render an intersecting model; all eight pass.
+- The knot stage is now a `<video>` with poster, play/pause, a scrub slider, three speeds (extra slow, slow, practice) and a status line; clips start paused, pause when the tab hides, and the poster shows the completed stage for reduced-motion viewers. Corrected the Adjustable Grip Hitch step 3 to wrap both ropes (Animated Knots reference) and softened the Bowline job/caution copy.
+- `scripts/encode-knot-animations.py` rewritten for the new pipeline (frames → h264 MP4 + WebP poster per step, `--knot`, `--keep-frames`); the 24 clips total about 0.8 MB, posters 0.13 MB. MP4/WebP are not precached by the service worker.
+- Added `npm run release:check` (`scripts/release-check.mjs` + unit test): runs the gate test, `astro check`, build, then the feature, audio and studio harnesses in `dist` mode, stopping at the first non-zero exit — no pipes masking exit codes. `feature-upgrades-e2e.mjs dist` now serves the built site itself.
+- Verified: check 0 errors; build; feature harness 15/15 (knot checks green); audio 72/72 and studio 102/102 on a standalone re-run after the gate's first pass tripped on the timing-sensitive tap-tempo check under load.
+- Hand-over note: Codex built most of this and lost its session twice to `os error 10053` while uploading screenshot-heavy tool results; Claude finished the encoder, render, gate run and docs. Cause is the laptop's upload path (~10 KB/s at the time), not Codex — tracked in the vault.

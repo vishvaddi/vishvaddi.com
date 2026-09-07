@@ -12,7 +12,7 @@ const knots = [
     ],
   },
   {
-    id: "bowline", name: "Bowline", job: "Make a fixed loop for shelter lines, hauling or rescue equipment.", caution: "Not a climbing tie-in. Add a backup stopper when cyclic loading could shake it loose.",
+    id: "bowline", name: "Bowline", job: "Make a fixed loop for a shelter line or tying to a post.", caution: "Can shake loose when unloaded. Check the tail and dressing each time; not for climbing or rescue.",
     steps: [
       ["Form a small loop with the working end on top.", "M22 92 L112 92 C152 92 152 38 112 38 C82 38 78 70 104 82"],
       ["Bring the working end up through the loop and around the standing part.", "M22 92 L112 92 C152 92 152 38 112 38 C82 38 78 70 104 82 C144 112 176 76 150 48"],
@@ -40,14 +40,14 @@ const knots = [
     steps: [
       ["Run the working end around the anchor and back beside the standing part.", "M18 42 L194 42 M190 108 C150 108 132 78 144 42"],
       ["Wrap twice around the standing part, working towards the anchor.", "M18 42 L194 42 M190 108 C150 108 132 78 144 42 C150 26 170 28 168 44 C166 60 140 62 138 44"],
-      ["Add a final wrap outside the first two, tuck through and dress. Slide unloaded; grip under load.", "M18 42 L194 42 M190 108 C150 108 132 78 144 42 C150 26 170 28 168 44 C166 60 140 62 138 44 C136 24 112 24 112 44 C112 66 136 78 154 90"],
+      ["Wrap around BOTH ropes, then tuck the working end under this last wrap. Dress and test; adjust only when unloaded, well away from the anchor.", "M18 42 L194 42 M190 108 C150 108 132 78 144 42 C150 26 170 28 168 44 C166 60 140 62 138 44 C136 24 112 24 112 44 C112 66 136 78 154 90"],
     ],
   },
   {
     id: "truckers-hitch", name: "Trucker’s Hitch", job: "Create mechanical advantage for tarps and securing non-critical loads.", caution: "High tension can damage rope and anchors. Use rated restraints for road cargo.",
     steps: [
-      ["Form a fixed loop in the standing part away from the anchor.", "M18 38 L102 38 C132 38 132 76 104 76 C82 76 82 54 100 50"],
-      ["Take the working end around the anchor and back through the loop.", "M18 38 L102 38 C132 38 132 76 104 76 C82 76 82 54 100 50 M190 104 C148 104 142 54 118 54"],
+      ["Form a slip loop in the standing part, well away from the anchor: twist a small loop, then pull a bight of the standing part through it. This slipped-overhand loop shakes out after use.", "M18 38 L102 38 C132 38 132 76 104 76 C82 76 82 54 100 50"],
+      ["Take the working end around the anchor and back up through the slip loop.", "M18 38 L102 38 C132 38 132 76 104 76 C82 76 82 54 100 50 M190 104 C148 104 142 54 118 54"],
       ["Haul the free end to tension, then lock it with two half hitches.", "M18 38 L102 38 C132 38 132 76 104 76 C82 76 82 54 100 50 M190 104 C148 104 142 54 118 54 C144 54 154 82 136 92 C122 102 148 110 174 94"],
     ],
   },
@@ -96,14 +96,17 @@ const knots = [
         <section class="knot-card" id={knot.id} data-knot={knot.id}>
           <header><div><h2>{knot.name}</h2><p>{knot.job}</p></div><span class="knot-count">1 / {knot.steps.length}</span></header>
           <div class="knot-stage">
-            <img data-knot-animation src={`/media/knots/${knot.id}-step-1.webp`} alt={`${knot.name} slow Blender step animation`} />
+            <video data-knot-animation src={`/media/knots/${knot.id}-step-1.mp4`} poster={`/media/knots/${knot.id}-step-1.webp`} muted playsinline preload="none" aria-label={`${knot.name}, step 1. Use the controls below to play or scrub.`}></video>
           </div>
           <p class="knot-step" aria-live="polite">{knot.steps[0][0]}</p>
           <div class="knot-controls">
             <button type="button" data-action="prev" aria-label={`Previous ${knot.name} step`}>←</button>
             <button type="button" data-action="play" aria-label={`Play ${knot.name} step`}>Play step</button>
             <button type="button" data-action="next" aria-label={`Next ${knot.name} step`}>→</button>
+            <label>Speed <select data-knot-speed aria-label={`${knot.name} playback speed`}><option value="0.5">Extra slow</option><option value="1" selected>Slow</option><option value="1.5">Practice</option></select></label>
           </div>
+          <label class="knot-timeline">Step progress <input data-knot-seek type="range" min="0" max="100" value="0" step="0.1" aria-label={`Scrub ${knot.name} step`} /></label>
+          <p class="knot-playback-status" data-playback-status role="status">Paused. Play when your rope is ready.</p>
           <div class="practice-controls">
             <button type="button" data-action="practice">Practise blind</button>
             <button type="button" data-action="correct" hidden>I tied it correctly</button>
@@ -136,7 +139,10 @@ const knots = [
   .knot-card header p { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.9rem; }
   .knot-count { flex: 0 0 auto; font: 0.75rem var(--font-mono); color: var(--muted); }
   .knot-stage { position: relative; margin: 0.8rem 0; border-radius: 8px; overflow: hidden; background: color-mix(in srgb, var(--fg) 5%, transparent); }
-  .knot-stage img { display: block; width: 100%; aspect-ratio: 80 / 51; object-fit: cover; background: #111820; }
+  .knot-stage video { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: contain; background: #111820; }
+  .knot-timeline { display: flex; align-items: center; gap: 0.7rem; margin-top: 0.7rem; font-size: 0.8rem; color: var(--muted); }
+  .knot-timeline input { flex: 1; min-width: 0; min-height: 44px; }
+  .knot-playback-status { min-height: 2.5em; font-size: 0.8rem; color: var(--muted); }
   .knot-step { min-height: 3.2em; font-size: 0.92rem; }
   .knot-controls { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
   .knot-controls button, .knot-controls select { min-height: 40px; padding: 0.4rem 0.65rem; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--fg); }
@@ -148,7 +154,6 @@ const knots = [
   .mastery-bar button, .practice-controls button { min-height: 40px; padding: 0.4rem 0.65rem; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--fg); }
   .practice-controls { margin-top: 0.7rem; }
   .practice-controls span { margin-left: auto; color: var(--muted); font: 0.75rem var(--font-mono); }
-  .knot-card.practice-blind .knot-stage img, .knot-card.practice-blind .knot-step, .knot-card.practice-blind .knot-controls { visibility: hidden; }
+  .knot-card.practice-blind .knot-stage video, .knot-card.practice-blind .knot-step, .knot-card.practice-blind .knot-controls, .knot-card.practice-blind .knot-timeline, .knot-card.practice-blind .knot-playback-status { visibility: hidden; }
   .knot-card.practice-blind .knot-stage::after { content: "Tie this knot from memory for the job above. Check dressing, tail length and the caution before revealing."; position: absolute; inset: 0; display: grid; place-items: center; padding: 1rem; border: 1px dashed var(--rule); border-radius: 8px; color: var(--muted); text-align: center; }
-  @media (prefers-reduced-motion: reduce) { .knot-stage img { display: none; } }
 </style>

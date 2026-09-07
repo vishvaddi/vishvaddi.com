@@ -1,7 +1,9 @@
 import { chromium } from 'playwright-core'
 import { PDFDocument, rgb } from 'pdf-lib'
+import { serveBuiltSite } from './serve-built-site.mjs'
 
-const BASE = process.argv[2] ?? 'http://127.0.0.1:4321'
+const builtSite = process.argv[2] === 'dist' ? await serveBuiltSite(4404) : null
+const BASE = builtSite?.base ?? process.argv[2] ?? 'http://127.0.0.1:4321'
 let failures = 0
 const check = (name, value, detail = '') => {
   console.log(`  ${value ? '✓' : '✗'} ${name}${detail ? ` — ${detail}` : ''}`)
@@ -15,8 +17,9 @@ const makePdf = async (colour) => {
   return Buffer.from(await pdf.save())
 }
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true })
+let browser
 try {
+  browser = await chromium.launch({ channel: 'chrome', headless: true })
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
@@ -79,7 +82,8 @@ try {
 } catch (error) {
   check('suite completed', false, String(error).slice(0, 240))
 } finally {
-  await browser.close()
+  await browser?.close()
+  await builtSite?.close()
 }
 
 if (failures) process.exit(1)
