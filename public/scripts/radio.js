@@ -42,6 +42,7 @@ var trackIdTitle = document.getElementById("track-id-title");
 var trackIdBtn = document.getElementById("track-id-btn");
 var favouriteBtn = document.getElementById("favourite-btn");
 var randomStationBtn = document.getElementById("random-station-btn");
+var miniPlayerBtn = document.getElementById("mini-player-btn");
 
 var currentStation = null;
 var currentUrl = null;
@@ -434,6 +435,23 @@ audio.addEventListener("waiting", function() {
 });
 
 audio.addEventListener("error", showAudioError);
+
+if (miniPlayerBtn) miniPlayerBtn.addEventListener("click", function() {
+  if (!currentStation) {
+    lcdStatus.textContent = "SELECT STATION";
+    setDirectoryOpen(true);
+    return;
+  }
+  rememberStation(currentStation);
+  window.open("/radio/mini", "vishvaddi-radio", "popup,width=380,height=250");
+});
+
+if ("BroadcastChannel" in window) {
+  var radioChannel = new BroadcastChannel("vv-radio-player");
+  radioChannel.addEventListener("message", function(event) {
+    if (event.data && event.data.type === "mini-playing") audio.pause();
+  });
+}
 
 if (trackIdBtn) {
   trackIdBtn.addEventListener("click", function() { identifyTrack(true); });

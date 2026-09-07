@@ -135,4 +135,60 @@ export function initVoice() {
   document.getElementById("copy")?.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(ta.value); } catch { /* */ }
   });
+
+  const captureInput = document.getElementById("capture-files") as HTMLInputElement | null;
+  const captureGallery = document.getElementById("capture-gallery");
+  const captureExport = document.getElementById("capture-export") as HTMLButtonElement | null;
+  type CapturePhoto = { file: File; url: string; note: string };
+  const photos: CapturePhoto[] = [];
+
+  const renderCaptures = () => {
+    if (!captureGallery) return;
+    captureGallery.textContent = "";
+    photos.forEach((photo, index) => {
+      const card = document.createElement("article");
+      card.className = "capture-card";
+      const image = document.createElement("img");
+      image.src = photo.url;
+      image.alt = `Capture ${index + 1}: ${photo.file.name}`;
+      const note = document.createElement("input");
+      note.type = "text";
+      note.placeholder = "What this photo shows";
+      note.value = photo.note;
+      note.addEventListener("input", () => { photo.note = note.value; });
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "Remove";
+      remove.addEventListener("click", () => {
+        URL.revokeObjectURL(photo.url);
+        photos.splice(index, 1);
+        renderCaptures();
+      });
+      card.append(image, note, remove);
+      captureGallery.appendChild(card);
+    });
+    if (captureExport) captureExport.disabled = photos.length === 0;
+  };
+
+  captureInput?.addEventListener("change", () => {
+    Array.from(captureInput.files || []).forEach((file) => {
+      if (file.type.startsWith("image/")) photos.push({ file, url: URL.createObjectURL(file), note: "" });
+    });
+    captureInput.value = "";
+    renderCaptures();
+  });
+
+  captureExport?.addEventListener("click", () => {
+    const checked = Array.from(document.querySelectorAll<HTMLInputElement>("#capture-checklist input:checked")).map((box) => box.value);
+    const manifest = {
+      version: 1,
+      capturedAt: new Date().toISOString(),
+      area: (document.getElementById("capture-zone") as HTMLInputElement | null)?.value.trim() || "",
+      reference: (document.getElementById("capture-reference") as HTMLInputElement | null)?.value.trim() || "",
+      coverage: checked,
+      measurementNotice: "Reference only — dimensions are not verified.",
+      photos: photos.map((photo, index) => ({ order: index + 1, filename: photo.file.name, type: photo.file.type, bytes: photo.file.size, note: photo.note })),
+    };
+    download(`site-capture-${new Date().toISOString().slice(0, 10)}.json`, URL.createObjectURL(new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" })));
+  });
 }

@@ -1,0 +1,39 @@
+---
+---
+
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Radio mini player</title>
+    <meta name="theme-color" content="#130d04" />
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">VISHVADDI / BACKGROUND RADIO</p>
+      <h1 id="mini-station">No station selected</h1>
+      <p id="mini-status">Open Radio, choose a station, then reopen this player.</p>
+      <audio id="mini-audio"></audio>
+      <div class="controls">
+        <button id="mini-play" type="button">Play</button>
+        <label>Volume <input id="mini-volume" type="range" min="0" max="1" step="0.02" value="0.8" /></label>
+        <a href="/radio" target="_blank" rel="noopener">Stations</a>
+      </div>
+      <p class="hint">Keep this window or tab open while you use Reader or other sections. Android media controls appear on the lock screen when supported.</p>
+    </main>
+    <script src="/scripts/radio-mini.js" defer></script>
+  </body>
+</html>
+
+<style>
+  :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #130d04; color: #f0d59a; }
+  body { margin: 0; }
+  main { padding: 1.2rem; }
+  .eyebrow { margin: 0; color: #c8890a; font: 0.68rem monospace; letter-spacing: 0.12em; }
+  h1 { margin: 0.65rem 0 0.25rem; color: #2dff4a; font: 1.2rem monospace; }
+  #mini-status, .hint { color: #a99a7b; font-size: 0.82rem; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem; margin: 1rem 0; }
+  button, a { padding: 0.55rem 0.8rem; border: 1px solid #6f4a0a; border-radius: 5px; background: #201505; color: #f0d59a; text-decoration: none; }
+  label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; }
+</style>

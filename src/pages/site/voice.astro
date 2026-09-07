@@ -42,6 +42,29 @@ import "../../styles/site.css";
       <button type="button" class="btn btn-ghost" id="clear">Clear</button>
     </div>
 
+    <section class="capture-panel no-print" aria-labelledby="capture-title">
+      <p class="eyebrow">Guided site capture / local only</p>
+      <h2 id="capture-title">Photograph a space consistently</h2>
+      <p>Enter the area, work through the coverage prompts, then export a manifest with your notes. Photos remain in this browser session and are not uploaded.</p>
+      <div class="capture-fields">
+        <label>Area / room <input id="capture-zone" type="text" placeholder="Level 2 — tenancy kitchen" /></label>
+        <label>Reference object (optional) <input id="capture-reference" type="text" placeholder="e.g. 600 mm ruler" /></label>
+      </div>
+      <fieldset class="capture-checklist" id="capture-checklist">
+        <legend>Coverage</legend>
+        <label><input type="checkbox" value="Wide context" /> Wide context</label>
+        <label><input type="checkbox" value="Each wall" /> Each wall</label>
+        <label><input type="checkbox" value="Ceiling and services" /> Ceiling and services</label>
+        <label><input type="checkbox" value="Floor and damage" /> Floor and damage</label>
+        <label><input type="checkbox" value="Scale reference" /> Scale reference</label>
+      </fieldset>
+      <label class="btn capture-button" for="capture-files">Take / add photos</label>
+      <input id="capture-files" type="file" accept="image/*" capture="environment" multiple hidden />
+      <div id="capture-gallery" class="capture-gallery"></div>
+      <p class="disclosure">A reference object helps later review but does not create verified dimensions. Confirm measurements on site with calibrated equipment.</p>
+      <button type="button" class="btn btn-ghost" id="capture-export" disabled>Export capture manifest</button>
+    </section>
+
     <p class="note-foot"><a href="/site">← all tools</a></p>
   </div>
 
@@ -50,3 +73,18 @@ import "../../styles/site.css";
     initVoice();
   </script>
 </Base>
+
+<style>
+  .capture-panel { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); }
+  .capture-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem; }
+  .capture-fields label { display: grid; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
+  .capture-fields input { padding: 0.55rem; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); color: var(--fg); }
+  .capture-checklist { display: flex; flex-wrap: wrap; gap: 0.7rem 1rem; margin: 1rem 0; border: 1px solid var(--rule); }
+  .capture-checklist label { font-size: 0.85rem; }
+  .capture-button { display: inline-flex; cursor: pointer; }
+  .capture-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+  .capture-card { padding: 0.5rem; border: 1px solid var(--rule); border-radius: 6px; }
+  .capture-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 4px; }
+  .capture-card input { width: 100%; margin-top: 0.4rem; }
+  .capture-card button { margin-top: 0.35rem; border: 0; background: none; color: var(--muted); text-decoration: underline; }
+</style>

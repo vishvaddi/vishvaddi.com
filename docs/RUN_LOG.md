@@ -518,3 +518,13 @@
 - Added five task-based readiness loadouts and a new eight-knot guide using original animated SVG paths.
 - Added focused browser coverage for the new radio, gear, knots, site-hub and PDF workflows.
 - Verified `npm run check` (0 errors), `npm run build` and `node scripts/feature-upgrades-e2e.mjs` with a clean browser console.
+
+## 2026-09-07 — Round 2 local-first tools
+
+- Added Reader read-aloud with sentence follow text, rate and saved on-device progress.
+- Added feed subscription JSON import/export, source enablement, local read history, unread filtering, daily-summary speech and sequential headline speech.
+- Added a persistent radio mini player with Media Session controls so audio can continue while the main site navigates.
+- Replaced the knot SVG presentation with 24 slow step animations rendered from eight editable Blender source files; added due-review recall practice stored locally.
+- Added guided local photo capture, coverage prompts, photo notes and manifest export to Voice Notes without claiming photogrammetric accuracy.
+- Kept TV/audio synchronisation parked because lawful synchronisation sources have not been established.
+- Verified `npm run check` (0 errors), `npm run build`, the 228-test QuoteTools suite and the expanded feature browser harness with a clean console.

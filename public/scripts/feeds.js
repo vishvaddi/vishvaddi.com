@@ -22,6 +22,11 @@
     "#0891b2", "#c026d3", "#dc2626", "#0d9488",
   ];
   var REFRESH_MS = 10 * 60 * 1000;
+  var READ_KEY = "rss_read_items";
+  var visibleItems = [];
+  var speechQueue = [];
+  var speechIndex = 0;
+  var speechPaused = false;
 
   function $(id) { return document.getElementById(id); }
 
@@ -35,14 +40,26 @@
       var raw = localStorage.getItem("rss_feeds");
       if (raw) {
         var parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return parsed.map(function (f) { return { name: f.name, url: f.url, enabled: f.enabled !== false }; });
       }
     } catch (_) {}
-    return DEFAULT_FEEDS.map(function (f) { return { name: f.name, url: f.url }; });
+    return DEFAULT_FEEDS.map(function (f) { return { name: f.name, url: f.url, enabled: true }; });
   }
 
   function saveFeeds(feeds) {
     localStorage.setItem("rss_feeds", JSON.stringify(feeds));
+  }
+
+  function loadRead() {
+    try { return JSON.parse(localStorage.getItem(READ_KEY) || "{}"); } catch (_) { return {}; }
+  }
+
+  function markRead(link) {
+    var read = loadRead();
+    read[link] = Date.now();
+    var keys = Object.keys(read).sort(function (a, b) { return read[b] - read[a]; }).slice(0, 1000);
+    var trimmed = {}; keys.forEach(function (key) { trimmed[key] = read[key]; });
+    localStorage.setItem(READ_KEY, JSON.stringify(trimmed));
   }
 
   function colourForIndex(i) {
@@ -132,6 +149,9 @@
   }
 
   function renderItems(items) {
+    visibleItems = items.slice();
+    var read = loadRead();
+    if ($("feed-unread-only") && $("feed-unread-only").checked) items = items.filter(function (item) { return !read[item.link]; });
     var container = $("feed-items");
     container.textContent = "";
     if (!items.length) {
@@ -147,7 +167,10 @@
       row.href = safeLink(item.link);
       row.target = "_blank";
       row.rel = "noopener";
+      row.dataset.feedLink = item.link;
       row.style.alignItems = "flex-start";
+      if (read[item.link]) row.classList.add("is-read");
+      row.addEventListener("click", function () { markRead(item.link); row.classList.add("is-read"); });
 
       var left = document.createElement("div");
       left.className = "feed-row-left";
@@ -235,6 +258,17 @@
       var dot = document.createElement("span");
       dot.style.cssText = "width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block;";
       dot.style.background = colourForIndex(i);
+      var enabled = document.createElement("input");
+      enabled.type = "checkbox";
+      enabled.className = "feed-enabled";
+      enabled.checked = feed.enabled !== false;
+      enabled.setAttribute("aria-label", "Enable " + feed.name);
+      enabled.addEventListener("change", function () {
+        var next = loadFeeds();
+        if (next[i]) next[i].enabled = enabled.checked;
+        saveFeeds(next);
+        loadAll();
+      });
       var label = document.createElement("span");
       label.style.cssText = "overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
       label.textContent = feed.name + " — " + feed.url;
@@ -250,7 +284,7 @@
         renderFeedList(next);
         loadAll();
       });
-      left.append(dot, label);
+      left.append(enabled, dot, label);
       row.append(left, remove);
       list.appendChild(row);
     });
@@ -262,13 +296,14 @@
     renderFeedList(feeds);
     status.textContent = "Loading...";
 
-    var results = await Promise.allSettled(feeds.map(function (f) { return fetchFeed(f); }));
+    var activeFeeds = feeds.filter(function (f) { return f.enabled !== false; });
+    var results = await Promise.allSettled(activeFeeds.map(function (f) { return fetchFeed(f); }));
     var all = [];
     var failed = 0;
     results.forEach(function (r, i) {
       if (r.status === "fulfilled") {
         r.value.forEach(function (item) {
-          item._colour = colourForIndex(i);
+          item._colour = colourForIndex(feeds.indexOf(activeFeeds[i]));
           all.push(item);
         });
       } else {
@@ -298,7 +333,7 @@
       return;
     }
     var feeds = loadFeeds();
-    feeds.push({ name: parsed.hostname.replace(/^www\./, "").split(".")[0], url: parsed.href });
+    feeds.push({ name: parsed.hostname.replace(/^www\./, "").split(".")[0], url: parsed.href, enabled: true });
     saveFeeds(feeds);
     input.value = "";
     renderFeedList(feeds);
@@ -306,6 +341,70 @@
   });
 
   $("feed-refresh-btn").addEventListener("click", loadAll);
+
+  function stopSpeech() {
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    speechQueue = []; speechIndex = 0; speechPaused = false;
+    document.querySelectorAll(".is-speaking").forEach(function (row) { row.classList.remove("is-speaking"); });
+    $("speak-pause").disabled = true; $("speak-stop").disabled = true; $("speak-pause").textContent = "Pause"; $("speak-status").textContent = "";
+  }
+
+  function speakNext() {
+    if (!speechQueue.length || speechPaused) return;
+    if (speechIndex >= speechQueue.length) { stopSpeech(); return; }
+    document.querySelectorAll(".is-speaking").forEach(function (row) { row.classList.remove("is-speaking"); });
+    var entry = speechQueue[speechIndex];
+    if (entry.link) {
+      var row = Array.from(document.querySelectorAll("[data-feed-link]")).find(function (candidate) { return candidate.dataset.feedLink === entry.link; });
+      if (row) row.classList.add("is-speaking");
+    }
+    $("speak-status").textContent = (speechIndex + 1) + " of " + speechQueue.length;
+    var utterance = new SpeechSynthesisUtterance(entry.text);
+    utterance.lang = navigator.language || "en-AU";
+    utterance.rate = 0.9;
+    utterance.onend = function () { speechIndex += 1; speakNext(); };
+    utterance.onerror = stopSpeech;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function startSpeech(entries) {
+    stopSpeech();
+    if (!("speechSynthesis" in window)) { $("speak-status").textContent = "Speech is not supported in this browser."; return; }
+    speechQueue = entries.filter(function (entry) { return entry.text; });
+    if (!speechQueue.length) return;
+    $("speak-pause").disabled = false; $("speak-stop").disabled = false;
+    speakNext();
+  }
+
+  $("speak-summary").addEventListener("click", function () {
+    var parts = [$("daily-summary-lead").textContent].concat(Array.from($("daily-summary-list").querySelectorAll("li")).map(function (li) { return li.textContent; }));
+    startSpeech(parts.map(function (value) { return { text: value }; }));
+  });
+  $("speak-headlines").addEventListener("click", function () {
+    startSpeech(visibleItems.map(function (item) { return { text: item.source + ". " + item.title, link: item.link }; }));
+  });
+  $("speak-pause").addEventListener("click", function () {
+    if (speechPaused) { speechPaused = false; speechSynthesis.resume(); this.textContent = "Pause"; }
+    else { speechPaused = true; speechSynthesis.pause(); this.textContent = "Resume"; }
+  });
+  $("speak-stop").addEventListener("click", stopSpeech);
+  $("feed-unread-only").addEventListener("change", function () { renderItems(visibleItems); });
+  $("feed-mark-read").addEventListener("click", function () { visibleItems.forEach(function (item) { markRead(item.link); }); renderItems(visibleItems); });
+  $("feed-export-btn").addEventListener("click", function () {
+    var blob = new Blob([JSON.stringify({ version: 1, feeds: loadFeeds() }, null, 2)], { type: "application/json" });
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "vishvaddi-feeds.json"; a.click(); URL.revokeObjectURL(a.href);
+  });
+  $("feed-import-input").addEventListener("change", async function () {
+    var file = this.files && this.files[0]; if (!file) return;
+    try {
+      var data = JSON.parse(await file.text());
+      var imported = Array.isArray(data) ? data : data.feeds;
+      if (!Array.isArray(imported)) throw new Error("No feeds array");
+      var clean = imported.map(function (f) { var u = new URL(f.url); if (u.protocol !== "https:") throw new Error("Only HTTPS feeds are accepted"); return { name: String(f.name || u.hostname).slice(0, 80), url: u.href, enabled: f.enabled !== false }; });
+      saveFeeds(clean); renderFeedList(clean); loadAll();
+    } catch (_) { $("feed-status").textContent = "That file is not a valid feed export."; }
+    this.value = "";
+  });
   loadAll();
   setInterval(loadAll, REFRESH_MS);
 })();

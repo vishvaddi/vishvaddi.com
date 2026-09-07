@@ -613,6 +613,7 @@ function doFlip(leftIdx, rightIdx, direction) {
 }
 
 function goNext() {
+  stopReadAloud();
   var isMobile = true; // single-page Kindle mode (one page at a time)
   var step = isMobile ? 1 : 2;
   if (currentSpread + step < pages.length) {
@@ -622,6 +623,7 @@ function goNext() {
 }
 
 function goPrev() {
+  stopReadAloud();
   var isMobile = true; // single-page Kindle mode (one page at a time)
   var step = isMobile ? 1 : 2;
   if (currentSpread - step >= 0) {
@@ -687,6 +689,7 @@ $("note-save").addEventListener("click", function () {
 $("prev-btn").addEventListener("click", goPrev);
 $("next-btn").addEventListener("click", goNext);
 $("back-btn").addEventListener("click", function () {
+  stopReadAloud();
   var audio = $("audio-player");
   if (audio) audio.pause();
   $("reader-ui").style.display = "none";
@@ -832,6 +835,87 @@ function initSettings() {
 }
 
 initSettings();
+
+var ttsActive = false;
+var ttsPaused = false;
+var ttsSentences = [];
+var ttsIndex = 0;
+
+function splitSentences(textValue) {
+  return (textValue.match(/[^.!?]+(?:[.!?]+|$)/g) || []).map(function (part) { return part.trim(); }).filter(Boolean);
+}
+
+function updateTTSButton() {
+  var btn = $("tts-btn");
+  if (!btn) return;
+  btn.textContent = ttsActive ? (ttsPaused ? "Resume" : "Pause") : "Listen";
+  btn.setAttribute("aria-pressed", String(ttsActive && !ttsPaused));
+}
+
+function stopReadAloud() {
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  ttsActive = false;
+  ttsPaused = false;
+  var follow = $("tts-follow");
+  if (follow) { follow.classList.remove("active"); follow.textContent = ""; }
+  updateTTSButton();
+}
+
+function speakNextSentence() {
+  if (!ttsActive || ttsPaused || !("speechSynthesis" in window)) return;
+  if (ttsIndex >= ttsSentences.length) { stopReadAloud(); return; }
+  var sentence = ttsSentences[ttsIndex];
+  var follow = $("tts-follow");
+  if (follow) { follow.textContent = sentence; follow.classList.add("active"); }
+  var utterance = new SpeechSynthesisUtterance(sentence);
+  utterance.rate = Number($("tts-rate").value) || 1;
+  utterance.lang = navigator.language || "en-AU";
+  utterance.onend = function () {
+    ttsIndex += 1;
+    if (currentBook) localStorage.setItem("reader-tts-" + currentBook.id, currentSpread + ":" + ttsIndex);
+    speakNextSentence();
+  };
+  utterance.onerror = stopReadAloud;
+  window.speechSynthesis.speak(utterance);
+}
+
+function beginReadAloud(startAt) {
+  if (!("speechSynthesis" in window)) {
+    $("tts-follow").textContent = "Read aloud is not supported by this browser.";
+    $("tts-follow").classList.add("active");
+    return;
+  }
+  ttsSentences = splitSentences($("left-panel").innerText.replace(/\n+/g, " "));
+  if (!ttsSentences.length) return;
+  ttsIndex = Number.isFinite(startAt) ? startAt : 0;
+  if (!Number.isFinite(startAt)) {
+    try {
+      var saved = currentBook && localStorage.getItem("reader-tts-" + currentBook.id);
+      if (saved && saved.split(":")[0] === String(currentSpread)) ttsIndex = Math.min(Number(saved.split(":")[1]) || 0, ttsSentences.length - 1);
+    } catch (_) {}
+  }
+  ttsActive = true;
+  ttsPaused = false;
+  updateTTSButton();
+  speakNextSentence();
+}
+
+$("tts-btn").addEventListener("click", function () {
+  if (!ttsActive) { beginReadAloud(); return; }
+  if (ttsPaused) { ttsPaused = false; window.speechSynthesis.resume(); }
+  else { ttsPaused = true; window.speechSynthesis.pause(); }
+  updateTTSButton();
+});
+$("tts-rate").addEventListener("input", function () {
+  $("tts-rate-val").textContent = Number(this.value).toFixed(1) + "×";
+  localStorage.setItem("reader-tts-rate", this.value);
+  if (ttsActive) { var restart = ttsIndex; stopReadAloud(); beginReadAloud(restart); }
+});
+try {
+  var savedRate = localStorage.getItem("reader-tts-rate");
+  if (savedRate) $("tts-rate").value = savedRate;
+  $("tts-rate-val").textContent = Number($("tts-rate").value).toFixed(1) + "×";
+} catch (_) {}
 
 // Repaginate only when the *width* changes (rotation, desktop resize). Mobile
 // browser chrome (address bar) changes height on scroll — ignoring that stops
