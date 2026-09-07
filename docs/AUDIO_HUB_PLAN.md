@@ -13,6 +13,6 @@ Order (one session each, harness-gated):
 6. ✅ BPM maths + tuner / polyrhythm metronome
 7. ✅ Lo-fi processor page — 16 one-knob Audiomatic-style transforms with dry/wet
 8. ✅ Ear training — six exercises on one engine
-9. Demucs WASM spike — gated on a 4-minute track separating on Vish's phone
+9. ✅ Demucs WASM spike — done, verdict no-go for the phone gate; see `docs/STEMS_SPIKE.md` (decision pending: park, or desktop-only ONNX separator later)
 
 Backlog: monophonic pitch correction (Vocal Edit), Kong choke groups + pad synth models, GM SoundFont player, Basic Pitch audio-to-MIDI, kit exporter (SFZ / Decent Sampler), DJ set prep + Rekordbox XML, beatmatch trainer.

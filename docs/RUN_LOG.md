@@ -8,6 +8,11 @@
 - Position counter fix: a song "bar" is one pattern cycle, so a 32-step scene spans two real bars; the app bar counter now shows real bars. The timeline ruler still numbers cycles.
 - Harness: the autosave check re-selects the scene it edited before reading the step back (a clip launch in between moves the edited scene). Gates: functional 86/86, responsive 375/375, density 48/48; both demos probed through the engine.
 
+## 2026-09-07 — Stem separation spike (Claude, branch `audio-hub`)
+
+- Researched in-browser Demucs: free-music-demixer (Emscripten `demucs.cpp`, Web Workers) needs 53–81 MB of float16 weights and takes ~9 minutes for a 7-minute track with 8 desktop workers (≈40 minutes single-threaded). No phone benchmarks exist; the desktop single-thread figure is already the optimistic bound for a phone. **Verdict: no-go for the phone gate.** The crude centre remover in Sample Prep remains the phone answer; a desktop-only ONNX Runtime Web separator with a smaller MDX-Net / Open-Unmix model is the viable later path. Full notes, sources and confidence tags in `docs/STEMS_SPIKE.md`. Nothing shipped on the site for this item.
+- With this, all nine items of the /audio programme are closed on branch `audio-hub` (eight built, one spiked). Merge to master and the single deploy are pending Vish's go.
+
 ## 2026-09-07 — Ear Training (Claude, branch `audio-hub`)
 
 - `/audio/ear` — one exercise engine, six drills: **Note ID**, **Interval ID** and **Chord ID** (each on a staff, a two-octave piano keyboard or a six-string fretboard in standard tuning, frets 0–12 with a tight-span placement search), **Interval ear** (rising, falling, either, or harmonic), **EQ ear** (pink noise flat then with a +N dB bell on one of up to nine bands) and **Rhythm dictation** (count-in, one bar at 100 BPM, pick the pattern from four; eighth or sixteenth grid). Settings: clef, accidentals, inversions, interval set, chord set (11 qualities), EQ band set and boost, rhythm grid, auto-play. Keys 1–9 answer, Enter next, R replay. Per-exercise stats (accuracy, streak, best) in localStorage; the URL hash carries exercise, view and settings so a link is a customiser; `seed=` replays a deterministic session.
