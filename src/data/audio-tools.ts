@@ -29,6 +29,7 @@ const RAW_AUDIO_TOOLS: Omit<AudioTool, 'problem' | 'promise' | 'privacy'>[] = [
   { href: '/audio/bpm', title: 'BPM Maths', shortTitle: 'BPM maths', icon: '⏱️', description: 'Note values in ms and Hz, reverb times, bars to seconds and samples, Hz to note and MIDI, tap tempo.', category: 'Prepare & convert', aliases: 'delay time ms lfo hz reverb predelay decay bars seconds samples tap tempo hz note midi cents', quick: true },
   { href: '/audio/metronome', title: 'Tuner & Metronome', shortTitle: 'Tuner', icon: '🎚️', description: 'Chromatic mic tuner with cents and a reference tone; metronome with accents, subdivisions and polyrhythms.', category: 'Learn', aliases: 'tuner pitch cents metronome click polyrhythm subdivision practice tap tempo' },
   { href: '/audio/lofi', title: 'Lo-fi Processor', shortTitle: 'Lo-fi', icon: '📼', description: 'Sixteen one-knob retro transforms: VHS, tape, vinyl, radio, telephone, 8-bit, old film, lo-fi hip hop and more, with dry/wet.', category: 'Prepare & convert', aliases: 'lofi lo-fi vhs tape cassette vinyl radio telephone walkie megaphone underwater bitcrush 8-bit crush film drift reverse audiomatic retro' },
+  { href: '/audio/ear', title: 'Ear Training', shortTitle: 'Ear training', icon: '👂', description: 'Note, interval and chord ID on staff, keyboard and fretboard; interval ear, EQ band ear and rhythm dictation, with streaks and shareable drills.', category: 'Learn', aliases: 'ear training musictheory interval chord note identification staff keyboard fretboard eq band rhythm dictation practice quiz' },
   { href: '/audio/analyser', title: 'Track Analyser', shortTitle: 'Analyser', icon: '📊', description: 'BPM, key and Camelot, LUFS, true peak, loudness range, stereo width and streaming targets.', category: 'Analyse', aliases: 'bpm key camelot lufs loudness true peak lra spectrum mastering spotify apple youtube club', quick: true },
 ]
 
@@ -38,6 +39,7 @@ const POSITIONING: Record<string, [problem: string, promise: string]> = {
   '/audio/bpm': ['Delay, LFO and reverb times get worked out on a phone calculator mid-session.', 'Type or tap a tempo and read every note value, reverb starting point and length conversion at once.'],
   '/audio/metronome': ['Practice tools on phones come wrapped in ads and drift.', 'A sample-accurate metronome with polyrhythms and a tuner that never records.'],
   '/audio/lofi': ['Getting a sample to sound like an old tape or a phone means stacking five plugins by hand.', 'Pick a character, turn one knob, blend it in, download.'],
+  '/audio/ear': ['Reading and hearing drills live in paid apps, and none of them teach you to hear an EQ move.', 'Six exercises with staff, keyboard and fretboard views, streak tracking and a link that saves the exact drill.'],
   '/audio/analyser': ['Mastering decisions get made on meters you have to pay for or plugins you have to open a DAW to see.', 'Drop a file and read tempo, key, loudness, peaks, width and how far you are from each platform target.'],
 }
 

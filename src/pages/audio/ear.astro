@@ -1,0 +1,68 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+import "../../styles/audio.css";
+---
+
+<Base
+  title="Ear Training — Notes, Intervals, Chords, EQ Bands, Rhythm"
+  description="Six ear-training exercises for producers: note, interval and chord identification on staff, piano keyboard and guitar fretboard; interval ear training; EQ band ear training; rhythm dictation. Streaks and accuracy saved in your browser, settings shareable by link."
+  audioNav
+>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/audio" style="color:inherit;text-decoration:none">Audio</a> / Ear training</p>
+    <h1>Ear Training</h1>
+    <p>
+      The musictheory.net drills, plus the two the free web never had: hearing
+      which EQ band moved and writing down a rhythm. Pick an exercise, answer
+      with the buttons or keys 1–9, Enter for next, R to replay.
+    </p>
+
+    <div class="ear-tabs" id="ear-tabs" role="tablist"></div>
+    <div class="ear-views" id="ear-views" hidden></div>
+
+    <section class="ear-card">
+      <p class="ear-prompt" id="ear-prompt"></p>
+      <div class="ear-stage" id="ear-stage"></div>
+      <div class="ear-choices" id="ear-choices"></div>
+      <p class="ear-feedback" id="ear-feedback"></p>
+      <div class="btn-row">
+        <button type="button" class="btn" id="ear-next" hidden>Next →</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="ear-replay">Replay (R)</button>
+        <span class="au-muted ear-stats" id="ear-stats"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="ear-reset">Reset stats</button>
+      </div>
+    </section>
+
+    <details class="ear-settings">
+      <summary>Settings and share link</summary>
+      <div class="ear-settings-grid">
+        <label class="ear-field">Clef <select id="ear-clef"><option value="treble">Treble</option><option value="bass">Bass</option></select></label>
+        <label class="ear-chk"><input type="checkbox" id="ear-acc" /> Include sharps and flats</label>
+        <label class="ear-chk"><input type="checkbox" id="ear-inv" /> Chord inversions</label>
+        <label class="ear-field">Interval ear <select id="ear-melodic"><option value="asc">Rising</option><option value="desc">Falling</option><option value="both">Rising or falling</option><option value="harmonic">Harmonic (together)</option></select></label>
+        <label class="ear-field">EQ boost <input id="ear-boost" type="number" min="2" max="15" step="1" value="9" /> dB</label>
+        <label class="ear-field">Rhythm grid <select id="ear-density"><option value="1">Easy (on the beat)</option><option value="2">Eighths</option><option value="3">Sixteenths</option></select></label>
+        <label class="ear-chk"><input type="checkbox" id="ear-autoplay" checked /> Auto-play ear questions</label>
+      </div>
+      <fieldset class="ear-set"><legend>Intervals</legend><div class="ear-chks" id="ear-intervals"></div></fieldset>
+      <fieldset class="ear-set"><legend>Chords</legend><div class="ear-chks" id="ear-chords"></div></fieldset>
+      <fieldset class="ear-set"><legend>EQ bands</legend><div class="ear-chks" id="ear-bands"></div></fieldset>
+      <div class="ear-share-row">
+        <input id="ear-share" type="text" readonly aria-label="Shareable link with these settings" />
+        <button type="button" class="btn btn-sm" id="ear-copy-link">Copy link</button>
+      </div>
+      <p class="au-muted">The link carries the exercise, view and every setting above, so a teacher or a future you can open the exact drill. Stats stay on this device.</p>
+    </details>
+
+    <p class="note-foot">
+      Staff spelling uses sharps. Fretboard positions are chosen for a tight hand span in frets 0–12 on standard tuning.
+      EQ ear plays pink noise flat for a second, then with a bell boost. Rhythm plays a four-beat count-in, then one bar at 100 BPM.
+    </p>
+  </div>
+
+  <script>
+    import { initEar } from "../../scripts/site/audio/ear";
+    initEar();
+  </script>
+</Base>
