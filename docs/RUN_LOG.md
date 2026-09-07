@@ -519,6 +519,12 @@
 - Added focused browser coverage for the new radio, gear, knots, site-hub and PDF workflows.
 - Verified `npm run check` (0 errors), `npm run build` and `node scripts/feature-upgrades-e2e.mjs` with a clean browser console.
 
+## 2026-09-07 — Deployed: /audio programme (`caba62c`, version `7de0770c`) and Round 2 (`bca9e2b`, version `ce933bbe`)
+
+- `audio-hub` fast-forwarded onto master; Codex's Round 2 committed as `bca9e2b` and deployed second. Both commits pushed before deploy.
+- Live verification: feature harness 15/15, audio-tools 72/72, studio 102/102 against https://vishvaddi.com; every /audio route, the studio, reader, feeds, radio mini player, knots and voice pages return 200.
+- Harness fix: `scripts/serve-built-site.mjs` now serves `.mjs` as JavaScript (plus `.wasm`, `.webmanifest`, `.mp3`), so the PDF comparison check in `feature-upgrades-e2e` passes in `dist` mode instead of waiting on a module worker the static server had served as an octet stream. It always passed live.
+
 ## 2026-09-07 — Round 2 local-first tools
 
 - Added Reader read-aloud with sentence follow text, rate and saved on-device progress.
