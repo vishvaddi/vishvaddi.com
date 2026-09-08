@@ -38,6 +38,13 @@
     var speed = card.querySelector('[data-knot-speed]');
     var seek = card.querySelector('[data-knot-seek]');
     var status = card.querySelector('[data-playback-status]');
+    var pendingSeek = null;
+
+    function applySeek() {
+      if (pendingSeek === null || !Number.isFinite(animation.duration) || animation.duration <= 0) return;
+      animation.currentTime = animation.duration * pendingSeek / 100;
+      pendingSeek = null;
+    }
 
     function stop() {
       animation.pause();
@@ -45,13 +52,14 @@
     }
 
     function show(next) {
+      pendingSeek = null;
       index = (next + knot.steps.length) % knot.steps.length;
-      copy.textContent = knot.steps[index][0];
+      copy.textContent = knot.steps[index];
       count.textContent = (index + 1) + " / " + knot.steps.length;
       var base = "/media/knots/" + knot.id + "-step-" + (index + 1);
       animation.poster = base + ".webp";
       animation.src = base + ".mp4";
-      animation.setAttribute("aria-label", knot.name + ", step " + (index + 1) + ". " + knot.steps[index][0]);
+      animation.setAttribute("aria-label", knot.name + ", step " + (index + 1) + ". " + knot.steps[index]);
       seek.value = "0";
       status.textContent = "Paused. Play when your rope is ready.";
     }
@@ -63,18 +71,28 @@
       document.querySelectorAll('[data-knot-animation]').forEach(function (other) { if (other !== animation) other.pause(); });
       if (animation.ended) animation.currentTime = 0;
       animation.playbackRate = Number(speed.value);
-      animation.play().catch(function () { status.textContent = "Could not play this clip. Read the step and use the technique reference below."; });
+      animation.play().catch(function (error) {
+        if (error.name !== "AbortError") status.textContent = "Could not play this clip. Read the step and use the technique reference below.";
+      });
     });
     animation.addEventListener("play", function () { playButton.textContent = "Pause"; status.textContent = "Follow the highlighted working end."; });
-    animation.addEventListener("pause", function () { playButton.textContent = animation.ended ? "Replay step" : "Play step"; });
+    animation.addEventListener("pause", function () {
+      playButton.textContent = animation.ended ? "Replay step" : "Play step";
+      if (!animation.ended && !animation.error) status.textContent = "Paused. Continue when your rope is ready.";
+    });
     animation.addEventListener("ended", function () { status.textContent = "Step complete. Check your rope, then choose the next step."; });
-    animation.addEventListener("timeupdate", function () { if (animation.duration) seek.value = String(100 * animation.currentTime / animation.duration); });
+    animation.addEventListener("loadedmetadata", applySeek);
+    animation.addEventListener("timeupdate", function () { if (pendingSeek === null && animation.duration) seek.value = String(100 * animation.currentTime / animation.duration); });
     animation.addEventListener("error", function () { status.textContent = "Clip unavailable. The still and written step remain available."; });
     speed.addEventListener("change", function () { animation.playbackRate = Number(speed.value); });
     seek.addEventListener("input", function () {
       stop();
-      if (Number.isFinite(animation.duration)) animation.currentTime = animation.duration * Number(seek.value) / 100;
-      else { animation.preload = "metadata"; animation.load(); }
+      pendingSeek = Number(seek.value);
+      if (animation.readyState >= 1) applySeek();
+      else {
+        animation.preload = "auto";
+        if (animation.networkState === 0) animation.load();
+      }
     });
     practice.addEventListener("click", function () {
       stop();
@@ -104,7 +122,7 @@
     if (!candidates.length) candidates = knots.slice();
     var knot = candidates[Math.floor(Math.random() * candidates.length)];
     var card = document.querySelector('[data-knot="' + knot.id + '"]');
-    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    card.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "center" });
     card.querySelector('[data-action="practice"]').click();
   });
   document.getElementById("knot-reset").addEventListener("click", function () {

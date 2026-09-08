@@ -551,3 +551,9 @@
 - `/audio` and `/radio` carry an "Also in Music" strip so the three sound pages are one tap apart; `/studio` is immersive (no header) and was left alone.
 - Homepage: Studio, Audio tools and Radio cards sit together in the same order as the menu; TV added to the More links; Music relabelled Listening.
 - Not done, by decision: Work, Now and Blog stay out of the header menu (reachable from the homepage and About).
+
+## 2026-09-08 — Knots: technique references, SVG cleanup, scrub fixes (Codex, gated by Claude)
+
+- Each knot card links its Animated Knots tying demonstration; the unused inline SVG path strings are gone so `steps` are plain strings on both sides of the JSON hand-off; page description no longer claims offline capability (clips are not precached).
+- `prepping-knots.js`: scrubbing before metadata loads now queues the seek and applies it on `loadedmetadata`; play() `AbortError` is ignored; pause shows a resume prompt; the "Test me" scroll honours reduced motion.
+- Codex paused before testing; Claude ran `npm run release:check` (189/189, 0 type errors) and committed. Not deployed.
