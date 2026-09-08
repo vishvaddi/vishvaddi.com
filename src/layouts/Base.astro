@@ -39,20 +39,15 @@ const navPrimary: [string, string][] = [
   ["/site", "Tools"],
   ["/prepping", "Prepping"],
 ];
-const navMore: [string, string][] = [
-  ["/notes", "Notes"],
-  ["/audio", "Audio"],
-  ["/radio", "Radio"],
-  ["/feeds", "Feeds"],
-  ["/reader", "Reader"],
-  ["/studio", "Studio"],
-  ["/games", "Games"],
-  ["/music", "Music"],
-  ["/tv", "TV"],
-  ["/movies", "Movies"],
-  ["/books", "Books"],
-  ["/about", "About"],
+// "More" is grouped so the menu reads as a map, not a list. /music is the
+// listening log, so it is labelled by what it is to avoid two "Music" entries.
+const navMoreGroups: { label: string | null; links: [string, string][] }[] = [
+  { label: "Music", links: [["/studio", "Studio"], ["/audio", "Audio tools"], ["/radio", "Radio"]] },
+  { label: "Read", links: [["/notes", "Notes"], ["/reader", "Reader"], ["/feeds", "Feeds"]] },
+  { label: "Logs", links: [["/music", "Listening"], ["/tv", "TV"], ["/movies", "Movies"], ["/books", "Books"]] },
+  { label: null, links: [["/games", "Games"], ["/about", "About"]] },
 ];
+const navMore: [string, string][] = navMoreGroups.flatMap((group) => group.links);
 const pathOnly = (href: string) => href.split("#")[0].split("?")[0].replace(/\/$/, "") || "/";
 const isActive = (href: string) => {
   const path = pathOnly(href);
@@ -114,8 +109,13 @@ const updatedFmt = updatedDate
           <details class="nav-more">
             <summary class={moreActive ? "active" : ""}>More</summary>
             <div class="nav-more-menu">
-              {navMore.map(([href, label]) => (
-                <a href={href} class={isActive(href) ? "active" : ""}>{label}</a>
+              {navMoreGroups.map((group) => (
+                <div class="nav-more-group">
+                  {group.label && <span class="nav-more-label">{group.label}</span>}
+                  {group.links.map(([href, label]) => (
+                    <a href={href} class={isActive(href) ? "active" : ""}>{label}</a>
+                  ))}
+                </div>
               ))}
             </div>
           </details>

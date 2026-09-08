@@ -544,3 +544,10 @@
 - Verified: check 0 errors; build; feature harness 15/15 (knot checks green); audio 72/72 and studio 102/102 on a standalone re-run after the gate's first pass tripped on the timing-sensitive tap-tempo check under load.
 - Hand-over note: Codex built most of this and lost its session twice to `os error 10053` while uploading screenshot-heavy tool results; Claude finished the encoder, render, gate run and docs. Cause is the laptop's upload path (~10 KB/s at the time), not Codex — tracked in the vault.
 - Bowline geometry reworked after visual review: the collar now passes behind the standing part once and the working end returns down through the small loop beside its up-pass, instead of a full wrap that re-entered from the right. Audit clear; bowline re-rendered and re-encoded.
+
+## 2026-09-08 — Grouped "More" menu; Music trio cross-linked
+
+- `Base.astro`'s More dropdown is now four groups with small uppercase labels: Music (Studio, Audio tools, Radio), Read (Notes, Reader, Feeds), Logs (Listening, TV, Movies, Books), then Games and About. Two columns from 600px, one column on phones; same `<details>` element and `chrome.js` close behaviour. The `/music` link is labelled "Listening" so the group heading and the listening log do not both read "Music".
+- `/audio` and `/radio` carry an "Also in Music" strip so the three sound pages are one tap apart; `/studio` is immersive (no header) and was left alone.
+- Homepage: Studio, Audio tools and Radio cards sit together in the same order as the menu; TV added to the More links; Music relabelled Listening.
+- Not done, by decision: Work, Now and Blog stay out of the header menu (reachable from the homepage and About).
