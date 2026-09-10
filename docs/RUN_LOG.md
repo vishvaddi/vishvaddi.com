@@ -557,3 +557,11 @@
 - Each knot card links its Animated Knots tying demonstration; the unused inline SVG path strings are gone so `steps` are plain strings on both sides of the JSON hand-off; page description no longer claims offline capability (clips are not precached).
 - `prepping-knots.js`: scrubbing before metadata loads now queues the seek and applies it on `loadedmetadata`; play() `AbortError` is ignored; pause shows a resume prompt; the "Test me" scroll honours reduced motion.
 - Codex paused before testing; Claude ran `npm run release:check` (189/189, 0 type errors) and committed. Not deployed.
+
+## 2026-09-10 — ElevenLabs narration for Reader and Feeds via a Worker proxy
+
+- New `GET /api/tts?text=…` in `worker/index.ts`: key held as the `ELEVENLABS_API_KEY` Worker secret; voice resolved by name (`TTS_VOICE_NAME`, default Charlie) against the premade set and cached a day; model `eleven_flash_v2_5`, 64 kbps MP3; 600-char cap per request; Referer must be same-origin; sits behind the existing per-IP limiter.
+- Audio cached at the edge by hash of model+voice+text for 30 days, so public-domain pages and the daily summary are paid for once. Monthly character budget (`TTS_MONTHLY_CHARS`, 150k) accounted in D1 `tts_usage` (migration `0002`); the route fails closed to 503 when the key, the table or the budget is missing.
+- `public/scripts/site-voice.js` is the shared narrator: tries the route, and on any non-audio response falls back to `speechSynthesis` for the rest of the session. Reader Listen and Feeds speech now call it; the rate slider changes playback rate live on the audio path. Attribution + disclosure line beside both sets of controls.
+- Gate 191/191 incl. two new harness checks; Worker type-checks; local `wrangler dev` without a key returns `{"error":"voice unavailable"}` 503 and the pages fall back.
+- To go live: `npx wrangler secret put ELEVENLABS_API_KEY` (Vish), `npx wrangler d1 migrations apply deep-swarm-saves --remote`, then the usual build + deploy.

@@ -853,7 +853,8 @@ function updateTTSButton() {
 }
 
 function stopReadAloud() {
-  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  if (window.SiteVoice) window.SiteVoice.cancel();
+  else if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   ttsActive = false;
   ttsPaused = false;
   var follow = $("tts-follow");
@@ -862,25 +863,25 @@ function stopReadAloud() {
 }
 
 function speakNextSentence() {
-  if (!ttsActive || ttsPaused || !("speechSynthesis" in window)) return;
+  if (!ttsActive || ttsPaused || !window.SiteVoice) return;
   if (ttsIndex >= ttsSentences.length) { stopReadAloud(); return; }
   var sentence = ttsSentences[ttsIndex];
   var follow = $("tts-follow");
   if (follow) { follow.textContent = sentence; follow.classList.add("active"); }
-  var utterance = new SpeechSynthesisUtterance(sentence);
-  utterance.rate = Number($("tts-rate").value) || 1;
-  utterance.lang = navigator.language || "en-AU";
-  utterance.onend = function () {
-    ttsIndex += 1;
-    if (currentBook) localStorage.setItem("reader-tts-" + currentBook.id, currentSpread + ":" + ttsIndex);
-    speakNextSentence();
-  };
-  utterance.onerror = stopReadAloud;
-  window.speechSynthesis.speak(utterance);
+  window.SiteVoice.speak(sentence, {
+    rate: Number($("tts-rate").value) || 1,
+    onend: function () {
+      ttsIndex += 1;
+      if (currentBook) localStorage.setItem("reader-tts-" + currentBook.id, currentSpread + ":" + ttsIndex);
+      speakNextSentence();
+    },
+    onerror: stopReadAloud
+  });
+  if (ttsIndex + 1 < ttsSentences.length) window.SiteVoice.prefetch(ttsSentences[ttsIndex + 1]);
 }
 
 function beginReadAloud(startAt) {
-  if (!("speechSynthesis" in window)) {
+  if (!window.SiteVoice || !window.SiteVoice.supported()) {
     $("tts-follow").textContent = "Read aloud is not supported by this browser.";
     $("tts-follow").classList.add("active");
     return;
@@ -902,14 +903,15 @@ function beginReadAloud(startAt) {
 
 $("tts-btn").addEventListener("click", function () {
   if (!ttsActive) { beginReadAloud(); return; }
-  if (ttsPaused) { ttsPaused = false; window.speechSynthesis.resume(); }
-  else { ttsPaused = true; window.speechSynthesis.pause(); }
+  if (ttsPaused) { ttsPaused = false; window.SiteVoice.resume(); }
+  else { ttsPaused = true; window.SiteVoice.pause(); }
   updateTTSButton();
 });
 $("tts-rate").addEventListener("input", function () {
   $("tts-rate-val").textContent = Number(this.value).toFixed(1) + "×";
   localStorage.setItem("reader-tts-rate", this.value);
-  if (ttsActive) { var restart = ttsIndex; stopReadAloud(); beginReadAloud(restart); }
+  // The audio path takes a live rate change; the browser voice has to restart the sentence.
+  if (ttsActive && !window.SiteVoice.setRate(Number(this.value) || 1)) { var restart = ttsIndex; stopReadAloud(); beginReadAloud(restart); }
 });
 try {
   var savedRate = localStorage.getItem("reader-tts-rate");

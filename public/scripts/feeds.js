@@ -343,7 +343,8 @@
   $("feed-refresh-btn").addEventListener("click", loadAll);
 
   function stopSpeech() {
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    if (window.SiteVoice) window.SiteVoice.cancel();
+    else if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     speechQueue = []; speechIndex = 0; speechPaused = false;
     document.querySelectorAll(".is-speaking").forEach(function (row) { row.classList.remove("is-speaking"); });
     $("speak-pause").disabled = true; $("speak-stop").disabled = true; $("speak-pause").textContent = "Pause"; $("speak-status").textContent = "";
@@ -359,17 +360,17 @@
       if (row) row.classList.add("is-speaking");
     }
     $("speak-status").textContent = (speechIndex + 1) + " of " + speechQueue.length;
-    var utterance = new SpeechSynthesisUtterance(entry.text);
-    utterance.lang = navigator.language || "en-AU";
-    utterance.rate = 0.9;
-    utterance.onend = function () { speechIndex += 1; speakNext(); };
-    utterance.onerror = stopSpeech;
-    window.speechSynthesis.speak(utterance);
+    window.SiteVoice.speak(entry.text, {
+      rate: 0.9,
+      onend: function () { speechIndex += 1; speakNext(); },
+      onerror: stopSpeech
+    });
+    if (speechIndex + 1 < speechQueue.length) window.SiteVoice.prefetch(speechQueue[speechIndex + 1].text);
   }
 
   function startSpeech(entries) {
     stopSpeech();
-    if (!("speechSynthesis" in window)) { $("speak-status").textContent = "Speech is not supported in this browser."; return; }
+    if (!window.SiteVoice || !window.SiteVoice.supported()) { $("speak-status").textContent = "Speech is not supported in this browser."; return; }
     speechQueue = entries.filter(function (entry) { return entry.text; });
     if (!speechQueue.length) return;
     $("speak-pause").disabled = false; $("speak-stop").disabled = false;
@@ -384,8 +385,8 @@
     startSpeech(visibleItems.map(function (item) { return { text: item.source + ". " + item.title, link: item.link }; }));
   });
   $("speak-pause").addEventListener("click", function () {
-    if (speechPaused) { speechPaused = false; speechSynthesis.resume(); this.textContent = "Pause"; }
-    else { speechPaused = true; speechSynthesis.pause(); this.textContent = "Resume"; }
+    if (speechPaused) { speechPaused = false; window.SiteVoice.resume(); this.textContent = "Pause"; }
+    else { speechPaused = true; window.SiteVoice.pause(); this.textContent = "Resume"; }
   });
   $("speak-stop").addEventListener("click", stopSpeech);
   $("feed-unread-only").addEventListener("change", function () { renderItems(visibleItems); });

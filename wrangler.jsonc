@@ -7,6 +7,10 @@
     "directory": "./dist",
     "binding": "ASSETS"
   },
+  // /api/tts: voice picked by name from the ElevenLabs premade set (Charlie, Australian),
+  // monthly character budget before the pages fall back to the browser voice.
+  // The key itself is a secret: `npx wrangler secret put ELEVENLABS_API_KEY`.
+  "vars": { "TTS_VOICE_NAME": "Charlie", "TTS_MONTHLY_CHARS": "150000" },
   "durable_objects": {
     "bindings": [{ "name": "RL_DO", "class_name": "RateLimiter" }]
   },

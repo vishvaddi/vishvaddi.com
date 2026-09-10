@@ -50,6 +50,7 @@ import Base from "../layouts/Base.astro";
       <button type="button" id="speak-pause" disabled>Pause</button>
       <button type="button" id="speak-stop" disabled>Stop</button>
       <span id="speak-status" aria-live="polite"></span>
+      <span class="voice-credit">Voices by ElevenLabs. Headlines and the summary are sent to ElevenLabs to make the audio; your browser's own voice takes over if that is unavailable.</span>
     </div>
   </section>
 
@@ -169,4 +170,5 @@ import Base from "../layouts/Base.astro";
   .note-row.is-speaking { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
 
+<script src="/scripts/site-voice.js" defer></script>
 <script src="/scripts/feeds.js" defer></script>

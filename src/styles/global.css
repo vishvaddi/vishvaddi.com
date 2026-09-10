@@ -304,6 +304,9 @@ header nav.topnav {
 .hub-related { margin: 0 0 1.2rem; font-family: var(--font-sans); font-size: 0.85rem; color: var(--muted); }
 .hub-related a { margin-right: 0.6rem; }
 
+/* ElevenLabs attribution + disclosure beside the speech controls */
+.voice-credit { display: block; flex-basis: 100%; margin-top: 0.3rem; font-size: 0.75rem; color: var(--muted); }
+
 /* /notes index — themed accordion groups */
 .note-group {
   border-top: 1px solid var(--rule);

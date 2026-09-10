@@ -22,6 +22,86 @@ interface Env {
   // across many isolates). See wrangler.jsonc.
   RL_DO?: DurableNamespace;
   DEEP_SWARM_DB?: D1Database;
+  // ElevenLabs proxy (/api/tts). Key is a Worker secret; the vars are in wrangler.jsonc.
+  ELEVENLABS_API_KEY?: string;
+  TTS_VOICE_NAME?: string;
+  TTS_VOICE_ID?: string;
+  TTS_MONTHLY_CHARS?: string;
+}
+
+// --- ElevenLabs text-to-speech proxy ---------------------------------------
+// Reader "Listen" and Feeds speech call GET /api/tts?text=… . The browser never
+// sees the key. Audio is cached at the edge by text hash (public-domain books
+// and the daily summary repeat across visitors) and a monthly character budget
+// in D1 caps the bill. Any non-200 makes the page fall back to the browser voice.
+const TTS_MAX_CHARS = 600;
+const TTS_MODEL = "eleven_flash_v2_5";
+const TTS_OUTPUT = "mp3_44100_64";
+const TTS_DEFAULT_BUDGET = 150_000;
+const edgeCache = () => (caches as unknown as { default: Cache }).default;
+
+async function ttsVoiceId(env: Env, origin: string): Promise<string | null> {
+  if (env.TTS_VOICE_ID) return env.TTS_VOICE_ID;
+  const name = env.TTS_VOICE_NAME || "Charlie";
+  const key = new Request(`${origin}/api/tts/voice/${encodeURIComponent(name)}`);
+  const hit = await edgeCache().match(key);
+  if (hit) return (await hit.text()) || null;
+  const res = await fetch("https://api.elevenlabs.io/v1/voices", { headers: { "xi-api-key": env.ELEVENLABS_API_KEY || "" } });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { voices?: { voice_id: string; name: string; category?: string }[] };
+  const voices = data.voices || [];
+  const pick = voices.find((v) => v.name.toLowerCase() === name.toLowerCase()) || voices.find((v) => v.category === "premade") || voices[0];
+  if (!pick) return null;
+  await edgeCache().put(key, new Response(pick.voice_id, { headers: { "Cache-Control": "public, max-age=86400" } }));
+  return pick.voice_id;
+}
+
+// Fail closed: if the accounting table is missing or D1 errors, the paid path stays shut.
+async function ttsBudgetSpend(env: Env, chars: number): Promise<boolean> {
+  if (!env.DEEP_SWARM_DB) return false;
+  const budget = Number(env.TTS_MONTHLY_CHARS) || TTS_DEFAULT_BUDGET;
+  const month = new Date().toISOString().slice(0, 7);
+  try {
+    const row = await env.DEEP_SWARM_DB.prepare("SELECT chars FROM tts_usage WHERE month = ?").bind(month).first<{ chars: number }>();
+    if ((row?.chars || 0) + chars > budget) return false;
+    await env.DEEP_SWARM_DB.prepare(
+      "INSERT INTO tts_usage (month, chars, updated_at) VALUES (?, ?, ?) ON CONFLICT(month) DO UPDATE SET chars = chars + excluded.chars, updated_at = excluded.updated_at",
+    ).bind(month, chars, Date.now()).run();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function handleTts(request: Request, env: Env, url: URL): Promise<Response> {
+  const fail = (error: string, status: number) => Response.json({ error }, { status, headers: { "Cache-Control": "no-store" } });
+  if (request.method !== "GET") return fail("method", 405);
+  if (!env.ELEVENLABS_API_KEY) return fail("voice unavailable", 503);
+  const referer = request.headers.get("Referer");
+  if (referer) {
+    try { if (new URL(referer).origin !== url.origin) return fail("origin rejected", 403); } catch { return fail("origin rejected", 403); }
+  }
+  const text = (url.searchParams.get("text") || "").replace(/\s+/g, " ").trim();
+  if (!text) return fail("text required", 400);
+  if (text.length > TTS_MAX_CHARS) return fail("text too long", 413);
+  const voice = await ttsVoiceId(env, url.origin);
+  if (!voice) return fail("voice unavailable", 503);
+  const cacheKey = new Request(`${url.origin}/api/tts/audio/${await sha256(`${TTS_MODEL}|${TTS_OUTPUT}|${voice}|${text}`)}`);
+  const cached = await edgeCache().match(cacheKey);
+  if (cached) return cached;
+  if (!(await ttsBudgetSpend(env, text.length))) return fail("voice budget exhausted", 503);
+  const upstream = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=${TTS_OUTPUT}`, {
+    method: "POST",
+    headers: { "xi-api-key": env.ELEVENLABS_API_KEY, "Content-Type": "application/json", Accept: "audio/mpeg" },
+    body: JSON.stringify({ text, model_id: TTS_MODEL }),
+  });
+  if (!upstream.ok) return fail(`voice upstream ${upstream.status}`, 502);
+  const audio = await upstream.arrayBuffer();
+  const response = new Response(audio, {
+    headers: { "Content-Type": "audio/mpeg", "Cache-Control": "public, max-age=2592000", "X-Voice": "elevenlabs" },
+  });
+  await edgeCache().put(cacheKey, response.clone());
+  return response;
 }
 
 const DEEP_SWARM_SAVE_LIMIT = 1_000_000;
@@ -332,6 +412,8 @@ export default {
         });
       }
     }
+
+    if (path === "/api/tts") return handleTts(request, env, url);
 
     if (path.startsWith("/api/deep-swarm/")) {
       if (!env.DEEP_SWARM_DB) return Response.json({ error: "cloud save unavailable" }, { status: 503 });

@@ -50,9 +50,11 @@ try {
 
   await page.goto(`${BASE}/reader/`, { waitUntil: 'domcontentloaded' })
   check('Reader: local read-aloud controls render', await page.locator('#tts-btn').count() === 1 && await page.locator('#tts-rate').count() === 1)
+  check('Reader: shared voice module loaded with browser fallback', await page.evaluate(() => Boolean(window.SiteVoice && window.SiteVoice.supported())))
 
   await page.goto(`${BASE}/feeds/`, { waitUntil: 'domcontentloaded' })
   check('Feeds: daily summary and headline speech modes render', await page.locator('#speak-summary').count() === 1 && await page.locator('#speak-headlines').count() === 1)
+  check('Feeds: shared voice module loaded and attribution shown', await page.evaluate(() => Boolean(window.SiteVoice)) && (await page.locator('.voice-credit').count()) === 1)
   check('Feeds: subscriptions can import and export locally', await page.locator('#feed-import-input').count() === 1 && await page.locator('#feed-export-btn').count() === 1)
 
   await page.goto(`${BASE}/radio/mini`, { waitUntil: 'domcontentloaded' })
