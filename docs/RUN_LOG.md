@@ -565,3 +565,11 @@
 - `public/scripts/site-voice.js` is the shared narrator: tries the route, and on any non-audio response falls back to `speechSynthesis` for the rest of the session. Reader Listen and Feeds speech now call it; the rate slider changes playback rate live on the audio path. Attribution + disclosure line beside both sets of controls.
 - Gate 191/191 incl. two new harness checks; Worker type-checks; local `wrangler dev` without a key returns `{"error":"voice unavailable"}` 503 and the pages fall back.
 - To go live: `npx wrangler secret put ELEVENLABS_API_KEY` (Vish), `npx wrangler d1 migrations apply deep-swarm-saves --remote`, then the usual build + deploy.
+
+## 2026-09-10 — Reader: Kindle-style phone layout
+
+- Phones (≤900 px wide or ≤520 px tall) open a book straight into the immersive layout: the page owns the whole viewport (`100svh`, safe-area padding) and the controls overlay it instead of stacking above and below, so showing or hiding them never repaginates. Controls are hidden by default once a book opens; a one-time pill says "Tap the middle for controls · edges to turn".
+- Touch: left third = previous page, right third = next, centre = toggle controls, horizontal swipe = page turn; any page turn hides the controls. Mouse clicks are ignored so desktop text selection for notes still works. Keyboard gains PageUp/PageDown/Space.
+- Landscape phones keep the measure at ~42rem instead of one long line; Download and the header font picker are hidden on phones (both live in settings). A 3 px progress bar sits at the bottom edge while the controls are hidden.
+- Pagination now measures with the panel's real computed padding, so the tighter phone margins are used rather than wasted.
+- `scripts/reader-phone-shots.mjs` opens a stubbed book at 390×844 and 844×390 (touch, 2×) and logs immersive state, page counts and overflow before saving screenshots — run against `serve-built-site` (default) or `SHOT_BASE=` a `wrangler dev`. Measured: portrait panel 844/844, overflow 0; landscape 390/390, overflow 0, repaginated 128 → 191 pages.

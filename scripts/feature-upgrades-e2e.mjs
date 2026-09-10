@@ -51,6 +51,7 @@ try {
   await page.goto(`${BASE}/reader/`, { waitUntil: 'domcontentloaded' })
   check('Reader: local read-aloud controls render', await page.locator('#tts-btn').count() === 1 && await page.locator('#tts-rate').count() === 1)
   check('Reader: shared voice module loaded with browser fallback', await page.evaluate(() => Boolean(window.SiteVoice && window.SiteVoice.supported())))
+  check('Reader: phone layout progress bar present and page-turn keys bound', await page.locator('#reader-progress-bar').count() === 1 && await page.evaluate(() => window.matchMedia('(max-width: 900px), (max-height: 520px)').matches))
 
   await page.goto(`${BASE}/feeds/`, { waitUntil: 'domcontentloaded' })
   check('Feeds: daily summary and headline speech modes render', await page.locator('#speak-summary').count() === 1 && await page.locator('#speak-headlines').count() === 1)

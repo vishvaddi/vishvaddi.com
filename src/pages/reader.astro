@@ -80,10 +80,42 @@ import Base from "../layouts/Base.astro";
        when a book opens — hence !important. Without it #reader-ui stayed block
        and the spread collapsed to the top instead of filling the screen. */
     body.reader-immersive #reader-ui {
-      position: fixed; inset: 0; z-index: 9999; margin: 0; max-width: none;
-      padding: 0.8rem clamp(0.75rem, 4vw, 2.5rem) 1rem;
-      background: var(--bg); overflow: hidden;
+      /* svh (not inset:0 / dvh): the page is laid out for the viewport WITH the
+         browser bar showing, so the last lines never clip when the bar comes back. */
+      position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100svh;
+      z-index: 9999; margin: 0; max-width: none;
+      padding: max(0.8rem, env(safe-area-inset-top)) clamp(0.75rem, 4vw, 2.5rem) max(1rem, env(safe-area-inset-bottom));
+      background: var(--bg); overflow: hidden; overscroll-behavior: none;
       display: flex !important; flex-direction: column;
+    }
+    /* Kindle-style reading on phones: the page owns the whole screen and the
+       controls OVERLAY it (no reflow, no repagination when they come and go).
+       Hidden by default once a book opens; a centre tap shows them, a page turn
+       hides them again. Desktop keeps the stacked layout. */
+    .reader-progress { display: none; height: 3px; width: 100%; max-width: 50rem; margin: 0.35rem auto 0; border-radius: 2px; background: color-mix(in srgb, var(--fg) 12%, transparent); }
+    .reader-progress span { display: block; height: 100%; width: 0; border-radius: 2px; background: var(--accent); transition: width 0.2s ease; }
+    .reader-hint { display: none; position: absolute; left: 50%; bottom: 1.4rem; transform: translateX(-50%); z-index: 4; padding: 0.45rem 0.9rem; border-radius: 999px; background: color-mix(in srgb, var(--fg) 85%, transparent); color: var(--bg); font: 0.8rem var(--font-sans); white-space: nowrap; pointer-events: none; }
+    .reader-hint.show { display: block; animation: reader-hint-fade 3.2s ease forwards; }
+    @keyframes reader-hint-fade { 0% { opacity: 0; } 12% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+    @media (max-width: 900px), (max-height: 520px) {
+      body.reader-immersive #reader-ui { padding: 0; }
+      body.reader-immersive .spread-wrap { max-width: none; height: 100%; }
+      body.reader-immersive .spread { border-radius: 0; box-shadow: none; }
+      body.reader-immersive .page-panel { padding: max(1.1rem, env(safe-area-inset-top)) max(1.1rem, env(safe-area-inset-right)) max(1.9rem, calc(env(safe-area-inset-bottom) + 1.4rem)) max(1.1rem, env(safe-area-inset-left)); }
+      body.reader-immersive .reader-chrome-top, body.reader-immersive .reader-chrome-bottom {
+        position: absolute; left: 0; right: 0; z-index: 3; margin: 0;
+        padding: 0.5rem max(0.6rem, env(safe-area-inset-right)) 0.5rem max(0.6rem, env(safe-area-inset-left));
+        background: color-mix(in srgb, var(--bg) 94%, transparent);
+      }
+      body.reader-immersive .reader-chrome-top { top: 0; padding-top: max(0.5rem, env(safe-area-inset-top)); border-bottom: 1px solid var(--rule); }
+      body.reader-immersive .reader-chrome-bottom { bottom: 0; padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); border-top: 1px solid var(--rule); }
+      body.reader-immersive .reader-chrome-top .reader-header { margin-bottom: 0; }
+      body.reader-immersive .reader-chrome-top .reader-settings { margin: 0.5rem 0 0; }
+      body.reader-immersive .reader-chrome-bottom .nav-row { margin: 0; max-width: none; }
+      body.reader-immersive.reader-chrome-hidden .reader-chrome-top,
+      body.reader-immersive.reader-chrome-hidden .reader-chrome-bottom { display: none; }
+      body.reader-immersive.reader-chrome-hidden .reader-progress { display: block; position: absolute; left: 0; right: 0; bottom: max(0.35rem, env(safe-area-inset-bottom)); max-width: none; width: auto; margin: 0 0.6rem; }
+      #dl-btn, #font-sel { display: none; }
     }
     body.reader-immersive .reader-header { flex: 0 0 auto; }
     body.reader-immersive .reader-settings.open { flex: 0 0 auto; }
@@ -176,6 +208,18 @@ import Base from "../layouts/Base.astro";
       .spread::after { display: none; }
       .page-flipper { display: none; }
     }
+    /* Phone portrait and landscape: tighter margins, compact chrome, page sized to the viewport. */
+    @media (max-width: 900px), (max-height: 520px) {
+      .spread { height: clamp(320px, 70vh, 880px); }
+      .page-panel { padding: 1.25rem 1.1rem 1.9rem; }
+      .page-panel.left .page-num { left: 1.1rem; bottom: 0.55rem; }
+      .reader-header h2 { font-size: 0.85rem; }
+      .reader-header button, .reader-header select { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+    }
+    /* Landscape phone: keep the measure readable (~80 characters) instead of one long line. */
+    @media (max-height: 520px) {
+      body.reader-immersive .page-panel { padding-left: max(2.2rem, calc((100vw - 42rem) / 2)); padding-right: max(2.2rem, calc((100vw - 42rem) / 2)); padding-top: 0.9rem; }
+    }
 
     /* Annotations */
     .note-btn {
@@ -258,6 +302,7 @@ import Base from "../layouts/Base.astro";
     </div>
 
     <div id="reader-ui">
+      <div class="reader-chrome-top">
       <div class="reader-header">
         <button id="back-btn">← Library</button>
         <h2 id="book-title-label"></h2>
@@ -314,6 +359,7 @@ import Base from "../layouts/Base.astro";
       </div>
 
       <p class="tts-follow" id="tts-follow" aria-live="polite"></p>
+      </div>
 
       <div class="spread-wrap">
         <div class="spread" id="spread">
@@ -330,10 +376,14 @@ import Base from "../layouts/Base.astro";
         </div>
       </div>
 
+      <div class="reader-progress" id="reader-progress" aria-hidden="true"><span id="reader-progress-bar"></span></div>
+      <div class="reader-hint" id="reader-hint" aria-hidden="true">Tap the middle for controls · edges to turn</div>
+      <div class="reader-chrome-bottom">
       <div class="nav-row">
         <button id="prev-btn">← Prev</button>
         <span class="page-info" id="page-info"></span>
         <button id="next-btn">Next →</button>
+      </div>
       </div>
 
       <div class="audio-reader" id="audio-reader">

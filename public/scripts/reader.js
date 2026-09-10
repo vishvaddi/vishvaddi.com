@@ -284,6 +284,7 @@ async function openBook(b) {
   $("library-ui").style.display = "none";
   $("reader-ui").style.display = "block";
   setTextMode(true);
+  if (isPhoneLayout() && !inImmersive()) setImmersiveClass(true);
   $("left-panel").innerHTML = '<span class="loading">Fetching text…</span>';
   $("right-panel").innerHTML = "";
 
@@ -304,6 +305,7 @@ async function openBook(b) {
     if (!pages.length) throw new Error("Book contained no readable pages");
     currentSpread = restorePosition(b.id);
     renderSpread(false);
+    if (isPhoneLayout() && inImmersive()) { setChromeHidden(true); showTapHint(); }
   } catch (e) {
     $("left-panel").innerHTML = '<span class="error-msg">Failed to load text. Try another book.</span>';
   }
@@ -455,7 +457,7 @@ async function paginateText(raw) {
     "position:absolute", "top:-9999px", "left:0",
     "visibility:hidden", "pointer-events:none",
     "width:" + W + "px", "height:auto", "overflow:visible",
-    "padding:2.5rem 2rem", "box-sizing:border-box",
+    "padding:" + (panel ? getComputedStyle(panel).padding : "2.5rem 2rem"), "box-sizing:border-box",
     "font-size:" + (0.95 * pct).toFixed(3) + "rem",
     "line-height:" + lh,
     "font-family:" + font
@@ -563,6 +565,8 @@ function renderSpread(animate, direction) {
   var lastShown = isMobile ? currentSpread + 1 : Math.min(currentSpread + 2, pages.length);
   var pct = Math.round((lastShown / pages.length) * 100);
   $("page-info").textContent = "Page " + (currentSpread + 1) + " of " + pages.length + " · " + pct + "%";
+  var bar = $("reader-progress-bar");
+  if (bar) bar.style.width = pct + "%";
 
   if (currentBook && pages.length) {
     try { localStorage.setItem("reader-pos-" + currentBook.id, String(currentSpread / pages.length)); } catch (_) {}
@@ -694,6 +698,8 @@ $("back-btn").addEventListener("click", function () {
   if (audio) audio.pause();
   $("reader-ui").style.display = "none";
   $("library-ui").style.display = "block";
+  setChromeHidden(false);
+  if (inImmersive()) toggleFullscreen();
   currentBook = null;
   currentAudioBook = null;
   currentRawText = null;
@@ -702,8 +708,9 @@ $("back-btn").addEventListener("click", function () {
 
 document.addEventListener("keydown", function (e) {
   if ($("reader-ui").style.display === "none") return;
-  if (e.key === "ArrowRight") goNext();
-  if (e.key === "ArrowLeft") goPrev();
+  if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); goNext(); }
+  if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); goPrev(); }
 });
 
 $("search-btn").addEventListener("click", function () {
@@ -933,13 +940,62 @@ window.addEventListener("resize", function () {
 function inImmersive() {
   return document.body.classList.contains("reader-immersive");
 }
-function setImmersive(on) {
+function setImmersiveClass(on) {
   document.body.classList.toggle("reader-immersive", on);
+  if (!on) document.body.classList.remove("reader-chrome-hidden");
   var btn = $("fs-btn");
   if (btn) btn.textContent = on ? "✕ Exit" : "⛶ Full screen";
+}
+function setImmersive(on) {
+  setImmersiveClass(on);
   // size changed — relayout once to fill the new viewport
   repaginate();
 }
+
+/* ── Kindle-style touch reading ──
+   Tap the left third: previous page. Right third: next. Centre: hide or show the
+   controls (immersive only). Swipe left/right pages too. Mouse clicks are left
+   alone so desktop text selection for notes keeps working. */
+function isPhoneLayout() {
+  return window.matchMedia("(max-width: 900px), (max-height: 520px)").matches;
+}
+function setChromeHidden(on) {
+  if (!inImmersive() && on) return;
+  document.body.classList.toggle("reader-chrome-hidden", on);
+  // On phones the controls overlay the page, so nothing reflows.
+}
+function showTapHint() {
+  var hint = $("reader-hint");
+  if (!hint) return;
+  try { if (localStorage.getItem("reader-hint-seen")) return; localStorage.setItem("reader-hint-seen", "1"); } catch (_) {}
+  hint.classList.add("show");
+  setTimeout(function () { hint.classList.remove("show"); }, 3400);
+}
+(function () {
+  var spread = $("spread");
+  if (!spread) return;
+  var start = null;
+  spread.addEventListener("pointerdown", function (e) {
+    if (e.pointerType === "mouse") { start = null; return; }
+    start = { x: e.clientX, y: e.clientY, t: Date.now() };
+  });
+  spread.addEventListener("pointerup", function (e) {
+    if (!start || e.pointerType === "mouse") return;
+    var dx = e.clientX - start.x, dy = e.clientY - start.y, dt = Date.now() - start.t;
+    start = null;
+    if (!pages.length) return;
+    var sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return; // a text selection is a note in progress, not a gesture
+    var phone = isPhoneLayout() && inImmersive();
+    if (Math.abs(dx) > 40 && Math.abs(dy) < 60 && dt < 800) { if (dx < 0) goNext(); else goPrev(); if (phone) setChromeHidden(true); return; }
+    if (Math.abs(dx) > 12 || Math.abs(dy) > 12 || dt > 400) return;
+    var zone = (e.clientX - spread.getBoundingClientRect().left) / spread.clientWidth;
+    if (zone < 0.3) { goPrev(); if (phone) setChromeHidden(true); }
+    else if (zone > 0.7) { goNext(); if (phone) setChromeHidden(true); }
+    else if (phone) setChromeHidden(!document.body.classList.contains("reader-chrome-hidden"));
+  });
+  spread.addEventListener("pointercancel", function () { start = null; });
+})();
 function toggleFullscreen() {
   var elem = document.documentElement;
   var goingIn = !inImmersive();
