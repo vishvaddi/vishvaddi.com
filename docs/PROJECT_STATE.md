@@ -1,5 +1,9 @@
 # Project State
 
+## 2026-09-14 - Pro paywall experiment LIVE (sandbox Stripe)
+
+The site is hybrid: `/site`, `/audio`, `/studio`, `/pro`, `/terms`, `/privacy` are public and indexable; everything else stays behind the six-digit PIN. Free visitors can use every tool without limit; exports, prints, Studio MP3/stem export, batch audio and cross-device sync ask for Pro through an inline panel (`src/scripts/site/pro.ts`). Pro is a `__Host-pro` cookie issued by Stripe Checkout (A$39/year or A$5/month, sandbox prices in `wrangler.jsonc`) or by restoring a licence key `VV-XXXX-XXXX-XXXX` (hash in D1 `pro_licences`; the key is also on the Stripe customer's metadata). The owner's PIN session is always Pro. Contract: `docs/PRO_PLAN.md`. Deployed version `c695b680`. Stripe is still in sandbox mode; a live purchase requires activating the Stripe account and repeating prices/webhook/secrets in live mode.
+
 ## 2026-09-14 - Life tools: Kitchen, Money, Training, album checklist, narration upgrade (not deployed)
 
 A "Life" group in the More menu adds three personal tools, all on one shared persistence layer (`src/scripts/site/store.ts`): one JSON document per tool in localStorage, JSON export/import, and an opt-in "Sync across devices" toggle that mirrors the document through `GET/PUT/DELETE /api/store/<key>` (D1 `site_store`, migration `0003`, revision-checked, the PIN gate is the only auth). Sync is off by default everywhere; Money data never leaves the device unless the owner turns it on.
