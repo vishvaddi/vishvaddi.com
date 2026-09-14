@@ -1,5 +1,11 @@
 # Project State
 
+## 2026-09-14 ? Private PIN gate ready; not deployed
+
+Six-digit server-side PIN protection now covers every page, asset and API through Worker-first routing. Seven-day signed cookies, PIN/key rotation invalidation, same-origin login/logout and a transactional Durable Object limiter (5 attempts/IP/15 minutes; 20/site/hour) fail closed. Offline precaching is retired; saved tool data is preserved. Production remains unchanged until secrets are configured and deployment is explicitly authorised.
+
+Validation: full release suite, 10 auth tests, Worker TypeScript and local Wrangler HTTPS smoke passed. Dependency audit reports 5 existing production advisories (1 critical, 4 high); dependency remediation remains separate.
+
 _Last updated: 2026-09-07 — Knot lessons re-rendered as slow MP4 step clips with play/scrub/speed controls and a geometry-audited Blender pipeline; a release gate script now runs the full check/build/harness sequence and stops on the first failure._
 
 ## Current Position

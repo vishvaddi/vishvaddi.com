@@ -1,8 +1,6 @@
-// Static-assets Worker for vishvaddi.com. Static files are served first by the
-// assets layer; only non-asset paths reach this fetch handler. We use it to
-// proxy the Field Survival map's tile + POI lookups same-origin, so the site's
-// strict CSP can stay default-src 'self'. Everything else falls through to the
-// built site assets.
+import { pinGate, privateResponse, base64Url } from "./auth.ts";
+import type { PinEnv } from "./auth.ts";
+export { PinAttempts } from "./auth.ts";
 interface DurableObjectState {
   storage: { get<T>(k: string): Promise<T | undefined>; put(k: string, v: unknown): Promise<void> };
 }
@@ -15,7 +13,7 @@ interface D1PreparedStatement {
   run<T = unknown>(): Promise<D1Result<T>>;
 }
 interface D1Database { prepare(query: string): D1PreparedStatement }
-interface Env {
+interface Env extends PinEnv {
   ASSETS: { fetch: (request: Request) => Promise<Response> };
   // Durable Object rate limiter — one instance per IP, so the count is globally
   // consistent (a plain in-memory Map can't be: Cloudflare spreads requests
@@ -105,11 +103,6 @@ async function handleTts(request: Request, env: Env, url: URL): Promise<Response
 }
 
 const DEEP_SWARM_SAVE_LIMIT = 1_000_000;
-function base64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
 async function sha256(value: string): Promise<string> {
   return base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))));
 }
@@ -396,7 +389,7 @@ async function readIcyTitle(upstream: Response): Promise<string | null> {
   }
 }
 
-export default {
+const site = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
@@ -861,5 +854,16 @@ export default {
 
     // Everything else: serve the built site.
     return env.ASSETS.fetch(request);
+  },
+};
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Old installations must receive the cache-retirement worker without signing in.
+    if (new URL(request.url).pathname === "/sw.js" && ["GET", "HEAD"].includes(request.method)) {
+      return privateResponse(await env.ASSETS.fetch(request));
+    }
+    const denied = await pinGate(request, env);
+    return privateResponse(denied || await site.fetch(request, env));
   },
 };

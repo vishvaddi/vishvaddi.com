@@ -5,14 +5,18 @@
   "compatibility_date": "2026-04-30",
   "assets": {
     "directory": "./dist",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    "run_worker_first": true
   },
   // /api/tts: voice picked by name from the ElevenLabs premade set (Charlie, Australian),
   // monthly character budget before the pages fall back to the browser voice.
   // The key itself is a secret: `npx wrangler secret put ELEVENLABS_API_KEY`.
   "vars": { "TTS_VOICE_NAME": "Charlie", "TTS_MONTHLY_CHARS": "150000" },
   "durable_objects": {
-    "bindings": [{ "name": "RL_DO", "class_name": "RateLimiter" }]
+    "bindings": [
+      { "name": "RL_DO", "class_name": "RateLimiter" },
+      { "name": "PIN_ATTEMPTS", "class_name": "PinAttempts" }
+    ]
   },
   "d1_databases": [
     {
@@ -22,5 +26,8 @@
       "migrations_dir": "migrations"
     }
   ],
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RateLimiter"] }]
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RateLimiter"] },
+    { "tag": "v2", "new_sqlite_classes": ["PinAttempts"] }
+  ]
 }

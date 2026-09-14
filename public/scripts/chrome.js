@@ -73,14 +73,13 @@
     });
   });
 
-  // Offline support: register the build-generated service worker (workbox
-  // precache of the whole site — see scripts/generate-sw.mjs). Registered
-  // here rather than injected markup so the strict CSP stays inline-free.
+  // Only update existing registrations; the retirement worker unregisters itself.
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", function () {
-      navigator.serviceWorker.register("/sw.js").catch(function () {
-        /* offline support is progressive enhancement — ignore */
-      });
-    });
+    navigator.serviceWorker.getRegistration("/").then(function (registration) {
+      if (registration) return registration.update();
+    }).catch(function () {});
   }
+  window.addEventListener("pageshow", function (event) {
+    if (event.persisted) window.location.reload();
+  });
 })();

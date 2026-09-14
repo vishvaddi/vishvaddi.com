@@ -21,6 +21,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   } else {
     process.exitCode = runSteps([
       [process.execPath, '--test', 'scripts/release-check.test.mjs'],
+      [process.execPath, '--experimental-strip-types', '--test', 'scripts/auth.test.mjs'],
       [process.execPath, npm, 'run', 'check'],
       [process.execPath, npm, 'run', 'build'],
       [process.execPath, 'scripts/feature-upgrades-e2e.mjs', 'dist'],
