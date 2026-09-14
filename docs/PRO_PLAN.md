@@ -80,3 +80,17 @@ Env: secrets `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`; vars `STRIPE_PRICE_YE
 
 - `scripts/pro-api.test.mjs` (`node --experimental-strip-types --test`): fake D1 (see `scripts/store-api.test.mjs`), stub `globalThis.fetch` for Stripe; cover public allowlist vs PIN, status for owner/pro/none, checkout 503 unconfigured and URL when configured, success page issues a key once and sets cookies, restore success/failure/rate-limit, webhook signature accept/reject and idempotency, store namespace for Pro vs owner.
 - `scripts/pro-e2e.mjs dist`: public visitor on `/site/pdf/` sees the upsell panel on export click (no navigation, no dialog); `/pro` renders both plans or "Not open yet"; `[data-private]` nav hidden without the owner marker; owner marker shows it.
+
+## Addendum 2026-09-14 (evening) — free quota, Money goes public
+
+**Free quota (Vish's call):** free visitors get **3 gated actions per rolling 30 days**, metered on the Worker; after that every gated action shows the upsell. Enforcement is anonymous-cookie **and** IP-hash, both counted, stricter wins — incognito resets the cookie, not the IP; a VPN beats it; accepted.
+
+- Migration `0005_free_uses.sql`: `CREATE TABLE IF NOT EXISTS free_uses (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0, window_start INTEGER NOT NULL);`
+- Cookie `__Host-anon`: HttpOnly, Secure, SameSite=Lax, Path=/, 400 days; value `<id>.<sig>` where id = 16 random bytes base64url and sig = HMAC (`keyFor(env)`) of the id. Set by the Worker on the first `/api/pro/use` call from a browser without one; a cookie with a bad signature is ignored and replaced.
+- `POST /api/pro/use` `{ feature: string }` (same-origin): owner or Pro → `200 { allowed: true, pro: true }`. Otherwise buckets `anon:<id>` and `ip:<base64url HMAC of CF-Connecting-IP>`; a bucket whose `window_start` is older than 30 days resets to 0. If **either** bucket already has `count >= FREE_USES` (env var `FREE_USES`, default `3`) → `402 { allowed: false, remaining: 0, resetsAt }`. Else increment both (upsert) → `200 { allowed: true, remaining: FREE_USES - max(counts) }`. The response sets `__Host-anon` when it was missing.
+- `GET /api/pro/status` gains `freeRemaining` (computed without incrementing; `null` for owner/Pro).
+- Client `requirePro(feature, run, anchor)`: owner/Pro markers → run immediately. Otherwise `POST /api/pro/use` first; `allowed` → run, then show a one-line note under the anchor ("2 free exports left this month — Pro removes the limit"); `402` → the upsell panel with heading "You've used your 3 free exports this month"; network error → the panel (fail closed) with a "try again" line.
+- Copy on `/pro`: "Free: every tool, unlimited use, 3 exports a month. Pro: unlimited exports, saved projects, sync."
+- Tests: `pro-api.test.mjs` — third use allowed, fourth 402, IP bucket blocks a fresh cookie, 31-day-old window resets, Pro/owner bypass, forged cookie replaced; `pro-e2e.mjs` — stub `/api/pro/use` 200 then 402 and assert note vs panel.
+
+**Money goes public and Pro-gated:** `/money` joins `PUBLIC_EXACT_OR_DIR`; the nav link moves out of the private Life group into the public last group; the homepage card loses `data-private`. Free = budget, transactions, net worth, debts, projections. Pro (via `requirePro`) = live prices, FIRE dashboard, property, CGT, rebalancing, CSV export, sync. Data stays in the visitor's browser either way.
