@@ -32,14 +32,24 @@ const login = (pin = '012345', headers = {}) => request('/login', {
 })
 const tokenFrom = (response) => response.headers.get('Set-Cookie').split(';')[0]
 
-test('all content stays closed without a session, including APIs and alternate hostnames', async () => {
+test('private content stays closed without a session, including APIs and alternate hostnames', async () => {
   const { env, assets } = setup()
-  for (const path of ['/', '/site/', '/_astro/app.js', '/api/deep-swarm/account', '/fonts/font.woff2', '/games/deep-swarm/', '/%6cogin', '//login', '/login/']) {
+  for (const path of ['/', '/money', '/api/deep-swarm/account', '/games/deep-swarm/', '/%6cogin', '//login', '/login/']) {
     assert.equal((await worker.fetch(request(path), env)).status, 401, path)
   }
-  assert.equal((await worker.fetch(new Request('https://alternate.workers.dev/site/'), env)).status, 401)
+  assert.equal((await worker.fetch(new Request('https://alternate.workers.dev/money'), env)).status, 401)
   assert.equal((await worker.fetch(request('/', { headers: { 'Sec-Fetch-Dest': 'document' } }), env)).headers.get('Location'), '/login')
   assert.equal(assets(), 0)
+})
+
+test('PUBLIC_PATHS fall through to the site without a session', async () => {
+  const { env, assets } = setup()
+  for (const path of ['/site/', '/_astro/app.js', '/fonts/font.woff2']) {
+    const response = await worker.fetch(request(path), env)
+    assert.equal(response.status, 200, path)
+    assert.equal(await response.text(), 'private asset', path)
+  }
+  assert.equal(assets(), 3)
 })
 
 test('configuration and limiter failures fail closed', async () => {
@@ -155,7 +165,15 @@ test('browser form submissions preserve the origin for login and logout', async 
           method: incoming.method(), headers: await incoming.allHeaders(), body: incoming.postDataBuffer(),
         }), env)
         workerStatuses.push({ method: incoming.method(), status: response.status, origin: incoming.headers().origin })
-        const headers = Object.fromEntries(response.headers)
+        // Object.fromEntries(response.headers) would silently drop all but the
+        // last Set-Cookie (login/logout now set two); Playwright's own HAR
+        // replay joins repeats of that header with "\n" and splits them back
+        // out when it hands them to the browser, so do the same here.
+        const headers = {}
+        for (const [name, value] of response.headers) {
+          if (name.toLowerCase() !== 'set-cookie') { headers[name] = value; continue }
+          headers['set-cookie'] = headers['set-cookie'] ? `${headers['set-cookie']}\n${value}` : value
+        }
         // Chromium follows a fulfilled 3xx on the real network, bypassing this
         // route, so redirects are replayed as a scripted navigation: the
         // Set-Cookie still applies and the next request is intercepted again.
