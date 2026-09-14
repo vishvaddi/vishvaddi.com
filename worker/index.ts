@@ -1,5 +1,6 @@
 import { pinGate, privateResponse, base64Url } from "./auth.ts";
 import type { PinEnv } from "./auth.ts";
+import { recipeFromHtml } from "./recipe-jsonld.ts";
 export { PinAttempts } from "./auth.ts";
 interface DurableObjectState {
   storage: { get<T>(k: string): Promise<T | undefined>; put(k: string, v: unknown): Promise<void> };
@@ -178,6 +179,7 @@ const TILE_RE = /^\/api\/poi\/tiles\/(\d+)\/(\d+)\/(\d+)$/;
 const UA = "vishvaddi.com field-survival tool (personal, low volume)";
 const MAX_FEED_BYTES = 2_000_000;
 const MAX_ICY_BYTES = 1_000_000;
+const MAX_RECIPE_BYTES = 2_000_000;
 const GUTENBERG_OPDS = "https://www.gutenberg.org/ebooks/search.opds/";
 const STANDARD_EBOOKS = "https://standardebooks.org";
 
@@ -588,6 +590,34 @@ const site = {
         });
       } catch {
         return new Response("fetch failed", { status: 504 });
+      }
+    }
+
+    // Recipe importer for /kitchen. Fetches a public HTTPS page, pulls the
+    // schema.org Recipe out of its JSON-LD and returns the flat shape the
+    // client stores. No HTML is returned, so it cannot serve as a page proxy.
+    if (path === "/api/recipe" && request.method === "GET") {
+      const target = publicHttpsUrl(url.searchParams.get("url") || "");
+      const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
+      if (!target) return Response.json({ error: "Enter a full https:// recipe page address." }, { status: 400, headers });
+      try {
+        const upstream = await fetchPublic(target, {
+          headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml" },
+          signal: AbortSignal.timeout(20000),
+          cf: { cacheTtl: 86400, cacheEverything: true },
+        } as RequestInit);
+        if (!upstream.ok) return Response.json({ error: `That site answered ${upstream.status}.` }, { status: 502, headers });
+        const len = Number(upstream.headers.get("Content-Length") || "0");
+        if (len > MAX_RECIPE_BYTES) return Response.json({ error: "Page too large." }, { status: 413, headers });
+        const body = await upstream.arrayBuffer();
+        if (body.byteLength > MAX_RECIPE_BYTES) return Response.json({ error: "Page too large." }, { status: 413, headers });
+        const recipe = recipeFromHtml(new TextDecoder().decode(body), target.toString());
+        if (!recipe) {
+          return Response.json({ error: "No recipe data (schema.org Recipe JSON-LD) found on that page — paste the ingredients in by hand." }, { status: 422, headers });
+        }
+        return Response.json(recipe, { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" } });
+      } catch {
+        return Response.json({ error: "Couldn't reach that page." }, { status: 504, headers });
       }
     }
 

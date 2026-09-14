@@ -1,0 +1,42 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+import "../../styles/kitchen.css";
+---
+
+<Base
+  title="Meal Plan"
+  description="Two-week meal planner with rule-based auto-fill (weeknight time cap, Sunday prep day, no repeats) and an aggregated, aisle-grouped shopping list."
+>
+  <nav class="kit-modes" aria-label="Kitchen sections">
+    <a href="/kitchen">Recipes</a>
+    <a href="/kitchen/plan" class="active">Plan &amp; shopping</a>
+  </nav>
+
+  <div class="blueprint tool">
+    <p class="eyebrow">Kitchen / Plan</p>
+    <h1>Fortnight plan</h1>
+    <p>
+      Fourteen days, three meals. Type a recipe name (it autocompletes from
+      your recipes) or free text like <em>out</em>; tick <em>away</em> for
+      days you're not home. Auto-fill picks dinners by your rules — no AI,
+      just the constraints below — and the shopping list adds itself up.
+    </p>
+
+    <div class="store-controls no-print" id="kit-store"></div>
+    <div id="plan-app"></div>
+
+    <div class="calc" id="shop">
+      <h2>Shopping list</h2>
+      <p class="calc-blurb no-print">Aggregated across the fortnight, scaled by servings, grouped by aisle. Ticks are saved.</p>
+      <div id="shop-app"></div>
+    </div>
+
+    <p class="note-foot"><a href="/kitchen">← recipes</a></p>
+  </div>
+
+  <script>
+    import { initKitchenPlan } from "../../scripts/site/kitchen-plan";
+    initKitchenPlan();
+  </script>
+</Base>
