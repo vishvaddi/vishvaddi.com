@@ -1,0 +1,36 @@
+---
+import Base from "../layouts/Base.astro";
+import "../styles/site.css";
+import "../styles/money.css";
+---
+
+<Base
+  title="Money"
+  description="Personal budget, bank CSV import, net worth tracker, investments, debt payoff planner and savings projections in AUD. Runs entirely in your browser — nothing is uploaded."
+  noindex
+>
+  <div class="blueprint tool">
+    <p class="eyebrow">Life / Money</p>
+    <h1>Money</h1>
+    <p>
+      Budget by category, import bank statements, track net worth over time,
+      plan debt payoff and project savings. Everything is AUD and stays in this
+      browser unless you export it.
+    </p>
+
+    <div class="store-controls" id="money-store"></div>
+
+    <div id="money-app"></div>
+
+    <p class="disclosure">
+      Stored only in this browser (localStorage). Export JSON to keep a backup or
+      move to another device — sync stays off for this tool by default.
+    </p>
+    <p class="note-foot">Estimates only, not financial advice.</p>
+  </div>
+
+  <script>
+    import { initMoney } from "../scripts/site/money";
+    initMoney();
+  </script>
+</Base>

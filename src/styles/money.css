@@ -1,0 +1,65 @@
+/* /money — layout mirrors the fitness sidebar tabs; the rest reuses site.css
+   (.calc, .field, .btn, .rec-card, .stat-grid). */
+.money-layout { display: grid; grid-template-columns: 11rem 1fr; gap: 1.5rem; align-items: start; margin-top: 0.5rem; }
+.money-tabs { display: flex; flex-direction: column; gap: 0.25rem; position: sticky; top: 5rem; }
+.money-tab {
+  padding: 0.5rem 0.9rem; font-size: 0.9rem; font-family: var(--font-sans); cursor: pointer; text-align: left;
+  color: var(--muted); background: transparent; border: 1px solid transparent; border-left: 2px solid var(--rule); border-radius: 0;
+}
+.money-tab:hover { color: var(--fg); }
+.money-tab.active { color: var(--fg); font-weight: 600; border-left-color: var(--site-accent); }
+.money-panel[hidden] { display: none; }
+.money-panel h2 { margin-top: 0; }
+.money-panel h3 { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
+.money-panel h4 { font-size: 0.9rem; margin: 0.75rem 0 0.35rem; }
+.money-content { min-width: 0; }
+
+.money-month { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0.75rem 0 1rem; }
+.money-month input[type="month"] { font-family: var(--font-mono); padding: 0.4rem 0.5rem; border: 1px solid var(--site-line-strong); border-radius: 6px; background: var(--bg); color: var(--fg); }
+.tool input[type="date"], .tool input[type="month"], .tool input[type="search"], .tool input[type="file"] {
+  font-family: var(--font-mono); font-size: 0.95rem; padding: 0.5rem 0.6rem; border: 1px solid var(--site-line-strong);
+  border-radius: 6px; background: var(--bg); color: var(--fg); width: 100%;
+}
+.money-check { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; margin: 0.5rem 0; }
+
+.money-row { padding: 0.55rem 0; border-bottom: 1px solid var(--site-line); }
+.money-row-head { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.money-row-foot { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.35rem; font-size: 0.85rem; }
+.money-mono { font-family: var(--font-mono); font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.3rem; }
+.money-mono.neg, .neg { color: var(--accent-dark); }
+.money-mono.pos, .pos { color: var(--site-accent); }
+.money-inline { width: 6.5rem !important; padding: 0.25rem 0.4rem !important; font-size: 0.9rem !important; }
+.money-inline-select { width: auto !important; font-size: 0.85rem !important; padding: 0.3rem 0.4rem !important; }
+.mb-remaining.over, .stat.over .n { color: var(--accent-dark); }
+:root[data-theme="dark"] .mb-remaining.over, :root[data-theme="dark"] .stat.over .n, :root[data-theme="dark"] .neg { color: var(--accent); }
+
+.money-bar { height: 8px; border-radius: 999px; background: var(--site-line); overflow: hidden; margin-top: 0.4rem; }
+.money-bar-fill { height: 100%; background: var(--site-accent); border-radius: 999px; transition: width var(--dur-fast); }
+.money-bar-fill.over { background: var(--accent); }
+
+.money-chart { display: block; width: 100%; height: 240px; margin: 0.75rem 0; border: 1px solid var(--rule); border-radius: 10px; background: var(--code-bg); }
+
+.money-table-wrap { overflow-x: auto; max-width: 100%; margin: 0.5rem 0; -webkit-overflow-scrolling: touch; }
+.money-table { border-collapse: collapse; width: 100%; font-size: 0.85rem; min-width: 28rem; }
+.money-table th, .money-table td { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--site-line); vertical-align: top; white-space: nowrap; }
+.money-table th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+.money-table td:nth-child(3) { white-space: normal; min-width: 10rem; }
+
+.money-details { margin: 1rem 0; }
+.money-details > summary { cursor: pointer; font-weight: 600; font-family: var(--font-sans); font-size: 0.95rem; }
+.money-rule { display: grid; grid-template-columns: 1fr 10rem auto; gap: 0.4rem; align-items: center; margin: 0.35rem 0; }
+.money-rule input, .money-rule select { font-size: 0.85rem !important; padding: 0.35rem 0.45rem !important; }
+
+.money-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.75rem; }
+.money-compare-col { min-width: 0; }
+.money-order { font-size: 0.85rem; padding-left: 1.2rem; margin: 0.5rem 0; }
+
+@media (max-width: 720px) {
+  .money-layout { display: block; }
+  .money-tabs { flex-direction: row; flex-wrap: wrap; gap: 0.4rem; position: static; margin-bottom: 1.25rem; }
+  .money-tab { border: 1px solid var(--rule); border-radius: 999px; padding: 0.45rem 1rem; }
+  .money-tab.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .money-compare { grid-template-columns: 1fr; }
+  .money-rule { grid-template-columns: 1fr auto; }
+  .money-rule input { grid-column: 1 / -1; }
+}
