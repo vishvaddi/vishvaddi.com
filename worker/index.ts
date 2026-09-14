@@ -1,6 +1,8 @@
-import { pinGate, privateResponse, base64Url } from "./auth.ts";
+import { pinGate, privateResponse, base64Url, ownerSession } from "./auth.ts";
 import type { PinEnv } from "./auth.ts";
 import { recipeFromHtml } from "./recipe-jsonld.ts";
+import { handleProRequest, activeLicenceHash } from "./pro.ts";
+import type { ProEnv } from "./pro.ts";
 export { PinAttempts } from "./auth.ts";
 interface DurableObjectState {
   storage: { get<T>(k: string): Promise<T | undefined>; put(k: string, v: unknown): Promise<void> };
@@ -14,7 +16,7 @@ interface D1PreparedStatement {
   run<T = unknown>(): Promise<D1Result<T>>;
 }
 interface D1Database { prepare(query: string): D1PreparedStatement }
-interface Env extends PinEnv {
+interface Env extends PinEnv, ProEnv {
   ASSETS: { fetch: (request: Request) => Promise<Response> };
   // Durable Object rate limiter — one instance per IP, so the count is globally
   // consistent (a plain in-memory Map can't be: Cloudflare spreads requests
@@ -411,14 +413,22 @@ const site = {
 
     if (path === "/api/tts") return handleTts(request, env, url);
 
-    // Personal-tool sync (src/scripts/site/store.ts). The PIN gate in front of
-    // this handler is the auth; revision numbers stop two devices clobbering
-    // each other. Same-origin only, like the Deep Swarm saves.
+    // Pro (paywall experiment). Reachable without a PIN session — see
+    // PUBLIC_PATHS in auth.ts — auth for the individual routes lives in pro.ts.
+    if (path.startsWith("/api/pro/") || path === "/pay/success") return handleProRequest(request, env, url);
+
+    // Personal-tool sync (src/scripts/site/store.ts). Public path (see
+    // PUBLIC_PATHS): the owner keeps their private namespace as before, a Pro
+    // cookie gets its own namespace so customers can sync public tools, and
+    // everyone else is rejected before touching D1.
     const storeMatch = path.match(/^\/api\/store\/([a-z0-9_-]{1,40})$/);
     if (path.startsWith("/api/store/") && !storeMatch) return Response.json({ error: "bad key" }, { status: 404 });
     if (storeMatch) {
-      const key = storeMatch[1];
       const headers = { "Cache-Control": "no-store", "Content-Type": "application/json" };
+      const isOwner = await ownerSession(request, env);
+      const licenceHash = isOwner ? null : await activeLicenceHash(request, env);
+      if (!isOwner && !licenceHash) return Response.json({ error: "unauthorised" }, { status: 401, headers });
+      const key = isOwner ? storeMatch[1] : `pro:${licenceHash}:${storeMatch[1]}`;
       if (!env.DEEP_SWARM_DB) return Response.json({ error: "sync unavailable" }, { status: 503, headers });
       const origin = request.headers.get("Origin");
       if (origin && origin !== url.origin) return Response.json({ error: "origin rejected" }, { status: 403, headers });

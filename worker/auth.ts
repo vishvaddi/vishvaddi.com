@@ -43,9 +43,31 @@ export function base64Url(bytes: Uint8Array): string {
 }
 
 const COOKIE = "__Host-site-session";
+const OWNER_COOKIE = "vv_owner";
 const SESSION_SECONDS = 7 * 24 * 3600;
 const encoder = new TextEncoder();
 const cookie = (value: string, age: number) => `${COOKIE}=${value}; Path=/; Max-Age=${age}; HttpOnly; Secure; SameSite=Strict`;
+// Plain (readable) marker so nav can hide/show private groups before any API call resolves.
+const ownerCookie = (value: string, age: number) => `${OWNER_COOKIE}=${value}; Path=/; Max-Age=${age}; Secure; SameSite=Lax`;
+
+// Public routes bypass the PIN entirely (contract: docs/PRO_PLAN.md). Checked
+// before the PIN logic so an anonymous visitor gets the page, not a 401/redirect.
+const PUBLIC_EXACT_OR_DIR = ["/site", "/audio", "/studio", "/pro"];
+const PUBLIC_PREFIXES = [
+  "/pay/", "/_astro/", "/scripts/", "/fonts/", "/media/", "/worklets/", "/data/", "/og/", "/icon-",
+  "/api/pro/", "/api/poi/", "/api/tiles/", "/api/store/",
+];
+const PUBLIC_EXACT = [
+  "/terms", "/privacy", "/login", "/logout",
+  "/favicon.ico", "/favicon.svg", "/apple-touch-icon.png", "/manifest.webmanifest",
+  "/robots.txt", "/sw.js", "/api/fx", "/api/prices",
+];
+
+export function isPublicPath(pathname: string): boolean {
+  if (PUBLIC_EXACT.includes(pathname)) return true;
+  if (PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return true;
+  return PUBLIC_EXACT_OR_DIR.some((base) => pathname === base || pathname.startsWith(`${base}/`));
+}
 
 export function privateResponse(response: Response): Response {
   const result = new Response(response.body, response);
@@ -72,7 +94,7 @@ function page(message = "Enter your six-digit PIN to continue.", status = 200, l
   });
 }
 
-async function keyFor(env: PinEnv): Promise<CryptoKey> {
+export async function keyFor(env: PinEnv): Promise<CryptoKey> {
   // Binding the key to the PIN invalidates every session when either secret rotates.
   return crypto.subtle.importKey("raw", encoder.encode(`${env.SESSION_SECRET}:${env.SITE_PIN}`), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
@@ -88,6 +110,18 @@ async function validSession(request: Request, key: CryptoKey): Promise<boolean> 
   return crypto.subtle.verify("HMAC", key, signature, encoder.encode(`${match[1]}.${match[2]}`));
 }
 
+// Reused by pro.ts/index.ts so Pro routes can tell owner sessions apart from
+// Pro-cookie customers without duplicating the PIN key derivation.
+export async function ownerSession(request: Request, env: PinEnv): Promise<boolean> {
+  if (!/^[0-9]{6}$/.test(env.SITE_PIN || "") || (env.SESSION_SECRET?.length || 0) < 32) return false;
+  try {
+    const key = await keyFor(env);
+    return await validSession(request, key);
+  } catch {
+    return false;
+  }
+}
+
 export async function pinGate(request: Request, env: PinEnv): Promise<Response | null> {
   const url = new URL(request.url);
   if (url.protocol !== "https:") return new Response("HTTPS required", { status: 400 });
@@ -100,7 +134,13 @@ export async function pinGate(request: Request, env: PinEnv): Promise<Response |
       if (request.method === "GET" || request.method === "HEAD") return page("You will need your PIN to unlock this browser again.", 200, true);
       if (request.method !== "POST") return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD, POST" } });
       if (request.headers.get("Origin") !== url.origin) return new Response("Origin rejected", { status: 403 });
-      return new Response(null, { status: 303, headers: { Location: "/login", "Set-Cookie": cookie("", 0), "Clear-Site-Data": '"cache"' } });
+      const headers = new Headers({ Location: "/login", "Clear-Site-Data": '"cache"' });
+      // Session cookie appended first: Headers#get("Set-Cookie") joins multiple
+      // values by comma in append order, and callers that split on the first
+      // ";" (tests, any future reader) need the session cookie's segment first.
+      headers.append("Set-Cookie", cookie("", 0));
+      headers.append("Set-Cookie", ownerCookie("", 0));
+      return new Response(null, { status: 303, headers });
     }
     if (url.pathname === "/login" && request.method === "POST") {
       if (request.headers.get("Origin") !== url.origin) return new Response("Origin rejected", { status: 403 });
@@ -138,13 +178,18 @@ export async function pinGate(request: Request, env: PinEnv): Promise<Response |
       if (!await crypto.subtle.verify("HMAC", key, expected, encoder.encode(pin))) return page("Incorrect PIN. Try again.", 401);
       const payload = `${Math.floor(Date.now() / 1000) + SESSION_SECONDS}.${base64Url(crypto.getRandomValues(new Uint8Array(16)))}`;
       const signature = base64Url(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(payload))));
-      return new Response(null, { status: 303, headers: { Location: "/", "Set-Cookie": cookie(`${payload}.${signature}`, SESSION_SECONDS), "Clear-Site-Data": '"cache"' } });
+      const headers = new Headers({ Location: "/", "Clear-Site-Data": '"cache"' });
+      // Session cookie appended first — see the matching comment on /logout.
+      headers.append("Set-Cookie", cookie(`${payload}.${signature}`, SESSION_SECONDS));
+      headers.append("Set-Cookie", ownerCookie("1", SESSION_SECONDS));
+      return new Response(null, { status: 303, headers });
     }
     if (await validSession(request, key)) {
       if (url.pathname === "/login") return new Response(null, { status: 303, headers: { Location: "/" } });
       return null;
     }
     if (url.pathname === "/login" && (request.method === "GET" || request.method === "HEAD")) return page();
+    if (isPublicPath(url.pathname)) return null;
     if (request.method === "GET" && request.headers.get("Sec-Fetch-Dest") === "document") return new Response(null, { status: 303, headers: { Location: "/login" } });
     return new Response("Site locked", { status: 401 });
   } catch {

@@ -11,7 +11,15 @@
   // /api/tts: voice picked by name from the ElevenLabs premade set (Charlie, Australian),
   // monthly character budget before the pages fall back to the browser voice.
   // The key itself is a secret: `npx wrangler secret put ELEVENLABS_API_KEY`.
-  "vars": { "TTS_VOICE_NAME": "Charlie", "TTS_MONTHLY_CHARS": "150000" },
+  "vars": {
+    "TTS_VOICE_NAME": "Charlie",
+    "TTS_MONTHLY_CHARS": "150000",
+    // Pro (paywall experiment, docs/PRO_PLAN.md): Stripe price ids, empty until
+    // Vish creates the product. Secrets (not vars): `npx wrangler secret put STRIPE_SECRET_KEY`
+    // and `npx wrangler secret put STRIPE_WEBHOOK_SECRET`.
+    "STRIPE_PRICE_YEAR": "",
+    "STRIPE_PRICE_MONTH": ""
+  },
   "durable_objects": {
     "bindings": [
       { "name": "RL_DO", "class_name": "RateLimiter" },
