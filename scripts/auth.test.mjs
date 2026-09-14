@@ -19,7 +19,7 @@ function setup() {
   let assets = 0
   const env = {
     // Test-only credentials; production has no defaults.
-    SITE_PIN: '012345', SESSION_SECRET: 'test-only-session-key-never-use-in-production',
+    SITE_LOCKED: '1', SITE_PIN: '012345', SESSION_SECRET: 'test-only-session-key-never-use-in-production',
     PIN_ATTEMPTS: { idFromName: (name) => name, get: () => limiter },
     ASSETS: { fetch: async () => { assets++; return new Response('private asset', { headers: { 'Cache-Control': 'public, max-age=31536000' } }) } },
   }
@@ -236,4 +236,22 @@ test('retirement worker is public and removes only old content caches', async ()
   assert.match(config, /"run_worker_first": true/)
   const chrome = await readFile(new URL('../public/scripts/chrome.js', import.meta.url), 'utf8')
   assert.doesNotMatch(chrome, /serviceWorker\.register\(/)
+})
+
+test('unlocked site (no SITE_LOCKED) serves every page publicly while the PIN still logs the owner in', async () => {
+  const { env, assets } = setup()
+  delete env.SITE_LOCKED
+  for (const path of ['/', '/money', '/notes/', '/kitchen/']) {
+    const response = await worker.fetch(request(path), env)
+    assert.equal(response.status, 200, path)
+    assert.equal(response.headers.get('X-Robots-Tag'), null, path)
+  }
+  assert.equal(assets(), 4)
+  assert.equal((await worker.fetch(request('/api/store/x'), env)).status, 401, 'owner sync still needs a session')
+  const response = await worker.fetch(login(), env)
+  assert.equal(response.status, 303)
+  const owner = await worker.fetch(request('/', { headers: { Cookie: tokenFrom(response) } }), env)
+  assert.equal(owner.headers.get('Cache-Control'), 'private, no-store', 'owner responses stay uncached')
+  assert.equal((await worker.fetch(request('/'), { ...env, SITE_PIN: undefined })).status, 200, 'unlocked site works without a PIN configured')
+  assert.equal((await worker.fetch(request('/login'), { ...env, SITE_PIN: undefined })).status, 503)
 })

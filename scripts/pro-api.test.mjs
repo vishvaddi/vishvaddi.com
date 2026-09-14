@@ -112,7 +112,7 @@ function setup() {
   const db = fakeD1()
   let assetHits = 0
   const env = {
-    SITE_PIN: '012345', SESSION_SECRET: 'test-only-session-key-never-use-in-production',
+    SITE_LOCKED: '1', SITE_PIN: '012345', SESSION_SECRET: 'test-only-session-key-never-use-in-production',
     PIN_ATTEMPTS: { idFromName: (name) => name, get: () => limiter },
     ASSETS: { fetch: async () => { assetHits++; return new Response('asset') } },
     DEEP_SWARM_DB: db,

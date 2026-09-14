@@ -41,13 +41,13 @@ const navPrimary: [string, string][] = [
 ];
 // "More" is grouped so the menu reads as a map, not a list. /music is the
 // listening log, so it is labelled by what it is to avoid two "Music" entries.
-// Life/Read/Logs are the owner-only groups (PIN as always); chrome.js hides
-// [data-private] for anyone without the vv_owner marker cookie.
+// The site is public; chrome.js hides [data-private] (owner-only links such as
+// Lock site) for anyone without the vv_owner marker cookie.
 const navMoreGroups: { label: string | null; links: [string, string][]; private?: boolean }[] = [
   { label: "Music", links: [["/studio", "Studio"], ["/audio", "Audio tools"], ["/radio", "Radio"]] },
-  { label: "Read", links: [["/notes", "Notes"], ["/reader", "Reader"], ["/feeds", "Feeds"]], private: true },
-  { label: "Life", links: [["/kitchen", "Kitchen"], ["/money", "Money"], ["/training", "Training"]], private: true },
-  { label: "Logs", links: [["/music", "Listening"], ["/tv", "TV"], ["/movies", "Movies"], ["/books", "Books"]], private: true },
+  { label: "Read", links: [["/notes", "Notes"], ["/reader", "Reader"], ["/feeds", "Feeds"]] },
+  { label: "Life", links: [["/kitchen", "Kitchen"], ["/money", "Money"], ["/training", "Training"]] },
+  { label: "Logs", links: [["/music", "Listening"], ["/tv", "TV"], ["/movies", "Movies"], ["/books", "Books"]] },
   { label: null, links: [["/games", "Games"], ["/pro", "Pro"], ["/about", "About"], ["/logout", "Lock site"]] },
 ];
 const navMore: [string, string][] = navMoreGroups.flatMap((group) => group.links);

@@ -231,8 +231,7 @@ export default defineConfig({
   site: 'https://vishvaddi.com',
   devToolbar: { enabled: false },
   // /site/lattice is deliberately unlisted — reachable only by direct URL
-  // Only the public (paywall-experiment) routes are listed; everything else sits behind the PIN.
-  integrations: [sitemap({ filter: (page) => !page.includes('/site/lattice') && /vishvaddi\.com\/(site|audio|studio|pro|terms|privacy)(\/|$)/.test(page) })],
+  integrations: [sitemap({ filter: (page) => !page.includes('/site/lattice') })],
   vite: {
     plugins: [tailwindcss(), localBookProxy()],
     // Never inline client scripts. The strict CSP (script-src 'self' + a couple

@@ -1,4 +1,8 @@
 export interface PinEnv {
+  // "1" turns the PIN into a wall in front of every non-public route. Unset
+  // (the default since 2026-09-14 evening) the site is public and the PIN is
+  // only the owner login that unlocks owner-only features such as sync.
+  SITE_LOCKED?: string;
   SITE_PIN?: string;
   SESSION_SECRET?: string;
   PIN_ATTEMPTS?: {
@@ -62,6 +66,8 @@ const PUBLIC_EXACT = [
   "/favicon.ico", "/favicon.svg", "/apple-touch-icon.png", "/manifest.webmanifest",
   "/robots.txt", "/sw.js", "/api/fx", "/api/prices",
 ];
+
+export function siteLocked(env: PinEnv): boolean { return env.SITE_LOCKED === "1"; }
 
 export function isPublicPath(pathname: string): boolean {
   if (PUBLIC_EXACT.includes(pathname)) return true;
@@ -133,6 +139,7 @@ export async function pinGate(request: Request, env: PinEnv): Promise<Response |
   const url = new URL(request.url);
   if (url.protocol !== "https:") return new Response("HTTPS required", { status: 400 });
   if (!/^[0-9]{6}$/.test(env.SITE_PIN || "") || (env.SESSION_SECRET?.length || 0) < 32 || !env.PIN_ATTEMPTS) {
+    if (!siteLocked(env) && url.pathname !== "/login" && url.pathname !== "/logout") return null;
     return new Response("Private site. Login is not configured yet.", { status: 503 });
   }
   try {
@@ -196,7 +203,7 @@ export async function pinGate(request: Request, env: PinEnv): Promise<Response |
       return null;
     }
     if (url.pathname === "/login" && (request.method === "GET" || request.method === "HEAD")) return page();
-    if (isPublicPath(url.pathname)) return null;
+    if (!siteLocked(env) || isPublicPath(url.pathname)) return null;
     if (request.method === "GET" && request.headers.get("Sec-Fetch-Dest") === "document") return new Response(null, { status: 303, headers: { Location: "/login" } });
     return new Response("Site locked", { status: 401 });
   } catch {

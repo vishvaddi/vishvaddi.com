@@ -1,4 +1,4 @@
-import { pinGate, privateResponse, publicResponse, isPublicPath, base64Url, ownerSession } from "./auth.ts";
+import { pinGate, privateResponse, publicResponse, isPublicPath, siteLocked, base64Url, ownerSession } from "./auth.ts";
 import type { PinEnv } from "./auth.ts";
 import { recipeFromHtml } from "./recipe-jsonld.ts";
 import { handleProRequest, activeLicenceHash } from "./pro.ts";
@@ -959,7 +959,7 @@ export default {
     const response = await site.fetch(request, env);
     // Public tool pages are meant to be found and cached; only the owner's
     // private pages and every gate response carry noindex + no-store.
-    if (isPublicPath(new URL(request.url).pathname) && !(await ownerSession(request, env))) return publicResponse(response);
+    if ((!siteLocked(env) || isPublicPath(new URL(request.url).pathname)) && !(await ownerSession(request, env))) return publicResponse(response);
     return privateResponse(response);
   },
 };

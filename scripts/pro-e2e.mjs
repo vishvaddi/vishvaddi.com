@@ -54,7 +54,7 @@ try {
   )
 
   await publicPage.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' })
-  check('Pro: [data-private] is hidden without the owner marker', (await publicPage.locator('a[href="/feeds"][data-private]').isHidden()))
+  check('Pro: [data-private] is hidden without the owner marker', (await publicPage.locator('footer a[href="/logout"][data-private]').isHidden()))
 
   // ── owner: always Pro, marker cookie set before first paint ──
   const ownerCtx = await browser.newContext({ viewport: { width: 390, height: 844 } })
@@ -64,7 +64,7 @@ try {
   ownerPage.on('pageerror', (error) => errors.push(String(error)))
 
   await ownerPage.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' })
-  check('Pro: [data-private] is visible with the owner marker', (await ownerPage.locator('a[href="/feeds"][data-private]').isVisible()))
+  check('Pro: [data-private] is visible with the owner marker', (await ownerPage.locator('footer a[href="/logout"][data-private]').isVisible()))
 
   await ownerPage.goto(`${BASE}/site/cut-list/`, { waitUntil: 'domcontentloaded' })
   await ownerPage.waitForSelector('#export-project:not([hidden])')
