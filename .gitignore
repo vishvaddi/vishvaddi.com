@@ -38,3 +38,4 @@ pnpm-debug.log*
 
 # agent worktrees (Claude Code)
 .claude/worktrees/
+__pycache__/

@@ -22,9 +22,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     process.exitCode = runSteps([
       [process.execPath, '--test', 'scripts/release-check.test.mjs'],
       [process.execPath, '--experimental-strip-types', '--test', 'scripts/auth.test.mjs'],
+      [process.execPath, '--experimental-strip-types', '--test', 'scripts/store-api.test.mjs', 'scripts/training-model.test.mjs', 'scripts/albums-model.test.mjs', 'scripts/voice-text.test.mjs'],
       [process.execPath, npm, 'run', 'check'],
       [process.execPath, npm, 'run', 'build'],
       [process.execPath, 'scripts/feature-upgrades-e2e.mjs', 'dist'],
+      [process.execPath, 'scripts/life-e2e.mjs', 'dist'],
       [process.execPath, 'scripts/audio-tools-e2e.mjs', 'dist'],
       [process.execPath, 'scripts/studio-e2e.mjs', 'dist'],
     ], { cwd: fileURLToPath(new URL('../', import.meta.url)) })
