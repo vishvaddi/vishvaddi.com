@@ -585,3 +585,11 @@
 - Validation: 10 auth tests (forgery, expiry, secret rotation, direct routes, fail-closed errors, concurrent/persisted/global limits, logout, cache retirement); full `npm run release:check` passed; explicit Worker tsc passed. Local Wrangler HTTPS smoke with dummy credentials passed actual Durable Object throttling, anonymous page/API/asset blocking, authenticated assets, cache headers, logout and the retirement script.
 - `npm audit --omit=dev`: 5 pre-existing advisories (Astro critical; js-yaml, sharp, smol-toml, svgo high); no dependencies changed. Browser visual verification unavailable in this session.
 - Production unchanged. Release still requires explicit deploy authorisation, secret setup, a build/deploy from the clean pushed commit and live anonymous plus owner-login checks. The original untracked Lattice brief and Python cache were preserved.
+
+
+## 2026-09-14 - PIN gate deployed
+
+- User explicitly requested deployment. Built and reran all 10 auth tests in a clean detached worktree of pushed commit `db2ed45`; deployed Cloudflare version `27e4126b-5a73-409d-a2ae-2273c5043f62`. Deployment checkout remains clean.
+- Owner chose the PIN in a local masked-entry window. The local PIN and generated random session key live only in the canonical credential store; both were sent through stdin to Worker secrets, without appearing in chat or tracked files.
+- Live verification passed anonymous page/API/asset denial, browser redirect to `/login`, public cache-retirement script, owner login, authenticated homepage/site/studio/script access, private no-store headers and logout. Anonymous `www` and `workers.dev` access also returned 401. Cloudflare rejected Python's default user agent with 403; the smoke passed using a browser-style user agent.
+- Existing main-checkout untracked Lattice brief and Python cache preserved. Five existing dependency advisories remain separate work. This entry records the release without changing the deployed application code.
