@@ -103,6 +103,7 @@ async function handleTts(request: Request, env: Env, url: URL): Promise<Response
 }
 
 const DEEP_SWARM_SAVE_LIMIT = 1_000_000;
+const SITE_STORE_LIMIT = 2_000_000;
 async function sha256(value: string): Promise<string> {
   return base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))));
 }
@@ -407,6 +408,56 @@ const site = {
     }
 
     if (path === "/api/tts") return handleTts(request, env, url);
+
+    // Personal-tool sync (src/scripts/site/store.ts). The PIN gate in front of
+    // this handler is the auth; revision numbers stop two devices clobbering
+    // each other. Same-origin only, like the Deep Swarm saves.
+    const storeMatch = path.match(/^\/api\/store\/([a-z0-9_-]{1,40})$/);
+    if (path.startsWith("/api/store/") && !storeMatch) return Response.json({ error: "bad key" }, { status: 404 });
+    if (storeMatch) {
+      const key = storeMatch[1];
+      const headers = { "Cache-Control": "no-store", "Content-Type": "application/json" };
+      if (!env.DEEP_SWARM_DB) return Response.json({ error: "sync unavailable" }, { status: 503, headers });
+      const origin = request.headers.get("Origin");
+      if (origin && origin !== url.origin) return Response.json({ error: "origin rejected" }, { status: 403, headers });
+      const db = env.DEEP_SWARM_DB;
+      const row = await db.prepare("SELECT revision, json, updated_at FROM site_store WHERE key = ?")
+        .bind(key).first<{ revision: number; json: string; updated_at: number }>();
+
+      if (request.method === "GET") {
+        if (!row) return Response.json({ error: "not found" }, { status: 404, headers });
+        return Response.json({ revision: row.revision, updatedAt: row.updated_at, doc: JSON.parse(row.json) }, { headers });
+      }
+      if (request.method === "PUT") {
+        const raw = await request.text();
+        if (raw.length > SITE_STORE_LIMIT) return Response.json({ error: "document too large" }, { status: 413, headers });
+        let body: { revision?: number; doc?: unknown };
+        try { body = JSON.parse(raw) as { revision?: number; doc?: unknown }; } catch { return Response.json({ error: "invalid json" }, { status: 400, headers }); }
+        if (!body.doc || typeof body.doc !== "object" || typeof (body.doc as { version?: unknown }).version !== "number") {
+          return Response.json({ error: "invalid document" }, { status: 400, headers });
+        }
+        const now = Date.now();
+        const json = JSON.stringify(body.doc);
+        if (!row) {
+          if (body.revision && body.revision !== 0) return Response.json({ error: "conflict", revision: 0 }, { status: 409, headers });
+          await db.prepare("INSERT INTO site_store (key, revision, json, updated_at) VALUES (?, 1, ?, ?)").bind(key, json, now).run();
+          return Response.json({ revision: 1, updatedAt: now }, { status: 201, headers });
+        }
+        if (body.revision !== row.revision) {
+          return Response.json({ error: "conflict", revision: row.revision, updatedAt: row.updated_at }, { status: 409, headers });
+        }
+        const revision = row.revision + 1;
+        const result = await db.prepare("UPDATE site_store SET revision = ?, json = ?, updated_at = ? WHERE key = ? AND revision = ?")
+          .bind(revision, json, now, key, row.revision).run();
+        if (!result.success || result.meta?.changes !== 1) return Response.json({ error: "conflict", revision: row.revision }, { status: 409, headers });
+        return Response.json({ revision, updatedAt: now }, { headers });
+      }
+      if (request.method === "DELETE") {
+        await db.prepare("DELETE FROM site_store WHERE key = ?").bind(key).run();
+        return new Response(null, { status: 204, headers });
+      }
+      return Response.json({ error: "method not allowed" }, { status: 405, headers });
+    }
 
     if (path.startsWith("/api/deep-swarm/")) {
       if (!env.DEEP_SWARM_DB) return Response.json({ error: "cloud save unavailable" }, { status: 503 });

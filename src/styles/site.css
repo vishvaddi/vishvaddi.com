@@ -349,3 +349,9 @@
 .blueprint .seg-toggle a + a { border-left: 1px solid var(--rule); }
 .blueprint .seg-toggle a:hover { color: var(--fg); }
 .blueprint .seg-toggle a.active { background: var(--fg); color: var(--bg); font-weight: 600; }
+
+/* Shared export / import / sync strip for the personal tools (store.ts). */
+.store-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 0.75rem 0 1.25rem; }
+.store-controls label.btn { cursor: pointer; }
+.store-sync { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--font-sans); font-size: 0.85rem; cursor: pointer; }
+.store-status { font: 0.72rem var(--font-mono); color: var(--muted); }
