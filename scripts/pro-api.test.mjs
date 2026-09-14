@@ -11,6 +11,7 @@ function fakeD1() {
   const store = new Map()
   const licences = new Map()
   const events = new Map()
+  const freeUses = new Map()
   const byStripeSub = (sub) => [...licences.values()].find((row) => row.stripe_subscription === sub)
 
   const prepare = (sql) => ({
@@ -34,6 +35,9 @@ function fakeD1() {
         }
         if (sql === 'SELECT event_id FROM pro_events WHERE event_id = ?') {
           return events.has(args[0]) ? { event_id: args[0] } : null
+        }
+        if (sql === 'SELECT count, window_start FROM free_uses WHERE bucket = ?') {
+          const row = freeUses.get(args[0]); return row ? { ...row } : null
         }
         throw new Error(`fakeD1: unexpected first(): ${sql}`)
       },
@@ -96,11 +100,19 @@ function fakeD1() {
           const row = byStripeSub(args[1]); if (row) Object.assign(row, { status: 'past_due', updated_at: args[0] })
           return { success: true, meta: { changes: row ? 1 : 0 } }
         }
+        if (sql === 'INSERT INTO free_uses (bucket, count, window_start) VALUES (?, ?, ?)') {
+          freeUses.set(args[0], { count: args[1], window_start: args[2] })
+          return { success: true, meta: { changes: 1 } }
+        }
+        if (sql === 'UPDATE free_uses SET count = ?, window_start = ? WHERE bucket = ?') {
+          const row = freeUses.get(args[2]); if (row) Object.assign(row, { count: args[0], window_start: args[1] })
+          return { success: true, meta: { changes: row ? 1 : 0 } }
+        }
         throw new Error(`fakeD1: unexpected run(): ${sql}`)
       },
     }),
   })
-  return { prepare, store, licences, events }
+  return { prepare, store, licences, events, freeUses }
 }
 
 function setup() {
@@ -131,6 +143,21 @@ const request = (path, options = {}) => new Request(`https://example.com${path}`
 const jsonPost = (path, body, headers = {}) => new Request(`https://example.com${path}`, {
   method: 'POST', headers: { Origin: 'https://example.com', 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body),
 })
+const useRequest = (feature, headers = {}) => jsonPost('/api/pro/use', { feature }, headers)
+
+function extractAnonCookie(response) {
+  const raw = response.headers.get('Set-Cookie') || ''
+  const match = raw.match(/__Host-anon=([^;,]+)/)
+  return match ? `__Host-anon=${match[1]}` : null
+}
+
+// Mirrors worker/pro.ts's hmacBase64Url (same keyFor formula) so tests can
+// seed/derive the IP bucket key without exercising the handler first.
+async function hmacBase64Url(env, value) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(`${env.SESSION_SECRET}:${env.SITE_PIN}`), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(value))
+  return base64Url(new Uint8Array(signature))
+}
 
 async function login(env) {
   const res = await worker.fetch(new Request('https://example.com/login', {
@@ -168,14 +195,14 @@ test('PUBLIC_PATHS: /site/ falls through without a session, /kitchen/ and /api/s
 
 test('status: unconfigured/configured, owner, and Pro licence', async () => {
   const { env, db } = setup()
-  assert.deepEqual(await (await worker.fetch(request('/api/pro/status'), env)).json(), { pro: false, source: null, configured: false })
+  assert.deepEqual(await (await worker.fetch(request('/api/pro/status'), env)).json(), { pro: false, source: null, configured: false, freeRemaining: 3 })
 
   const configuredEnv = { ...env, ...CONFIGURED }
-  assert.deepEqual(await (await worker.fetch(request('/api/pro/status'), configuredEnv)).json(), { pro: false, source: null, configured: true })
+  assert.deepEqual(await (await worker.fetch(request('/api/pro/status'), configuredEnv)).json(), { pro: false, source: null, configured: true, freeRemaining: 3 })
 
   const sessionCookie = await login(configuredEnv)
   const ownerStatus = await worker.fetch(request('/api/pro/status', { headers: { Cookie: sessionCookie } }), configuredEnv)
-  assert.deepEqual(await ownerStatus.json(), { pro: true, source: 'owner', configured: true })
+  assert.deepEqual(await ownerStatus.json(), { pro: true, source: 'owner', configured: true, freeRemaining: null })
 
   const rawKey = 'VV-DDDD-EEEE-FFFF'
   const hash = await sha256(rawKey)
@@ -183,7 +210,7 @@ test('status: unconfigured/configured, owner, and Pro licence', async () => {
   const restored = await worker.fetch(jsonPost('/api/pro/restore', { key: rawKey }, { 'CF-Connecting-IP': '198.51.100.1' }), configuredEnv)
   const proCookie = restored.headers.get('Set-Cookie').split(';')[0]
   const licenceStatus = await worker.fetch(request('/api/pro/status', { headers: { Cookie: proCookie } }), configuredEnv)
-  assert.deepEqual(await licenceStatus.json(), { pro: true, source: 'licence', plan: 'month', periodEnd: 1888888888, configured: true })
+  assert.deepEqual(await licenceStatus.json(), { pro: true, source: 'licence', plan: 'month', periodEnd: 1888888888, configured: true, freeRemaining: null })
 })
 
 test('checkout: 503 unconfigured, 400 bad plan, 403 bad origin, 200 with a session url when configured', async () => {
@@ -336,4 +363,71 @@ test('/api/store/<key>: owner keeps a plain key, a Pro cookie gets a namespaced 
   assert.equal(proDelete.status, 204)
   assert.ok(!db.store.has(`pro:${hash}:cutlist`))
   assert.ok(db.store.has('cutlist')) // the owner's own row is untouched by the Pro customer's delete
+})
+
+test('free quota: three uses allowed, the fourth is blocked, and owner/Pro bypass entirely', async () => {
+  const { env, db } = setup()
+
+  let cookie
+  for (let i = 0; i < 3; i++) {
+    const res = await worker.fetch(useRequest('pdf-export', cookie ? { Cookie: cookie } : {}), env)
+    assert.equal(res.status, 200)
+    assert.deepEqual(await res.json(), { allowed: true, remaining: 2 - i })
+    cookie = cookie || extractAnonCookie(res)
+  }
+  assert.ok(cookie)
+
+  const fourth = await worker.fetch(useRequest('pdf-export', { Cookie: cookie }), env)
+  assert.equal(fourth.status, 402)
+  const fourthBody = await fourth.json()
+  assert.equal(fourthBody.allowed, false)
+  assert.equal(fourthBody.remaining, 0)
+  assert.ok(fourthBody.resetsAt > Math.floor(Date.now() / 1000))
+
+  const sessionCookie = await login(env)
+  assert.deepEqual(await (await worker.fetch(useRequest('pdf-export', { Cookie: sessionCookie }), env)).json(), { allowed: true, pro: true })
+
+  const rawKey = 'VV-FREE-0001-0002'
+  const hash = await sha256(rawKey)
+  seedLicence(db, { hash, subscription: 'sub_free_1', plan: 'year', status: 'active' })
+  const restored = await worker.fetch(jsonPost('/api/pro/restore', { key: rawKey }, { 'CF-Connecting-IP': '203.0.113.9' }), env)
+  const proCookie = restored.headers.get('Set-Cookie').split(';')[0]
+  assert.deepEqual(await (await worker.fetch(useRequest('pdf-export', { Cookie: proCookie }), env)).json(), { allowed: true, pro: true })
+})
+
+test('free quota: the IP bucket blocks a fresh anon cookie once the IP itself is exhausted', async () => {
+  const { env } = setup()
+  const ip = '198.51.100.77'
+  for (let i = 0; i < 3; i++) {
+    const res = await worker.fetch(useRequest('pdf-export', { 'CF-Connecting-IP': ip }), env)
+    assert.equal(res.status, 200) // each call has no Cookie, so it's a genuinely fresh anon id sharing one IP
+  }
+  const blocked = await worker.fetch(useRequest('pdf-export', { 'CF-Connecting-IP': ip }), env)
+  assert.equal(blocked.status, 402)
+  assert.deepEqual((await blocked.json()).allowed, false)
+})
+
+test('free quota: a window older than 30 days resets the bucket instead of blocking it', async () => {
+  const { env, db } = setup()
+  const ip = '203.0.113.44'
+  const bucket = `ip:${await hmacBase64Url(env, ip)}`
+  db.freeUses.set(bucket, { count: 3, window_start: Date.now() - 31 * 24 * 3600 * 1000 })
+
+  const res = await worker.fetch(useRequest('pdf-export', { 'CF-Connecting-IP': ip }), env)
+  assert.equal(res.status, 200)
+  assert.deepEqual(await res.json(), { allowed: true, remaining: 2 })
+  assert.equal(db.freeUses.get(bucket).count, 1)
+})
+
+test('free quota: a cookie with a bad signature is ignored and replaced', async () => {
+  const { env } = setup()
+  const forgedId = base64Url(crypto.getRandomValues(new Uint8Array(16)))
+  const forged = `__Host-anon=${forgedId}.${'A'.repeat(43)}`
+
+  const res = await worker.fetch(useRequest('pdf-export', { Cookie: forged }), env)
+  assert.equal(res.status, 200)
+  assert.deepEqual(await res.json(), { allowed: true, remaining: 2 })
+  const setCookie = res.headers.get('Set-Cookie') || ''
+  assert.match(setCookie, /__Host-anon=/)
+  assert.ok(!setCookie.includes(forgedId)) // the forged id is discarded, not reused
 })

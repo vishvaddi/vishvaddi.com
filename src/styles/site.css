@@ -269,6 +269,8 @@
   color: var(--muted); font-size: 0.8rem; cursor: pointer;
 }
 .pro-upsell-note { font-size: 0.9rem; color: var(--muted); }
+/* One-line note left under the anchor after an allowed free-quota use. */
+.pro-free-note { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--muted); }
 
 /* calculation notepad */
 .notepad-help {

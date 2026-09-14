@@ -16,6 +16,7 @@ export interface ProStatus {
   plan?: "year" | "month";
   periodEnd?: number;
   configured: boolean;
+  freeRemaining?: number | null;
 }
 
 function cookie(name: string): string | null {
@@ -162,24 +163,7 @@ function buildRestoreForm(onSuccess: () => void): HTMLDetailsElement {
   return details;
 }
 
-function featureLabel(feature: string): string {
-  return feature.replace(/-/g, " ");
-}
-
-/** Runs `run` unchanged for Pro/owner; otherwise shows an inline upsell next to `anchor`. */
-export function requirePro(feature: string, run: () => void, anchor: HTMLElement): void {
-  if (proState().pro) {
-    run();
-    return;
-  }
-  const host = anchor.parentElement;
-  const existing = host?.querySelector<HTMLElement>(`.pro-upsell[data-feature="${feature}"]`);
-  if (existing) {
-    existing.remove();
-    return; // second click on the same button just closes the panel
-  }
-  host?.querySelectorAll(".pro-upsell").forEach((panel) => panel.remove());
-
+function buildUpsellPanel(feature: string, heading: string, onRestored: () => void): HTMLDivElement {
   const panel = document.createElement("div");
   panel.className = "pro-upsell";
   panel.id = "pro-upsell";
@@ -187,7 +171,7 @@ export function requirePro(feature: string, run: () => void, anchor: HTMLElement
 
   const lede = document.createElement("p");
   lede.className = "pro-upsell-lede";
-  lede.textContent = `${featureLabel(feature)} is a Pro feature. Every tool here stays free and unlimited — Pro adds exports, saves and sync.`;
+  lede.textContent = heading;
   panel.append(lede);
 
   if (proState().configured === false) {
@@ -200,12 +184,7 @@ export function requirePro(feature: string, run: () => void, anchor: HTMLElement
     plans.className = "pro-upsell-plans";
     plans.append(planButton("year", "Pro — A$39 / year"), planButton("month", "A$5 / month"));
     panel.append(plans);
-    panel.append(
-      buildRestoreForm(() => {
-        panel.remove();
-        run();
-      }),
-    );
+    panel.append(buildRestoreForm(onRestored));
   }
 
   const dismiss = document.createElement("button");
@@ -214,8 +193,67 @@ export function requirePro(feature: string, run: () => void, anchor: HTMLElement
   dismiss.textContent = "Not now";
   dismiss.addEventListener("click", () => panel.remove());
   panel.append(dismiss);
+  return panel;
+}
 
-  anchor.insertAdjacentElement("afterend", panel);
+function showFreeUseNote(anchor: HTMLElement, feature: string, remaining: number): void {
+  const host = anchor.parentElement;
+  host?.querySelector<HTMLElement>(`.pro-free-note[data-feature="${feature}"]`)?.remove();
+  const left = Math.max(0, remaining);
+  const note = document.createElement("p");
+  note.className = "pro-free-note";
+  note.dataset.feature = feature;
+  note.textContent = `${left} free export${left === 1 ? "" : "s"} left this month — Pro removes the limit`;
+  anchor.insertAdjacentElement("afterend", note);
+}
+
+/**
+ * Runs `run` unchanged for Pro/owner. Otherwise calls POST /api/pro/use first:
+ * allowed (within the free quota) runs `run` and leaves a one-line note next
+ * to `anchor`; blocked (402) or a network error (fail closed) shows the inline
+ * upsell panel instead — never a modal, never `alert`.
+ */
+export function requirePro(feature: string, run: () => void, anchor: HTMLElement): void {
+  if (proState().pro) {
+    run();
+    return;
+  }
+  const host = anchor.parentElement;
+  const existingPanel = host?.querySelector<HTMLElement>(`.pro-upsell[data-feature="${feature}"]`);
+  if (existingPanel) {
+    existingPanel.remove();
+    return; // second click on the same button just closes the panel
+  }
+  host?.querySelectorAll(".pro-upsell").forEach((panel) => panel.remove());
+  host?.querySelector<HTMLElement>(`.pro-free-note[data-feature="${feature}"]`)?.remove();
+
+  const showPanel = (heading: string) => {
+    anchor.insertAdjacentElement(
+      "afterend",
+      buildUpsellPanel(feature, heading, () => {
+        host?.querySelector<HTMLElement>(`.pro-upsell[data-feature="${feature}"]`)?.remove();
+        run();
+      }),
+    );
+  };
+
+  fetch("/api/pro/use", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ feature }),
+  })
+    .then((res) => res.json() as Promise<{ allowed?: boolean; remaining?: number; pro?: boolean }>)
+    .then((body) => {
+      if (body.allowed) {
+        run();
+        if (!body.pro && typeof body.remaining === "number") showFreeUseNote(anchor, feature, body.remaining);
+        return;
+      }
+      showPanel("You've used your 3 free exports this month");
+    })
+    .catch(() => {
+      showPanel("Couldn't check your free uses — try again.");
+    });
 }
 
 /** Mounts the buttons/restore/owner-note block used by the /pro page. */
