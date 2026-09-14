@@ -66,7 +66,8 @@ function page(message = "Enter your six-digit PIN to continue.", status = 200, l
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
-      "Referrer-Policy": "no-referrer",
+      // no-referrer makes native form POSTs send Origin: null, failing the CSRF check.
+      "Referrer-Policy": "same-origin",
     },
   });
 }

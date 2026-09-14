@@ -2,6 +2,8 @@
 
 ## 2026-09-14 - Private PIN gate deployed
 
+Native browser login/logout fix: auth pages use `Referrer-Policy: same-origin` so form submissions retain Origin. Real desktop/mobile Chrome regression added; all 11 auth tests pass. The previous manually headed HTTP smoke did not cover this browser behaviour.
+
 Six-digit server-side PIN protection now covers every page, asset and API through Worker-first routing. Seven-day signed cookies, PIN/key rotation invalidation, same-origin login/logout and a transactional Durable Object limiter (5 attempts/IP/15 minutes; 20/site/hour) fail closed. Offline precaching is retired; saved tool data is preserved. Deployed from clean pushed commit `db2ed45` as Cloudflare version `27e4126b-5a73-409d-a2ae-2273c5043f62`. The owner chose the PIN in a local masked-entry window; both production Worker secrets are configured.
 
 Validation: full release suite, 10 auth tests, Worker TypeScript and local Wrangler HTTPS smoke passed. Live owner login, protected pages/assets, logout, browser redirect and anonymous blocking on the primary, www and workers.dev hosts passed. Dependency audit reports 5 existing production advisories (1 critical, 4 high); dependency remediation remains separate.

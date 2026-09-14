@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import vm from 'node:vm'
+import { chromium } from 'playwright-core'
 import worker from '../worker/index.ts'
 import { PinAttempts, pinGate } from '../worker/auth.ts'
 
@@ -71,6 +72,10 @@ test('invalid PINs, cross-origin forms and oversized streamed bodies cannot log 
     assert.equal((await worker.fetch(login(pin), env)).status, 401)
   }
   assert.equal((await worker.fetch(login('012345', { Origin: 'https://evil.example' }), env)).status, 403)
+  assert.equal((await worker.fetch(login('012345', { Origin: 'null' }), env)).status, 403)
+  const noOrigin = login()
+  noOrigin.headers.delete('Origin')
+  assert.equal((await worker.fetch(noOrigin, env)).status, 403)
   assert.equal((await worker.fetch(login('012345', { 'Content-Type': 'application/json' }), env)).status, 415)
   const fresh = setup()
   assert.equal((await worker.fetch(login('1'.repeat(129)), fresh.env)).status, 413)
@@ -135,6 +140,42 @@ test('login is self-contained, uncached and never includes credentials', async (
   assert.doesNotMatch(html, new RegExp(`${env.SITE_PIN}|${env.SESSION_SECRET}`))
   assert.match(response.headers.get('Content-Security-Policy'), /frame-ancestors 'none'/)
   assert.equal(response.headers.get('Cache-Control'), 'private, no-store')
+})
+
+test('browser form submissions preserve the origin for login and logout', async () => {
+  const browser = await chromium.launch({ channel: 'chrome', headless: true })
+  try {
+    for (const isMobile of [false, true]) {
+      const { env } = setup()
+      const context = await browser.newContext({ isMobile, hasTouch: isMobile })
+      await context.route('https://example.com/**', async (route) => {
+        const incoming = route.request()
+        const response = await worker.fetch(new Request(incoming.url(), {
+          method: incoming.method(), headers: await incoming.allHeaders(), body: incoming.postDataBuffer(),
+        }), env)
+        await route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) })
+      })
+      const page = await context.newPage()
+      await page.goto('https://example.com/login')
+      await page.getByLabel('Six-digit PIN').fill(env.SITE_PIN)
+      const [loginResponse] = await Promise.all([
+        page.waitForResponse((res) => res.request().method() === 'POST'),
+        page.getByRole('button', { name: 'Unlock', exact: true }).click(),
+      ])
+      assert.equal(loginResponse.status(), 303, `Browser login rejected; Origin=${await loginResponse.request().headerValue('origin')}`)
+      await page.waitForURL('https://example.com/')
+      assert.equal(await page.locator('body').innerText(), 'private asset')
+      await page.goto('https://example.com/logout')
+      const [logoutResponse] = await Promise.all([
+        page.waitForResponse((res) => res.request().method() === 'POST'),
+        page.getByRole('button', { name: 'Lock site', exact: true }).click(),
+      ])
+      assert.equal(logoutResponse.status(), 303)
+      await page.waitForURL('https://example.com/login')
+      assert.equal((await context.cookies()).some((entry) => entry.name === '__Host-site-session'), false)
+      await context.close()
+    }
+  } finally { await browser.close() }
 })
 
 test('retirement worker is public and removes only old content caches', async () => {

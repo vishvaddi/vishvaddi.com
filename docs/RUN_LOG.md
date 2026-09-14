@@ -593,3 +593,8 @@
 - Owner chose the PIN in a local masked-entry window. The local PIN and generated random session key live only in the canonical credential store; both were sent through stdin to Worker secrets, without appearing in chat or tracked files.
 - Live verification passed anonymous page/API/asset denial, browser redirect to `/login`, public cache-retirement script, owner login, authenticated homepage/site/studio/script access, private no-store headers and logout. Anonymous `www` and `workers.dev` access also returned 401. Cloudflare rejected Python's default user agent with 403; the smoke passed using a browser-style user agent.
 - Existing main-checkout untracked Lattice brief and Python cache preserved. Five existing dependency advisories remain separate work. This entry records the release without changing the deployed application code.
+
+
+## 2026-09-14 - Fix native PIN form Origin rejection
+
+The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Origin: null` for native form POSTs. The initial HTTP smoke supplied Origin manually and missed the failure. Changed the auth page policy to `same-origin`; the strict login/logout origin checks remain unchanged. A real headless Chrome regression reproduces the original 403 and now passes desktop/mobile native login and logout; null, missing and cross-site origins remain rejected. All 11 authentication tests and Worker TypeScript pass. PIN and session secrets unchanged.
