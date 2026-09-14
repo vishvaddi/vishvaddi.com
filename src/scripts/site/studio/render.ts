@@ -12,6 +12,7 @@ import * as engine from "./engine";
 import { playNote } from "./vsynth";
 import { projectState, applyProject, saveAll } from "./persistence";
 import { el, btn, help, download, encodeWav, encodeMp3, dataUrlToBytes } from "./helpers";
+import { requirePro } from "../pro";
 import { ctx } from "./ctx";
 import { buildMidi } from "./midiexport";
 
@@ -163,7 +164,7 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
       setTimeout(() => { if (expStatus.textContent === "Saved ✓") expStatus.textContent = ""; }, 2500);
     }
   }
-  wavBtn.addEventListener("click", () => doExport("wav"));
+  wavBtn.addEventListener("click", () => doExport("wav")); // WAV master export stays free
   midiBtn.addEventListener("click", () => {
     try {
       const { bytes, summary } = buildMidi(renderSel.value as "pattern" | "song");
@@ -172,15 +173,16 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
       expStatus.textContent = `MIDI saved — ${total} notes over ${summary.bars} bar${summary.bars === 1 ? "" : "s"}.`;
     } catch { expStatus.textContent = "MIDI export failed."; }
   });
-  mp3Btn.addEventListener("click", () => doExport("mp3"));
-  stemsBtn.addEventListener("click", async () => {
+  mp3Btn.addEventListener("click", () => requirePro("studio-mp3-export", () => doExport("mp3"), mp3Btn));
+  async function doStemsExport(): Promise<void> {
     stemsBtn.setAttribute("disabled", "1"); expStatus.textContent = "Rendering stems…";
     try {
       for (const track of TRACKS) download(`vishamp-${track}-${transport.bpm}bpm.wav`, encodeWav(await renderBuffer(renderSel.value as "pattern" | "song", track)));
       expStatus.textContent = "Stems saved ✓";
     } catch { expStatus.textContent = "Stem export failed."; }
     finally { stemsBtn.removeAttribute("disabled"); }
-  });
+  }
+  stemsBtn.addEventListener("click", () => requirePro("studio-stem-export", () => void doStemsExport(), stemsBtn));
   saveProjectBtn.addEventListener("click", () => {
     download(`vishamp-project-${transport.bpm}bpm.json`, new Blob([JSON.stringify(projectState())], { type: "application/json" }));
   });

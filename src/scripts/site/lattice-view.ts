@@ -20,6 +20,9 @@ export interface LatticeAdapter {
   /** optional hook: hand a file to the user. Hosts where <a download> is a
    *  silent no-op (Capacitor WebView) must supply this; browsers can omit it. */
   saveFile?(blob: Blob, name: string): void
+  /** optional hook: gate a paid feature. Hosts without a paywall omit it and
+   *  `run` executes unconditionally. */
+  requirePro?(feature: string, run: () => void, anchor: HTMLElement): void
 }
 
 const COLLAPSE_DEPTH = 2
@@ -825,18 +828,23 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
       dl.className = 'lat-tb'
       dl.textContent = 'download JSON'
       dl.addEventListener('click', () => {
-        if (!sheet) return
-        const blob = new Blob([JSON.stringify(sheet, null, 2)], { type: 'application/json' })
-        const name = `${sheet.title.replace(/[^\w\- ]+/g, '')}.lattice.json`
-        if (adapter.saveFile) {
-          adapter.saveFile(blob, name)
-        } else {
-          const a = document.createElement('a')
-          a.href = URL.createObjectURL(blob)
-          a.download = name
-          a.click()
-          URL.revokeObjectURL(a.href)
+        const snapshot = sheet
+        if (!snapshot) return
+        const doDownload = () => {
+          const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
+          const name = `${snapshot.title.replace(/[^\w\- ]+/g, '')}.lattice.json`
+          if (adapter.saveFile) {
+            adapter.saveFile(blob, name)
+          } else {
+            const a = document.createElement('a')
+            a.href = URL.createObjectURL(blob)
+            a.download = name
+            a.click()
+            URL.revokeObjectURL(a.href)
+          }
         }
+        if (adapter.requirePro) adapter.requirePro('lattice-export', doDownload, menu)
+        else doDownload()
         menu.remove()
       })
       menu.appendChild(dl)

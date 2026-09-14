@@ -41,12 +41,14 @@ const navPrimary: [string, string][] = [
 ];
 // "More" is grouped so the menu reads as a map, not a list. /music is the
 // listening log, so it is labelled by what it is to avoid two "Music" entries.
-const navMoreGroups: { label: string | null; links: [string, string][] }[] = [
+// Life/Read/Logs are the owner-only groups (PIN as always); chrome.js hides
+// [data-private] for anyone without the vv_owner marker cookie.
+const navMoreGroups: { label: string | null; links: [string, string][]; private?: boolean }[] = [
   { label: "Music", links: [["/studio", "Studio"], ["/audio", "Audio tools"], ["/radio", "Radio"]] },
-  { label: "Read", links: [["/notes", "Notes"], ["/reader", "Reader"], ["/feeds", "Feeds"]] },
-  { label: "Life", links: [["/kitchen", "Kitchen"], ["/money", "Money"], ["/training", "Training"]] },
-  { label: "Logs", links: [["/music", "Listening"], ["/tv", "TV"], ["/movies", "Movies"], ["/books", "Books"]] },
-  { label: null, links: [["/games", "Games"], ["/about", "About"], ["/logout", "Lock site"]] },
+  { label: "Read", links: [["/notes", "Notes"], ["/reader", "Reader"], ["/feeds", "Feeds"]], private: true },
+  { label: "Life", links: [["/kitchen", "Kitchen"], ["/money", "Money"], ["/training", "Training"]], private: true },
+  { label: "Logs", links: [["/music", "Listening"], ["/tv", "TV"], ["/movies", "Movies"], ["/books", "Books"]], private: true },
+  { label: null, links: [["/games", "Games"], ["/pro", "Pro"], ["/about", "About"], ["/logout", "Lock site"]] },
 ];
 const navMore: [string, string][] = navMoreGroups.flatMap((group) => group.links);
 const pathOnly = (href: string) => href.split("#")[0].split("?")[0].replace(/\/$/, "") || "/";
@@ -111,10 +113,10 @@ const updatedFmt = updatedDate
             <summary class={moreActive ? "active" : ""}>More</summary>
             <div class="nav-more-menu">
               {navMoreGroups.map((group) => (
-                <div class="nav-more-group">
+                <div class="nav-more-group" data-private={group.private ? "" : undefined}>
                   {group.label && <span class="nav-more-label">{group.label}</span>}
                   {group.links.map(([href, label]) => (
-                    <a href={href} class={isActive(href) ? "active" : ""}>{label}</a>
+                    <a href={href} class={isActive(href) ? "active" : ""} data-private={href === "/logout" ? "" : undefined}>{label}</a>
                   ))}
                 </div>
               ))}
@@ -213,7 +215,7 @@ const updatedFmt = updatedDate
       <p style="font-size: 0.875rem; color: var(--muted);">
         © {new Date().getFullYear()} Vish Vaddi · Sydney ·
         <a href="mailto:vishvaddi@gmail.com">vishvaddi@gmail.com</a> ·
-        <a href="/privacy">Privacy</a> · <a href="/logout">Lock site</a>
+        <a href="/privacy">Privacy</a> · <a href="/logout" data-private>Lock site</a>
       </p>
     </footer>}
     <script src="/scripts/chrome.js" defer></script>

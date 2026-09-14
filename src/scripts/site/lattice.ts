@@ -3,6 +3,7 @@
 // persistence and the toast implementation.
 import type { LatticeSheet } from './lattice-model'
 import { createLatticeView } from './lattice-view'
+import { requirePro } from './pro'
 
 const LS_KEY = 'lattice_sheets_v1'
 
@@ -32,5 +33,5 @@ function toast(msg: string): void {
 }
 
 export function initLattice(el: HTMLElement): void {
-  createLatticeView(el, { loadAll, persist, remove, toast })
+  createLatticeView(el, { loadAll, persist, remove, toast, requirePro })
 }

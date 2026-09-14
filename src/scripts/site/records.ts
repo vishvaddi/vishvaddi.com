@@ -3,6 +3,7 @@
 // shares one add/edit/delete/export engine. Stored in localStorage only; CSP
 // clean (all output via textContent, never innerHTML of user data).
 import { download, auFmt } from "./calc";
+import { requirePro } from "./pro";
 
 type FieldType = "text" | "number" | "date" | "textarea" | "select";
 interface Field { key: string; label: string; type: FieldType; options?: string[] }
@@ -189,7 +190,7 @@ export function initRecords(): void {
     const exportBtn = mk("button", "btn btn-ghost btn-sm") as HTMLButtonElement;
     exportBtn.type = "button";
     exportBtn.textContent = "Export CSV";
-    exportBtn.addEventListener("click", () => exportCsv(type, recs));
+    exportBtn.addEventListener("click", () => requirePro(`records-${type.id}-export`, () => exportCsv(type, recs), exportBtn));
     const clearBtn = mk("button", "btn btn-ghost btn-sm") as HTMLButtonElement;
     clearBtn.type = "button";
     clearBtn.textContent = "Clear all";

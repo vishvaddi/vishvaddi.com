@@ -1,5 +1,6 @@
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import { download } from './calc'
+import { requirePro } from './pro'
 
 interface Src { name: string; bytes: Uint8Array; pdf: any; render?: any }
 interface PageRef { id: string; src: number; page: number; rot: number; selected: boolean }
@@ -208,12 +209,16 @@ export function initPdf() {
   byId<HTMLInputElement>('pdf-compare-opacity')?.addEventListener('input', (event) => {
     const output = byId<HTMLOutputElement>('pdf-compare-opacity-out'); if (output) output.value = `${(event.target as HTMLInputElement).value}%`
   })
-  byId<HTMLButtonElement>('pdf-compare-export')?.addEventListener('click', async () => {
+  byId<HTMLButtonElement>('pdf-compare-export')?.addEventListener('click', () => {
+    const btn = byId<HTMLButtonElement>('pdf-compare-export')!
+    requirePro('pdf-compare-export', () => void exportComparison(), btn)
+  })
+  async function exportComparison() {
     if (!comparisonCanvas) return
     const L = await lib(); const out = await L.PDFDocument.create(); const png = await out.embedPng(comparisonCanvas.toDataURL('image/png'))
     const page = out.addPage([comparisonCanvas.width / 1.35, comparisonCanvas.height / 1.35]); page.drawImage(png, { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() })
     const data = await out.save(); download(`drawing-comparison-${new Date().toISOString().slice(0, 10)}.pdf`, URL.createObjectURL(new Blob([data.buffer as ArrayBuffer], { type: 'application/pdf' })))
-  })
+  }
 
   function parseRange(value: string): Set<number> {
     const found = new Set<number>()
@@ -282,7 +287,7 @@ export function initPdf() {
     finally { updateButtons() }
   }
 
-  exportBtn.addEventListener('click', () => void savePdf(pages, 'edited'))
+  exportBtn.addEventListener('click', () => requirePro('pdf-export', () => void savePdf(pages, 'edited'), exportBtn))
   byId<HTMLButtonElement>('pdf-extract')?.addEventListener('click', () => void savePdf(selected(), 'extracted'))
   byId<HTMLButtonElement>('pdf-split')?.addEventListener('click', async () => {
     const refs = selected(); if (!refs.length) return; setStatus('Splitting pages…')
