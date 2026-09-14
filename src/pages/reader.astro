@@ -256,6 +256,10 @@ import Base from "../layouts/Base.astro";
     mark.ann-pink   { background: #fbb6ce; color: inherit; border-radius: 2px; }
 
     .load-more-row { display: flex; justify-content: center; margin: 1.75rem 0 0.5rem; }
+    .open-file-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin: -1rem 0 1.25rem; }
+    .open-file-btn { font-family: var(--font-sans); font-size: 0.8125rem; padding: 0.4rem 0.75rem; border: 1px solid var(--rule); border-radius: 3px; cursor: pointer; }
+    .open-file-btn:hover { border-color: var(--fg); }
+    .open-file-opt { font-family: var(--font-sans); font-size: 0.8rem; color: var(--muted); display: inline-flex; align-items: center; gap: 0.35rem; }
     .load-more-row button {
       padding: 0.55rem 1.4rem; background: var(--code-bg); color: var(--fg);
       border: 1px solid var(--rule); border-radius: 4px; cursor: pointer;
@@ -293,6 +297,11 @@ import Base from "../layouts/Base.astro";
         </select>
         <input type="text" id="search-input" placeholder="Search Project Gutenberg…" />
         <button id="search-btn">Search</button>
+      </div>
+      <div class="open-file-row">
+        <label for="open-file-input" class="open-file-btn">Open a .txt file</label>
+        <input id="open-file-input" type="file" accept="text/plain,.txt" hidden />
+        <label class="open-file-opt"><input type="checkbox" id="open-file-clean" checked /> Clean scanned text (rejoin wrapped lines, drop page numbers and running heads)</label>
       </div>
       <div id="status" class="loading">Loading classics…</div>
       <div id="book-grid" class="book-grid"></div>
@@ -410,4 +419,5 @@ import Base from "../layouts/Base.astro";
 </Base>
 
 <script src="/scripts/site-voice.js" defer></script>
+<script src="/scripts/text-clean.js" defer></script>
 <script src="/scripts/reader.js" defer></script>

@@ -294,11 +294,11 @@ async function openBook(b) {
       || b.formats["text/plain"]
       || b.formats["text/html"]
       || "";
-    if (!textUrl) {
+    if (!textUrl && !b.localText) {
       $("left-panel").innerHTML = '<span class="error-msg">No plain text available for this book.</span>';
       return;
     }
-    var raw = await fetchBookText(textUrl);
+    var raw = b.localText || await fetchBookText(textUrl);
     currentRawText = raw;
     $("left-panel").innerHTML = '<span class="loading">Laying out pages…</span>';
     pages = await paginateText(raw);
@@ -852,6 +852,19 @@ function splitSentences(textValue) {
   return (textValue.match(/[^.!?]+(?:[.!?]+|$)/g) || []).map(function (part) { return part.trim(); }).filter(Boolean);
 }
 
+// The page's paragraphs, headings kept as their own lines, so SiteVoice can
+// put audiobook-length pauses between them (2 s chapter, 0.8 s paragraph,
+// 0.25 s on a change of speaker).
+function pageSegments(panel) {
+  if (!panel) return [];
+  var blocks = Array.from(panel.querySelectorAll("p"));
+  var text = blocks.length
+    ? blocks.map(function (p) { return p.textContent.replace(/\s+/g, " ").trim(); }).filter(Boolean).join("\n\n")
+    : panel.innerText;
+  if (!window.SiteVoice || !window.SiteVoice.segment) return splitSentences(text.replace(/\n+/g, " ")).map(function (t) { return { text: t, pauseAfter: 0 }; });
+  return window.SiteVoice.segment(text);
+}
+
 function updateTTSButton() {
   var btn = $("tts-btn");
   if (!btn) return;
@@ -872,11 +885,13 @@ function stopReadAloud() {
 function speakNextSentence() {
   if (!ttsActive || ttsPaused || !window.SiteVoice) return;
   if (ttsIndex >= ttsSentences.length) { stopReadAloud(); return; }
-  var sentence = ttsSentences[ttsIndex];
+  var seg = ttsSentences[ttsIndex];
+  var sentence = seg.text;
   var follow = $("tts-follow");
   if (follow) { follow.textContent = sentence; follow.classList.add("active"); }
   window.SiteVoice.speak(sentence, {
     rate: Number($("tts-rate").value) || 1,
+    pauseAfter: seg.pauseAfter,
     onend: function () {
       ttsIndex += 1;
       if (currentBook) localStorage.setItem("reader-tts-" + currentBook.id, currentSpread + ":" + ttsIndex);
@@ -884,7 +899,7 @@ function speakNextSentence() {
     },
     onerror: stopReadAloud
   });
-  if (ttsIndex + 1 < ttsSentences.length) window.SiteVoice.prefetch(ttsSentences[ttsIndex + 1]);
+  if (ttsIndex + 1 < ttsSentences.length) window.SiteVoice.prefetch(ttsSentences[ttsIndex + 1].text);
 }
 
 function beginReadAloud(startAt) {
@@ -893,7 +908,7 @@ function beginReadAloud(startAt) {
     $("tts-follow").classList.add("active");
     return;
   }
-  ttsSentences = splitSentences($("left-panel").innerText.replace(/\n+/g, " "));
+  ttsSentences = pageSegments($("left-panel"));
   if (!ttsSentences.length) return;
   ttsIndex = Number.isFinite(startAt) ? startAt : 0;
   if (!Number.isFinite(startAt)) {
@@ -1054,6 +1069,24 @@ function downloadBook() {
   setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
 }
 if ($("dl-btn")) $("dl-btn").addEventListener("click", downloadBook);
+
+/* ── Open a local .txt (a scan, an OCR export) as a book ── */
+function hashText(text) {
+  var h = 2166136261;
+  for (var i = 0; i < text.length; i += 7) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36);
+}
+async function openLocalFile(file) {
+  var raw = await file.text();
+  var cleaned = window.TextClean && $("open-file-clean") && $("open-file-clean").checked ? window.TextClean.clean(raw) : raw;
+  var title = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+  openBook({ id: "local-" + hashText(cleaned), title: title, authors: [], kind: "text", formats: {}, localText: cleaned });
+}
+if ($("open-file-input")) $("open-file-input").addEventListener("change", function () {
+  var file = this.files && this.files[0];
+  if (file) openLocalFile(file).catch(function () { $("status").textContent = "Could not read that file."; });
+  this.value = "";
+});
 
 searchSource("gutenberg", "", null, false).catch(function () {
   $("status").textContent = "Failed to load Project Gutenberg.";

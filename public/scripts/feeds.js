@@ -362,6 +362,7 @@
     $("speak-status").textContent = (speechIndex + 1) + " of " + speechQueue.length;
     window.SiteVoice.speak(entry.text, {
       rate: 0.9,
+      pauseAfter: window.SiteVoice.PAUSE ? window.SiteVoice.PAUSE.paragraph : 0,
       onend: function () { speechIndex += 1; speakNext(); },
       onerror: stopSpeech
     });
