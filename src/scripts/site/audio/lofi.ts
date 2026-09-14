@@ -7,6 +7,7 @@ import type { Biquad } from "./dsp";
 import { peakOf } from "./process";
 import type { Channels } from "./process";
 import { encodeMp3Channels, encodeWavChannels } from "./wav";
+import { requirePro } from "../pro";
 
 // ── primitives ──
 const run = (x: Float32Array, b: Biquad): Float32Array => { const y = new Float32Array(x.length); let s1 = 0, s2 = 0; for (let i = 0; i < x.length; i++) { const v = x[i], o = b.b0 * v + s1; s1 = b.b1 * v - b.a1 * o + s2; s2 = b.b2 * v - b.a2 * o; y[i] = o; } return y; };
@@ -124,11 +125,16 @@ export function initLofi(): void {
   $("lf-play-dry").addEventListener("click", () => original && play(original));
   $("lf-play-wet").addEventListener("click", () => processed && play(processed));
   $("lf-stop").addEventListener("click", () => source?.stop());
-  $("lf-download").addEventListener("click", async () => {
+  const downloadBtn = $<HTMLButtonElement>("lf-download");
+  downloadBtn.addEventListener("click", () => {
     if (!processed) return;
     const format = $<HTMLSelectElement>("lf-format").value, stem = name.replace(/\.[^.]+$/, "");
-    const blob = format === "mp3" ? await encodeMp3Channels(processed, rate) : encodeWavChannels(processed, rate, 16);
-    download(`${stem}-${current}.${format}`, URL.createObjectURL(blob));
+    const doDownload = async () => {
+      const blob = format === "mp3" ? await encodeMp3Channels(processed as Channels, rate) : encodeWavChannels(processed as Channels, rate, 16);
+      download(`${stem}-${current}.${format}`, URL.createObjectURL(blob));
+    };
+    if (format === "mp3") requirePro("lofi-mp3-format", () => void doDownload(), downloadBtn);
+    else void doDownload();
   });
   async function load(file: File): Promise<void> {
     status.textContent = `Decoding ${file.name}…`;

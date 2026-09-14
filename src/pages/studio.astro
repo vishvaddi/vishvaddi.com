@@ -1,5 +1,9 @@
 ---
 import Base from "../layouts/Base.astro";
+// pro.ts inserts the Pro upsell panel via requirePro() when exporting
+// MP3/stems; its styles live in site.css (shared with every other gated
+// tool) rather than duplicated into studio.css.
+import "../styles/site.css";
 ---
 
 <Base

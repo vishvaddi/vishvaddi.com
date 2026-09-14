@@ -31,6 +31,7 @@ import "../../styles/site.css";
 
   <script>
     import { mountCalcs, wireActions, type CalcSpec } from "../../scripts/site/calc";
+    import { requirePro } from "../../scripts/site/pro";
 
     const f2 = (n: number) => n.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
     const f0 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 0 });
@@ -94,6 +95,6 @@ import "../../styles/site.css";
 
     const root = document.getElementById("calcs")!;
     mountCalcs(root, specs);
-    wireActions(root, "Charge-out rate");
+    wireActions(root, "Charge-out rate", (run, anchor) => requirePro("charge-rate-print", run, anchor));
   </script>
 </Base>

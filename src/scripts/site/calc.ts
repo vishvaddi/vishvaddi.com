@@ -264,10 +264,13 @@ export function summarize(root: HTMLElement, title: string): string {
 }
 
 // Wire a "Save as PDF" + "Email to myself" button pair for a calc page.
-export function wireActions(root: HTMLElement, title: string) {
+// `gatePrint` is opt-in per page (only charge-rate gates print per the Pro
+// contract — geometry/materials/fitness keep it free) so the shared helper
+// stays free by default for every other caller.
+export function wireActions(root: HTMLElement, title: string, gatePrint?: (run: () => void, anchor: HTMLElement) => void) {
   const print = document.getElementById("print");
   const email = document.getElementById("email");
-  print?.addEventListener("click", () => window.print());
+  if (print) print.addEventListener("click", () => (gatePrint ? gatePrint(() => window.print(), print) : window.print()));
   email?.addEventListener("click", () => {
     location.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(summarize(root, title))}`;
   });

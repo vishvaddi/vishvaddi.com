@@ -8,6 +8,7 @@ import {
   pid, depsToText, textToDeps,
 } from './programme-model'
 import { createProgrammeTutorial } from './programme-tutorial'
+import { requirePro } from './pro'
 
 const ZOOMS = [10, 20, 34]              // month / week / day feel
 const ROW_H = 30
@@ -371,17 +372,17 @@ export function initProgramme(el: HTMLElement): void {
         bar.insertAdjacentElement('afterend', rb)
         inp.focus()
       })
-      mk('print / PDF', () => window.print())
-      mk('PNG', exportPNG)
-      mk('CSV', exportCSV)
-      mk('JSON', () => {
+      mk('print / PDF', () => requirePro('programme-print', () => window.print(), menu))
+      mk('PNG', () => requirePro('programme-png', exportPNG, menu))
+      mk('CSV', () => requirePro('programme-csv', exportCSV, menu))
+      mk('JSON', () => requirePro('programme-json', () => {
         if (!prog) return
         const a = document.createElement('a')
         a.href = URL.createObjectURL(new Blob([JSON.stringify(prog, null, 2)], { type: 'application/json' }))
         a.download = `${prog.title.replace(/[^\w\- ]+/g, '')}.programme.json`
         a.click()
         URL.revokeObjectURL(a.href)
-      })
+      }, menu))
       mk('import JSON', () => {
         const input = document.createElement('input')
         input.type = 'file'

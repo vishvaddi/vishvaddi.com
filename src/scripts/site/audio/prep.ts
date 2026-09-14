@@ -6,6 +6,7 @@ import { DEFAULT_RECIPE, applyRecipe, peakOf } from "./process";
 import type { Channels, Recipe } from "./process";
 import { encodeMp3Channels, encodeWavChannels } from "./wav";
 import type { WavDepth } from "./wav";
+import { requirePro } from "../pro";
 
 interface Item {
   name: string; rate: number; channels: Channels; duration: number; peakDb: number; lufs: number; bpm: number;
@@ -145,8 +146,13 @@ export function initPrep(): void {
   ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
   drop.addEventListener("drop", (e) => { const files = (e as DragEvent).dataTransfer?.files; if (files?.length) void addFiles(files); });
   $("pp-process").addEventListener("click", () => void processAll());
-  $("pp-download-all").addEventListener("click", async () => {
+  const downloadAllBtn = $<HTMLButtonElement>("pp-download-all");
+  const downloadAll = async () => {
     for (const item of items) { if (item.out) { await save(item); await new Promise((r) => setTimeout(r, 400)); } }
+  };
+  downloadAllBtn.addEventListener("click", () => {
+    if (items.length > 1) requirePro("audio-prep-batch-download", () => void downloadAll(), downloadAllBtn);
+    else void downloadAll();
   });
   $("pp-clear").addEventListener("click", () => { items.splice(0); list.replaceChildren(); $("pp-actions").hidden = true; status.textContent = ""; });
 }

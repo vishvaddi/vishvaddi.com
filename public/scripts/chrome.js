@@ -17,6 +17,18 @@
     btn.setAttribute("title", label);
   }
 
+  // Private nav groups and homepage cards are owner-only. The PIN session
+  // sets a plain (non-HttpOnly) vv_owner marker alongside it at login, purely
+  // so chrome can hide these before first paint without a round trip.
+  try {
+    var owner = /(?:^|; )vv_owner=1(?:;|$)/.test(document.cookie);
+    if (!owner) {
+      document.querySelectorAll("[data-private]").forEach(function (el) { el.hidden = true; });
+    }
+  } catch (e) {
+    /* ignore */
+  }
+
   var btn = document.getElementById("theme-toggle");
   if (btn) {
     applyIcon(btn);

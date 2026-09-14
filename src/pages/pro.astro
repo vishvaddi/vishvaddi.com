@@ -1,0 +1,48 @@
+---
+import Base from "../layouts/Base.astro";
+import "../styles/site.css";
+---
+
+<Base
+  title="Pro"
+  description="vishvaddi.com Pro — every tool stays free and unlimited; Pro unlocks exports, saved projects, cross-device sync and MP3/stem export."
+>
+  <div class="blueprint tool">
+    <p class="eyebrow">Pro</p>
+    <h1>Pro</h1>
+    <p>
+      Every tool on this site is free, with no limits on use. Pro is an optional
+      add-on for people who want more than the browser tab: exports, saved
+      projects, cross-device sync and Studio's MP3/stem export.
+    </p>
+
+    <h2>Free</h2>
+    <p>
+      Every calculator, optimiser, tracker and editor here — unlimited use, no
+      account, no watermark, nothing that expires or throttles. Files never
+      leave your browser unless a page says otherwise.
+    </p>
+
+    <h2>Pro adds</h2>
+    <ul>
+      <li>PDF, CSV, project and image exports on the tools that support them</li>
+      <li>Saved projects you can reopen and re-export later</li>
+      <li>Cross-device sync for tools with a "Sync across devices" toggle</li>
+      <li>MP3 and stem export in Studio — WAV master export stays free for everyone</li>
+    </ul>
+
+    <div id="pro-plans"></div>
+
+    <h2>Questions</h2>
+    <p><strong>Cancel any time.</strong> Manage or cancel from Stripe's customer portal link, sent with your receipt once you've subscribed.</p>
+    <p><strong>Refunds.</strong> Within 14 days of your first payment, email <a href="mailto:vishvaddi@gmail.com">vishvaddi@gmail.com</a> for a full refund, no questions asked.</p>
+    <p><strong>Your data.</strong> Everything you make with these tools stays in your browser unless you turn sync on for a specific tool — Pro doesn't change that.</p>
+
+    <p class="note-foot">See <a href="/terms">terms</a> and <a href="/privacy">privacy</a> for the rest. <a href="/site">← all tools</a></p>
+  </div>
+
+  <script>
+    import { mountPro } from "../scripts/site/pro";
+    mountPro(document.getElementById("pro-plans")!);
+  </script>
+</Base>

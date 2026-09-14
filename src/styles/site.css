@@ -238,6 +238,38 @@
 .saved-row span { font-family: var(--font-mono); font-size: 0.9rem; }
 .disclosure { font-size: 0.8rem; color: var(--muted); border-left: 2px solid var(--site-accent); padding-left: 0.6rem; margin: 0.75rem 0; }
 
+/* Pro upsell panel — self-contained on global tokens (not --site-*) so it
+   renders consistently everywhere requirePro() can insert it, including
+   /studio which loads this stylesheet just for this block. */
+.pro-upsell {
+  margin: 0.6rem 0; padding: 0.85rem 1rem; max-width: 32rem;
+  border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent); border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg));
+}
+.pro-upsell-lede { margin: 0 0 0.6rem; font-size: 0.9rem; }
+.pro-upsell-plans, .pro-upsell-restore form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.pro-upsell-btn {
+  font-family: var(--font-sans); font-size: 0.88rem; font-weight: 600; min-height: 40px;
+  padding: 0.5rem 0.9rem; border-radius: 6px; cursor: pointer; border: 1px solid var(--accent);
+  background: var(--accent); color: #fff;
+}
+.pro-upsell-btn:hover { filter: brightness(1.08); }
+.pro-upsell-btn[disabled] { opacity: 0.6; cursor: default; }
+.pro-upsell-restore { margin-top: 0.65rem; font-size: 0.85rem; }
+.pro-upsell-restore summary { cursor: pointer; color: var(--muted); }
+.pro-upsell-restore form { margin-top: 0.5rem; }
+.pro-upsell-restore input {
+  min-height: 40px; min-width: 0; flex: 1 1 12rem; padding: 0.4rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent); border-radius: 6px;
+  background: var(--bg); color: var(--fg); font: 0.85rem var(--font-sans);
+}
+.pro-upsell-status { font-size: 0.8rem; color: var(--muted); }
+.pro-upsell-dismiss {
+  display: block; margin-top: 0.6rem; padding: 0.2rem 0; background: none; border: none;
+  color: var(--muted); font-size: 0.8rem; cursor: pointer;
+}
+.pro-upsell-note { font-size: 0.9rem; color: var(--muted); }
+
 /* calculation notepad */
 .notepad-help {
   display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
