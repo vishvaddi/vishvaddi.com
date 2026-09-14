@@ -17,8 +17,8 @@
     // Pro (paywall experiment, docs/PRO_PLAN.md): Stripe price ids, empty until
     // Vish creates the product. Secrets (not vars): `npx wrangler secret put STRIPE_SECRET_KEY`
     // and `npx wrangler secret put STRIPE_WEBHOOK_SECRET`.
-    "STRIPE_PRICE_YEAR": "",
-    "STRIPE_PRICE_MONTH": ""
+    "STRIPE_PRICE_YEAR": "price_1UFVis1069bHoZmxzK1fLzGN",
+    "STRIPE_PRICE_MONTH": "price_1UFVlC1069bHoZmxr8aUEwl2"
   },
   "durable_objects": {
     "bindings": [
