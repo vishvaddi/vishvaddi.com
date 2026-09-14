@@ -69,6 +69,13 @@ export function isPublicPath(pathname: string): boolean {
   return PUBLIC_EXACT_OR_DIR.some((base) => pathname === base || pathname.startsWith(`${base}/`));
 }
 
+// Public routes keep the asset's own caching and stay indexable.
+export function publicResponse(response: Response): Response {
+  const result = new Response(response.body, response);
+  result.headers.set("X-Content-Type-Options", "nosniff");
+  return result;
+}
+
 export function privateResponse(response: Response): Response {
   const result = new Response(response.body, response);
   result.headers.set("Cache-Control", "private, no-store");
