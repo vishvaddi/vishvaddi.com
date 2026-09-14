@@ -1,0 +1,67 @@
+---
+import Base from "../layouts/Base.astro";
+import "../styles/site.css";
+---
+
+<Base
+  title="Training"
+  description="Programme, session log with RPE and rule-based progression. Stays on this device unless you turn on sync."
+>
+  <div class="blueprint tool">
+    <h1>Training</h1>
+    <p>
+      Pick today's session, lift, log kg × reps and how hard it felt (RPE 1–10).
+      Next time the sheet suggests the load: add weight after a clean session, hold
+      when it was heavy, back off after a miss. Rules are yours to tune in Programme.
+    </p>
+    <div class="store-controls" id="training-store"></div>
+    <div id="training-app"></div>
+    <p class="note-foot">Estimates only — not medical advice. Calculators: <a href="/prepping/fitness">1RM, plates, macros</a>.</p>
+  </div>
+
+  <style>
+    .fit-layout { display: grid; grid-template-columns: 11rem 1fr; gap: 1.5rem; align-items: start; margin-top: 0.5rem; }
+    .fit-tabs { display: flex; flex-direction: column; gap: 0.25rem; position: sticky; top: 5rem; }
+    .fit-tab {
+      padding: 0.5rem 0.9rem; font-size: 0.9rem; font-family: var(--font-sans); cursor: pointer; text-align: left;
+      color: var(--muted); background: transparent; border: 1px solid transparent; border-left: 2px solid var(--rule); border-radius: 0;
+    }
+    .fit-tab:hover { color: var(--fg); }
+    .fit-tab.active { color: var(--fg); font-weight: 600; border-left-color: var(--fg); }
+    @media (max-width: 720px) {
+      .fit-layout { display: block; }
+      .fit-tabs { flex-direction: row; flex-wrap: wrap; gap: 0.4rem; position: static; margin-bottom: 1.25rem; }
+      .fit-tab { border: 1px solid var(--rule); border-radius: 999px; padding: 0.45rem 1rem; }
+      .fit-tab.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+    }
+
+    .tr-sheet { display: grid; gap: 0.6rem; margin-top: 1rem; }
+    .tr-sets { display: grid; gap: 0.3rem; margin-top: 0.6rem; }
+    .tr-set { display: grid; grid-template-columns: 2.2rem 1fr 1fr 1fr; gap: 0.4rem; align-items: center; }
+    .tr-set-head span { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font-sans); }
+    .tr-set-n { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
+    .tool .tr-set input[type="number"] { width: 100%; min-width: 0; }
+    .rec-chip.tr-progress { color: var(--site-accent); }
+    .rec-chip.tr-deload { color: var(--fg); border-color: var(--fg); }
+    .rec-chip.tr-hold { color: var(--muted); }
+
+    .tr-day { margin-top: 1.5rem; }
+    .tool .tr-day-name { font-family: var(--font-sans); font-weight: 600; font-size: 1rem; width: 100%; max-width: 22rem; }
+    .tr-ex-table { display: grid; gap: 0.3rem; margin-top: 0.75rem; overflow-x: auto; }
+    .tr-ex-row { display: grid; grid-template-columns: minmax(9rem, 1.6fr) repeat(6, minmax(3.6rem, 1fr)) 2.2rem; gap: 0.35rem; align-items: center; min-width: 40rem; }
+    .tr-ex-head span { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font-sans); }
+    .tool .tr-ex-row input { width: 100%; min-width: 0; }
+    .tr-add-ex { margin-top: 0.6rem; }
+
+    .tr-session summary { cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; list-style: none; }
+    .tr-session summary::-webkit-details-marker { display: none; }
+    .tr-session[open] summary { margin-bottom: 0.4rem; }
+    .tr-session .btn { margin-top: 0.5rem; }
+    .tr-spark { width: 100%; max-width: 22rem; height: auto; margin-top: 0.5rem; display: block; }
+  </style>
+
+  <script>
+    import { initTraining } from "../scripts/site/training";
+    initTraining();
+  </script>
+</Base>

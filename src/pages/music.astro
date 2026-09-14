@@ -1,5 +1,6 @@
 ---
 import Base from "../layouts/Base.astro";
+import "../styles/site.css";
 import { getEntry, render } from "astro:content";
 
 const entry = await getEntry("pages", "music");
@@ -14,4 +15,47 @@ const { Content } = await render(entry);
   updatedDate={entry.data.updatedDate}
 >
   <Content />
+
+  <section class="tool alb-section" aria-labelledby="albums-title">
+    <h2 id="albums-title">Album checklist</h2>
+    <p class="calc-blurb">
+      Paste in the “best albums” lists worth working through. Albums on more than one
+      list are merged, so ticking one off counts everywhere. “Pick an unplayed album”
+      chooses tonight's listen.
+    </p>
+    <div class="store-controls" id="albums-store"></div>
+    <div id="albums-app"></div>
+  </section>
+
+  <style>
+    .alb-section { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); }
+    .alb-import { border: 1px solid var(--site-line); border-radius: 8px; padding: 0.6rem 0.9rem; margin: 0.75rem 0; }
+    .alb-import summary { cursor: pointer; font-family: var(--font-sans); font-weight: 600; }
+    .alb-import textarea, .alb-import input[type="text"] { width: 100%; }
+    .alb-opt { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--font-sans); font-size: 0.85rem; }
+    .alb-stats { margin: 1rem 0; }
+    .alb-stat { position: relative; }
+    .alb-remove { position: absolute; top: 0.35rem; right: 0.5rem; background: none; border: none; color: var(--muted); font: 0.65rem var(--font-mono); cursor: pointer; }
+    .alb-remove:hover { color: var(--fg); }
+    .alb-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.75rem 0; }
+    .tool .alb-toolbar select, .tool .alb-toolbar input[type="search"] { padding: 0.4rem 0.6rem; border: 1px solid var(--site-line-strong); border-radius: 6px; background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: 0.85rem; }
+    .alb-pick { margin: 0.75rem 0 1rem; }
+    .alb-pick .rec-title { font-size: 1.15rem; margin-top: 0.3rem; }
+    .alb-table { display: grid; gap: 0.2rem; }
+    .alb-row { display: grid; grid-template-columns: 1.4rem 1fr auto; gap: 0.5rem; align-items: baseline; padding: 0.4rem 0.3rem; border-bottom: 1px solid var(--site-line); cursor: pointer; }
+    .alb-row.done .alb-title, .alb-row.done .alb-artist { color: var(--muted); text-decoration: line-through; }
+    .alb-main { display: flex; flex-wrap: wrap; gap: 0.15rem 0.5rem; align-items: baseline; }
+    .alb-artist { font-family: var(--font-sans); font-weight: 600; }
+    .alb-year { font: 0.72rem var(--font-mono); color: var(--muted); }
+    .alb-lists { font: 0.68rem var(--font-mono); color: var(--muted); text-align: right; }
+    @media (max-width: 600px) {
+      .alb-row { grid-template-columns: 1.4rem 1fr; }
+      .alb-lists { grid-column: 2; text-align: left; }
+    }
+  </style>
+
+  <script>
+    import { initAlbums } from "../scripts/site/albums";
+    initAlbums();
+  </script>
 </Base>
