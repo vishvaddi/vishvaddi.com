@@ -22,14 +22,25 @@ const stubStatus = (context, status) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(status) }),
   )
 
+// Free-use quota (docs/PRO_PLAN.md addendum): POST /api/pro/use gates every
+// requirePro() call before it runs. `status` fixed always answers the same
+// way; `status` as a function gets called once per request (for the
+// allowed-then-blocked sequence below).
+const stubUse = (context, status) =>
+  context.route('**/api/pro/use', (route) => {
+    const body = typeof status === 'function' ? status() : status
+    route.fulfill({ status: body.allowed === false ? 402 : 200, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+
 let browser
 try {
   browser = await chromium.launch({ channel: 'chrome', headless: true })
   const errors = []
 
-  // ── public visitor: not Pro, Stripe configured ──
+  // ── public visitor: not Pro, Stripe configured, free quota already used up ──
   const publicCtx = await browser.newContext({ viewport: { width: 390, height: 844 } })
-  await stubStatus(publicCtx, { pro: false, source: null, configured: true })
+  await stubStatus(publicCtx, { pro: false, source: null, configured: true, freeRemaining: 0 })
+  await stubUse(publicCtx, { allowed: false, remaining: 0, resetsAt: Math.floor(Date.now() / 1000) + 86400 })
   const publicPage = await publicCtx.newPage()
   publicPage.on('pageerror', (error) => errors.push(String(error)))
 
@@ -55,6 +66,29 @@ try {
 
   await publicPage.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' })
   check('Pro: [data-private] is hidden without the owner marker', (await publicPage.locator('footer a[href="/logout"][data-private]').isHidden()))
+
+  // ── free quota: an allowed use leaves a note; a blocked one shows the panel ──
+  const freeCtx = await browser.newContext({ viewport: { width: 390, height: 844 } })
+  await stubStatus(freeCtx, { pro: false, source: null, configured: true, freeRemaining: 2 })
+  let useCall = 0
+  await stubUse(freeCtx, () => (useCall++ === 0 ? { allowed: true, remaining: 2 } : { allowed: false, remaining: 0, resetsAt: Math.floor(Date.now() / 1000) + 86400 }))
+  const freePage = await freeCtx.newPage()
+  freePage.on('pageerror', (error) => errors.push(String(error)))
+
+  await freePage.goto(`${BASE}/site/pdf/`, { waitUntil: 'domcontentloaded' })
+  await freePage.locator('#pdf-file').setInputFiles({ name: 'base.pdf', mimeType: 'application/pdf', buffer: await makePdf([0.2, 0.6, 0.3]) })
+  await freePage.waitForSelector('.pdf-page-card')
+  await freePage.locator('#pdf-export').click()
+  await freePage.waitForSelector('.pro-free-note[data-feature="pdf-export"]')
+  check('Free quota: an allowed export leaves a note, not a panel', await freePage.locator('#pro-upsell').count() === 0)
+
+  await freePage.locator('#pdf-export').click()
+  await freePage.waitForSelector('#pro-upsell')
+  const blockedHeading = await freePage.locator('#pro-upsell .pro-upsell-lede').textContent()
+  check('Free quota: a blocked export (402) shows the upsell panel with the quota heading', (blockedHeading || '').includes('used your 3 free exports'))
+
+  await freePage.close()
+  await freeCtx.close()
 
   // ── owner: always Pro, marker cookie set before first paint ──
   const ownerCtx = await browser.newContext({ viewport: { width: 390, height: 844 } })

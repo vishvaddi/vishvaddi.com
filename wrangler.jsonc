@@ -18,7 +18,9 @@
     // Vish creates the product. Secrets (not vars): `npx wrangler secret put STRIPE_SECRET_KEY`
     // and `npx wrangler secret put STRIPE_WEBHOOK_SECRET`.
     "STRIPE_PRICE_YEAR": "price_1UFVis1069bHoZmxzK1fLzGN",
-    "STRIPE_PRICE_MONTH": "price_1UFVlC1069bHoZmxr8aUEwl2"
+    "STRIPE_PRICE_MONTH": "price_1UFVlC1069bHoZmxr8aUEwl2",
+    // Free-use quota addendum: gated actions per rolling 30 days before the upsell.
+    "FREE_USES": "3"
   },
   "durable_objects": {
     "bindings": [

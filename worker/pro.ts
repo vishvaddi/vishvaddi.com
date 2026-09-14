@@ -7,6 +7,8 @@ export interface ProEnv extends PinEnv {
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_YEAR?: string;
   STRIPE_PRICE_MONTH?: string;
+  // Free-use quota (addendum, docs/PRO_PLAN.md) — gated actions per rolling 30 days.
+  FREE_USES?: string;
 }
 
 interface D1Result<T = unknown> { results?: T[]; success: boolean; meta?: { changes?: number } }
@@ -40,6 +42,86 @@ const encoder = new TextEncoder();
 const proCookie = (value: string, age: number) => `${PRO_COOKIE}=${value}; Path=/; Max-Age=${age}; HttpOnly; Secure; SameSite=Lax`;
 // Plain (readable) marker so pages can render Pro state before /api/pro/status answers.
 const proMarker = (value: string, age: number) => `${PRO_MARKER}=${value}; Path=/; Max-Age=${age}; Secure; SameSite=Lax`;
+
+// --- Free-use quota (addendum, docs/PRO_PLAN.md) ---------------------------
+const ANON_COOKIE = "__Host-anon";
+const ANON_COOKIE_SECONDS = 400 * 24 * 3600;
+const FREE_WINDOW_MS = 30 * 24 * 3600 * 1000;
+const DEFAULT_FREE_USES = 3;
+const anonCookie = (value: string, age: number) => `${ANON_COOKIE}=${value}; Path=/; Max-Age=${age}; HttpOnly; Secure; SameSite=Lax`;
+
+function freeUsesLimit(env: ProEnv): number {
+  const n = Number(env.FREE_USES);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_FREE_USES;
+}
+
+// Shared with the anon-cookie signature and the IP bucket hash — same secret
+// as the PIN/Pro cookies (keyFor), so rotating it also resets the quota.
+async function hmacBase64Url(env: PinEnv, value: string): Promise<string> {
+  const key = await keyFor(env);
+  return base64Url(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(value))));
+}
+
+async function signAnonId(env: PinEnv, id: string): Promise<string> {
+  return `${id}.${await hmacBase64Url(env, id)}`;
+}
+
+// A cookie with a bad (or missing) signature is treated as absent — a fresh
+// id is minted and the cookie replaced, per the addendum.
+async function verifyAnonId(request: Request, env: PinEnv): Promise<string | null> {
+  const token = readCookie(request, ANON_COOKIE);
+  if (!token) return null;
+  const match = token.match(/^([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})$/);
+  if (!match) return null;
+  const [, id, signature] = match;
+  try {
+    const key = await keyFor(env);
+    const ok = await crypto.subtle.verify("HMAC", key, base64UrlToBytes(signature), encoder.encode(id));
+    return ok ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+interface FreeUseRow { count: number; window_start: number }
+
+async function readFreeUseBucket(env: ProEnv, bucket: string): Promise<FreeUseRow | null> {
+  if (!env.DEEP_SWARM_DB) return null;
+  return env.DEEP_SWARM_DB.prepare("SELECT count, window_start FROM free_uses WHERE bucket = ?").bind(bucket).first<FreeUseRow>();
+}
+
+// A window older than 30 days counts as 0 without touching the row — the row
+// itself only resets on the next increment (bumpFreeUseBucket).
+function freeUseEffectiveCount(row: FreeUseRow | null, now: number): number {
+  if (!row || now - row.window_start > FREE_WINDOW_MS) return 0;
+  return row.count;
+}
+
+async function bumpFreeUseBucket(env: ProEnv, bucket: string, row: FreeUseRow | null, now: number): Promise<number> {
+  if (!env.DEEP_SWARM_DB) return 1;
+  const expired = !row || now - row.window_start > FREE_WINDOW_MS;
+  const count = expired ? 1 : row!.count + 1;
+  const windowStart = expired ? now : row!.window_start;
+  if (!row) {
+    await env.DEEP_SWARM_DB.prepare("INSERT INTO free_uses (bucket, count, window_start) VALUES (?, ?, ?)").bind(bucket, count, windowStart).run();
+  } else {
+    await env.DEEP_SWARM_DB.prepare("UPDATE free_uses SET count = ?, window_start = ? WHERE bucket = ?").bind(count, windowStart, bucket).run();
+  }
+  return count;
+}
+
+async function computeFreeRemaining(request: Request, env: ProEnv): Promise<number> {
+  const now = Date.now();
+  const limit = freeUsesLimit(env);
+  const anonId = await verifyAnonId(request, env);
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const [anonRow, ipRow] = await Promise.all([
+    anonId ? readFreeUseBucket(env, `anon:${anonId}`) : Promise.resolve(null),
+    readFreeUseBucket(env, `ip:${await hmacBase64Url(env, ip)}`),
+  ]);
+  const count = Math.max(freeUseEffectiveCount(anonRow, now), freeUseEffectiveCount(ipRow, now));
+  return Math.max(0, limit - count);
+}
 
 async function sha256Base64Url(value: string): Promise<string> {
   return base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value))));
@@ -151,13 +233,54 @@ async function resolvePro(request: Request, env: ProEnv): Promise<ProStatus> {
   };
 }
 
-function statusHandler(request: Request, env: ProEnv): Promise<Response> {
-  return resolvePro(request, env).then((result) => {
-    const payload: Record<string, unknown> = { pro: result.pro, source: result.source, configured: result.configured };
-    if (result.plan) payload.plan = result.plan;
-    if (result.periodEnd != null) payload.periodEnd = result.periodEnd;
-    return Response.json(payload, { headers: NO_STORE_JSON });
-  });
+async function statusHandler(request: Request, env: ProEnv): Promise<Response> {
+  const result = await resolvePro(request, env);
+  const payload: Record<string, unknown> = { pro: result.pro, source: result.source, configured: result.configured };
+  if (result.plan) payload.plan = result.plan;
+  if (result.periodEnd != null) payload.periodEnd = result.periodEnd;
+  // Computed without incrementing — status is a read, /api/pro/use is the write.
+  payload.freeRemaining = result.pro ? null : await computeFreeRemaining(request, env);
+  return Response.json(payload, { headers: NO_STORE_JSON });
+}
+
+async function useHandler(request: Request, env: ProEnv, url: URL): Promise<Response> {
+  if (!originOk(request, url)) return Response.json({ error: "origin rejected" }, { status: 403, headers: NO_STORE_JSON });
+  const isOwner = await ownerSession(request, env);
+  const licenceHash = isOwner ? null : await activeLicenceHash(request, env);
+  if (isOwner || licenceHash) return Response.json({ allowed: true, pro: true }, { headers: NO_STORE_JSON });
+
+  const now = Date.now();
+  const limit = freeUsesLimit(env);
+  const existingAnonId = await verifyAnonId(request, env);
+  const anonId = existingAnonId || base64Url(crypto.getRandomValues(new Uint8Array(16)));
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const anonBucket = `anon:${anonId}`;
+  const ipBucket = `ip:${await hmacBase64Url(env, ip)}`;
+
+  const [anonRow, ipRow] = await Promise.all([readFreeUseBucket(env, anonBucket), readFreeUseBucket(env, ipBucket)]);
+  const anonCount = freeUseEffectiveCount(anonRow, now);
+  const ipCount = freeUseEffectiveCount(ipRow, now);
+
+  const headers = new Headers(NO_STORE_JSON);
+  if (!existingAnonId) headers.append("Set-Cookie", anonCookie(await signAnonId(env, anonId), ANON_COOKIE_SECONDS));
+
+  // Either bucket at the limit blocks the action — stricter wins (see addendum).
+  if (anonCount >= limit || ipCount >= limit) {
+    const resetsAt = Math.floor(
+      Math.max(
+        anonCount >= limit ? anonRow!.window_start + FREE_WINDOW_MS : 0,
+        ipCount >= limit ? ipRow!.window_start + FREE_WINDOW_MS : 0,
+      ) / 1000,
+    );
+    return new Response(JSON.stringify({ allowed: false, remaining: 0, resetsAt }), { status: 402, headers });
+  }
+
+  const [newAnonCount, newIpCount] = await Promise.all([
+    bumpFreeUseBucket(env, anonBucket, anonRow, now),
+    bumpFreeUseBucket(env, ipBucket, ipRow, now),
+  ]);
+  const remaining = Math.max(0, limit - Math.max(newAnonCount, newIpCount));
+  return new Response(JSON.stringify({ allowed: true, remaining }), { status: 200, headers });
 }
 
 async function checkoutHandler(request: Request, env: ProEnv, url: URL): Promise<Response> {
@@ -427,6 +550,7 @@ async function webhookHandler(request: Request, env: ProEnv): Promise<Response> 
 export async function handleProRequest(request: Request, env: ProEnv, url: URL): Promise<Response> {
   const path = url.pathname;
   if (path === "/api/pro/status" && request.method === "GET") return statusHandler(request, env);
+  if (path === "/api/pro/use" && request.method === "POST") return useHandler(request, env, url);
   if (path === "/api/pro/checkout" && request.method === "POST") return checkoutHandler(request, env, url);
   if (path === "/pay/success" && (request.method === "GET" || request.method === "HEAD")) return successHandler(request, env, url);
   if (path === "/api/pro/restore" && request.method === "POST") return restoreHandler(request, env, url);
