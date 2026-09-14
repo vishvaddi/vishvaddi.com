@@ -44,14 +44,14 @@ test('private content stays closed without a session, including APIs and alterna
 
 test('PUBLIC_PATHS fall through to the site without a session', async () => {
   const { env, assets } = setup()
-  for (const path of ['/site/', '/_astro/app.js', '/fonts/font.woff2']) {
+  for (const path of ['/site/', '/terms/', '/privacy/', '/sitemap-index.xml', '/_astro/app.js', '/fonts/font.woff2']) {
     const response = await worker.fetch(request(path), env)
     assert.equal(response.status, 200, path)
     assert.equal(await response.text(), 'private asset', path)
     assert.equal(response.headers.get('X-Robots-Tag'), null, `${path} stays indexable`)
     assert.equal(response.headers.get('Cache-Control'), 'public, max-age=31536000', `${path} keeps asset caching`)
   }
-  assert.equal(assets(), 3)
+  assert.equal(assets(), 6)
 })
 
 test('configuration and limiter failures fail closed', async () => {

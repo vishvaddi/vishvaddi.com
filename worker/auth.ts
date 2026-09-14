@@ -52,13 +52,13 @@ const ownerCookie = (value: string, age: number) => `${OWNER_COOKIE}=${value}; P
 
 // Public routes bypass the PIN entirely (contract: docs/PRO_PLAN.md). Checked
 // before the PIN logic so an anonymous visitor gets the page, not a 401/redirect.
-const PUBLIC_EXACT_OR_DIR = ["/site", "/audio", "/studio", "/pro"];
+const PUBLIC_EXACT_OR_DIR = ["/site", "/audio", "/studio", "/pro", "/terms", "/privacy"];
 const PUBLIC_PREFIXES = [
   "/pay/", "/_astro/", "/scripts/", "/fonts/", "/media/", "/worklets/", "/data/", "/og/", "/icon-",
-  "/api/pro/", "/api/poi/", "/api/tiles/", "/api/store/",
+  "/api/pro/", "/api/poi/", "/api/tiles/", "/api/store/", "/sitemap",
 ];
 const PUBLIC_EXACT = [
-  "/terms", "/privacy", "/login", "/logout",
+  "/login", "/logout",
   "/favicon.ico", "/favicon.svg", "/apple-touch-icon.png", "/manifest.webmanifest",
   "/robots.txt", "/sw.js", "/api/fx", "/api/prices",
 ];
