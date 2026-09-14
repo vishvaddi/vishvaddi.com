@@ -46,6 +46,7 @@ try {
   check('Import: debit/credit columns auto-mapped', await page.locator('#mt-map-mode').inputValue() === 'split' && await page.locator('#mt-map-debit').inputValue() === '2' && await page.locator('#mt-map-credit').inputValue() === '3')
   check('Import: date format detected as DD/MM/YYYY', await page.locator('#mt-map-fmt').inputValue() === 'DMY')
   check('Import: preview shows the three rows', await page.locator('.mt-preview-row').count() === 3)
+  await page.locator('#mt-map-preset').fill('Test Bank')
   await page.locator('#mt-import-go').click()
   await page.waitForSelector('#mt-import-status')
   const status = await page.locator('#mt-import-status').textContent()

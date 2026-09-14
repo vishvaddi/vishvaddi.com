@@ -610,3 +610,10 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Gate: `astro check` 0/0; Worker tsc 0; unit 46 + 3; e2e feature 18, life 21, money 21, kitchen 28, audio 72, studio 102 — all exit 0, run one at a time (full `release:check` in one go risks the OOM seen 10/09). `__pycache__/` now gitignored.
 - Pre-existing failure: `auth.test.mjs` browser-origin test fails here identically on `04d36f3` (before any change) — real example.com served after the fulfilled 303. Left for follow-up; not caused by this batch.
 - To go live: apply the D1 migration remotely, `npm run build && npx wrangler deploy` from the pushed commit, then check `/kitchen/`, `/kitchen/plan/`, `/money/`, `/training/`, `/music/`, `/reader/`, `/api/store/kitchen` (expect 404 JSON when empty) and a sync round-trip from two devices.
+
+
+## 2026-09-14 - Auth browser test fixed; Money CSV preset is an inline field
+
+- Root cause of the failing `auth.test.mjs` browser-origin test: Playwright 1.61 + Chrome 152 follow a *fulfilled* 3xx on the real network, so the redirected `GET /` never reached `context.route` and the page showed the real example.com. Reproduced with a 10-line probe independent of the Worker. The test now replays Worker redirects as a scripted `location.replace()` navigation (Set-Cookie still applies) and asserts the Worker's own 303 status. 11/11 auth tests pass; Worker unchanged.
+- `/money/` CSV import names its layout preset in a "Remember this layout as" field instead of a `prompt()` dialog. Money e2e 21/21.
+

@@ -352,7 +352,12 @@ export function initMoney(): void {
       for (const s of [modeSel, amtSel, debSel, creSel]) s.addEventListener("change", syncMode);
       negate.addEventListener("change", () => { m.negateAmount = negate.checked; renderPreview(); });
       descSel.addEventListener("change", () => { m.description = Number(descSel.value); renderPreview(); });
-      mapWrap.append(headerLabel, fields(field("Date column", dateSel), field("Date format", fmtSel), field("Amount layout", modeSel), amtField, debField, creField, field("Description column", descSel), field("Account for these rows", accSel)), negateLabel);
+      const sigNow = headerSignature(csvRows[0]);
+      const presetIn = input("text");
+      presetIn.id = "mt-map-preset";
+      presetIn.placeholder = "e.g. CommBank savings";
+      presetIn.value = store.get().presets.find((p) => p.signature === sigNow)?.name ?? fileName.replace(/\.csv$/i, "");
+      mapWrap.append(headerLabel, fields(field("Date column", dateSel), field("Date format", fmtSel), field("Amount layout", modeSel), amtField, debField, creField, field("Description column", descSel), field("Account for these rows", accSel), field("Remember this layout as", presetIn)), negateLabel);
       const preview = mk("div", "money-table-wrap");
       const previewNote = mk("p", "calc-blurb");
       mapWrap.append(mk("h4", undefined, "Preview (first 10)"), preview, previewNote);
@@ -364,7 +369,7 @@ export function initMoney(): void {
         const accountId = accSel.value || null;
         const txs: Transaction[] = fresh.map((r) => ({ id: uid(), date: r.date, amount: r.amount, description: r.description, categoryId: categorise(r.description, d.rules), accountId }));
         const sig = headerSignature(csvRows[0]);
-        const presetName = prompt("Name this bank / CSV layout so next time is one click:", store.get().presets.find((p) => p.signature === sig)?.name ?? fileName.replace(/\.csv$/i, "")) ?? "";
+        const presetName = presetIn.value;
         store.update((dd) => {
           dd.transactions.push(...txs);
           if (presetName.trim()) dd.presets = [...dd.presets.filter((p) => p.signature !== sig), { signature: sig, name: presetName.trim(), mapping: { ...m } }];

@@ -148,29 +148,41 @@ test('browser form submissions preserve the origin for login and logout', async 
     for (const isMobile of [false, true]) {
       const { env } = setup()
       const context = await browser.newContext({ isMobile, hasTouch: isMobile })
+      const workerStatuses = []
       await context.route('https://example.com/**', async (route) => {
         const incoming = route.request()
         const response = await worker.fetch(new Request(incoming.url(), {
           method: incoming.method(), headers: await incoming.allHeaders(), body: incoming.postDataBuffer(),
         }), env)
-        await route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) })
+        workerStatuses.push({ method: incoming.method(), status: response.status, origin: incoming.headers().origin })
+        const headers = Object.fromEntries(response.headers)
+        // Chromium follows a fulfilled 3xx on the real network, bypassing this
+        // route, so redirects are replayed as a scripted navigation: the
+        // Set-Cookie still applies and the next request is intercepted again.
+        if (response.status >= 300 && response.status < 400 && headers.location) {
+          const { location, ...rest } = headers
+          await route.fulfill({ status: 200, headers: { ...rest, 'content-type': 'text/html' }, body: `<script>location.replace(${JSON.stringify(location)})</script>` })
+          return
+        }
+        await route.fulfill({ status: response.status, headers, body: Buffer.from(await response.arrayBuffer()) })
       })
       const page = await context.newPage()
       await page.goto('https://example.com/login')
       await page.getByLabel('Six-digit PIN').fill(env.SITE_PIN)
-      const [loginResponse] = await Promise.all([
+      await Promise.all([
         page.waitForResponse((res) => res.request().method() === 'POST'),
         page.getByRole('button', { name: 'Unlock', exact: true }).click(),
       ])
-      assert.equal(loginResponse.status(), 303, `Browser login rejected; Origin=${await loginResponse.request().headerValue('origin')}`)
+      const login = workerStatuses.find((entry) => entry.method === 'POST')
+      assert.equal(login.status, 303, `Browser login rejected; Origin=${login.origin}`)
       await page.waitForURL('https://example.com/')
       assert.equal(await page.locator('body').innerText(), 'private asset')
       await page.goto('https://example.com/logout')
-      const [logoutResponse] = await Promise.all([
+      await Promise.all([
         page.waitForResponse((res) => res.request().method() === 'POST'),
         page.getByRole('button', { name: 'Lock site', exact: true }).click(),
       ])
-      assert.equal(logoutResponse.status(), 303)
+      assert.equal(workerStatuses.filter((entry) => entry.method === 'POST').at(-1).status, 303)
       await page.waitForURL('https://example.com/login')
       assert.equal((await context.cookies()).some((entry) => entry.name === '__Host-site-session'), false)
       await context.close()
