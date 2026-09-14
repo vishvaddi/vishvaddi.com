@@ -617,3 +617,10 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Root cause of the failing `auth.test.mjs` browser-origin test: Playwright 1.61 + Chrome 152 follow a *fulfilled* 3xx on the real network, so the redirected `GET /` never reached `context.route` and the page showed the real example.com. Reproduced with a 10-line probe independent of the Worker. The test now replays Worker redirects as a scripted `location.replace()` navigation (Set-Cookie still applies) and asserts the Worker's own 303 status. 11/11 auth tests pass; Worker unchanged.
 - `/money/` CSV import names its layout preset in a "Remember this layout as" field instead of a `prompt()` dialog. Money e2e 21/21.
 
+
+
+## 2026-09-14 - Life tools batch DEPLOYED (version 4cde9f87-a88c-4e2e-9adc-ff92c7661c1d)
+
+- Vish authorised deployment. `0003_site_store.sql` applied to the remote D1 (`wrangler d1 migrations apply deep-swarm-saves --remote`, 2 commands). Built in a clean detached worktree of pushed commit `91a1690` (`tmp/vishvaddi-deploy-91a1690`, 66 pages) and deployed from there; worktree clean.
+- Anonymous live checks: `/`, `/kitchen/`, `/kitchen/plan/`, `/money/`, `/training/`, `/music/`, `/reader/`, `/api/store/kitchen` all 401; document requests redirect to `/login`; `/sw.js` 200. Owner-session checks (pages render, `/api/store/<key>` 404 JSON when empty, two-device sync round-trip) are owed — the Chrome extension was not connected and sessions do not read the PIN.
+- Paywall decisions recorded with Vish: hybrid public/private gate = yes; gate at export, not "3 free uses"; an experiment under the 4 h/week cap with no date; deploy first. Plan lives in the vault project note.
