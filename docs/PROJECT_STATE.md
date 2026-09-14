@@ -1,5 +1,17 @@
 # Project State
 
+## 2026-09-14 - Life tools: Kitchen, Money, Training, album checklist, narration upgrade (not deployed)
+
+A "Life" group in the More menu adds three personal tools, all on one shared persistence layer (`src/scripts/site/store.ts`): one JSON document per tool in localStorage, JSON export/import, and an opt-in "Sync across devices" toggle that mirrors the document through `GET/PUT/DELETE /api/store/<key>` (D1 `site_store`, migration `0003`, revision-checked, the PIN gate is the only auth). Sync is off by default everywhere; Money data never leaves the device unless the owner turns it on.
+
+- `/kitchen/` — recipe database (tolerant ingredient-line parser, tags, search/sort, servings scaler, Markdown copy) with "Import from URL" through `GET /api/recipe?url=` (public HTTPS only, 2 MB cap, schema.org Recipe JSON-LD normaliser in `worker/recipe-jsonld.ts`). `/kitchen/plan/` — fortnight grid with away days, weeknight time cap, Sunday meal-prep with leftovers, deterministic auto-fill of dinners, and an aisle-grouped aggregated shopping list with persisted ticks.
+- `/money/` — budget vs actual by category, transactions with bank CSV import (column mapping remembered per header signature, DMY/ISO date detection, debit/credit merge, dedupe, editable keyword auto-categorisation), net-worth accounts and monthly snapshots, manual-price holdings, snowball/avalanche debt payoff, compound and savings-goal projections, canvas charts that follow the theme.
+- `/training/` — programme (days → exercises → sets × rep range, start, increment, plate step), today's sheet with a suggested load per exercise from rule-based progression (add after every set at top reps under RPE 7, hold at RPE ≥ 9.5, deload 5 % after a miss), session history and e1RM sparklines.
+- `/music/` — album checklist: paste "best albums" lists (numbered lines or CSV), merged across lists on a normalised artist+title key, tick-off, per-list progress, "pick an unplayed album".
+- Narration: `SiteVoice` now segments text with audiobook pauses (2 s chapter/scene, 0.8 s paragraph, 0.25 s speaker change, `(150ms)` markers) and normalises numbers, years, money, times and abbreviations before ElevenLabs or the browser voice sees them. Reader can open a local `.txt` and clean scanned/OCR text (`public/scripts/text-clean.js`: rejoin wrapped lines and hyphenation, drop page numbers and running heads).
+
+Validation: 46 new unit tests (store API, training, albums, voice/text, money, kitchen, JSON-LD) plus the 3 gate tests; `astro check` 0 errors; Worker tsc clean; harnesses feature 18/18, life 21/21, money 21/21, kitchen 28/28, audio 72/72, studio 102/102. `release:check` now runs all of them. Known: `scripts/auth.test.mjs` "browser form submissions preserve the origin" fails on this laptop with or without these changes (the routed redirect to `/` reaches the real example.com) — the other 10 auth tests pass; needs a look at Playwright/Chrome routing of fulfilled 303s. Not deployed: needs `npx wrangler d1 migrations apply deep-swarm-saves --remote` for `site_store`, then build + deploy from the pushed commit.
+
 ## 2026-09-14 - Private PIN gate deployed
 
 Native browser login/logout fix: auth pages use `Referrer-Policy: same-origin` so form submissions retain Origin. Real desktop/mobile Chrome regression added; all 11 auth tests pass. The previous manually headed HTTP smoke did not cover this browser behaviour.

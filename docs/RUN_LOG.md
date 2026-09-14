@@ -598,3 +598,15 @@
 ## 2026-09-14 - Fix native PIN form Origin rejection
 
 The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Origin: null` for native form POSTs. The initial HTTP smoke supplied Origin manually and missed the failure. Changed the auth page policy to `same-origin`; the strict login/logout origin checks remain unchanged. A real headless Chrome regression reproduces the original 403 and now passes desktop/mobile native login and logout; null, missing and cross-site origins remain rejected. All 11 authentication tests and Worker TypeScript pass. PIN and session secrets unchanged.
+
+
+## 2026-09-14 - Life tools batch (Kitchen, Money, Training, albums, narration) — built, not deployed
+
+- Source: two Reddit threads Vish shared (r/ClaudeAI "Unique ideas for Claude"; r/vibecoding "using your vibecoded project long-term") plus his ask for a recipe database, meal planner and finance/investment tracker. Built in one session: foundation by Claude in the main checkout, Kitchen and Money by two parallel agents in git worktrees (node_modules junctioned), Training/albums/narration by Claude; merged with `--no-ff`.
+- Foundation: `store.ts` + `/api/store/<key>` (D1 `site_store`, migration `0003_site_store.sql`, 2 MB cap, same-origin, 409 on stale revision, 404 for bad keys, 503 without D1) with `scripts/store-api.test.mjs`. "Life" group (Kitchen, Money, Training) in `Base.astro`; homepage cards.
+- Decision: sync is opt-in per tool, default off, so finance data stays on-device unless chosen. Alternative (D1 by default) rejected on privacy grounds.
+- Kitchen and Money are documented in their agents' commits (`ecb3276`, `3e288ad`). Money uses `prompt()` to name a CSV preset — swap for an inline field if unwanted. Kitchen's plan and shopping ticks share the recipe document (one sync toggle); split if ticks should stay per-device.
+- Narration: `site-voice.js` gained `segment()`, `normalise()` and timed gaps (rate-scaled); Reader speaks paragraph-structured page text; Feeds items get paragraph gaps. Normalising changes the `/api/tts` cache key, so previously cached audio re-generates once.
+- Gate: `astro check` 0/0; Worker tsc 0; unit 46 + 3; e2e feature 18, life 21, money 21, kitchen 28, audio 72, studio 102 — all exit 0, run one at a time (full `release:check` in one go risks the OOM seen 10/09). `__pycache__/` now gitignored.
+- Pre-existing failure: `auth.test.mjs` browser-origin test fails here identically on `04d36f3` (before any change) — real example.com served after the fulfilled 303. Left for follow-up; not caused by this batch.
+- To go live: apply the D1 migration remotely, `npm run build && npx wrangler deploy` from the pushed commit, then check `/kitchen/`, `/kitchen/plan/`, `/money/`, `/training/`, `/music/`, `/reader/`, `/api/store/kitchen` (expect 404 JSON when empty) and a sync round-trip from two devices.
