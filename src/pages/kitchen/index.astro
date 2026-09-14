@@ -1,0 +1,35 @@
+---
+import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
+import "../../styles/kitchen.css";
+---
+
+<Base
+  title="Kitchen"
+  description="Personal recipe database — add recipes by hand or import from a recipe page, search by ingredient, scale servings and copy as Markdown. Feeds the fortnight meal plan."
+>
+  <nav class="kit-modes" aria-label="Kitchen sections">
+    <a href="/kitchen" class="active">Recipes</a>
+    <a href="/kitchen/plan">Plan &amp; shopping</a>
+  </nav>
+
+  <div class="blueprint tool">
+    <p class="eyebrow">Kitchen / Recipes</p>
+    <h1>Recipes</h1>
+    <p>
+      Your recipe box. Add one by hand or paste a recipe page URL to import it;
+      search by title, tag or ingredient; scale the servings on the fly. Metric
+      units. Saved in this browser, with optional sync across devices.
+    </p>
+
+    <div class="store-controls no-print" id="kit-store"></div>
+    <div id="kit-app"></div>
+
+    <p class="note-foot"><a href="/kitchen/plan">Plan the fortnight →</a></p>
+  </div>
+
+  <script>
+    import { initKitchen } from "../../scripts/site/kitchen";
+    initKitchen();
+  </script>
+</Base>

@@ -1,0 +1,75 @@
+/* /kitchen — recipe database and fortnight planner. Sits on top of site.css
+   (.blueprint .tool, .btn, .rec-card, .field) and only adds what those lack. */
+
+.kit-modes { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--rule); margin: 0 0 1.5rem; }
+.kit-modes a {
+  font-family: var(--font-sans); font-weight: 600; font-size: 1.05rem; text-decoration: none; color: var(--muted);
+  padding: 0.5rem 1rem 0.65rem; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.kit-modes a:hover { color: var(--fg); }
+.kit-modes a.active { color: var(--fg); border-bottom-color: var(--fg); }
+
+.kit-toolbar { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: end; margin: 1rem 0 0.5rem; }
+.kit-toolbar .field { margin: 0; }
+.kit-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.5rem 0 1rem; }
+.kit-chip {
+  font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase;
+  border: 1px solid var(--site-line-strong); border-radius: 999px; padding: 0.2rem 0.6rem;
+  background: none; color: var(--muted); cursor: pointer; min-height: 0;
+}
+.tool .kit-chip { min-height: 32px; }
+.kit-chip.active { background: var(--site-accent); border-color: var(--site-accent); color: #fff; }
+.kit-count { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); margin: 0.25rem 0 0.75rem; }
+
+.rec-card .rec-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; justify-content: flex-end; }
+.rec-card.clickable { cursor: pointer; }
+.rec-card.clickable:hover { border-color: var(--site-accent); }
+
+.kit-detail h2 { margin: 0.25rem 0 0.35rem; }
+.kit-scaler { display: flex; align-items: center; gap: 0.5rem; margin: 0.75rem 0; font-family: var(--font-sans); font-size: 0.9rem; }
+.kit-scaler input { width: 4.5rem; }
+.kit-ings { list-style: none; padding: 0; margin: 0.5rem 0 1rem; }
+.kit-ings li { padding: 0.35rem 0; border-bottom: 1px solid var(--site-line); display: flex; gap: 0.6rem; }
+.kit-ings .q { font-family: var(--font-mono); min-width: 5.5rem; color: var(--site-accent); }
+.kit-steps { padding-left: 1.25rem; }
+.kit-steps li { margin: 0.4rem 0; }
+.kit-import { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: end; }
+.kit-import .field { margin: 0; }
+.kit-status { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); min-height: 1.2em; margin: 0.35rem 0; }
+.kit-status.err { color: var(--site-accent); }
+
+/* Planner: one card per day, slots stacked; grid on wide screens. */
+.kit-plan { display: grid; grid-template-columns: 1fr; gap: 0.5rem; margin: 1rem 0; }
+@media (min-width: 900px) { .kit-plan { grid-template-columns: 1fr 1fr; } }
+.kit-day { border: 1px solid var(--site-line); border-radius: 8px; padding: 0.6rem 0.75rem; }
+.kit-day.today { border-color: var(--site-accent); }
+.kit-day.away { opacity: 0.55; background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.kit-day.prep { border-left: 3px solid var(--site-accent); }
+.kit-day-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+.kit-day-head strong { font-family: var(--font-sans); }
+.kit-day-head label { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--muted); font-family: var(--font-sans); }
+.kit-slot { display: grid; grid-template-columns: 4.6rem 1fr 3.6rem; gap: 0.35rem; align-items: center; margin: 0.3rem 0; }
+.kit-slot .l { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.tool .kit-slot input { min-height: 40px; padding: 0.35rem 0.5rem; font-size: 0.9rem; }
+.kit-slot.leftover input:first-of-type { font-style: italic; color: var(--muted); }
+.kit-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.5rem; align-items: end; }
+.kit-settings .field { margin: 0.25rem 0; }
+.kit-settings label.check { display: flex; align-items: center; gap: 0.4rem; min-height: 44px; color: var(--fg); font-size: 0.9rem; font-family: var(--font-sans); }
+
+/* Shopping list */
+.shop-aisle { margin: 1rem 0 0.5rem; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--site-accent); border-bottom: 1px solid var(--site-line-strong); padding-bottom: 0.2rem; }
+.shop-line { display: grid; grid-template-columns: auto 1fr auto; gap: 0.6rem; align-items: center; padding: 0.3rem 0; border-bottom: 1px solid var(--site-line); }
+.shop-line label { display: flex; align-items: center; gap: 0.6rem; cursor: pointer; min-width: 0; }
+.shop-line .t { font-size: 0.95rem; }
+.shop-line .t small { color: var(--muted); display: block; font-size: 0.75rem; }
+.shop-line.done .t { text-decoration: line-through; color: var(--muted); }
+.tool .shop-line select { min-height: 32px; font-size: 0.75rem; padding: 0.2rem 0.3rem; width: auto; }
+
+@media (max-width: 480px) {
+  .kit-toolbar, .kit-import { grid-template-columns: 1fr; }
+  .kit-slot { grid-template-columns: 4.2rem 1fr 3.4rem; }
+}
+@media print {
+  .kit-modes, .kit-plan, .kit-settings, .store-controls, .kit-toolbar, .shop-line select { display: none !important; }
+  .shop-line { break-inside: avoid; }
+}
