@@ -1,17 +1,19 @@
 ---
 import Base from "../../layouts/Base.astro";
+import ToolIntro from "../../components/ToolIntro.astro";
 import "../../styles/site.css";
 import "../../styles/audio.css";
 ---
 
 <Base
-  title="Sample Prep — Trim, Normalise, Stretch, Convert, Vocal Remover"
-  description="Batch-prepare samples in your browser: trim silence, normalise to a peak or LUFS target, fade, reverse, pitch-shift, time-stretch to a BPM, remove the centre channel for a quick instrumental, fold to mono, convert sample rate and export WAV or MP3. Nothing is uploaded."
+  title="Sample Prep — free batch audio trim & convert (AU)"
+  description="Batch trim, normalise, fade, reverse, pitch, stretch to BPM, remove vocals and convert WAV/MP3 — set the recipe once, run every file. Free."
   audioNav
 >
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/audio" style="color:inherit;text-decoration:none">Audio</a> / Sample prep</p>
     <h1>Sample Prep</h1>
+    <ToolIntro href="/audio/prep" />
     <p>
       Set the recipe once, drop in as many files as you like, and every one
       comes out trimmed, levelled, stretched and converted the same way. Audio

@@ -1,16 +1,18 @@
 ---
 import Base from "../../layouts/Base.astro";
+import ToolIntro from "../../components/ToolIntro.astro";
 import "../../styles/site.css";
 ---
 
 <Base
-  title="Unit Converter"
-  description="Free unit converter — length, area, volume, mass and energy. Runs entirely in your browser."
+  title="Free Unit Converter — metric, imperial & AUD (Australia)"
+  description="Convert length, area, volume, mass, pressure, energy, data and more, plus live AUD currency exchange — updates as you type, runs in your browser."
   siteNav
 >
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Convert</p>
     <h1>Unit Converter</h1>
+    <ToolIntro href="/site/convert" />
     <p>Length, area, volume, mass, temperature, speed, pressure, power, energy, data, time, angle, frequency, force and torque — plus live currency exchange rates. Updates as you type.</p>
 
     <div class="field">

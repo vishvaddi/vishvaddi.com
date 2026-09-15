@@ -1,0 +1,79 @@
+---
+// Drops under a tool page's <h1>: a visible intro sentence for humans and
+// crawlers, then How to use + FAQ collapsed in <details> so the tool's own
+// controls don't shift down the page. JSON-LD (SoftwareApplication + FAQPage)
+// travels with it so every /site and /audio tool page carries structured data
+// without repeating it by hand.
+import { TOOL_SEO } from "../data/tool-seo";
+import { SITE_TOOLS } from "../data/site-tools";
+import { AUDIO_TOOLS } from "../data/audio-tools";
+
+interface Props {
+  href: string;
+}
+
+const { href } = Astro.props;
+const seo = TOOL_SEO[href];
+if (!seo) throw new Error(`ToolIntro: no tool-seo entry for ${href}`);
+
+const catalogue = href.startsWith("/audio/") ? AUDIO_TOOLS : SITE_TOOLS;
+const tool = catalogue.find((t) => t.href === href);
+const name = tool?.title ?? seo.metaTitle;
+const category = href.startsWith("/audio/") ? "MultimediaApplication" : "BusinessApplication";
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      name,
+      description: seo.metaDescription,
+      url: `https://vishvaddi.com${href}`,
+      applicationCategory: category,
+      operatingSystem: "Any (runs in a web browser)",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "AUD" },
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: seo.faq.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: { "@type": "Answer", text: item.a },
+      })),
+    },
+  ],
+};
+---
+
+<div class="tool-intro">
+  <p class="tool-intro-text">{seo.intro}</p>
+  <details class="tool-intro-more">
+    <summary>How to use it &amp; FAQ</summary>
+    <h2>How to use it</h2>
+    <ol>
+      {seo.howTo.map((step) => <li>{step}</li>)}
+    </ol>
+    <h2>FAQ</h2>
+    {seo.faq.map((item) => (
+      <details class="tool-faq-item">
+        <summary>{item.q}</summary>
+        <p>{item.a}</p>
+      </details>
+    ))}
+  </details>
+</div>
+
+<script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
+<style>
+  .tool-intro-text { color: var(--muted); margin: 0 0 0.75rem; }
+  .tool-intro-more { border: 1px solid var(--site-line-strong); border-radius: 8px; padding: 0.6rem 0.8rem; margin: 0 0 1rem; }
+  .tool-intro-more summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+  .tool-intro-more h2 { font-size: 0.95rem; margin: 0.9rem 0 0.4rem; }
+  .tool-intro-more ol { margin: 0; padding-left: 1.2rem; color: var(--muted); font-size: 0.9rem; }
+  .tool-intro-more ol li { margin: 0.2rem 0; }
+  .tool-faq-item { border-top: 1px solid var(--site-line); padding: 0.5rem 0 0.1rem; }
+  .tool-faq-item summary { min-height: 40px; display: flex; align-items: center; cursor: pointer; font-size: 0.88rem; font-weight: 500; }
+  .tool-faq-item p { margin: 0.3rem 0 0.6rem; color: var(--muted); font-size: 0.88rem; }
+  @media print { .tool-intro-more { display: none; } }
+</style>

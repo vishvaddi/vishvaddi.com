@@ -1,16 +1,18 @@
 ---
 import Base from "../../layouts/Base.astro";
+import ToolIntro from "../../components/ToolIntro.astro";
 import "../../styles/site.css";
 ---
 
 <Base
-  title="Site Records"
-  description="Running site registers — variations, punch list, deliveries, contacts and a daily log. Add, edit and export to CSV. Runs entirely in your browser."
+  title="Site Records — free variations & punch list tracker"
+  description="Running site registers — variations, punch list, deliveries, contacts and a daily log — with CSV export. Free, runs entirely in your browser."
   siteNav
 >
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site Tools</a> / Records</p>
     <h1>Site Records</h1>
+    <ToolIntro href="/site/records" />
     <p>
       Running registers for a job — variations, punch list, deliveries, contacts
       and a daily log. Add and edit entries, see live totals, and export any
