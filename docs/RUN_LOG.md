@@ -662,3 +662,8 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 
 - Vish's sandbox purchase (A$39/yr, test card) hit "Already issued" with no key: Stripe's `checkout.session.completed` webhook created the licence 231 ms before the browser reached `/pay/success`, and the page's "existing row" branch showed a message promising an email that is never sent. The Pro cookie was set, so the browser was unlocked; `pay_success` was not counted by either path.
 - Fix: `pro_licences.key_shown_at` (migration `0008`, applied). On an existing row with no `key_shown_at`, the success page reads `metadata.licence_key` from the Stripe customer (the webhook writes it there), verifies its hash matches, shows it once and stamps the row; later visits say the key was shown once and point to Restore or email recovery. The webhook path now counts `pay_success`; the success page counts it only when it minted the key itself. Test: webhook-first race (key shown once, counted once, second visit no key). Worker tests 32/32, pro e2e green.
+
+
+## 2026-09-15 - /pro: Money Pro paragraph removed
+
+- Vish: "remove the paragraph about money pro in the pro section". The paragraph also claimed Money Pro hadn't landed (it had). Section is now "Updates" with the same email form ("Keep me posted", waitlist source `updates`). pro 22/22, seo 146/146.
