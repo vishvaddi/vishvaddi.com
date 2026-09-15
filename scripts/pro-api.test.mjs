@@ -34,6 +34,9 @@ function fakeD1() {
         if (sql === 'SELECT licence_hash FROM pro_licences WHERE stripe_subscription = ?') {
           const row = byStripeSub(args[0]); return row ? { licence_hash: row.licence_hash } : null
         }
+        if (sql === 'SELECT licence_hash, key_shown_at FROM pro_licences WHERE stripe_subscription = ?') {
+          const row = byStripeSub(args[0]); return row ? { licence_hash: row.licence_hash, key_shown_at: row.key_shown_at ?? null } : null
+        }
         if (sql === 'SELECT event_id FROM pro_events WHERE event_id = ?') {
           return events.has(args[0]) ? { event_id: args[0] } : null
         }
@@ -69,6 +72,10 @@ function fakeD1() {
         if (sql.startsWith('INSERT INTO pro_events')) {
           events.set(args[0], { event_id: args[0], received_at: args[1] })
           return { success: true, meta: { changes: 1 } }
+        }
+        if (sql === 'UPDATE pro_licences SET key_shown_at = ? WHERE licence_hash = ?') {
+          const row = licences.get(args[1]); if (row) row.key_shown_at = args[0]
+          return { success: true, meta: { changes: row ? 1 : 0 } }
         }
         if (sql === 'UPDATE pro_licences SET last_seen = ? WHERE licence_hash = ?') {
           const row = licences.get(args[1]); if (row) row.last_seen = args[0]
@@ -493,4 +500,46 @@ test('metric: whitelist enforced, same-origin required (Origin or Sec-Fetch-Site
     { day: today(), event: 'nudge_click', count: 1 },
     { day: today(), event: 'nudge_shown', count: 1 },
   ])
+})
+
+test('/pay/success after the webhook already minted the key shows that key once, from Stripe customer metadata', async () => {
+  const { env, db } = setup()
+  const configuredEnv = { ...env, ...CONFIGURED }
+  const originalFetch = globalThis.fetch
+  let storedKey = null
+  globalThis.fetch = async (url, init = {}) => {
+    const href = String(url)
+    if (href.startsWith('https://api.stripe.com/v1/customers/cus_9')) {
+      if ((init.method || 'GET') === 'POST') { storedKey = new URLSearchParams(String(init.body)).get('metadata[licence_key]'); return new Response(JSON.stringify({ id: 'cus_9' }), { status: 200 }) }
+      return new Response(JSON.stringify({ id: 'cus_9', metadata: storedKey ? { licence_key: storedKey } : {} }), { status: 200 })
+    }
+    if (href.startsWith('https://api.stripe.com/v1/checkout/sessions/cs_test_9')) {
+      return new Response(JSON.stringify({
+        payment_status: 'paid',
+        customer: { id: 'cus_9', email: 'race@example.com' },
+        subscription: { id: 'sub_9', status: 'active', current_period_end: 1999999999, items: { data: [{ price: { id: CONFIGURED.STRIPE_PRICE_YEAR } }] } },
+      }), { status: 200 })
+    }
+    throw new Error(`unexpected fetch: ${href}`)
+  }
+  try {
+    const payload = JSON.stringify({ id: 'evt_race', type: 'checkout.session.completed', data: { object: { id: 'cs_test_9', subscription: 'sub_9', customer: 'cus_9', metadata: { plan: 'year' }, customer_details: { email: 'race@example.com' } } } })
+    const header = await stripeSignature(CONFIGURED.STRIPE_WEBHOOK_SECRET, payload)
+    const hook = await worker.fetch(new Request('https://example.com/api/pro/webhook', { method: 'POST', headers: { 'Stripe-Signature': header }, body: payload }), configuredEnv)
+    assert.equal(hook.status, 200)
+    assert.ok(storedKey, 'webhook wrote the key to the customer')
+    assert.equal(db.metrics.get(`${today()}|pay_success`), 1, 'webhook counted the sale')
+
+    const first = await worker.fetch(request('/pay/success?session_id=cs_test_9'), configuredEnv)
+    const html = await first.text()
+    assert.match(html, new RegExp(storedKey), 'success page shows the webhook-minted key')
+    assert.match(first.headers.get('Set-Cookie') || '', /__Host-pro=/)
+    assert.equal(db.metrics.get(`${today()}|pay_success`), 1, 'not counted twice')
+
+    const second = await worker.fetch(request('/pay/success?session_id=cs_test_9'), configuredEnv)
+    const html2 = await second.text()
+    assert.doesNotMatch(html2, /VV-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/)
+    assert.match(html2, /shown once already/)
+    assert.doesNotMatch(html2, /check your email/)
+  } finally { globalThis.fetch = originalFetch }
 })

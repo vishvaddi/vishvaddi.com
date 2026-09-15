@@ -373,14 +373,20 @@ async function successHandler(request: Request, env: ProEnv, url: URL): Promise<
   const plan: "year" | "month" = priceId === env.STRIPE_PRICE_YEAR ? "year" : "month";
   const status = sub.status === "trialing" ? "active" : sub.status;
   const now = Date.now();
-  const existing = await env.DEEP_SWARM_DB.prepare("SELECT licence_hash FROM pro_licences WHERE stripe_subscription = ?")
-    .bind(sub.id).first<{ licence_hash: string }>();
+  const existing = await env.DEEP_SWARM_DB.prepare("SELECT licence_hash, key_shown_at FROM pro_licences WHERE stripe_subscription = ?")
+    .bind(sub.id).first<{ licence_hash: string; key_shown_at: number | null }>();
   let licenceHash: string;
   let issuedKey: string | undefined;
   if (existing) {
     licenceHash = existing.licence_hash;
     await env.DEEP_SWARM_DB.prepare("UPDATE pro_licences SET status = ?, plan = ?, current_period_end = ?, updated_at = ? WHERE licence_hash = ?")
       .bind(status, plan, sub.current_period_end ?? null, now, licenceHash).run();
+    // The webhook normally wins the race and has already minted the key; it
+    // lives on the Stripe customer, so show it here once.
+    if (!existing.key_shown_at && customerId) {
+      const recovered = await customerLicenceKey(env, customerId);
+      if (recovered && (await sha256Base64Url(recovered)) === licenceHash) issuedKey = recovered;
+    }
   } else {
     issuedKey = generateLicenceKey();
     licenceHash = await sha256Base64Url(issuedKey);
@@ -397,12 +403,13 @@ async function successHandler(request: Request, env: ProEnv, url: URL): Promise<
     }
     await bumpMetric(env, "pay_success");
   }
+  if (issuedKey) await env.DEEP_SWARM_DB.prepare("UPDATE pro_licences SET key_shown_at = ? WHERE licence_hash = ?").bind(now, licenceHash).run();
   const expiry = Math.floor(now / 1000) + PRO_COOKIE_SECONDS;
   const token = await signPro(env, licenceHash, expiry);
   const cookies = [proCookie(token, PRO_COOKIE_SECONDS), proMarker("1", PRO_COOKIE_SECONDS)];
   const html = issuedKey
     ? successHtml("You're in.", `Your ${plan === "year" ? "yearly" : "monthly"} Pro subscription is active.`, issuedKey)
-    : successHtml("Already issued.", "This subscription already has a licence key — check your email, or use Restore on the Pro page if you need it on this device.");
+    : successHtml("Already issued.", "This subscription's licence key was shown once already. This browser is unlocked; for another device use Restore on the Pro page with the key you saved, or email vishvaddi@gmail.com with your Stripe receipt and I'll recover it.");
   return htmlResponse(html, 200, cookies);
 }
 
@@ -473,6 +480,18 @@ async function verifyStripeSignature(header: string, payload: string, secret: st
   return timingSafeEqualHex(expectedHex, parts.v1.toLowerCase());
 }
 
+async function customerLicenceKey(env: ProEnv, customerId: string): Promise<string | null> {
+  try {
+    const res = await stripe(env, `/v1/customers/${encodeURIComponent(customerId)}`, { method: "GET" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { metadata?: Record<string, string> };
+    const key = data.metadata?.licence_key || "";
+    return /^VV-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key) ? key : null;
+  } catch {
+    return null;
+  }
+}
+
 async function upsertFromCheckoutCompleted(env: ProEnv, obj: Record<string, unknown>): Promise<void> {
   if (!env.DEEP_SWARM_DB) return;
   const subscriptionId = typeof obj.subscription === "string" ? obj.subscription : (obj.subscription as { id?: string } | null)?.id;
@@ -496,6 +515,7 @@ async function upsertFromCheckoutCompleted(env: ProEnv, obj: Record<string, unkn
   try {
     await stripe(env, `/v1/customers/${encodeURIComponent(customerId)}`, { method: "POST", body: new URLSearchParams({ "metadata[licence_key]": key }).toString() });
   } catch { /* best-effort */ }
+  await bumpMetric(env, "pay_success");
 }
 
 async function updateFromSubscriptionUpdated(env: ProEnv, obj: Record<string, unknown>): Promise<void> {
