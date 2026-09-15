@@ -35,17 +35,12 @@ import "../styles/site.css";
 
     <div id="pro-plans"></div>
 
-    <h2>Money Pro</h2>
-    <p>
-      Money is free and public today — budget, transactions, net worth, debts
-      and projections. Money Pro (live prices, FIRE dashboard, property, CGT,
-      rebalancing, CSV export and sync) hasn't landed yet. Leave your email and
-      I'll send one email when it does — no spam, no other list.
-    </p>
+    <h2>Updates</h2>
+    <p>One email when something new lands — no other list, no spam.</p>
     <form id="waitlist-form" class="waitlist-form" novalidate>
       <label for="waitlist-email" class="sr-only">Email address</label>
       <input type="email" id="waitlist-email" name="email" placeholder="you@example.com" maxlength="254" required autocomplete="email" />
-      <button type="submit" class="btn">Tell me when Money Pro lands</button>
+      <button type="submit" class="btn">Keep me posted</button>
       <p id="waitlist-status" class="waitlist-status" role="status" aria-live="polite" hidden></p>
     </form>
 
@@ -88,10 +83,10 @@ import "../styles/site.css";
         const res = await fetch("/api/waitlist", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, source: "money-pro" }),
+          body: JSON.stringify({ email, source: "updates" }),
         });
         if (res.ok) {
-          say("Done — I'll email you when Money Pro lands.");
+          say("Done — you'll hear from me when something new lands.");
           track("waitlist_signup");
           waitlistForm.reset();
         } else if (res.status === 429) {
