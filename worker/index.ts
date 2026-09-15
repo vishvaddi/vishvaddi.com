@@ -3,6 +3,8 @@ import type { PinEnv } from "./auth.ts";
 import { recipeFromHtml } from "./recipe-jsonld.ts";
 import { handleProRequest, activeLicenceHash } from "./pro.ts";
 import type { ProEnv } from "./pro.ts";
+import { handleWaitlist } from "./waitlist.ts";
+import type { WaitlistEnv } from "./waitlist.ts";
 export { PinAttempts } from "./auth.ts";
 interface DurableObjectState {
   storage: { get<T>(k: string): Promise<T | undefined>; put(k: string, v: unknown): Promise<void> };
@@ -16,7 +18,7 @@ interface D1PreparedStatement {
   run<T = unknown>(): Promise<D1Result<T>>;
 }
 interface D1Database { prepare(query: string): D1PreparedStatement }
-interface Env extends PinEnv, ProEnv {
+interface Env extends PinEnv, ProEnv, WaitlistEnv {
   ASSETS: { fetch: (request: Request) => Promise<Response> };
   // Durable Object rate limiter — one instance per IP, so the count is globally
   // consistent (a plain in-memory Map can't be: Cloudflare spreads requests
@@ -416,6 +418,7 @@ const site = {
     // Pro (paywall experiment). Reachable without a PIN session — see
     // PUBLIC_PATHS in auth.ts — auth for the individual routes lives in pro.ts.
     if (path.startsWith("/api/pro/") || path === "/pay/success") return handleProRequest(request, env, url);
+    if (path === "/api/waitlist") return handleWaitlist(request, env, url);
 
     // Personal-tool sync (src/scripts/site/store.ts). Public path (see
     // PUBLIC_PATHS): the owner keeps their private namespace as before, a Pro

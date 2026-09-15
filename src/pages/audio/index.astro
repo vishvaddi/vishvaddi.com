@@ -13,9 +13,12 @@ import { AUDIO_TOOLS, AUDIO_TOOL_CATEGORIES } from "../../data/audio-tools";
     <p class="eyebrow">Producer tools</p>
     <h1>Audio Tools</h1>
     <p>
-      Utilities for producers and DJs that run entirely in your browser — no
-      account, no upload, no server ever hears your audio. The full workstation
-      lives at <a href="/studio">/studio</a>; these are the tools around it.
+      Free browser-based audio tools for producers and DJs — a chord and scale
+      lab with MIDI export, batch sample prep, BPM maths, a tuner and
+      metronome, a lo-fi effects processor, ear training and a track analyser
+      for LUFS, key and BPM. No account, no upload, no server ever hears your
+      audio. The full workstation lives at <a href="/studio">/studio</a>; these
+      are the tools around it.
     </p>
     <p class="hub-related" aria-label="Related music pages">Also in Music: <a href="/studio">Studio</a> <a href="/radio">Radio</a></p>
 
@@ -47,10 +50,40 @@ import { AUDIO_TOOLS, AUDIO_TOOL_CATEGORIES } from "../../data/audio-tools";
       </section>
     ))}
 
+    <section class="site-faq" aria-labelledby="audio-faq-title">
+      <h2 id="audio-faq-title" class="site-group-title">FAQ</h2>
+      <details class="tool-faq-item">
+        <summary>Are these audio tools free?</summary>
+        <p>Yes — every tool here is free and unlimited. Pro only adds MP3 and stem export in Studio and batch/format extras noted on individual tool pages.</p>
+      </details>
+      <details class="tool-faq-item">
+        <summary>Is my audio uploaded anywhere?</summary>
+        <p>No — every tool decodes and processes audio entirely in your browser; nothing is sent to a server.</p>
+      </details>
+      <details class="tool-faq-item">
+        <summary>What's the difference between these tools and Studio?</summary>
+        <p>These are focused single-purpose tools. <a href="/studio">Studio</a> is the full workstation — drum machine, synth, mixer and export — that they sit around.</p>
+      </details>
+      <details class="tool-faq-item">
+        <summary>Do I need an account?</summary>
+        <p>No — no sign-up, no account. Open a tool and start using it.</p>
+      </details>
+    </section>
+
     <p class="note-foot">
       Nothing you load leaves your browser. <a href="/">← vishvaddi.com</a>
     </p>
   </div>
 
   <script src="/scripts/site-hub.js" defer></script>
+  <script type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: [
+      { "@type": "Question", name: "Are these audio tools free?", acceptedAnswer: { "@type": "Answer", text: "Yes — every tool here is free and unlimited. Pro only adds MP3 and stem export in Studio and batch/format extras noted on individual tool pages." } },
+      { "@type": "Question", name: "Is my audio uploaded anywhere?", acceptedAnswer: { "@type": "Answer", text: "No — every tool decodes and processes audio entirely in your browser; nothing is sent to a server." } },
+      { "@type": "Question", name: "What's the difference between these tools and Studio?", acceptedAnswer: { "@type": "Answer", text: "These are focused single-purpose tools. Studio is the full workstation — drum machine, synth, mixer and export — that they sit around." } },
+      { "@type": "Question", name: "Do I need an account?", acceptedAnswer: { "@type": "Answer", text: "No — no sign-up, no account. Open a tool and start using it." } },
+    ],
+  })} />
 </Base>

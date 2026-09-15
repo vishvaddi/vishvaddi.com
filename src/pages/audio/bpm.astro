@@ -1,17 +1,19 @@
 ---
 import Base from "../../layouts/Base.astro";
+import ToolIntro from "../../components/ToolIntro.astro";
 import "../../styles/site.css";
 import "../../styles/audio.css";
 ---
 
 <Base
-  title="BPM Maths — Delay Times, LFO Rates, Bars to Seconds, Hz to Note"
-  description="Tap or type a tempo and read every note value in milliseconds and hertz for delays and LFOs, reverb pre-delay and decay starting points, bars to seconds and samples, and Hz to note, MIDI and cents. Runs in your browser."
+  title="BPM Maths — free delay, LFO & note value calculator"
+  description="Type or tap a tempo and read every delay/LFO note value in ms and Hz, reverb times, bars to seconds and Hz-to-note/MIDI/cents. Free."
   audioNav
 >
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/audio" style="color:inherit;text-decoration:none">Audio</a> / BPM maths</p>
     <h1>BPM Maths</h1>
+    <ToolIntro href="/audio/bpm" />
     <p>
       The numbers you keep working out on a phone calculator mid-session: note
       values in milliseconds for delays, in hertz for LFOs, reverb times that

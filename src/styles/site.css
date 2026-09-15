@@ -220,6 +220,15 @@
 .seg.offcut { background: color-mix(in srgb, var(--fg) 14%, transparent); color: var(--muted); }
 .note-foot { font-size: 0.8rem; color: var(--muted); margin-top: 1.5rem; }
 
+/* hub FAQ (site/index.astro, audio/index.astro) and the shared FAQ-item look
+   ToolIntro.astro also uses for individual tool pages (that file's <details>
+   are scoped to the component, so this global copy renders the same markup
+   on the hub pages that import no component). */
+.site-faq { margin-top: 1.5rem; }
+.tool-faq-item { border-top: 1px solid var(--site-line); padding: 0.5rem 0 0.1rem; }
+.tool-faq-item summary { min-height: 40px; display: flex; align-items: center; cursor: pointer; font-size: 0.9rem; font-weight: 500; }
+.tool-faq-item p { margin: 0.3rem 0 0.6rem; color: var(--muted); font-size: 0.9rem; }
+
 /* multi-calculator pages */
 .calc { border-top: 1px solid var(--site-line-strong); padding-top: 1.25rem; margin-top: 1.75rem; scroll-margin-top: 1rem; }
 .calc:first-child { border-top: none; padding-top: 0; margin-top: 1rem; }
@@ -271,6 +280,15 @@
 .pro-upsell-note { font-size: 0.9rem; color: var(--muted); }
 /* One-line note left under the anchor after an allowed free-quota use. */
 .pro-free-note { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--muted); }
+
+/* /pro waitlist form */
+.waitlist-form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; max-width: 32rem; margin: 0.75rem 0 1.25rem; }
+.waitlist-form input {
+  min-height: 44px; min-width: 0; flex: 1 1 14rem; padding: 0.5rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent); border-radius: 6px;
+  background: var(--bg); color: var(--fg); font: 0.9rem var(--font-sans);
+}
+.waitlist-status { flex-basis: 100%; margin: 0.3rem 0 0; font-size: 0.85rem; color: var(--muted); }
 
 /* calculation notepad */
 .notepad-help {

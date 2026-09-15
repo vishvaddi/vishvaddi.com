@@ -1,17 +1,19 @@
 ---
 import Base from "../../layouts/Base.astro";
+import ToolIntro from "../../components/ToolIntro.astro";
 import "../../styles/site.css";
 import "../../styles/audio.css";
 ---
 
 <Base
-  title="Track Analyser — BPM, Key, LUFS & True Peak"
-  description="Drop a track and read its tempo, key and Camelot code, integrated and short-term loudness (LUFS), true peak, loudness range, stereo width and tonal balance, with the gain needed for Spotify, Apple Music, YouTube and club targets. Runs entirely in your browser."
+  title="Track Analyser — free BPM, key & LUFS checker (AU)"
+  description="Drop a track and read tempo, key, Camelot code, LUFS, true peak, loudness range, stereo width and streaming targets. Free, in-browser."
   audioNav
 >
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/audio" style="color:inherit;text-decoration:none">Audio</a> / Track analyser</p>
     <h1>Track Analyser</h1>
+    <ToolIntro href="/audio/analyser" />
     <p>
       Tempo, key, loudness, peaks, width and tonal balance from one file, plus how
       far it sits from each streaming and club target. The audio is decoded and

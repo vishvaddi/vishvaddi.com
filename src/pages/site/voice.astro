@@ -1,16 +1,18 @@
 ---
 import Base from "../../layouts/Base.astro";
+import ToolIntro from "../../components/ToolIntro.astro";
 import "../../styles/site.css";
 ---
 
 <Base
-  title="Voice Notes"
-  description="Speak and it transcribes live — annotate site notes hands-free, record audio, and export. Runs in your browser."
+  title="Voice Notes — hands-free site transcription (AU)"
+  description="Speak and it transcribes live — take hands-free site notes, then edit, timestamp and export. Free; transcript and audio stay on your device."
   siteNav
 >
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site Tools</a> / Voice notes</p>
     <h1>Voice Notes</h1>
+    <ToolIntro href="/site/voice" />
     <p>Hit record and talk — it transcribes as you speak so you can take site notes hands-free, then edit, timestamp and export.</p>
 
     <p class="disclosure">

@@ -1,17 +1,19 @@
 ---
 import Base from "../../layouts/Base.astro";
+import ToolIntro from "../../components/ToolIntro.astro";
 import "../../styles/site.css";
 import "../../styles/audio.css";
 ---
 
 <Base
-  title="Tuner & Metronome — Polyrhythms, Subdivisions, Tap Tempo"
-  description="A chromatic tuner using your microphone with cents readout and a reference tone, plus a metronome with accents, subdivisions, polyrhythm layers and tap tempo. Runs in your browser, nothing is recorded."
+  title="Tuner & Metronome — free polyrhythm practice tool"
+  description="A chromatic mic tuner with cents readout and reference tone, plus a metronome with accents, subdivisions and polyrhythms. Free, no ads."
   audioNav
 >
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/audio" style="color:inherit;text-decoration:none">Audio</a> / Tuner &amp; metronome</p>
     <h1>Tuner &amp; Metronome</h1>
+    <ToolIntro href="/audio/metronome" />
     <p>
       Two things every practice session needs and every phone app buries under
       ads. The metronome schedules clicks on the audio clock so it does not

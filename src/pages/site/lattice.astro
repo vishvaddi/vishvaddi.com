@@ -1,16 +1,18 @@
 ---
 import Base from "../../layouts/Base.astro";
+import ToolIntro from "../../components/ToolIntro.astro";
 import "../../styles/site.css";
 ---
 
 <Base
-  title="Lattice"
-  description="Nested-grid planner — grids inside grids with roll-ups, formulas and links. Local-only."
+  title="Lattice — free nested estimating grid (Australia)"
+  description="A hierarchical spreadsheet where every cell can hold another grid — break a job into trades and items with roll-up totals. Free, local-only."
   siteNav
 >
   <div class="blueprint tool lattice">
     <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Lattice</p>
     <h1>Lattice</h1>
+    <ToolIntro href="/site/lattice" />
     <p>
       A hierarchical sheet: every cell can hold another grid. Break a job into
       trades, a trade into items, and let costs roll up. <code>=B2*D2</code>

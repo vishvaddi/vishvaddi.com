@@ -1,5 +1,6 @@
 ---
 import Base from "../../layouts/Base.astro";
+import ToolIntro from "../../components/ToolIntro.astro";
 import "../../styles/site.css";
 
 const standards = [
@@ -32,13 +33,14 @@ const refs = [
 ---
 
 <Base
-  title="Resources"
-  description="Handy construction references — Australian Standards, the NCC, and quick rules of thumb. Plus the free Site Tools."
+  title="Construction Resources — NCC & AS standards links (AU)"
+  description="A free launch point for Australian construction standards and NCC/BCA links — for quick reference, not a substitute for buying the standards."
   siteNav
 >
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site Tools</a> / Resources</p>
     <h1>Resources</h1>
+    <ToolIntro href="/site/resources" />
     <p>Australian Standards, the National Construction Code, and common rules of thumb.</p>
 
     <h2 style="font-size:1.05rem;">Australian Standards (commonly referenced in fit-out)</h2>

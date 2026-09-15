@@ -34,6 +34,20 @@ import "../styles/site.css";
 
     <div id="pro-plans"></div>
 
+    <h2>Money Pro</h2>
+    <p>
+      Money is free and public today — budget, transactions, net worth, debts
+      and projections. Money Pro (live prices, FIRE dashboard, property, CGT,
+      rebalancing, CSV export and sync) hasn't landed yet. Leave your email and
+      I'll send one email when it does — no spam, no other list.
+    </p>
+    <form id="waitlist-form" class="waitlist-form" novalidate>
+      <label for="waitlist-email" class="sr-only">Email address</label>
+      <input type="email" id="waitlist-email" name="email" placeholder="you@example.com" maxlength="254" required autocomplete="email" />
+      <button type="submit" class="btn">Tell me when Money Pro lands</button>
+      <p id="waitlist-status" class="waitlist-status" role="status" aria-live="polite" hidden></p>
+    </form>
+
     <h2>Questions</h2>
     <p><strong>Cancel any time.</strong> Manage or cancel from Stripe's customer portal link, sent with your receipt once you've subscribed.</p>
     <p><strong>Refunds.</strong> Within 14 days of your first payment, email <a href="mailto:vishvaddi@gmail.com">vishvaddi@gmail.com</a> for a full refund, no questions asked.</p>
@@ -45,5 +59,39 @@ import "../styles/site.css";
   <script>
     import { mountPro } from "../scripts/site/pro";
     mountPro(document.getElementById("pro-plans")!);
+
+    const waitlistForm = document.getElementById("waitlist-form") as HTMLFormElement;
+    const waitlistEmail = document.getElementById("waitlist-email") as HTMLInputElement;
+    const waitlistStatus = document.getElementById("waitlist-status") as HTMLParagraphElement;
+    waitlistForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const email = waitlistEmail.value.trim();
+      const say = (text: string) => { waitlistStatus.textContent = text; waitlistStatus.hidden = false; };
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+        say("That doesn't look like a valid email address.");
+        return;
+      }
+      const submitBtn = waitlistForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+      submitBtn.disabled = true;
+      try {
+        const res = await fetch("/api/waitlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, source: "money-pro" }),
+        });
+        if (res.ok) {
+          say("Done — I'll email you when Money Pro lands.");
+          waitlistForm.reset();
+        } else if (res.status === 429) {
+          say("Too many requests from this connection today — try again tomorrow.");
+        } else {
+          say("That didn't work — check the address and try again.");
+        }
+      } catch {
+        say("Couldn't reach the server — check your connection and try again.");
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
   </script>
 </Base>

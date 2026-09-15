@@ -13,9 +13,11 @@ import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../../data/site-tools";
     <p class="eyebrow">Field tools</p>
     <h1>Site Tools</h1>
     <p>
-      Free calculators for shopfitting, construction and DIY. Everything runs
-      entirely in your browser — no account, no sign-up, nothing uploaded. Print
-      to PDF or email a copy to yourself.
+      Free calculators and trackers for Australian estimators, shopfitters,
+      builders and DIY — a cut list optimiser, a critical-path programme
+      builder, a PDF toolkit, unit and material calculators and more. Everything
+      runs entirely in your browser — no account, no sign-up, nothing uploaded.
+      Print to PDF or email a copy to yourself.
     </p>
 
     <label class="hub-search-label" for="site-hub-search">Find the right tool</label>
@@ -46,10 +48,40 @@ import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../../data/site-tools";
       </section>
     ))}
 
+    <section class="site-faq" aria-labelledby="site-faq-title">
+      <h2 id="site-faq-title" class="site-group-title">FAQ</h2>
+      <details class="tool-faq-item">
+        <summary>Are these tools really free?</summary>
+        <p>Yes — every tool listed here is free, with no account and no limit on use. Pro is optional and only adds exports, saved projects and cross-device sync on the tools that support them.</p>
+      </details>
+      <details class="tool-faq-item">
+        <summary>Is anything I type uploaded?</summary>
+        <p>No — every tool runs entirely in your browser. A few fetch public reference data (like currency or commodity prices) but never send your inputs anywhere.</p>
+      </details>
+      <details class="tool-faq-item">
+        <summary>Do I need to sign up?</summary>
+        <p>No — no account, no sign-up. Open a tool and start using it straight away.</p>
+      </details>
+      <details class="tool-faq-item">
+        <summary>How do I find the right tool?</summary>
+        <p>Use the search box above, or browse by category — Estimate &amp; price, Plan &amp; procure, Site &amp; records, and Documents &amp; reference.</p>
+      </details>
+    </section>
+
     <p class="note-foot">
       Nothing you type leaves your browser. <a href="/">← vishvaddi.com</a>
     </p>
   </div>
 
   <script src="/scripts/site-hub.js" defer></script>
+  <script type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: [
+      { "@type": "Question", name: "Are these tools really free?", acceptedAnswer: { "@type": "Answer", text: "Yes — every tool listed here is free, with no account and no limit on use. Pro is optional and only adds exports, saved projects and cross-device sync on the tools that support them." } },
+      { "@type": "Question", name: "Is anything I type uploaded?", acceptedAnswer: { "@type": "Answer", text: "No — every tool runs entirely in your browser. A few fetch public reference data (like currency or commodity prices) but never send your inputs anywhere." } },
+      { "@type": "Question", name: "Do I need to sign up?", acceptedAnswer: { "@type": "Answer", text: "No — no account, no sign-up. Open a tool and start using it straight away." } },
+      { "@type": "Question", name: "How do I find the right tool?", acceptedAnswer: { "@type": "Answer", text: "Use the search box above, or browse by category — Estimate & price, Plan & procure, Site & records, and Documents & reference." } },
+    ],
+  })} />
 </Base>
