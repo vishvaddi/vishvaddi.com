@@ -30,6 +30,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       [process.execPath, 'scripts/money-e2e.mjs', 'dist'],
       [process.execPath, 'scripts/kitchen-e2e.mjs', 'dist'],
       [process.execPath, 'scripts/pro-e2e.mjs', 'dist'],
+      [process.execPath, 'scripts/seo-e2e.mjs', 'dist'],
       [process.execPath, 'scripts/audio-tools-e2e.mjs', 'dist'],
       [process.execPath, 'scripts/studio-e2e.mjs', 'dist'],
     ], { cwd: fileURLToPath(new URL('../', import.meta.url)) })

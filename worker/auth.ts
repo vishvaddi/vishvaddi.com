@@ -59,7 +59,7 @@ const ownerCookie = (value: string, age: number) => `${OWNER_COOKIE}=${value}; P
 const PUBLIC_EXACT_OR_DIR = ["/site", "/audio", "/studio", "/pro", "/terms", "/privacy"];
 const PUBLIC_PREFIXES = [
   "/pay/", "/_astro/", "/scripts/", "/fonts/", "/media/", "/worklets/", "/data/", "/og/", "/icon-",
-  "/api/pro/", "/api/poi/", "/api/tiles/", "/api/store/", "/sitemap",
+  "/api/pro/", "/api/waitlist", "/api/poi/", "/api/tiles/", "/api/store/", "/sitemap",
 ];
 const PUBLIC_EXACT = [
   "/login", "/logout",
