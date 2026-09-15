@@ -65,6 +65,9 @@ const PUBLIC_EXACT = [
   "/login", "/logout",
   "/favicon.ico", "/favicon.svg", "/apple-touch-icon.png", "/manifest.webmanifest",
   "/robots.txt", "/sw.js", "/api/fx", "/api/prices", "/api/market",
+  // Funnel counters (Addendum 3, docs/PRO_PLAN.md) — POST from any page,
+  // GET is owner-only (checked in the handler, not here).
+  "/api/metric",
 ];
 
 export function siteLocked(env: PinEnv): boolean { return env.SITE_LOCKED === "1"; }

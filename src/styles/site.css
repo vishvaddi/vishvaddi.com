@@ -281,6 +281,20 @@
 /* One-line note left under the anchor after an allowed free-quota use. */
 .pro-free-note { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--muted); }
 
+/* Free-tier session nudge bar (Addendum 3, docs/PRO_PLAN.md) — inserted at
+   the top of <main> by public/scripts/chrome.js on the 3rd distinct tool page. */
+.vv-nudge {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem;
+  margin: 0 0 1rem; padding: 0.6rem 0.9rem; border-radius: 8px; font-size: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg));
+}
+.vv-nudge a { color: var(--accent); font-weight: 600; margin-left: 0.25rem; }
+.vv-nudge-dismiss {
+  flex: 0 0 auto; background: none; border: none; color: var(--muted);
+  font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0.15rem 0.4rem;
+}
+
 /* /pro waitlist form */
 .waitlist-form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; max-width: 32rem; margin: 0.75rem 0 1.25rem; }
 .waitlist-form input {

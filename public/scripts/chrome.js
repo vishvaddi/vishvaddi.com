@@ -95,3 +95,72 @@
     if (event.persisted) window.location.reload();
   });
 })();
+
+// Free-tier nudge + tool_view funnel counter (Addendum 3, docs/PRO_PLAN.md).
+// Site-wide script, so this duplicates the small track() helper in
+// src/scripts/site/pro.ts rather than importing it (this file is a plain
+// /public asset, not a module).
+(function () {
+  var METRIC_ENDPOINT = "/api/metric";
+  function track(event) {
+    var payload = JSON.stringify({ event: event });
+    try {
+      if (navigator.sendBeacon && navigator.sendBeacon(METRIC_ENDPOINT, new Blob([payload], { type: "application/json" }))) return;
+    } catch (e) {
+      /* fall through to fetch */
+    }
+    try {
+      fetch(METRIC_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload, keepalive: true }).catch(function () {});
+    } catch (e) {
+      /* ignore — a lost metric isn't worth surfacing */
+    }
+  }
+
+  var path = location.pathname.replace(/\/+$/, "") || "/";
+  function isToolPath(p) {
+    return /^\/site\//.test(p) || /^\/audio\//.test(p) || p === "/studio" || /^\/studio\//.test(p) || p === "/money" || /^\/money\//.test(p);
+  }
+  if (!isToolPath(path)) return;
+
+  track("tool_view");
+  if (path === "/pro") return; // never on /pro itself
+
+  try {
+    var seen = JSON.parse(sessionStorage.getItem("vv_tool_views") || "[]");
+    if (!Array.isArray(seen)) seen = [];
+    if (seen.indexOf(path) === -1) seen.push(path);
+    sessionStorage.setItem("vv_tool_views", JSON.stringify(seen));
+
+    var hasOwner = /(?:^|; )vv_owner=1(?:;|$)/.test(document.cookie);
+    var hasPro = /(?:^|; )vv_pro=1(?:;|$)/.test(document.cookie);
+    var dismissed = sessionStorage.getItem("vv_nudge_dismissed") === "1";
+    if (seen.length !== 3 || hasOwner || hasPro || dismissed) return;
+
+    var main = document.querySelector("main");
+    if (!main) return;
+    var bar = document.createElement("div");
+    bar.className = "vv-nudge";
+    bar.setAttribute("role", "note");
+    var text = document.createElement("span");
+    text.textContent = "Using these a lot? Pro is A$39 a year — unlimited exports, saved projects and sync. ";
+    var link = document.createElement("a");
+    link.href = "/pro";
+    link.textContent = "See Pro";
+    link.addEventListener("click", function () { track("nudge_click"); });
+    text.appendChild(link);
+    var close = document.createElement("button");
+    close.type = "button";
+    close.className = "vv-nudge-dismiss";
+    close.setAttribute("aria-label", "Dismiss");
+    close.textContent = "×";
+    close.addEventListener("click", function () {
+      bar.remove();
+      try { sessionStorage.setItem("vv_nudge_dismissed", "1"); } catch (e) { /* ignore */ }
+    });
+    bar.append(text, close);
+    main.insertBefore(bar, main.firstChild);
+    track("nudge_shown");
+  } catch (e) {
+    /* sessionStorage unavailable (private mode) — skip the nudge, tool_view already fired */
+  }
+})();
