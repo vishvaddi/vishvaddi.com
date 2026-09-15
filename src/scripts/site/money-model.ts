@@ -16,10 +16,47 @@ export interface Category { id: string; name: string; budget: number }
 export interface Account { id: string; name: string; type: AccountType; balance: number }
 // amount: negative = money out, positive = money in.
 export interface Transaction { id: string; date: string; amount: number; description: string; categoryId: string | null; accountId: string | null }
-export interface Snapshot { month: string; assets: number; liabilities: number; net: number; at: string }
-export interface Holding { id: string; name: string; units: number; avgCost: number; price: number; priceAt: string; currency: string }
+export interface SnapshotBreakdown { cash: number; investments: number; property: number; super: number }
+export interface Snapshot {
+  month: string; assets: number; liabilities: number; net: number; at: string;
+  byClass?: SnapshotBreakdown; income?: number; spend?: number; savingsRate?: number;
+}
+export type AssetClass = "share" | "etf" | "managed" | "crypto" | "commodity" | "other";
+export const ASSET_CLASSES: { id: AssetClass; label: string }[] = [
+  { id: "share", label: "Share" }, { id: "etf", label: "ETF" }, { id: "managed", label: "Managed fund" },
+  { id: "crypto", label: "Crypto" }, { id: "commodity", label: "Commodity" }, { id: "other", label: "Other" },
+];
+export interface Holding {
+  id: string; name: string; units: number; avgCost: number; price: number; priceAt: string; currency: string;
+  symbol?: string | null; assetClass?: AssetClass;
+}
 export interface Debt { id: string; name: string; balance: number; apr: number; minimum: number }
 export interface Rule { id: string; pattern: string; categoryId: string }
+
+// ── Property ──
+export interface PropertyMortgage { balance: number; rate: number; repayment: number; offsetBalance: number }
+export interface Property {
+  id: string; name: string; purchasePrice: number; purchaseDate: string;
+  currentValue: number; valuedAt: string;
+  // Either link an existing Debt (its balance is the liability) or keep a
+  // dedicated mortgage here — never both.
+  debtId: string | null; mortgage: PropertyMortgage | null;
+  rentPerWeek: number | null; expensesPerYear: number;
+}
+
+// ── Super ──
+export interface SuperSettings {
+  balance: number; salary: number; employerPct: number; extraPerYear: number;
+  returnPct: number; feePct: number; yearsToPreservation: number;
+}
+export const DEFAULT_SUPER: SuperSettings = { balance: 0, salary: 0, employerPct: 12, extraPerYear: 0, returnPct: 7, feePct: 0.7, yearsToPreservation: 30 };
+
+// ── FIRE ──
+export interface FireSettings {
+  withdrawalPct: number; currentAge: number | null; retirementAge: number;
+  includeSuper: boolean; expensesOverride: number | null; returnPct: number;
+}
+export const DEFAULT_FIRE: FireSettings = { withdrawalPct: 4, currentAge: null, retirementAge: 65, includeSuper: true, expensesOverride: null, returnPct: 7 };
 export interface ColumnMapping {
   date: number;
   dateFormat: DateFormat;
@@ -41,6 +78,9 @@ export interface MoneyData {
   debts: Debt[];
   rules: Rule[];
   presets: CsvPreset[];
+  properties: Property[];
+  super: SuperSettings;
+  fire: FireSettings;
   settings: { month: string; extra?: number; strategy?: Strategy };
 }
 
@@ -70,14 +110,51 @@ export function slug(name: string): string {
 export function initialData(month = currentMonth()): MoneyData {
   const categories = DEFAULT_CATEGORIES.map(([name, budget]) => ({ id: slug(name), name, budget }));
   const rules = DEFAULT_RULES.map(([pattern, cat], i) => ({ id: `rule-${i}`, pattern, categoryId: slug(cat) }));
-  return { categories, accounts: [], transactions: [], snapshots: [], holdings: [], debts: [], rules, presets: [], settings: { month } };
+  return {
+    categories, accounts: [], transactions: [], snapshots: [], holdings: [], debts: [], rules, presets: [],
+    properties: [], super: { ...DEFAULT_SUPER }, fire: { ...DEFAULT_FIRE }, settings: { month },
+  };
 }
 
 export function isMoneyData(d: unknown): d is MoneyData {
   if (!d || typeof d !== "object") return false;
   const o = d as Record<string, unknown>;
-  return ["categories", "accounts", "transactions", "snapshots", "holdings", "debts", "rules", "presets"].every((k) => Array.isArray(o[k]))
-    && typeof o.settings === "object" && o.settings !== null;
+  return ["categories", "accounts", "transactions", "snapshots", "holdings", "debts", "rules", "presets", "properties"].every((k) => Array.isArray(o[k]))
+    && typeof o.settings === "object" && o.settings !== null
+    && typeof o.super === "object" && o.super !== null
+    && typeof o.fire === "object" && o.fire !== null;
+}
+
+// Structural migration from any earlier shape (missing arrays/objects get
+// defaults; existing data is kept as-is since the new fields are additive).
+export function migrateMoneyData(doc: { version?: number; data?: unknown }): MoneyData {
+  const raw = (doc?.data && typeof doc.data === "object" ? (doc.data as Record<string, unknown>) : {}) as Record<string, unknown>;
+  const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+  const settingsRaw = (raw.settings && typeof raw.settings === "object" ? (raw.settings as Record<string, unknown>) : {}) as Record<string, unknown>;
+  const month = typeof settingsRaw.month === "string" ? settingsRaw.month : currentMonth();
+  const base = initialData(month);
+  const categories = arr(raw.categories) as Category[];
+  const rules = arr(raw.rules) as Rule[];
+  const superRaw = (raw.super && typeof raw.super === "object" ? (raw.super as Partial<SuperSettings>) : {});
+  const fireRaw = (raw.fire && typeof raw.fire === "object" ? (raw.fire as Partial<FireSettings>) : {});
+  return {
+    categories: categories.length ? categories : base.categories,
+    accounts: arr(raw.accounts) as Account[],
+    transactions: arr(raw.transactions) as Transaction[],
+    snapshots: arr(raw.snapshots) as Snapshot[],
+    holdings: (arr(raw.holdings) as Holding[]).map((h) => ({ symbol: null, assetClass: "other" as AssetClass, ...h })),
+    debts: arr(raw.debts) as Debt[],
+    rules: rules.length ? rules : base.rules,
+    presets: arr(raw.presets) as CsvPreset[],
+    properties: arr(raw.properties) as Property[],
+    super: { ...DEFAULT_SUPER, ...superRaw },
+    fire: { ...DEFAULT_FIRE, ...fireRaw },
+    settings: {
+      month,
+      extra: typeof settingsRaw.extra === "number" ? settingsRaw.extra : undefined,
+      strategy: settingsRaw.strategy === "snowball" || settingsRaw.strategy === "avalanche" ? (settingsRaw.strategy as Strategy) : undefined,
+    },
+  };
 }
 
 // ── Dates ──
@@ -449,6 +526,113 @@ export function addMonths(iso: string, months: number): string {
   const [y, m, d] = iso.split("-").map(Number);
   const dt = new Date(y, m - 1 + months, d);
   return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+}
+
+// ── Property ──
+export function propertyLiability(p: Property, debts: Debt[]): number {
+  if (p.debtId) return debts.find((d) => d.id === p.debtId)?.balance ?? 0;
+  if (p.mortgage) return Math.max(0, round2(p.mortgage.balance - p.mortgage.offsetBalance));
+  return 0;
+}
+
+export function propertyEquity(p: Property, debts: Debt[]): number {
+  return round2(p.currentValue - propertyLiability(p, debts));
+}
+
+export interface PropertyMetrics { liability: number; equity: number; lvr: number; grossYield: number; netYield: number; annualisedGrowth: number | null }
+export function propertyMetrics(p: Property, debts: Debt[], asOfIso: string): PropertyMetrics {
+  const liability = propertyLiability(p, debts);
+  const equity = round2(p.currentValue - liability);
+  const lvr = p.currentValue > 0 ? liability / p.currentValue : 0;
+  const annualRent = (p.rentPerWeek ?? 0) * 52;
+  const grossYield = p.currentValue > 0 ? annualRent / p.currentValue : 0;
+  const netYield = p.currentValue > 0 ? (annualRent - p.expensesPerYear) / p.currentValue : 0;
+  const months = monthsBetween(p.purchaseDate, asOfIso);
+  const annualisedGrowth = months > 0 && p.purchasePrice > 0 ? Math.pow(p.currentValue / p.purchasePrice, 12 / months) - 1 : null;
+  return { liability, equity, lvr, grossYield, netYield, annualisedGrowth };
+}
+
+export function investedAssetsTotal(holdings: Holding[], properties: Property[], debts: Debt[], superBalance: number, includeSuper: boolean): number {
+  const holdingsValue = holdingsSummary(holdings).value;
+  const propertyEq = properties.reduce((s, p) => s + propertyEquity(p, debts), 0);
+  return round2(holdingsValue + propertyEq + (includeSuper ? superBalance : 0));
+}
+
+// ── Super ──
+// Employer + extra contributions are treated as concessional, taxed at 15% on
+// the way in — the common case for salary-sacrifice and SG contributions.
+const SUPER_CONTRIB_TAX = 0.15;
+export interface SuperInput { balance: number; salary: number; employerPct: number; extraPerYear: number; returnPct: number; feePct: number; years: number }
+export interface SuperResult { series: number[]; finalBalance: number; totalContributions: number; totalTax: number }
+export function superProjection(input: SuperInput): SuperResult {
+  const employerAnnual = input.salary * (input.employerPct / 100);
+  const grossContrib = employerAnnual + input.extraPerYear;
+  const netContrib = round2(grossContrib * (1 - SUPER_CONTRIB_TAX));
+  const netAnnualReturn = (input.returnPct - input.feePct) / 100;
+  const years = Math.max(0, Math.round(input.years));
+  let balance = input.balance;
+  const series = [round2(balance)];
+  let totalContrib = 0, totalTax = 0;
+  for (let y = 0; y < years; y++) {
+    totalTax += round2(grossContrib * SUPER_CONTRIB_TAX);
+    totalContrib += netContrib;
+    balance = balance * (1 + netAnnualReturn) + netContrib;
+    series.push(round2(balance));
+  }
+  return { series, finalBalance: series[series.length - 1], totalContributions: round2(totalContrib), totalTax: round2(totalTax) };
+}
+
+// ── FIRE ──
+export function fiNumber(annualExpenses: number, withdrawalPct: number): number {
+  return withdrawalPct > 0 ? round2(annualExpenses / (withdrawalPct / 100)) : 0;
+}
+
+// Trailing income/expenses over `months` calendar months ending in the month
+// of `asOfIso` (inclusive) — feeds the FIRE dashboard's default annual expenses.
+export function trailingWindow(transactions: Transaction[], asOfIso: string, months = 12): { income: number; expenses: number } {
+  const asOfMonth = asOfIso.slice(0, 7);
+  const startMonth = shiftMonth(asOfMonth, -(months - 1));
+  const start = `${startMonth}-01`;
+  let income = 0, expenses = 0;
+  for (const t of transactions) {
+    if (t.date < start || t.date > asOfIso) continue;
+    if (t.amount > 0) income += t.amount; else expenses += -t.amount;
+  }
+  return { income: round2(income), expenses: round2(expenses) };
+}
+
+// Closed-form years to reach `target` from `current`, contributing
+// `annualContribution` a year at `returnPct` p.a. (contributions at year-end).
+export function yearsToFi(current: number, annualContribution: number, target: number, returnPct: number): number | null {
+  if (current >= target) return 0;
+  const r = returnPct / 100;
+  if (r === 0) return annualContribution > 0 ? round2((target - current) / annualContribution) : null;
+  if (annualContribution === 0) {
+    if (current <= 0) return null;
+    const n = Math.log(target / current) / Math.log(1 + r);
+    return n > 0 ? round2(n) : 0;
+  }
+  const k = annualContribution / r;
+  const ratio = (target + k) / (current + k);
+  if (ratio <= 0) return null;
+  const n = Math.log(ratio) / Math.log(1 + r);
+  return n > 0 ? round2(n) : 0;
+}
+
+// The age at which today's balance, left to compound with no further
+// contributions, would still reach `fiTarget` by `retirementAge` — i.e. the
+// year you could stop saving and "coast" to FI. Simulated year by year since
+// each birthday changes both the balance and the years left to grow it.
+export function coastFireAge(current: number, annualContribution: number, returnPct: number, currentAge: number, retirementAge: number, fiTarget: number): number | null {
+  const r = returnPct / 100;
+  let balance = current;
+  for (let age = currentAge; age <= retirementAge; age++) {
+    const yearsLeft = retirementAge - age;
+    const projected = balance * Math.pow(1 + r, yearsLeft);
+    if (projected >= fiTarget) return age;
+    balance = balance * (1 + r) + annualContribution;
+  }
+  return null;
 }
 
 // ── Projections ──

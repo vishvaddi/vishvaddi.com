@@ -34,24 +34,24 @@ const tokenFrom = (response) => response.headers.get('Set-Cookie').split(';')[0]
 
 test('private content stays closed without a session, including APIs and alternate hostnames', async () => {
   const { env, assets } = setup()
-  for (const path of ['/', '/money', '/api/deep-swarm/account', '/games/deep-swarm/', '/%6cogin', '//login', '/login/']) {
+  for (const path of ['/', '/api/deep-swarm/account', '/games/deep-swarm/', '/%6cogin', '//login', '/login/']) {
     assert.equal((await worker.fetch(request(path), env)).status, 401, path)
   }
-  assert.equal((await worker.fetch(new Request('https://alternate.workers.dev/money'), env)).status, 401)
+  assert.equal((await worker.fetch(new Request('https://alternate.workers.dev/kitchen'), env)).status, 401)
   assert.equal((await worker.fetch(request('/', { headers: { 'Sec-Fetch-Dest': 'document' } }), env)).headers.get('Location'), '/login')
   assert.equal(assets(), 0)
 })
 
 test('PUBLIC_PATHS fall through to the site without a session', async () => {
   const { env, assets } = setup()
-  for (const path of ['/site/', '/terms/', '/privacy/', '/sitemap-index.xml', '/_astro/app.js', '/fonts/font.woff2']) {
+  for (const path of ['/site/', '/terms/', '/privacy/', '/money/', '/sitemap-index.xml', '/_astro/app.js', '/fonts/font.woff2']) {
     const response = await worker.fetch(request(path), env)
     assert.equal(response.status, 200, path)
     assert.equal(await response.text(), 'private asset', path)
     assert.equal(response.headers.get('X-Robots-Tag'), null, `${path} stays indexable`)
     assert.equal(response.headers.get('Cache-Control'), 'public, max-age=31536000', `${path} keeps asset caching`)
   }
-  assert.equal(assets(), 6)
+  assert.equal(assets(), 7)
 })
 
 test('configuration and limiter failures fail closed', async () => {

@@ -5,6 +5,7 @@ import { handleProRequest, activeLicenceHash } from "./pro.ts";
 import type { ProEnv } from "./pro.ts";
 import { handleWaitlist } from "./waitlist.ts";
 import type { WaitlistEnv } from "./waitlist.ts";
+import { handleMarket } from "./market.ts";
 export { PinAttempts } from "./auth.ts";
 interface DurableObjectState {
   storage: { get<T>(k: string): Promise<T | undefined>; put(k: string, v: unknown): Promise<void> };
@@ -753,6 +754,8 @@ const site = {
     // Currency exchange-rate proxy for the unit converter. Keeps the page CSP at
     // connect-src 'self'; rates are cached for an hour. open.er-api.com is free
     // and needs no key.
+    if (path === "/api/market") return handleMarket(request, env, url);
+
     if (path === "/api/fx" && request.method === "GET") {
       try {
         const upstream = await fetch("https://open.er-api.com/v6/latest/USD", {

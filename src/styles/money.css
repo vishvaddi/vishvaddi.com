@@ -21,6 +21,7 @@
   border-radius: 6px; background: var(--bg); color: var(--fg); width: 100%;
 }
 .money-check { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; margin: 0.5rem 0; }
+.money-check input[type="range"] { flex: 1; min-width: 0; }
 
 .money-row { padding: 0.55rem 0; border-bottom: 1px solid var(--site-line); }
 .money-row-head { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
