@@ -49,12 +49,15 @@ try {
   await publicPage.waitForSelector('.pdf-page-card')
   const urlBefore = publicPage.url()
   await publicPage.locator('#pdf-export').click()
+  // requirePro asks /api/pro/use before deciding, so the panel arrives a tick later.
+  await publicPage.waitForSelector('#pro-upsell', { timeout: 5000 }).catch(() => {})
   check('Pro: PDF export shows the upsell panel for a public visitor', await publicPage.locator('#pro-upsell').count() === 1)
   check('Pro: upsell panel click does not navigate', publicPage.url() === urlBefore)
 
   await publicPage.goto(`${BASE}/site/cut-list/`, { waitUntil: 'domcontentloaded' })
   await publicPage.waitForSelector('#save-pdf:not([hidden])')
   await publicPage.locator('#save-pdf').click()
+  await publicPage.waitForSelector('#pro-upsell[data-feature="cut-list-save-pdf"]', { timeout: 5000 }).catch(() => {})
   check('Pro: cut-list Save as PDF shows the upsell panel', await publicPage.locator('#pro-upsell[data-feature="cut-list-save-pdf"]').count() === 1)
 
   await publicPage.goto(`${BASE}/pro/`, { waitUntil: 'domcontentloaded' })
