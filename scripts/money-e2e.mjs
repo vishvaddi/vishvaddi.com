@@ -19,9 +19,15 @@ try {
   page.on('pageerror', (error) => errors.push(String(error)))
   page.on('dialog', (dialog) => dialog.accept('Test Bank'))
 
+  const stubStatus = (status) => page.route('**/api/pro/status', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(status) }))
+  await stubStatus({ pro: false, source: null, configured: true })
+  await page.route('**/api/pro/use', (route) => route.fulfill({ status: 402, contentType: 'application/json', body: '{"allowed":false}' }))
+
   await page.goto(`${BASE}/money/`, { waitUntil: 'domcontentloaded' })
+  check('Money: /money/ has no noindex meta (public + Pro-gated)', await page.locator('meta[name="robots"]').count() === 0)
   await page.waitForSelector('#money-tabs .money-tab')
-  check('Money: seven section tabs render', await page.locator('#money-tabs .money-tab').count() === 7)
+  check('Money: eleven section tabs render', await page.locator('#money-tabs .money-tab').count() === 11)
   check('Money: no horizontal body scroll at 390px', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1))
 
   await page.locator('[data-tab="budget"]').click()
@@ -91,6 +97,48 @@ try {
   check('Reload: budget category and transactions persist', await page.locator('.mb-row[data-cat="pets"]').count() === 1 && await page.evaluate(() => JSON.parse(localStorage.getItem('vv_money')).data.transactions.length === 4))
   await page.locator('[data-tab="overview"]').click()
   check('Overview: renders debt-free and net worth stats', (await page.locator('[data-panel="overview"] .stat').count()) >= 8)
+
+  // ── Pro gating for a public visitor (stubbed /api/pro/status + /api/pro/use above) ──
+  await page.locator('[data-tab="fire"]').click()
+  check('FIRE: tab click shows the upsell panel for a public visitor', await page.locator('.pro-upsell[data-feature="fire"]').count() === 1)
+  check('FIRE: panel itself stays hidden (gate is on opening the tab)', await page.locator('[data-panel="fire"]').isHidden())
+
+  await page.locator('[data-tab="property"]').click()
+  check('Property: viewing the tab stays open for a public visitor', await page.locator('[data-panel="property"]').isVisible())
+  await page.locator('#mpr-name').fill('Investment unit')
+  await page.locator('#mpr-price').fill('500000')
+  await page.locator('#mpr-value').fill('800000')
+  await page.locator('#mpr-add').click()
+  check('Property: adding shows the upsell panel for a public visitor', await page.locator('.pro-upsell[data-feature="property"]').count() === 1)
+  check('Property: no property was added for a public visitor', await page.locator('.mp-row').count() === 0)
+
+  // ── Owner: always Pro ──
+  await page.unroute('**/api/pro/status')
+  await stubStatus({ pro: true, source: 'owner', configured: true })
+  await page.evaluate(() => { document.cookie = 'vv_owner=1; path=/' })
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.locator('[data-tab="property"]').click()
+  await page.locator('#mpr-name').fill('Investment unit')
+  await page.locator('#mpr-price').fill('500000')
+  await page.locator('#mpr-date').fill('2016-09-14')
+  await page.locator('#mpr-value').fill('800000')
+  await page.locator('#mpr-valued-at').fill('2026-09-14')
+  await page.locator('#mpr-add').click()
+  const propertyRow = page.locator('.mp-row')
+  check('Property: owner can add a property and see LVR', await propertyRow.count() === 1 && (await propertyRow.first().innerText()).includes('LVR'))
+
+  await page.locator('[data-tab="fire"]').click()
+  check('FIRE: owner opens the tab straight through', await page.locator('[data-panel="fire"]').isVisible() && await page.locator('.pro-upsell').count() === 0)
+
+  await page.locator('[data-tab="super"]').click()
+  const superBox = await page.locator('#money-super-chart').boundingBox()
+  check('Super: projection renders a chart', superBox && superBox.width > 100 && superBox.height > 100)
+
+  await page.locator('[data-tab="overview"]').click()
+  await page.locator('#mo-record').click()
+  await page.locator('[data-tab="history"]').click()
+  check('History: "Record this month" adds a row', await page.locator('.mh-row').count() === 1)
+
   check('Money: console is clean', errors.length === 0, errors.slice(0, 2).join(' | '))
   await page.close()
 } catch (error) {

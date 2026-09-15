@@ -46,9 +46,9 @@ const navPrimary: [string, string][] = [
 const navMoreGroups: { label: string | null; links: [string, string][]; private?: boolean }[] = [
   { label: "Music", links: [["/studio", "Studio"], ["/audio", "Audio tools"], ["/radio", "Radio"]] },
   { label: "Read", links: [["/notes", "Notes"], ["/reader", "Reader"], ["/feeds", "Feeds"]], private: true },
-  { label: "Life", links: [["/kitchen", "Kitchen"], ["/money", "Money"], ["/training", "Training"]], private: true },
+  { label: "Life", links: [["/kitchen", "Kitchen"], ["/training", "Training"]], private: true },
   { label: "Logs", links: [["/music", "Listening"], ["/tv", "TV"], ["/movies", "Movies"], ["/books", "Books"]], private: true },
-  { label: null, links: [["/games", "Games"], ["/pro", "Pro"], ["/about", "About"], ["/logout", "Lock site"]] },
+  { label: null, links: [["/games", "Games"], ["/money", "Money"], ["/pro", "Pro"], ["/about", "About"], ["/logout", "Lock site"]] },
 ];
 const navMore: [string, string][] = navMoreGroups.flatMap((group) => group.links);
 const pathOnly = (href: string) => href.split("#")[0].split("?")[0].replace(/\/$/, "") || "/";

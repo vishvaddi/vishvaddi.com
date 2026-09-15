@@ -4,19 +4,27 @@
 import { createStore, mountStoreControls, uid, todayIso } from "./store";
 import { download } from "./calc";
 import { drawLineChart, watchTheme } from "./money-chart";
+import { requirePro, proState } from "./pro";
 import {
-  ACCOUNT_TYPES, type MoneyData, type Transaction, type ColumnMapping, type DateFormat, type Strategy, type AccountType,
-  initialData, isMoneyData, currentMonth, shiftMonth, fmtAud, fmtDateAu, fmtMonth, round2,
+  ACCOUNT_TYPES, ASSET_CLASSES, type MoneyData, type Transaction, type ColumnMapping, type DateFormat, type Strategy, type AccountType,
+  type AssetClass, type Property, type PropertyMortgage, type Holding,
+  initialData, isMoneyData, migrateMoneyData, currentMonth, shiftMonth, fmtAud, fmtDateAu, fmtMonth, round2,
   parseCsv, guessMapping, rowsToImportRows, dedupe, headerSignature, detectDateFormat, categorise, applyRules,
   budgetSummary, topCategories, netWorth, upsertSnapshot, holdingsSummary, payoffPlan, addMonths,
   compoundProjection, savingsGoal, monthsBetween, transactionsCsv, slug,
+  propertyMetrics, propertyEquity, propertyLiability, superProjection, fiNumber, yearsToFi, coastFireAge, trailingWindow, investedAssetsTotal,
 } from "./money-model";
 
-type Panel = "overview" | "budget" | "transactions" | "networth" | "investments" | "debts" | "projections";
+type Panel = "overview" | "budget" | "transactions" | "networth" | "investments" | "property" | "super" | "debts" | "fire" | "projections" | "history";
 const PANELS: [Panel, string][] = [
   ["overview", "Overview"], ["budget", "Budget"], ["transactions", "Transactions"], ["networth", "Net worth"],
-  ["investments", "Investments"], ["debts", "Debts"], ["projections", "Projections"],
+  ["investments", "Investments"], ["property", "Property"], ["super", "Super"], ["debts", "Debts"], ["fire", "FIRE"],
+  ["projections", "Projections"], ["history", "History"],
 ];
+// Gated at the tab level (clicking the tab checks Pro first, matching
+// docs/PRO_PLAN.md — "Pro-gated ... on opening the tab"). Property gates only
+// the add action, so it is deliberately not in this set.
+const GATED_TABS: Partial<Record<Panel, string>> = { fire: "fire" };
 
 // ── tiny DOM helpers ──
 const mk = (tag: string, cls?: string, text?: string): HTMLElement => {
@@ -82,7 +90,7 @@ const signed = (n: number): string => (n > 0 ? "+" : "") + fmtAud(n);
 export function initMoney(): void {
   const root = document.getElementById("money-app");
   if (!root) return;
-  const store = createStore<MoneyData>({ key: "money", version: 1, initial: () => initialData(), validate: isMoneyData });
+  const store = createStore<MoneyData>({ key: "money", version: 2, initial: () => initialData(), migrate: migrateMoneyData, validate: isMoneyData });
   const controlsHost = document.getElementById("money-store");
   const redraws = new Map<Panel, () => void>();
 
@@ -100,7 +108,8 @@ export function initMoney(): void {
   if (!PANELS.some(([p]) => p === active)) active = "overview";
 
   for (const [id, label] of PANELS) {
-    const b = btn(label, "money-tab", () => show(id));
+    const gate = GATED_TABS[id];
+    const b = btn(label, "money-tab", gate ? () => requirePro(gate, () => show(id), b) : () => show(id));
     b.dataset.tab = id;
     b.setAttribute("role", "tab");
     tabs.append(b);
@@ -124,10 +133,41 @@ export function initMoney(): void {
   const accOptions = (): [string, string][] => [["", "— no account —"], ...store.get().accounts.map((a) => [a.id, a.name] as [string, string])];
   const catName = (id: string | null): string => store.get().categories.find((c) => c.id === id)?.name ?? "Uncategorised";
 
+  // Shared by the Overview "Record this month" button and the History tab —
+  // declared at this scope (not inside either panel's own block) so both can
+  // reach it. Extends the plain net-worth snapshot with a class breakdown and
+  // this month's income/spend, migrating old snapshots implicitly since those
+  // fields are optional.
+  function recordSnapshot(): string {
+    const d = store.get();
+    const month = currentMonth();
+    const nw = netWorth(d.accounts);
+    const holdingsValue = holdingsSummary(d.holdings).value;
+    const propertyValue = d.properties.reduce((s, p) => s + p.currentValue, 0);
+    const propertyLiab = d.properties.reduce((s, p) => s + propertyLiability(p, d.debts), 0);
+    const assets = round2(nw.assets + holdingsValue + propertyValue + d.super.balance);
+    const liabilities = round2(nw.liabilities + propertyLiab);
+    const net = round2(assets - liabilities);
+    const budget = budgetSummary(d, month, todayIso());
+    const savingsRate = budget.incomeTotal > 0 ? round2((budget.incomeTotal - budget.spentTotal) / budget.incomeTotal) : 0;
+    const snap = {
+      month, assets, liabilities, net, at: new Date().toISOString(),
+      byClass: { cash: nw.assets, investments: holdingsValue, property: round2(propertyValue - propertyLiab), super: d.super.balance },
+      income: budget.incomeTotal, spend: budget.spentTotal, savingsRate,
+    };
+    store.update((dd) => { dd.snapshots = upsertSnapshot(dd.snapshots, snap); });
+    redraws.get("history")?.();
+    return `Saved ${fmtMonth(month)}: ${fmtAud(net)}.`;
+  }
+
   // ════════ Overview ════════
   {
     const panel = panels.get("overview")!;
     panel.append(mk("h2", undefined, "Overview"));
+    const recordRow = mk("div", "btn-row");
+    const recordStatus = mk("span", "calc-blurb");
+    recordRow.append(btn("Record this month", "btn btn-ghost btn-sm", () => { recordStatus.textContent = recordSnapshot(); }, "mo-record"), recordStatus);
+    panel.append(recordRow);
     const body = mk("div");
     panel.append(body);
     redraws.set("overview", () => {
@@ -441,11 +481,13 @@ export function initMoney(): void {
     const list = mk("div");
     listSec.append(listStats, list);
     const exportRow = mk("div", "btn-row");
-    exportRow.append(btn("Export CSV", "btn btn-ghost btn-sm", () => {
+    const exportBtn = btn("Export CSV", "btn btn-ghost btn-sm", () => {}, "mt-export-csv");
+    exportBtn.addEventListener("click", () => requirePro("csv-export", () => {
       const d = store.get();
       const blob = new Blob(["﻿" + transactionsCsv(d.transactions, d.categories, d.accounts)], { type: "text/csv;charset=utf-8" });
       download("money-transactions.csv", URL.createObjectURL(blob));
-    }, "mt-export-csv"), btn("Delete shown", "btn btn-ghost btn-sm", () => {
+    }, exportBtn));
+    exportRow.append(exportBtn, btn("Delete shown", "btn btn-ghost btn-sm", () => {
       const shown = filtered();
       if (!shown.length || !confirm(`Delete the ${shown.length} transactions currently shown?`)) return;
       const ids = new Set(shown.map((t) => t.id));
@@ -576,30 +618,71 @@ export function initMoney(): void {
   {
     const panel = panels.get("investments")!;
     panel.append(mk("h2", undefined, "Investments"));
-    panel.append(mk("p", "calc-blurb", "Prices are entered by hand — no live feeds. Note the date you looked them up."));
+    panel.append(mk("p", "calc-blurb", "Prices are entered by hand, or refreshed live with Pro. Note the date you looked them up."));
     const totals = mk("div");
+    const refreshRow = mk("div", "btn-row");
+    const refreshStatus = mk("span", "calc-blurb");
     const tableWrap = mk("div", "money-table-wrap");
     const form = mk("div", "calc");
     let editing: string | null = null;
+    // Day change from the last live refresh — deliberately not persisted, it's
+    // only meaningful for the session that fetched it.
+    const dayChange = new Map<string, { change: number; changePercent: number }>();
     form.append(mk("h3", undefined, "Add holding"));
     const hName = input("text", "mi-name", { placeholder: "VAS / Vanguard AU shares" });
+    const hSymbol = input("text", "mi-symbol", { placeholder: "e.g. VAS.AX, BTC-AUD (optional)" });
+    const hClass = select(ASSET_CLASSES.map((c) => [c.id, c.label]), "mi-class");
     const hUnits = input("number", "mi-units", { step: "0.0001", min: "0" });
     const hCost = input("number", "mi-cost", { step: "0.01", min: "0", placeholder: "avg cost / unit" });
     const hPrice = input("number", "mi-price", { step: "0.01", min: "0", placeholder: "current price" });
     const hAt = input("date", "mi-at"); hAt.value = todayIso();
     const hCur = input("text", "mi-cur", { maxlength: "3" }); hCur.value = "AUD";
-    form.append(fields(field("Ticker / name", hName), field("Units", hUnits), field("Avg cost per unit", hCost), field("Current price", hPrice), field("Price as at", hAt), field("Currency", hCur)));
+    form.append(fields(
+      field("Ticker / name", hName), field("Symbol (for live prices)", hSymbol), field("Asset class", hClass),
+      field("Units", hUnits), field("Avg cost per unit", hCost), field("Current price", hPrice),
+      field("Price as at", hAt), field("Currency", hCur),
+    ));
     const formRow = mk("div", "btn-row");
     const saveBtn = btn("Add holding", "btn", () => {
       if (!hName.value.trim()) return;
-      const h = { id: editing ?? uid(), name: hName.value.trim(), units: num(hUnits), avgCost: num(hCost), price: num(hPrice), priceAt: hAt.value || todayIso(), currency: (hCur.value.trim().toUpperCase() || "AUD") };
+      const h: Holding = {
+        id: editing ?? uid(), name: hName.value.trim(), units: num(hUnits), avgCost: num(hCost), price: num(hPrice),
+        priceAt: hAt.value || todayIso(), currency: (hCur.value.trim().toUpperCase() || "AUD"),
+        symbol: hSymbol.value.trim().toUpperCase() || null, assetClass: hClass.value as AssetClass,
+      };
       store.update((d) => { d.holdings = editing ? d.holdings.map((x) => (x.id === editing ? h : x)) : [...d.holdings, h]; });
-      editing = null; saveBtn.textContent = "Add holding"; hName.value = ""; hUnits.value = ""; hCost.value = ""; hPrice.value = "";
+      editing = null; saveBtn.textContent = "Add holding"; hName.value = ""; hSymbol.value = ""; hUnits.value = ""; hCost.value = ""; hPrice.value = "";
     }, "mi-add");
     formRow.append(saveBtn);
     form.append(formRow);
-    panel.append(totals, tableWrap, form);
+    const refreshBtn = btn("Refresh prices", "btn btn-ghost btn-sm", () => requirePro("live-prices", () => { void refreshPrices(); }, refreshBtn), "mi-refresh");
+    refreshRow.append(refreshBtn, refreshStatus);
+    panel.append(totals, refreshRow, tableWrap, form);
     const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+
+    async function refreshPrices(): Promise<void> {
+      const symbols = Array.from(new Set(store.get().holdings.map((h) => h.symbol).filter((s): s is string => !!s)));
+      if (!symbols.length) { refreshStatus.textContent = "No holdings have a symbol set."; return; }
+      refreshStatus.textContent = "Refreshing…";
+      try {
+        const res = await fetch(`/api/market?symbols=${symbols.map(encodeURIComponent).join(",")}`, { headers: { Accept: "application/json" } });
+        if (!res.ok) { refreshStatus.textContent = res.status === 401 ? "Pro required for live prices." : `Refresh failed (${res.status}).`; return; }
+        const body = (await res.json()) as { prices: Record<string, { price: number; asAt: string; change?: number; changePercent?: number }> };
+        let updated = 0;
+        store.update((d) => {
+          d.holdings = d.holdings.map((h) => {
+            const sym = h.symbol ? body.prices[h.symbol] : undefined;
+            if (!sym) return h;
+            updated++;
+            if (typeof sym.change === "number" && typeof sym.changePercent === "number") dayChange.set(h.id, { change: sym.change, changePercent: sym.changePercent });
+            return { ...h, price: sym.price, priceAt: sym.asAt.slice(0, 10) };
+          });
+        });
+        refreshStatus.textContent = updated ? `Updated ${updated} of ${symbols.length} priced holdings.` : "No matching prices came back.";
+      } catch {
+        refreshStatus.textContent = "Offline — try again.";
+      }
+    }
 
     redraws.set("investments", () => {
       const d = store.get();
@@ -610,23 +693,181 @@ export function initMoney(): void {
       if (!d.holdings.length) { tableWrap.append(mk("p", "calc-blurb", "No holdings yet.")); return; }
       const table = mk("table", "money-table");
       const thead = mk("thead"); const hr = mk("tr");
-      for (const h of ["Holding", "Units", "Avg cost", "Price", "Value", "Gain", "Weight", ""]) hr.append(mk("th", undefined, h));
+      for (const h of ["Holding", "Class", "Units", "Avg cost", "Price", "Day", "Value", "Gain", "Weight", ""]) hr.append(mk("th", undefined, h));
       thead.append(hr); table.append(thead);
       const tb = mk("tbody");
       for (const l of s.lines) {
         const tr = mk("tr"); tr.className = "mi-row";
-        const nameCell = mk("td"); nameCell.append(mk("div", "rec-title", l.holding.name), mk("div", "rec-meta", `${l.holding.currency} · as at ${fmtDateAu(l.holding.priceAt)}`));
-        tr.append(nameCell, mk("td", "money-mono", String(l.holding.units)), mk("td", "money-mono", fmtAud(l.holding.avgCost)), mk("td", "money-mono", fmtAud(l.holding.price)),
+        const nameCell = mk("td");
+        nameCell.append(mk("div", "rec-title", l.holding.name), mk("div", "rec-meta", `${l.holding.symbol ? l.holding.symbol + " · " : ""}${l.holding.currency} · as at ${fmtDateAu(l.holding.priceAt)}`));
+        const dc = dayChange.get(l.holding.id);
+        const dayCell = mk("td", "money-mono" + (dc ? dc.change < 0 ? " neg" : " pos" : ""), dc ? `${signed(round2(dc.change))} (${dc.changePercent.toFixed(2)}%)` : "—");
+        tr.append(nameCell, mk("td", "money-mono", ASSET_CLASSES.find((c) => c.id === l.holding.assetClass)?.label ?? "Other"),
+          mk("td", "money-mono", String(l.holding.units)), mk("td", "money-mono", fmtAud(l.holding.avgCost)), mk("td", "money-mono", fmtAud(l.holding.price)), dayCell,
           mk("td", "money-mono", fmtAud(l.value)), mk("td", "money-mono " + (l.gain < 0 ? "neg" : "pos"), `${signed(l.gain)} (${pct(l.gainPct)})`), mk("td", "money-mono", pct(l.weight)));
         const act = mk("td");
         act.append(btn("Edit", "btn btn-ghost btn-sm", () => {
           editing = l.holding.id; saveBtn.textContent = "Save";
-          hName.value = l.holding.name; hUnits.value = String(l.holding.units); hCost.value = String(l.holding.avgCost); hPrice.value = String(l.holding.price); hAt.value = l.holding.priceAt; hCur.value = l.holding.currency;
+          hName.value = l.holding.name; hSymbol.value = l.holding.symbol ?? ""; hClass.value = l.holding.assetClass ?? "other";
+          hUnits.value = String(l.holding.units); hCost.value = String(l.holding.avgCost); hPrice.value = String(l.holding.price); hAt.value = l.holding.priceAt; hCur.value = l.holding.currency;
           form.scrollIntoView({ behavior: "smooth", block: "center" });
         }), btn("✕", "btn btn-ghost btn-sm", () => store.update((dd) => { dd.holdings = dd.holdings.filter((x) => x.id !== l.holding.id); })));
         tr.append(act); tb.append(tr);
       }
       table.append(tb); tableWrap.append(table);
+    });
+  }
+
+  // ════════ Property ════════
+  {
+    const panel = panels.get("property")!;
+    panel.append(mk("h2", undefined, "Property"));
+    panel.append(mk("p", "calc-blurb", "Link an existing debt as the mortgage, or enter one just for this property. Viewing is free — adding a property is Pro."));
+    const totals = mk("div");
+    const list = mk("div");
+    const form = mk("div", "calc");
+    let editing: string | null = null;
+    form.append(mk("h3", undefined, "Add property"));
+    const pName = input("text", "mpr-name", { placeholder: "e.g. Investment unit" });
+    const pPrice = input("number", "mpr-price", { step: "100", min: "0" });
+    const pDate = input("date", "mpr-date"); pDate.value = todayIso();
+    const pValue = input("number", "mpr-value", { step: "100", min: "0" });
+    const pValuedAt = input("date", "mpr-valued-at"); pValuedAt.value = todayIso();
+    const pRent = input("number", "mpr-rent", { step: "5", min: "0", placeholder: "optional" });
+    const pExpenses = input("number", "mpr-expenses", { step: "100", min: "0" }); pExpenses.value = "0";
+    const loanMode = select([["debt", "Link an existing debt"], ["mortgage", "Enter a mortgage here"], ["none", "No loan"]], "mpr-loan-mode");
+    const debtSel = select([], "mpr-debt");
+    const mBalance = input("number", "mpr-m-balance", { step: "100", min: "0" });
+    const mRate = input("number", "mpr-m-rate", { step: "0.01", min: "0", placeholder: "%" });
+    const mRepayment = input("number", "mpr-m-repayment", { step: "10", min: "0", placeholder: "per month" });
+    const mOffset = input("number", "mpr-m-offset", { step: "100", min: "0" }); mOffset.value = "0";
+    const debtField = field("Debt", debtSel);
+    const mortgageFields = fields(field("Loan balance", mBalance), field("Rate %", mRate), field("Repayment / month", mRepayment), field("Offset balance", mOffset));
+    const syncLoanMode = () => {
+      debtField.hidden = loanMode.value !== "debt";
+      mortgageFields.hidden = loanMode.value !== "mortgage";
+    };
+    loanMode.addEventListener("change", syncLoanMode);
+    form.append(
+      fields(field("Name", pName), field("Purchase price", pPrice), field("Purchase date", pDate)),
+      fields(field("Current value", pValue), field("Valued as at", pValuedAt)),
+      fields(field("Rent / week", pRent), field("Expenses / year", pExpenses)),
+      field("Loan", loanMode), debtField, mortgageFields,
+    );
+    const formRow = mk("div", "btn-row");
+    const saveBtn = btn("Add property", "btn", () => {}, "mpr-add");
+    const doSave = () => {
+      if (!pName.value.trim() || !num(pPrice) || !num(pValue)) return;
+      const p: Property = {
+        id: editing ?? uid(), name: pName.value.trim(), purchasePrice: num(pPrice), purchaseDate: pDate.value || todayIso(),
+        currentValue: num(pValue), valuedAt: pValuedAt.value || todayIso(),
+        debtId: loanMode.value === "debt" ? debtSel.value || null : null,
+        mortgage: loanMode.value === "mortgage" ? { balance: num(mBalance), rate: num(mRate), repayment: num(mRepayment), offsetBalance: num(mOffset) } as PropertyMortgage : null,
+        rentPerWeek: pRent.value ? num(pRent) : null, expensesPerYear: num(pExpenses),
+      };
+      store.update((d) => { d.properties = editing ? d.properties.map((x) => (x.id === editing ? p : x)) : [...d.properties, p]; });
+      editing = null; saveBtn.textContent = "Add property";
+      pName.value = ""; pPrice.value = ""; pValue.value = ""; pRent.value = ""; pExpenses.value = "0"; mBalance.value = ""; mRate.value = ""; mRepayment.value = ""; mOffset.value = "0";
+    };
+    saveBtn.addEventListener("click", () => requirePro("property", doSave, saveBtn));
+    formRow.append(saveBtn);
+    form.append(formRow);
+    panel.append(totals, list, form);
+    syncLoanMode();
+    const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+
+    redraws.set("property", () => {
+      const d = store.get();
+      setOptions(debtSel, [["", "— select a debt —"], ...d.debts.map((x) => [x.id, x.name] as [string, string])]);
+      const equityTotal = d.properties.reduce((s, p) => s + propertyEquity(p, d.debts), 0);
+      const valueTotal = d.properties.reduce((s, p) => s + p.currentValue, 0);
+      totals.textContent = "";
+      totals.append(stats([[fmtAud(valueTotal, true), "portfolio value"], [fmtAud(equityTotal, true), "total equity"], [String(d.properties.length), "properties"]]));
+      list.textContent = "";
+      if (!d.properties.length) { list.append(mk("p", "calc-blurb", "No properties yet.")); return; }
+      for (const p of d.properties) {
+        const m = propertyMetrics(p, d.debts, todayIso());
+        const card = mk("div", "rec-card mp-row");
+        const head = mk("div", "rec-card-head");
+        head.append(mk("span", "rec-title", p.name), mk("span", "money-mono", fmtAud(p.currentValue, true)));
+        card.append(head);
+        card.append(stats([
+          [fmtAud(m.equity, true), "equity"], [pct(m.lvr), "LVR"], [pct(m.grossYield), "gross yield"],
+          [pct(m.netYield), "net yield"], [m.annualisedGrowth === null ? "—" : pct(m.annualisedGrowth), "growth p.a."],
+        ]));
+        const foot = mk("div", "money-row-foot");
+        foot.append(mk("span", "rec-meta", `Bought ${fmtDateAu(p.purchaseDate)} for ${fmtAud(p.purchasePrice, true)} · valued ${fmtDateAu(p.valuedAt)}`));
+        foot.append(btn("Edit", "btn btn-ghost btn-sm", () => {
+          editing = p.id; saveBtn.textContent = "Save";
+          pName.value = p.name; pPrice.value = String(p.purchasePrice); pDate.value = p.purchaseDate;
+          pValue.value = String(p.currentValue); pValuedAt.value = p.valuedAt;
+          pRent.value = p.rentPerWeek ? String(p.rentPerWeek) : ""; pExpenses.value = String(p.expensesPerYear);
+          loanMode.value = p.debtId ? "debt" : p.mortgage ? "mortgage" : "none";
+          debtSel.value = p.debtId ?? "";
+          if (p.mortgage) { mBalance.value = String(p.mortgage.balance); mRate.value = String(p.mortgage.rate); mRepayment.value = String(p.mortgage.repayment); mOffset.value = String(p.mortgage.offsetBalance); }
+          syncLoanMode();
+          form.scrollIntoView({ behavior: "smooth", block: "center" });
+        }), btn("✕", "btn btn-ghost btn-sm", () => store.update((dd) => { dd.properties = dd.properties.filter((x) => x.id !== p.id); })));
+        card.append(foot);
+        list.append(card);
+      }
+    });
+  }
+
+  // ════════ Super ════════
+  {
+    const panel = panels.get("super")!;
+    panel.append(mk("h2", undefined, "Super"));
+    panel.append(mk("p", "calc-blurb", "Employer and extra contributions are treated as concessional — taxed 15% going in, same as SG and salary-sacrifice."));
+    const sBalance = input("number", "ms-balance", { step: "1000", min: "0" });
+    const sSalary = input("number", "ms-salary", { step: "1000", min: "0" });
+    const sEmployer = input("number", "ms-employer", { step: "0.5", min: "0" });
+    const sExtra = input("number", "ms-extra", { step: "500", min: "0" });
+    const sReturn = input("number", "ms-return", { step: "0.1" });
+    const sFee = input("number", "ms-fee", { step: "0.05", min: "0" });
+    const sYears = input("number", "ms-years", { step: "1", min: "1", max: "60" });
+    panel.append(fields(
+      field("Current balance", sBalance), field("Salary", sSalary), field("Employer %", sEmployer),
+      field("Extra contributions / year", sExtra), field("Expected return %", sReturn), field("Fees %", sFee),
+      field("Years to preservation age (default 60)", sYears),
+    ));
+    const out = mk("div");
+    const chart = chartCanvas("money-super-chart");
+    panel.append(out, chart);
+    const det = mk("details", "money-details");
+    det.append(mk("summary", undefined, "Year by year"));
+    const detBody = mk("div", "money-table-wrap");
+    det.append(detBody);
+    panel.append(det);
+
+    const loadInputs = () => {
+      const s = store.get().super;
+      sBalance.value = String(s.balance); sSalary.value = String(s.salary); sEmployer.value = String(s.employerPct);
+      sExtra.value = String(s.extraPerYear); sReturn.value = String(s.returnPct); sFee.value = String(s.feePct); sYears.value = String(s.yearsToPreservation);
+    };
+    const save = () => store.update((d) => {
+      d.super = { balance: num(sBalance), salary: num(sSalary), employerPct: num(sEmployer), extraPerYear: num(sExtra), returnPct: num(sReturn), feePct: num(sFee), yearsToPreservation: Math.max(1, num(sYears) || 1) };
+    });
+    for (const el of [sBalance, sSalary, sEmployer, sExtra, sReturn, sFee, sYears]) el.addEventListener("change", save);
+
+    redraws.set("super", () => {
+      loadInputs();
+      const s = store.get().super;
+      const r = superProjection({ balance: s.balance, salary: s.salary, employerPct: s.employerPct, extraPerYear: s.extraPerYear, returnPct: s.returnPct, feePct: s.feePct, years: s.yearsToPreservation });
+      out.textContent = "";
+      out.append(stats([
+        [fmtAud(r.finalBalance, true), `balance in ${s.yearsToPreservation} years`], [fmtAud(r.totalContributions, true), "net contributions"],
+        [fmtAud(r.totalTax, true), "contributions tax paid"],
+      ]));
+      drawLineChart(chart, [{ label: "Balance", values: r.series }], { xLabels: r.series.map((_, i) => `${i}y`), yFormat: (v) => fmtAud(v, true), fill: true });
+      detBody.textContent = "";
+      const table = mk("table", "money-table");
+      const thead = mk("thead"); const hr = mk("tr");
+      for (const h of ["Year", "Balance"]) hr.append(mk("th", undefined, h));
+      thead.append(hr); table.append(thead);
+      const tb = mk("tbody");
+      r.series.forEach((v, i) => { const tr = mk("tr"); tr.append(mk("td", "money-mono", String(i)), mk("td", "money-mono", fmtAud(v, true))); tb.append(tr); });
+      table.append(tb); detBody.append(table);
     });
   }
 
@@ -725,6 +966,83 @@ export function initMoney(): void {
     });
   }
 
+  // ════════ FIRE ════════
+  // Whole tab is Pro-gated at the tab button (GATED_TABS); this panel's own
+  // content always renders once reached, matching the other free tabs.
+  {
+    const panel = panels.get("fire")!;
+    panel.append(mk("h2", undefined, "FIRE"));
+    panel.append(mk("p", "calc-blurb", "FI number = annual expenses ÷ withdrawal rate. Contributions assume this year's income minus expenses is invested."));
+    const form = mk("div", "calc");
+    const fExpenses = input("number", "mf-expenses", { step: "100", min: "0" });
+    const fWithdrawal = input("range", "mf-withdrawal", { min: "3", max: "5", step: "0.1" });
+    const fWithdrawalOut = mk("span", "money-mono");
+    const withdrawalWrap = mk("div", "money-check"); withdrawalWrap.append(fWithdrawal, fWithdrawalOut);
+    const fReturn = input("number", "mf-return", { step: "0.1" });
+    const fAge = input("number", "mf-age", { step: "1", min: "16", max: "90", placeholder: "e.g. 35" });
+    const fRetireAge = input("number", "mf-retire-age", { step: "1", min: "40", max: "90" });
+    const fIncludeSuper = input("checkbox", "mf-include-super");
+    const includeLabel = mk("label", "money-check"); includeLabel.append(fIncludeSuper, document.createTextNode(" Include super in invested assets"));
+    form.append(fields(
+      field("Annual expenses (trailing 12mo, editable)", fExpenses), field("Withdrawal rate %", withdrawalWrap),
+      field("Expected return %", fReturn), field("Current age", fAge), field("Retirement age", fRetireAge),
+    ), includeLabel);
+    panel.append(form);
+    const out = mk("div");
+    const chart = chartCanvas("money-fire-chart");
+    panel.append(out, chart);
+
+    const loadInputs = () => {
+      const d = store.get();
+      const trailing = trailingWindow(d.transactions, todayIso(), 12);
+      fExpenses.value = String(d.fire.expensesOverride ?? trailing.expenses);
+      fWithdrawal.value = String(d.fire.withdrawalPct);
+      fReturn.value = String(d.fire.returnPct);
+      fAge.value = d.fire.currentAge === null ? "" : String(d.fire.currentAge);
+      fRetireAge.value = String(d.fire.retirementAge);
+      fIncludeSuper.checked = d.fire.includeSuper;
+    };
+    const save = () => store.update((d) => {
+      const trailing = trailingWindow(d.transactions, todayIso(), 12);
+      const overrideVal = num(fExpenses);
+      d.fire = {
+        withdrawalPct: num(fWithdrawal, 4), returnPct: num(fReturn, 7),
+        currentAge: fAge.value ? num(fAge) : null, retirementAge: Math.max(1, num(fRetireAge) || 65),
+        includeSuper: fIncludeSuper.checked, expensesOverride: overrideVal !== trailing.expenses ? overrideVal : null,
+      };
+    });
+    for (const el of [fExpenses, fWithdrawal, fReturn, fAge, fRetireAge, fIncludeSuper]) el.addEventListener("change", save);
+    fWithdrawal.addEventListener("input", () => { fWithdrawalOut.textContent = `${num(fWithdrawal).toFixed(1)}%`; });
+
+    redraws.set("fire", () => {
+      loadInputs();
+      fWithdrawalOut.textContent = `${num(fWithdrawal).toFixed(1)}%`;
+      const d = store.get();
+      const trailing = trailingWindow(d.transactions, todayIso(), 12);
+      const annualExpenses = d.fire.expensesOverride ?? trailing.expenses;
+      const savingsRate = trailing.income > 0 ? (trailing.income - trailing.expenses) / trailing.income : 0;
+      const annualContribution = Math.max(0, trailing.income - trailing.expenses);
+      const invested = investedAssetsTotal(d.holdings, d.properties, d.debts, d.super.balance, d.fire.includeSuper);
+      const target = fiNumber(annualExpenses, d.fire.withdrawalPct);
+      const years = yearsToFi(invested, annualContribution, target, d.fire.returnPct);
+      const coastAge = d.fire.currentAge !== null ? coastFireAge(invested, annualContribution, d.fire.returnPct, d.fire.currentAge, d.fire.retirementAge, target) : null;
+      out.textContent = "";
+      out.append(stats([
+        [fmtAud(target, true), "FI number"], [fmtAud(invested, true), "invested assets"],
+        [`${(savingsRate * 100).toFixed(0)}%`, "savings rate (trailing 12mo)"],
+        [years === null ? "never at this rate" : `${years.toFixed(1)} yrs`, "years to FI"],
+        [coastAge === null ? (d.fire.currentAge === null ? "set your age" : "not yet") : `age ${coastAge}`, "coast-FI"],
+      ]));
+      const horizon = Math.max(1, Math.min(60, years ?? 30));
+      const points = Math.ceil(horizon) + 1;
+      const r = d.fire.returnPct / 100;
+      const series: number[] = [];
+      let bal = invested;
+      for (let i = 0; i < points; i++) { series.push(round2(bal)); bal = bal * (1 + r) + annualContribution; }
+      drawLineChart(chart, [{ label: "Invested assets", values: series }], { xLabels: series.map((_, i) => `${i}y`), yFormat: (v) => fmtAud(v, true), zeroLine: true, fill: true });
+    });
+  }
+
   // ════════ Projections ════════
   {
     const panel = panels.get("projections")!;
@@ -772,7 +1090,75 @@ export function initMoney(): void {
     redraws.set("projections", () => { renderGrowth(); renderGoal(); });
   }
 
-  if (controlsHost) mountStoreControls(controlsHost, store, { filename: "money.json", onImport: () => redraws.get(active)?.() });
+  // ════════ History ════════
+  {
+    const panel = panels.get("history")!;
+    panel.append(mk("h2", undefined, "History"));
+    const recordRow = mk("div", "btn-row");
+    const recordStatus = mk("span", "calc-blurb");
+    recordRow.append(btn("Record this month", "btn btn-ghost btn-sm", () => { recordStatus.textContent = recordSnapshot(); }, "mh-record"), recordStatus);
+    panel.append(recordRow);
+    const summary = mk("div");
+    const chart = chartCanvas("money-history-chart");
+    const tableWrap = mk("div", "money-table-wrap");
+    panel.append(summary, chart, tableWrap);
+
+    redraws.set("history", () => {
+      const d = store.get();
+      const snaps = [...d.snapshots].sort((a, b) => a.month.localeCompare(b.month));
+      summary.textContent = "";
+      if (!snaps.length) { summary.append(mk("p", "calc-blurb", "No months recorded yet — use \"Record this month\" above.")); }
+      else {
+        const latest = snaps[snaps.length - 1];
+        summary.append(stats([
+          [fmtAud(latest.net, true), `net worth · ${fmtMonth(latest.month)}`],
+          [latest.income === undefined ? "—" : fmtAud(latest.income, true), "income"],
+          [latest.spend === undefined ? "—" : fmtAud(latest.spend, true), "spend"],
+          [latest.savingsRate === undefined ? "—" : `${(latest.savingsRate * 100).toFixed(0)}%`, "savings rate"],
+        ]));
+      }
+      drawLineChart(chart, [
+        { label: "Net", values: snaps.map((s) => s.net) },
+        { label: "Assets", values: snaps.map((s) => s.assets), dashed: true },
+        { label: "Liabilities", values: snaps.map((s) => s.liabilities), dashed: true },
+      ], { xLabels: snaps.map((s) => s.month.slice(2).replace("-", "/")), yFormat: (v) => fmtAud(v, true), zeroLine: true, fill: true });
+      tableWrap.textContent = "";
+      if (!snaps.length) return;
+      const table = mk("table", "money-table");
+      const thead = mk("thead"); const hr = mk("tr");
+      for (const h of ["Month", "Net", "Assets", "Liabilities", "Income", "Spend", "Savings rate"]) hr.append(mk("th", undefined, h));
+      thead.append(hr); table.append(thead);
+      const tb = mk("tbody");
+      for (const s of [...snaps].reverse()) {
+        const tr = mk("tr"); tr.className = "mh-row";
+        tr.append(
+          mk("td", undefined, fmtMonth(s.month)), mk("td", "money-mono", fmtAud(s.net, true)), mk("td", "money-mono", fmtAud(s.assets, true)),
+          mk("td", "money-mono", fmtAud(s.liabilities, true)), mk("td", "money-mono", s.income === undefined ? "—" : fmtAud(s.income, true)),
+          mk("td", "money-mono", s.spend === undefined ? "—" : fmtAud(s.spend, true)), mk("td", "money-mono", s.savingsRate === undefined ? "—" : `${(s.savingsRate * 100).toFixed(0)}%`),
+        );
+        tb.append(tr);
+      }
+      table.append(tb); tableWrap.append(table);
+    });
+  }
+
+  if (controlsHost) {
+    mountStoreControls(controlsHost, store, {
+      filename: "money.json",
+      onImport: () => redraws.get(active)?.(),
+    });
+    // Sync is Pro-only for public tools (docs/PRO_PLAN.md). store.ts stays
+    // untouched — intercept the checkbox in the capture phase so a free
+    // visitor sees the upsell instead of a confusing 401 from /api/store/.
+    const syncBox = controlsHost.querySelector<HTMLInputElement>('[data-store-sync="money"]');
+    syncBox?.addEventListener("click", (event) => {
+      if (!proState().pro) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        requirePro("sync", () => {}, syncBox);
+      }
+    }, true);
+  }
   store.subscribe(() => redraws.get(active)?.());
   watchTheme(() => redraws.get(active)?.(), Array.from(root.querySelectorAll<HTMLCanvasElement>("canvas.money-chart")));
   show(active);

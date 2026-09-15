@@ -4,6 +4,8 @@ import {
   parseCsv, detectDateFormat, parseDate, parseAmount, guessMapping, rowsToImportRows, dedupe,
   categorise, applyRules, initialData, budgetSummary, payoffPlan, compoundProjection, savingsGoal,
   netWorth, holdingsSummary, monthsBetween, transactionsCsv, headerSignature,
+  propertyMetrics, propertyEquity, superProjection, fiNumber, yearsToFi, coastFireAge, trailingWindow,
+  isMoneyData, migrateMoneyData,
 } from '../src/scripts/site/money-model.ts'
 
 const near = (a, b, eps = 0.05) => assert.ok(Math.abs(a - b) <= eps, `${a} !~ ${b}`)
@@ -191,6 +193,84 @@ test('net worth splits liabilities; holdings summary weights and gains', () => {
   assert.equal(h.gain, 100)
   assert.equal(h.lines[0].weight, 0.5)
   near(h.lines[0].gainPct, 0.1111, 0.001)
+})
+
+test('property maths: equity, LVR, gross/net yield and annualised growth', () => {
+  const debts = [{ id: 'm1', name: 'Home loan', balance: 350000, apr: 5.5, minimum: 2000 }]
+  const linked = {
+    id: 'p1', name: 'Investment unit', purchasePrice: 500000, purchaseDate: '2016-09-14',
+    currentValue: 800000, valuedAt: '2026-09-14', debtId: 'm1', mortgage: null,
+    rentPerWeek: 700, expensesPerYear: 8000,
+  }
+  const m = propertyMetrics(linked, debts, '2026-09-14')
+  assert.equal(m.liability, 350000)
+  assert.equal(m.equity, 450000)
+  near(m.lvr, 0.4375, 0.0001)
+  near(m.grossYield, 0.0455, 0.0001)
+  near(m.netYield, 0.0355, 0.0001)
+  near(m.annualisedGrowth, 0.04812, 0.001)
+  assert.equal(propertyEquity(linked, debts), 450000)
+
+  const withMortgage = {
+    id: 'p2', name: 'PPOR', purchasePrice: 500000, purchaseDate: '2016-09-14',
+    currentValue: 800000, valuedAt: '2026-09-14', debtId: null,
+    mortgage: { balance: 400000, rate: 6, repayment: 3000, offsetBalance: 50000 },
+    rentPerWeek: null, expensesPerYear: 0,
+  }
+  const m2 = propertyMetrics(withMortgage, [], '2026-09-14')
+  assert.equal(m2.liability, 350000)
+  assert.equal(m2.equity, 450000)
+  assert.equal(m2.grossYield, 0)
+})
+
+test('super projection: hand-checked one-year fixture with 15% contributions tax', () => {
+  const r = superProjection({ balance: 100000, salary: 100000, employerPct: 11, extraPerYear: 0, returnPct: 7, feePct: 0, years: 1 })
+  assert.deepEqual(r.series, [100000, 116350])
+  assert.equal(r.finalBalance, 116350)
+  assert.equal(r.totalContributions, 9350)
+  assert.equal(r.totalTax, 1650)
+})
+
+test('FIRE: FI number, years-to-FI at 7% and coast-FI age', () => {
+  assert.equal(fiNumber(80000, 4), 2000000)
+  near(yearsToFi(0, 10000, 138164.4886, 7), 10, 0.01)
+  assert.equal(yearsToFi(2000000, 0, 2000000, 7), 0)
+  assert.equal(coastFireAge(90000, 5000, 0, 60, 62, 100000), 62)
+  assert.equal(coastFireAge(90000, 5000, 0, 60, 62, 200000), null)
+})
+
+test('trailingWindow sums income and expenses over the trailing 12 months', () => {
+  const txs = [
+    { id: '1', date: '2025-09-01', amount: -100, description: 'old', categoryId: null, accountId: null },
+    { id: '2', date: '2025-10-01', amount: 5000, description: 'pay', categoryId: null, accountId: null },
+    { id: '3', date: '2025-10-02', amount: -500, description: 'rent', categoryId: null, accountId: null },
+    { id: '4', date: '2026-09-14', amount: -200, description: 'today', categoryId: null, accountId: null },
+  ]
+  const w = trailingWindow(txs, '2026-09-14', 12)
+  assert.equal(w.income, 5000)
+  assert.equal(w.expenses, 700)
+})
+
+test('MoneyData migration keeps old snapshots and fills in property/super/fire defaults', () => {
+  const oldDoc = {
+    version: 1,
+    data: {
+      categories: [{ id: 'groceries', name: 'Groceries', budget: 600 }],
+      accounts: [], transactions: [],
+      snapshots: [{ month: '2026-06', assets: 1000, liabilities: 200, net: 800, at: '2026-06-30T00:00:00.000Z' }],
+      holdings: [{ id: 'h1', name: 'VAS', units: 10, avgCost: 90, price: 100, priceAt: '2026-06-01', currency: 'AUD' }],
+      debts: [], rules: [], presets: [], settings: { month: '2026-06' },
+    },
+  }
+  const migrated = migrateMoneyData(oldDoc)
+  assert.equal(isMoneyData(migrated), true)
+  assert.equal(migrated.snapshots.length, 1)
+  assert.equal(migrated.snapshots[0].net, 800)
+  assert.equal(migrated.holdings[0].assetClass, 'other')
+  assert.deepEqual(migrated.properties, [])
+  assert.equal(migrated.super.yearsToPreservation, 30)
+  assert.equal(migrated.fire.withdrawalPct, 4)
+  assert.equal(migrated.settings.month, '2026-06')
 })
 
 test('transactions CSV export quotes fields and resolves names', () => {
