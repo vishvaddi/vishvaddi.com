@@ -649,3 +649,10 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Tests: auth/pro suites pin `SITE_LOCKED: '1'` so the wall's guarantees are still asserted; a new test covers the unlocked mode. 26 Worker tests, `astro check` 0, pro 9/9 (owner-marker check now targets the footer Lock-site link), feature 18/18, life 21/21.
 - Deployed `f2c0841` → `e2bd4a05-8cf6-4931-950e-6e3fdfd880be`. Live: `/`, `/kitchen/`, `/money/`, `/reader/`, `/notes/` 200 with no `X-Robots-Tag`; `/api/store/x` 401; `/login` 200; `/api/tts` 503 (no ElevenLabs key set — browser voice fallback).
 - Observation: clicking "Lock site" and the yearly checkout button through the Chrome extension did not fire their handlers, while a fetch POST to `/logout` and to `/api/pro/checkout` worked — likely extension click timing, but worth a real-browser check of the `/pro` buttons.
+
+
+## 2026-09-15 - Free tier = 1 export/30 days, session nudge, funnel counters; analytics already on
+
+- Vish: keep A$39/A$5 for now; tighten free to 1 export + nudge; analytics yes; Money wave 2 parked. `FREE_USES=1`; `/api/pro/use` and status return `freeLimit` so copy derives from it. `chrome.js` shows a dismissible bar on the 3rd distinct tool page for non-owner/non-Pro sessions. `metrics` table (`0007`), `POST /api/metric` (whitelisted events, same-origin, 204, swallow errors), owner-only `GET /api/metric?days=30`; `pay_success`/`restore_ok` counted server-side; `upsell_shown`, `checkout_click`, `waitlist_signup`, `nudge_*`, `tool_view` from the client.
+- Cloudflare Web Analytics for vishvaddi.com already existed (created ~April 2026, automatic edge setup) and is collecting — no beacon or CSP change needed; the "site stays quiet" ruling had been overtaken months ago without anyone noticing.
+- Gate: unit 59 (auth/pro/store/money/market) + earlier suites unchanged; check 0; Worker tsc 0; e2e pro 22, seo 146, money 31, feature 18, life 21, kitchen 28. Migration `0007` applied.
