@@ -1,7 +1,7 @@
 import { pinGate, privateResponse, publicResponse, isPublicPath, siteLocked, base64Url, ownerSession } from "./auth.ts";
 import type { PinEnv } from "./auth.ts";
 import { recipeFromHtml } from "./recipe-jsonld.ts";
-import { handleProRequest, activeLicenceHash } from "./pro.ts";
+import { handleProRequest, activeLicenceHash, handleMetricRequest } from "./pro.ts";
 import type { ProEnv } from "./pro.ts";
 import { handleWaitlist } from "./waitlist.ts";
 import type { WaitlistEnv } from "./waitlist.ts";
@@ -17,6 +17,7 @@ interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
   first<T = unknown>(): Promise<T | null>;
   run<T = unknown>(): Promise<D1Result<T>>;
+  all<T = unknown>(): Promise<D1Result<T>>;
 }
 interface D1Database { prepare(query: string): D1PreparedStatement }
 interface Env extends PinEnv, ProEnv, WaitlistEnv {
@@ -420,6 +421,9 @@ const site = {
     // PUBLIC_PATHS in auth.ts — auth for the individual routes lives in pro.ts.
     if (path.startsWith("/api/pro/") || path === "/pay/success") return handleProRequest(request, env, url);
     if (path === "/api/waitlist") return handleWaitlist(request, env, url);
+    // Funnel counters (Addendum 3, docs/PRO_PLAN.md) — public path, same-origin
+    // check and owner gate live inside the handler.
+    if (path === "/api/metric") return handleMetricRequest(request, env, url);
 
     // Personal-tool sync (src/scripts/site/store.ts). Public path (see
     // PUBLIC_PATHS): the owner keeps their private namespace as before, a Pro

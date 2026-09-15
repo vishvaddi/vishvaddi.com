@@ -16,6 +16,7 @@ interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
   first<T = unknown>(): Promise<T | null>;
   run<T = unknown>(): Promise<D1Result<T>>;
+  all<T = unknown>(): Promise<D1Result<T>>;
 }
 interface D1Database { prepare(query: string): D1PreparedStatement }
 
@@ -47,7 +48,9 @@ const proMarker = (value: string, age: number) => `${PRO_MARKER}=${value}; Path=
 const ANON_COOKIE = "__Host-anon";
 const ANON_COOKIE_SECONDS = 400 * 24 * 3600;
 const FREE_WINDOW_MS = 30 * 24 * 3600 * 1000;
-const DEFAULT_FREE_USES = 3;
+// Tightened Addendum 3 (docs/PRO_PLAN.md): default matches wrangler.jsonc's
+// FREE_USES so a deploy that forgets the var still gets the tight quota.
+const DEFAULT_FREE_USES = 1;
 const anonCookie = (value: string, age: number) => `${ANON_COOKIE}=${value}; Path=/; Max-Age=${age}; HttpOnly; Secure; SameSite=Lax`;
 
 function freeUsesLimit(env: ProEnv): number {
@@ -240,6 +243,9 @@ async function statusHandler(request: Request, env: ProEnv): Promise<Response> {
   if (result.periodEnd != null) payload.periodEnd = result.periodEnd;
   // Computed without incrementing — status is a read, /api/pro/use is the write.
   payload.freeRemaining = result.pro ? null : await computeFreeRemaining(request, env);
+  // Configured quota, always present (Addendum 3) — the client derives its
+  // copy from this instead of hardcoding the number.
+  payload.freeLimit = freeUsesLimit(env);
   return Response.json(payload, { headers: NO_STORE_JSON });
 }
 
@@ -247,10 +253,10 @@ async function useHandler(request: Request, env: ProEnv, url: URL): Promise<Resp
   if (!originOk(request, url)) return Response.json({ error: "origin rejected" }, { status: 403, headers: NO_STORE_JSON });
   const isOwner = await ownerSession(request, env);
   const licenceHash = isOwner ? null : await activeLicenceHash(request, env);
-  if (isOwner || licenceHash) return Response.json({ allowed: true, pro: true }, { headers: NO_STORE_JSON });
+  const limit = freeUsesLimit(env);
+  if (isOwner || licenceHash) return Response.json({ allowed: true, pro: true, freeLimit: limit }, { headers: NO_STORE_JSON });
 
   const now = Date.now();
-  const limit = freeUsesLimit(env);
   const existingAnonId = await verifyAnonId(request, env);
   const anonId = existingAnonId || base64Url(crypto.getRandomValues(new Uint8Array(16)));
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
@@ -272,7 +278,7 @@ async function useHandler(request: Request, env: ProEnv, url: URL): Promise<Resp
         ipCount >= limit ? ipRow!.window_start + FREE_WINDOW_MS : 0,
       ) / 1000,
     );
-    return new Response(JSON.stringify({ allowed: false, remaining: 0, resetsAt }), { status: 402, headers });
+    return new Response(JSON.stringify({ allowed: false, remaining: 0, resetsAt, freeLimit: limit }), { status: 402, headers });
   }
 
   const [newAnonCount, newIpCount] = await Promise.all([
@@ -280,7 +286,7 @@ async function useHandler(request: Request, env: ProEnv, url: URL): Promise<Resp
     bumpFreeUseBucket(env, ipBucket, ipRow, now),
   ]);
   const remaining = Math.max(0, limit - Math.max(newAnonCount, newIpCount));
-  return new Response(JSON.stringify({ allowed: true, remaining }), { status: 200, headers });
+  return new Response(JSON.stringify({ allowed: true, remaining, freeLimit: limit }), { status: 200, headers });
 }
 
 async function checkoutHandler(request: Request, env: ProEnv, url: URL): Promise<Response> {
@@ -389,6 +395,7 @@ async function successHandler(request: Request, env: ProEnv, url: URL): Promise<
         });
       } catch { /* best-effort — the licence still works without it */ }
     }
+    await bumpMetric(env, "pay_success");
   }
   const expiry = Math.floor(now / 1000) + PRO_COOKIE_SECONDS;
   const token = await signPro(env, licenceHash, expiry);
@@ -429,6 +436,7 @@ async function restoreHandler(request: Request, env: ProEnv, url: URL): Promise<
   const headers = new Headers(NO_STORE_JSON);
   headers.append("Set-Cookie", proCookie(token, PRO_COOKIE_SECONDS));
   headers.append("Set-Cookie", proMarker("1", PRO_COOKIE_SECONDS));
+  await bumpMetric(env, "restore_ok");
   return new Response(JSON.stringify({ ok: true, plan: row.plan }), { status: 200, headers });
 }
 
@@ -545,6 +553,94 @@ async function webhookHandler(request: Request, env: ProEnv): Promise<Response> 
     default: break; // unhandled event types are acknowledged, not errors
   }
   return new Response("ok", { status: 200 });
+}
+
+// --- Funnel counters (Addendum 3, docs/PRO_PLAN.md) -------------------------
+// migrations/0007_metrics.sql. One row per (day, event); POST increments,
+// GET (owner-only) reads the last N days. Never throws — a metrics outage
+// must never take down the feature it's measuring.
+const METRIC_EVENTS = new Set([
+  "upsell_shown", "checkout_click", "restore_ok", "pay_success",
+  "waitlist_signup", "nudge_shown", "nudge_click", "tool_view",
+]);
+const DEFAULT_METRIC_DAYS = 30;
+const MAX_METRIC_DAYS = 90;
+
+interface MetricRow { day: string; event: string; count: number }
+
+function utcDay(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// navigator.sendBeacon carries no custom headers, so Origin/Sec-Fetch-Site —
+// both set by the browser itself, never by page script — are what we can
+// trust here instead of the usual Origin-only check the other POST routes use.
+function sameOriginOk(request: Request, url: URL): boolean {
+  const origin = request.headers.get("Origin");
+  if (origin) return origin === url.origin;
+  const secFetchSite = request.headers.get("Sec-Fetch-Site");
+  if (secFetchSite) return secFetchSite === "same-origin";
+  return false;
+}
+
+async function parseMetricEvent(request: Request): Promise<string | null> {
+  const raw = (await request.text()).trim();
+  if (!raw) return null;
+  if (raw.startsWith("{")) {
+    try {
+      const body = JSON.parse(raw) as { event?: unknown };
+      return typeof body.event === "string" ? body.event : null;
+    } catch {
+      return null;
+    }
+  }
+  const event = new URLSearchParams(raw).get("event");
+  return event || null;
+}
+
+// Best-effort — a failed insert never surfaces to the caller (see metricPostHandler).
+export async function bumpMetric(env: ProEnv, event: string): Promise<void> {
+  if (!METRIC_EVENTS.has(event) || !env.DEEP_SWARM_DB) return;
+  try {
+    await env.DEEP_SWARM_DB.prepare(
+      "INSERT INTO metrics (day, event, count) VALUES (?, ?, 1) ON CONFLICT(day, event) DO UPDATE SET count = count + excluded.count",
+    ).bind(utcDay(), event).run();
+  } catch {
+    /* swallow — metrics must never break the feature they measure */
+  }
+}
+
+async function metricPostHandler(request: Request, env: ProEnv, url: URL): Promise<Response> {
+  const headers = { "Cache-Control": "no-store" };
+  if (!sameOriginOk(request, url)) return new Response(null, { status: 403, headers });
+  try {
+    const event = await parseMetricEvent(request);
+    if (event) await bumpMetric(env, event);
+  } catch {
+    /* malformed body — still 204, never throw on a fire-and-forget beacon */
+  }
+  return new Response(null, { status: 204, headers });
+}
+
+async function metricGetHandler(request: Request, env: ProEnv, url: URL): Promise<Response> {
+  if (!(await ownerSession(request, env))) return Response.json({ error: "unauthorised" }, { status: 401, headers: NO_STORE_JSON });
+  if (!env.DEEP_SWARM_DB) return Response.json([], { headers: NO_STORE_JSON });
+  const days = Math.min(MAX_METRIC_DAYS, Math.max(1, Number(url.searchParams.get("days")) || DEFAULT_METRIC_DAYS));
+  const since = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  try {
+    const result = await env.DEEP_SWARM_DB.prepare(
+      "SELECT day, event, count FROM metrics WHERE day >= ? ORDER BY day ASC, event ASC",
+    ).bind(since).all<MetricRow>();
+    return Response.json(result.results || [], { headers: NO_STORE_JSON });
+  } catch {
+    return Response.json([], { headers: NO_STORE_JSON });
+  }
+}
+
+export async function handleMetricRequest(request: Request, env: ProEnv, url: URL): Promise<Response> {
+  if (request.method === "POST") return metricPostHandler(request, env, url);
+  if (request.method === "GET") return metricGetHandler(request, env, url);
+  return new Response(null, { status: 405, headers: { "Cache-Control": "no-store" } });
 }
 
 export async function handleProRequest(request: Request, env: ProEnv, url: URL): Promise<Response> {

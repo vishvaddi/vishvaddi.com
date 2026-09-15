@@ -9,6 +9,7 @@
 // closed — but never blocks the free tool underneath.
 
 const STATUS_KEY = "vv_pro_status";
+const METRIC_ENDPOINT = "/api/metric";
 
 export interface ProStatus {
   pro: boolean;
@@ -17,6 +18,33 @@ export interface ProStatus {
   periodEnd?: number;
   configured: boolean;
   freeRemaining?: number | null;
+  // Configured quota (Addendum 3, docs/PRO_PLAN.md) — so copy never hardcodes it.
+  freeLimit?: number;
+}
+
+/** "1 export" / "3 exports" — the one place the plural is spelled out. */
+export function freeLimitLabel(limit: number): string {
+  return `${limit} export${limit === 1 ? "" : "s"}`;
+}
+
+/**
+ * Fire-and-forget funnel counter (Addendum 3, docs/PRO_PLAN.md). sendBeacon
+ * survives page unload (e.g. a checkout redirect); fetch keepalive is the
+ * fallback for browsers/contexts without it. Never awaited by a caller, never
+ * throws, carries no PII.
+ */
+export function track(event: string): void {
+  const payload = JSON.stringify({ event });
+  try {
+    if (navigator.sendBeacon?.(METRIC_ENDPOINT, new Blob([payload], { type: "application/json" }))) return;
+  } catch {
+    /* fall through to fetch */
+  }
+  try {
+    fetch(METRIC_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload, keepalive: true }).catch(() => {});
+  } catch {
+    /* ignore — a lost metric is not worth surfacing */
+  }
 }
 
 function cookie(name: string): string | null {
@@ -51,8 +79,15 @@ let current: ProStatus | null = null;
 let confirming: Promise<ProStatus> | null = null;
 
 function applyStatus(status: ProStatus): void {
+  // freeLimit is compared too (Addendum 3) — it starts undefined from the
+  // synchronous marker read and only arrives once /api/pro/status answers, so
+  // a listener relying purely on pro/source/configured would never be told.
   const changed =
-    !current || current.pro !== status.pro || current.source !== status.source || current.configured !== status.configured;
+    !current ||
+    current.pro !== status.pro ||
+    current.source !== status.source ||
+    current.configured !== status.configured ||
+    current.freeLimit !== status.freeLimit;
   current = status;
   writeCache(status);
   if (changed) window.dispatchEvent(new CustomEvent<ProStatus>("pro:changed", { detail: status }));
@@ -109,6 +144,7 @@ function planButton(plan: "year" | "month", label: string): HTMLButtonElement {
   btn.className = "pro-upsell-btn";
   btn.textContent = label;
   btn.addEventListener("click", () => {
+    track("checkout_click");
     btn.setAttribute("disabled", "1");
     fetch("/api/pro/checkout", {
       method: "POST",
@@ -164,6 +200,7 @@ function buildRestoreForm(onSuccess: () => void): HTMLDetailsElement {
 }
 
 function buildUpsellPanel(feature: string, heading: string, onRestored: () => void): HTMLDivElement {
+  track("upsell_shown");
   const panel = document.createElement("div");
   panel.className = "pro-upsell";
   panel.id = "pro-upsell";
@@ -196,14 +233,18 @@ function buildUpsellPanel(feature: string, heading: string, onRestored: () => vo
   return panel;
 }
 
-function showFreeUseNote(anchor: HTMLElement, feature: string, remaining: number): void {
+function showFreeUseNote(anchor: HTMLElement, feature: string, remaining: number, freeLimit: number): void {
   const host = anchor.parentElement;
   host?.querySelector<HTMLElement>(`.pro-free-note[data-feature="${feature}"]`)?.remove();
   const left = Math.max(0, remaining);
   const note = document.createElement("p");
   note.className = "pro-free-note";
   note.dataset.feature = feature;
-  note.textContent = `${left} free export${left === 1 ? "" : "s"} left this month — Pro removes the limit`;
+  // freeLimit === 1 means this use was the free quota — "left" reads oddly at 0.
+  note.textContent =
+    left > 0
+      ? `${left} free export${left === 1 ? "" : "s"} left this month — Pro removes the limit`
+      : `That was your ${freeLimit === 1 ? "free export" : "last free export"} this month — Pro removes the limit`;
   anchor.insertAdjacentElement("afterend", note);
 }
 
@@ -242,14 +283,15 @@ export function requirePro(feature: string, run: () => void, anchor: HTMLElement
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ feature }),
   })
-    .then((res) => res.json() as Promise<{ allowed?: boolean; remaining?: number; pro?: boolean }>)
+    .then((res) => res.json() as Promise<{ allowed?: boolean; remaining?: number; pro?: boolean; freeLimit?: number }>)
     .then((body) => {
+      const freeLimit = body.freeLimit ?? 1;
       if (body.allowed) {
         run();
-        if (!body.pro && typeof body.remaining === "number") showFreeUseNote(anchor, feature, body.remaining);
+        if (!body.pro && typeof body.remaining === "number") showFreeUseNote(anchor, feature, body.remaining, freeLimit);
         return;
       }
-      showPanel("You've used your 3 free exports this month");
+      showPanel(`You've used your ${freeLimit === 1 ? "free export" : `${freeLimit} free exports`} this month`);
     })
     .catch(() => {
       showPanel("Couldn't check your free uses — try again.");

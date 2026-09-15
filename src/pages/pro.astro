@@ -20,8 +20,9 @@ import "../styles/site.css";
     <p>
       Every calculator, optimiser, tracker and editor here — unlimited use, no
       account, no watermark, nothing that expires or throttles. Files never
-      leave your browser unless a page says otherwise. Exports are capped at 3
-      a month; Pro removes that limit.
+      leave your browser unless a page says otherwise. Exports are capped at
+      <span id="free-limit-copy">1 export</span> a month; Pro removes that
+      limit.
     </p>
 
     <h2>Pro adds</h2>
@@ -57,8 +58,18 @@ import "../styles/site.css";
   </div>
 
   <script>
-    import { mountPro } from "../scripts/site/pro";
+    import { mountPro, proState, onProChanged, freeLimitLabel, track, type ProStatus } from "../scripts/site/pro";
     mountPro(document.getElementById("pro-plans")!);
+
+    // Free section copy derives from the configured quota (Addendum 3,
+    // docs/PRO_PLAN.md) instead of hardcoding it — freeLimit only arrives once
+    // /api/pro/status has answered, so this updates in place when it does.
+    const freeLimitEl = document.getElementById("free-limit-copy");
+    const updateFreeLimitCopy = (status: ProStatus) => {
+      if (freeLimitEl && typeof status.freeLimit === "number") freeLimitEl.textContent = freeLimitLabel(status.freeLimit);
+    };
+    updateFreeLimitCopy(proState());
+    onProChanged(updateFreeLimitCopy);
 
     const waitlistForm = document.getElementById("waitlist-form") as HTMLFormElement;
     const waitlistEmail = document.getElementById("waitlist-email") as HTMLInputElement;
@@ -81,6 +92,7 @@ import "../styles/site.css";
         });
         if (res.ok) {
           say("Done — I'll email you when Money Pro lands.");
+          track("waitlist_signup");
           waitlistForm.reset();
         } else if (res.status === 429) {
           say("Too many requests from this connection today — try again tomorrow.");

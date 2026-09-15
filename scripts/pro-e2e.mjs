@@ -39,8 +39,8 @@ try {
 
   // ── public visitor: not Pro, Stripe configured, free quota already used up ──
   const publicCtx = await browser.newContext({ viewport: { width: 390, height: 844 } })
-  await stubStatus(publicCtx, { pro: false, source: null, configured: true, freeRemaining: 0 })
-  await stubUse(publicCtx, { allowed: false, remaining: 0, resetsAt: Math.floor(Date.now() / 1000) + 86400 })
+  await stubStatus(publicCtx, { pro: false, source: null, configured: true, freeRemaining: 0, freeLimit: 1 })
+  await stubUse(publicCtx, { allowed: false, remaining: 0, resetsAt: Math.floor(Date.now() / 1000) + 86400, freeLimit: 1 })
   const publicPage = await publicCtx.newPage()
   publicPage.on('pageerror', (error) => errors.push(String(error)))
 
@@ -53,6 +53,8 @@ try {
   await publicPage.waitForSelector('#pro-upsell', { timeout: 5000 }).catch(() => {})
   check('Pro: PDF export shows the upsell panel for a public visitor', await publicPage.locator('#pro-upsell').count() === 1)
   check('Pro: upsell panel click does not navigate', publicPage.url() === urlBefore)
+  const singularHeading = await publicPage.locator('#pro-upsell .pro-upsell-lede').textContent()
+  check('Pro: upsell heading says "free export" (singular) with freeLimit:1 stubbed', (singularHeading || '').includes('used your free export'))
 
   await publicPage.goto(`${BASE}/site/cut-list/`, { waitUntil: 'domcontentloaded' })
   await publicPage.waitForSelector('#save-pdf:not([hidden])')
@@ -72,9 +74,11 @@ try {
 
   // ── free quota: an allowed use leaves a note; a blocked one shows the panel ──
   const freeCtx = await browser.newContext({ viewport: { width: 390, height: 844 } })
-  await stubStatus(freeCtx, { pro: false, source: null, configured: true, freeRemaining: 2 })
+  // freeLimit: 3 here (not the current default of 1) proves the client derives
+  // the pluralised copy from the server's response instead of hardcoding it.
+  await stubStatus(freeCtx, { pro: false, source: null, configured: true, freeRemaining: 2, freeLimit: 3 })
   let useCall = 0
-  await stubUse(freeCtx, () => (useCall++ === 0 ? { allowed: true, remaining: 2 } : { allowed: false, remaining: 0, resetsAt: Math.floor(Date.now() / 1000) + 86400 }))
+  await stubUse(freeCtx, () => (useCall++ === 0 ? { allowed: true, remaining: 2, freeLimit: 3 } : { allowed: false, remaining: 0, resetsAt: Math.floor(Date.now() / 1000) + 86400, freeLimit: 3 }))
   const freePage = await freeCtx.newPage()
   freePage.on('pageerror', (error) => errors.push(String(error)))
 
@@ -108,12 +112,74 @@ try {
   await ownerPage.locator('#export-project').click()
   check('Pro: owner sees no upsell panel on /site/cut-list/', await ownerPage.locator('#pro-upsell').count() === 0)
 
+  // A 3rd distinct tool page would trigger the nudge for a public visitor —
+  // confirm the owner marker suppresses it.
+  await ownerPage.goto(`${BASE}/site/pdf/`, { waitUntil: 'domcontentloaded' })
+  await ownerPage.goto(`${BASE}/site/sheet/`, { waitUntil: 'domcontentloaded' })
+  check('Nudge: never shown with the owner marker even at the 3rd distinct tool page', await ownerPage.locator('.vv-nudge').count() === 0)
+
   check('Pro pages: console is clean', errors.length === 0, errors.slice(0, 2).join(' | '))
 
   await publicPage.close()
   await ownerPage.close()
   await publicCtx.close()
   await ownerCtx.close()
+
+  // ── funnel counters: session nudge on the 3rd distinct tool page, tool_view/nudge beacons ──
+  const nudgeCtx = await browser.newContext({ viewport: { width: 390, height: 844 } })
+  await stubStatus(nudgeCtx, { pro: false, source: null, configured: true, freeRemaining: 1, freeLimit: 1 })
+  await stubUse(nudgeCtx, { allowed: true, remaining: 0, freeLimit: 1 })
+  const metricCalls = []
+  await nudgeCtx.route('**/api/metric', (route) => {
+    try { metricCalls.push(route.request().postDataJSON()) } catch { /* non-JSON beacon body — ignore */ }
+    route.fulfill({ status: 204 })
+  })
+  const nudgePage = await nudgeCtx.newPage()
+  nudgePage.on('pageerror', (error) => errors.push(String(error)))
+
+  await nudgePage.goto(`${BASE}/site/pdf/`, { waitUntil: 'domcontentloaded' })
+  check('Nudge: not shown on the 1st distinct tool page', await nudgePage.locator('.vv-nudge').count() === 0)
+
+  await nudgePage.goto(`${BASE}/site/cut-list/`, { waitUntil: 'domcontentloaded' })
+  check('Nudge: not shown on the 2nd distinct tool page', await nudgePage.locator('.vv-nudge').count() === 0)
+
+  await nudgePage.goto(`${BASE}/site/sheet/`, { waitUntil: 'domcontentloaded' })
+  await nudgePage.waitForSelector('.vv-nudge', { timeout: 3000 }).catch(() => {})
+  check('Nudge: shown on the 3rd distinct tool page', await nudgePage.locator('.vv-nudge').count() === 1)
+  check('Nudge: links to /pro', await nudgePage.locator('.vv-nudge a[href="/pro"]').count() === 1)
+  check('Metrics: tool_view beacon recorded for each tool page visited', metricCalls.filter((call) => call?.event === 'tool_view').length === 3)
+  check('Metrics: nudge_shown beacon recorded once', metricCalls.filter((call) => call?.event === 'nudge_shown').length === 1)
+
+  await nudgePage.locator('.vv-nudge-dismiss').click()
+  check('Nudge: dismiss button removes the bar', await nudgePage.locator('.vv-nudge').count() === 0)
+
+  await nudgePage.close()
+  await nudgeCtx.close()
+
+  // ── funnel counters: checkout_click beacon on the /pro page's plan buttons ──
+  const checkoutCtx = await browser.newContext({ viewport: { width: 390, height: 844 } })
+  await stubStatus(checkoutCtx, { pro: false, source: null, configured: true, freeRemaining: 1, freeLimit: 1 })
+  const checkoutMetricCalls = []
+  await checkoutCtx.route('**/api/metric', (route) => {
+    try { checkoutMetricCalls.push(route.request().postDataJSON()) } catch { /* ignore */ }
+    route.fulfill({ status: 204 })
+  })
+  await checkoutCtx.route('**/api/pro/checkout', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ url: `${BASE}/pro?cancelled=1` }) }),
+  )
+  const checkoutPage = await checkoutCtx.newPage()
+  checkoutPage.on('pageerror', (error) => errors.push(String(error)))
+
+  await checkoutPage.goto(`${BASE}/pro/`, { waitUntil: 'domcontentloaded' })
+  const freeLimitCopy = await checkoutPage.locator('#free-limit-copy').textContent()
+  check('Pro: /pro Free section reads "1 export" from freeLimit:1', (freeLimitCopy || '').includes('1 export'))
+
+  await checkoutPage.locator('.pro-upsell-plans .pro-upsell-btn').first().click()
+  await checkoutPage.waitForTimeout(300) // the beacon fires before the stubbed checkout redirect races it
+  check('Metrics: checkout_click beacon recorded on plan button click', checkoutMetricCalls.some((call) => call?.event === 'checkout_click'))
+
+  await checkoutPage.close()
+  await checkoutCtx.close()
 } catch (error) {
   check('suite completed', false, String(error).slice(0, 240))
 } finally {

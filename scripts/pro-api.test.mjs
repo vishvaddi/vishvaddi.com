@@ -12,6 +12,7 @@ function fakeD1() {
   const licences = new Map()
   const events = new Map()
   const freeUses = new Map()
+  const metrics = new Map() // key `${day}|${event}` -> count (migrations/0007_metrics.sql)
   const byStripeSub = (sub) => [...licences.values()].find((row) => row.stripe_subscription === sub)
 
   const prepare = (sql) => ({
@@ -108,11 +109,27 @@ function fakeD1() {
           const row = freeUses.get(args[2]); if (row) Object.assign(row, { count: args[0], window_start: args[1] })
           return { success: true, meta: { changes: row ? 1 : 0 } }
         }
+        if (sql === 'INSERT INTO metrics (day, event, count) VALUES (?, ?, 1) ON CONFLICT(day, event) DO UPDATE SET count = count + excluded.count') {
+          const key = `${args[0]}|${args[1]}`
+          metrics.set(key, (metrics.get(key) || 0) + 1)
+          return { success: true, meta: { changes: 1 } }
+        }
         throw new Error(`fakeD1: unexpected run(): ${sql}`)
+      },
+      async all() {
+        if (sql === 'SELECT day, event, count FROM metrics WHERE day >= ? ORDER BY day ASC, event ASC') {
+          const since = args[0]
+          const rows = [...metrics.entries()]
+            .filter(([key]) => key.split('|')[0] >= since)
+            .map(([key, count]) => { const [day, event] = key.split('|'); return { day, event, count } })
+            .sort((a, b) => (a.day === b.day ? a.event.localeCompare(b.event) : a.day.localeCompare(b.day)))
+          return { results: rows, success: true }
+        }
+        throw new Error(`fakeD1: unexpected all(): ${sql}`)
       },
     }),
   })
-  return { prepare, store, licences, events, freeUses }
+  return { prepare, store, licences, events, freeUses, metrics }
 }
 
 function setup() {
@@ -125,12 +142,16 @@ function setup() {
   let assetHits = 0
   const env = {
     SITE_LOCKED: '1', SITE_PIN: '012345', SESSION_SECRET: 'test-only-session-key-never-use-in-production',
+    // Tightened Addendum 3 (docs/PRO_PLAN.md) — matches wrangler.jsonc's FREE_USES.
+    FREE_USES: '1',
     PIN_ATTEMPTS: { idFromName: (name) => name, get: () => limiter },
     ASSETS: { fetch: async () => { assetHits++; return new Response('asset') } },
     DEEP_SWARM_DB: db,
   }
   return { env, db, assetHits: () => assetHits }
 }
+
+const today = () => new Date().toISOString().slice(0, 10)
 
 const CONFIGURED = {
   STRIPE_SECRET_KEY: 'sk_test_123',
@@ -195,14 +216,14 @@ test('PUBLIC_PATHS: /site/ falls through without a session, /kitchen/ and /api/s
 
 test('status: unconfigured/configured, owner, and Pro licence', async () => {
   const { env, db } = setup()
-  assert.deepEqual(await (await worker.fetch(request('/api/pro/status'), env)).json(), { pro: false, source: null, configured: false, freeRemaining: 3 })
+  assert.deepEqual(await (await worker.fetch(request('/api/pro/status'), env)).json(), { pro: false, source: null, configured: false, freeRemaining: 1, freeLimit: 1 })
 
   const configuredEnv = { ...env, ...CONFIGURED }
-  assert.deepEqual(await (await worker.fetch(request('/api/pro/status'), configuredEnv)).json(), { pro: false, source: null, configured: true, freeRemaining: 3 })
+  assert.deepEqual(await (await worker.fetch(request('/api/pro/status'), configuredEnv)).json(), { pro: false, source: null, configured: true, freeRemaining: 1, freeLimit: 1 })
 
   const sessionCookie = await login(configuredEnv)
   const ownerStatus = await worker.fetch(request('/api/pro/status', { headers: { Cookie: sessionCookie } }), configuredEnv)
-  assert.deepEqual(await ownerStatus.json(), { pro: true, source: 'owner', configured: true, freeRemaining: null })
+  assert.deepEqual(await ownerStatus.json(), { pro: true, source: 'owner', configured: true, freeRemaining: null, freeLimit: 1 })
 
   const rawKey = 'VV-DDDD-EEEE-FFFF'
   const hash = await sha256(rawKey)
@@ -210,7 +231,7 @@ test('status: unconfigured/configured, owner, and Pro licence', async () => {
   const restored = await worker.fetch(jsonPost('/api/pro/restore', { key: rawKey }, { 'CF-Connecting-IP': '198.51.100.1' }), configuredEnv)
   const proCookie = restored.headers.get('Set-Cookie').split(';')[0]
   const licenceStatus = await worker.fetch(request('/api/pro/status', { headers: { Cookie: proCookie } }), configuredEnv)
-  assert.deepEqual(await licenceStatus.json(), { pro: true, source: 'licence', plan: 'month', periodEnd: 1888888888, configured: true, freeRemaining: null })
+  assert.deepEqual(await licenceStatus.json(), { pro: true, source: 'licence', plan: 'month', periodEnd: 1888888888, configured: true, freeRemaining: null, freeLimit: 1 })
 })
 
 test('checkout: 503 unconfigured, 400 bad plan, 403 bad origin, 200 with a session url when configured', async () => {
@@ -238,7 +259,7 @@ test('checkout: 503 unconfigured, 400 bad plan, 403 bad origin, 200 with a sessi
 })
 
 test('/pay/success issues a licence key once, sets both cookies, and re-visits show "already issued"', async () => {
-  const { env } = setup()
+  const { env, db } = setup()
   const configuredEnv = { ...env, ...CONFIGURED }
   const originalFetch = globalThis.fetch
   globalThis.fetch = async (url) => {
@@ -261,11 +282,13 @@ test('/pay/success issues a licence key once, sets both cookies, and re-visits s
     const setCookie = first.headers.get('Set-Cookie') || ''
     assert.match(setCookie, /__Host-pro=/)
     assert.match(setCookie, /vv_pro=1/)
+    assert.equal(db.metrics.get(`${today()}|pay_success`), 1)
 
     const second = await worker.fetch(request('/pay/success?session_id=cs_test_1'), configuredEnv)
     const html2 = await second.text()
     assert.doesNotMatch(html2, /VV-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/)
     assert.match(html2, /already/i)
+    assert.equal(db.metrics.get(`${today()}|pay_success`), 1) // unchanged — no new key issued on the revisit
   } finally { globalThis.fetch = originalFetch }
 })
 
@@ -291,11 +314,13 @@ test('restore: succeeds for an active licence, rejects unknown keys, and rate-li
   const ok = await worker.fetch(jsonPost('/api/pro/restore', { key: rawKey }, { 'CF-Connecting-IP': '203.0.113.1' }), env)
   assert.equal(ok.status, 200)
   assert.deepEqual(await ok.json(), { ok: true, plan: 'year' })
+  assert.equal(db.metrics.get(`${today()}|restore_ok`), 1)
 
   const results = await Promise.all(Array.from({ length: 12 }, () =>
     worker.fetch(jsonPost('/api/pro/restore', { key: 'VV-WRONG-0000-0000' }, { 'CF-Connecting-IP': '203.0.113.2' }), env)))
   assert.equal(results.filter((r) => r.status === 401).length, 5)
   assert.equal(results.filter((r) => r.status === 429).length, 7)
+  assert.equal(db.metrics.get(`${today()}|restore_ok`), 1) // failed attempts never bump it
 })
 
 test('logout clears both Pro cookies', async () => {
@@ -365,43 +390,40 @@ test('/api/store/<key>: owner keeps a plain key, a Pro cookie gets a namespaced 
   assert.ok(db.store.has('cutlist')) // the owner's own row is untouched by the Pro customer's delete
 })
 
-test('free quota: three uses allowed, the fourth is blocked, and owner/Pro bypass entirely', async () => {
+test('free quota: one use allowed, the second is blocked, freeLimit is reported, and owner/Pro bypass entirely', async () => {
   const { env, db } = setup()
 
-  let cookie
-  for (let i = 0; i < 3; i++) {
-    const res = await worker.fetch(useRequest('pdf-export', cookie ? { Cookie: cookie } : {}), env)
-    assert.equal(res.status, 200)
-    assert.deepEqual(await res.json(), { allowed: true, remaining: 2 - i })
-    cookie = cookie || extractAnonCookie(res)
-  }
+  const first = await worker.fetch(useRequest('pdf-export'), env)
+  assert.equal(first.status, 200)
+  assert.deepEqual(await first.json(), { allowed: true, remaining: 0, freeLimit: 1 })
+  const cookie = extractAnonCookie(first)
   assert.ok(cookie)
 
-  const fourth = await worker.fetch(useRequest('pdf-export', { Cookie: cookie }), env)
-  assert.equal(fourth.status, 402)
-  const fourthBody = await fourth.json()
-  assert.equal(fourthBody.allowed, false)
-  assert.equal(fourthBody.remaining, 0)
-  assert.ok(fourthBody.resetsAt > Math.floor(Date.now() / 1000))
+  const second = await worker.fetch(useRequest('pdf-export', { Cookie: cookie }), env)
+  assert.equal(second.status, 402)
+  const secondBody = await second.json()
+  assert.equal(secondBody.allowed, false)
+  assert.equal(secondBody.remaining, 0)
+  assert.equal(secondBody.freeLimit, 1)
+  assert.ok(secondBody.resetsAt > Math.floor(Date.now() / 1000))
 
   const sessionCookie = await login(env)
-  assert.deepEqual(await (await worker.fetch(useRequest('pdf-export', { Cookie: sessionCookie }), env)).json(), { allowed: true, pro: true })
+  assert.deepEqual(await (await worker.fetch(useRequest('pdf-export', { Cookie: sessionCookie }), env)).json(), { allowed: true, pro: true, freeLimit: 1 })
 
   const rawKey = 'VV-FREE-0001-0002'
   const hash = await sha256(rawKey)
   seedLicence(db, { hash, subscription: 'sub_free_1', plan: 'year', status: 'active' })
   const restored = await worker.fetch(jsonPost('/api/pro/restore', { key: rawKey }, { 'CF-Connecting-IP': '203.0.113.9' }), env)
   const proCookie = restored.headers.get('Set-Cookie').split(';')[0]
-  assert.deepEqual(await (await worker.fetch(useRequest('pdf-export', { Cookie: proCookie }), env)).json(), { allowed: true, pro: true })
+  assert.deepEqual(await (await worker.fetch(useRequest('pdf-export', { Cookie: proCookie }), env)).json(), { allowed: true, pro: true, freeLimit: 1 })
 })
 
 test('free quota: the IP bucket blocks a fresh anon cookie once the IP itself is exhausted', async () => {
   const { env } = setup()
   const ip = '198.51.100.77'
-  for (let i = 0; i < 3; i++) {
-    const res = await worker.fetch(useRequest('pdf-export', { 'CF-Connecting-IP': ip }), env)
-    assert.equal(res.status, 200) // each call has no Cookie, so it's a genuinely fresh anon id sharing one IP
-  }
+  const first = await worker.fetch(useRequest('pdf-export', { 'CF-Connecting-IP': ip }), env)
+  assert.equal(first.status, 200) // no Cookie, so this is a genuinely fresh anon id sharing the IP
+
   const blocked = await worker.fetch(useRequest('pdf-export', { 'CF-Connecting-IP': ip }), env)
   assert.equal(blocked.status, 402)
   assert.deepEqual((await blocked.json()).allowed, false)
@@ -411,11 +433,11 @@ test('free quota: a window older than 30 days resets the bucket instead of block
   const { env, db } = setup()
   const ip = '203.0.113.44'
   const bucket = `ip:${await hmacBase64Url(env, ip)}`
-  db.freeUses.set(bucket, { count: 3, window_start: Date.now() - 31 * 24 * 3600 * 1000 })
+  db.freeUses.set(bucket, { count: 5, window_start: Date.now() - 31 * 24 * 3600 * 1000 })
 
   const res = await worker.fetch(useRequest('pdf-export', { 'CF-Connecting-IP': ip }), env)
   assert.equal(res.status, 200)
-  assert.deepEqual(await res.json(), { allowed: true, remaining: 2 })
+  assert.deepEqual(await res.json(), { allowed: true, remaining: 0, freeLimit: 1 })
   assert.equal(db.freeUses.get(bucket).count, 1)
 })
 
@@ -426,8 +448,49 @@ test('free quota: a cookie with a bad signature is ignored and replaced', async 
 
   const res = await worker.fetch(useRequest('pdf-export', { Cookie: forged }), env)
   assert.equal(res.status, 200)
-  assert.deepEqual(await res.json(), { allowed: true, remaining: 2 })
+  assert.deepEqual(await res.json(), { allowed: true, remaining: 0, freeLimit: 1 })
   const setCookie = res.headers.get('Set-Cookie') || ''
   assert.match(setCookie, /__Host-anon=/)
   assert.ok(!setCookie.includes(forgedId)) // the forged id is discarded, not reused
+})
+
+test('metric: whitelist enforced, same-origin required (Origin or Sec-Fetch-Site), owner GET reads rows, anon GET is 401', async () => {
+  const { env, db } = setup()
+
+  const rejected = await worker.fetch(new Request('https://example.com/api/metric', {
+    method: 'POST', headers: { Origin: 'https://evil.example', 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'upsell_shown' }),
+  }), env)
+  assert.equal(rejected.status, 403)
+  assert.equal(db.metrics.size, 0)
+
+  const unknown = await worker.fetch(new Request('https://example.com/api/metric', {
+    method: 'POST', headers: { Origin: 'https://example.com', 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'not-a-real-event' }),
+  }), env)
+  assert.equal(unknown.status, 204)
+  assert.equal(db.metrics.size, 0) // whitelisted-only — no row for an unknown event
+
+  const known = await worker.fetch(new Request('https://example.com/api/metric', {
+    method: 'POST', headers: { Origin: 'https://example.com', 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'nudge_shown' }),
+  }), env)
+  assert.equal(known.status, 204)
+  assert.equal(db.metrics.get(`${today()}|nudge_shown`), 1)
+
+  // sendBeacon carries no custom headers on some paths — Sec-Fetch-Site (browser-set,
+  // never page script) is the fallback same-origin signal; body here is form-style text.
+  const viaSecFetch = await worker.fetch(new Request('https://example.com/api/metric', {
+    method: 'POST', headers: { 'Sec-Fetch-Site': 'same-origin' }, body: 'event=nudge_click',
+  }), env)
+  assert.equal(viaSecFetch.status, 204)
+  assert.equal(db.metrics.get(`${today()}|nudge_click`), 1)
+
+  assert.equal((await worker.fetch(new Request('https://example.com/api/metric?days=30'), env)).status, 401)
+
+  const sessionCookie = await login(env)
+  const ownerGet = await worker.fetch(new Request('https://example.com/api/metric?days=30', { headers: { Cookie: sessionCookie } }), env)
+  assert.equal(ownerGet.status, 200)
+  const rows = (await ownerGet.json()).sort((a, b) => a.event.localeCompare(b.event))
+  assert.deepEqual(rows, [
+    { day: today(), event: 'nudge_click', count: 1 },
+    { day: today(), event: 'nudge_shown', count: 1 },
+  ])
 })
