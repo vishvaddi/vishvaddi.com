@@ -11,9 +11,11 @@ function fakeD1() {
   const store = new Map()
   const licences = new Map()
   const events = new Map()
-  const freeUses = new Map()
   const metrics = new Map() // key `${day}|${event}` -> count (migrations/0007_metrics.sql)
   const byStripeSub = (sub) => [...licences.values()].find((row) => row.stripe_subscription === sub)
+  // Simulates the webhook and /pay/success racing: the next pass-row lookup
+  // misses even though the other path's row is already there.
+  const race = { hideNextPassLookup: false }
 
   const prepare = (sql) => ({
     bind: (...args) => ({
@@ -21,15 +23,17 @@ function fakeD1() {
         if (sql === 'SELECT revision, json, updated_at FROM site_store WHERE key = ?') {
           const row = store.get(args[0]); return row ? { ...row } : null
         }
-        if (sql === 'SELECT status FROM pro_licences WHERE licence_hash = ?') {
-          const row = licences.get(args[0]); return row ? { status: row.status } : null
-        }
         if (sql === 'SELECT plan, status, current_period_end, last_seen FROM pro_licences WHERE licence_hash = ?') {
           const row = licences.get(args[0])
           return row ? { plan: row.plan, status: row.status, current_period_end: row.current_period_end, last_seen: row.last_seen } : null
         }
-        if (sql === 'SELECT plan, status FROM pro_licences WHERE licence_hash = ?') {
-          const row = licences.get(args[0]); return row ? { plan: row.plan, status: row.status } : null
+        if (sql === 'SELECT plan, status, current_period_end FROM pro_licences WHERE licence_hash = ?') {
+          const row = licences.get(args[0]); return row ? { plan: row.plan, status: row.status, current_period_end: row.current_period_end } : null
+        }
+        if (sql === 'SELECT licence_hash, plan, status, current_period_end, key_shown_at FROM pro_licences WHERE stripe_subscription = ?') {
+          if (race.hideNextPassLookup) { race.hideNextPassLookup = false; return null }
+          const row = byStripeSub(args[0])
+          return row ? { licence_hash: row.licence_hash, plan: row.plan, status: row.status, current_period_end: row.current_period_end, key_shown_at: row.key_shown_at ?? null } : null
         }
         if (sql === 'SELECT licence_hash FROM pro_licences WHERE stripe_subscription = ?') {
           const row = byStripeSub(args[0]); return row ? { licence_hash: row.licence_hash } : null
@@ -39,9 +43,6 @@ function fakeD1() {
         }
         if (sql === 'SELECT event_id FROM pro_events WHERE event_id = ?') {
           return events.has(args[0]) ? { event_id: args[0] } : null
-        }
-        if (sql === 'SELECT count, window_start FROM free_uses WHERE bucket = ?') {
-          const row = freeUses.get(args[0]); return row ? { ...row } : null
         }
         throw new Error(`fakeD1: unexpected first(): ${sql}`)
       },
@@ -61,6 +62,7 @@ function fakeD1() {
         }
         if (sql.startsWith('INSERT INTO pro_licences') && args.length === 9) {
           const [licence_hash, stripe_customer, stripe_subscription, plan, status, current_period_end, email, created_at, updated_at] = args
+          if (byStripeSub(stripe_subscription)) throw new Error('D1_ERROR: UNIQUE constraint failed: pro_licences.stripe_subscription')
           licences.set(licence_hash, { licence_hash, stripe_customer, stripe_subscription, plan, status, current_period_end, email, created_at, updated_at, last_seen: null })
           return { success: true, meta: { changes: 1 } }
         }
@@ -108,14 +110,6 @@ function fakeD1() {
           const row = byStripeSub(args[1]); if (row) Object.assign(row, { status: 'past_due', updated_at: args[0] })
           return { success: true, meta: { changes: row ? 1 : 0 } }
         }
-        if (sql === 'INSERT INTO free_uses (bucket, count, window_start) VALUES (?, ?, ?)') {
-          freeUses.set(args[0], { count: args[1], window_start: args[2] })
-          return { success: true, meta: { changes: 1 } }
-        }
-        if (sql === 'UPDATE free_uses SET count = ?, window_start = ? WHERE bucket = ?') {
-          const row = freeUses.get(args[2]); if (row) Object.assign(row, { count: args[0], window_start: args[1] })
-          return { success: true, meta: { changes: row ? 1 : 0 } }
-        }
         if (sql === 'INSERT INTO metrics (day, event, count) VALUES (?, ?, 1) ON CONFLICT(day, event) DO UPDATE SET count = count + excluded.count') {
           const key = `${args[0]}|${args[1]}`
           metrics.set(key, (metrics.get(key) || 0) + 1)
@@ -136,7 +130,7 @@ function fakeD1() {
       },
     }),
   })
-  return { prepare, store, licences, events, freeUses, metrics }
+  return { prepare, store, licences, events, metrics, race }
 }
 
 function setup() {
@@ -149,8 +143,6 @@ function setup() {
   let assetHits = 0
   const env = {
     SITE_LOCKED: '1', SITE_PIN: '012345', SESSION_SECRET: 'test-only-session-key-never-use-in-production',
-    // Tightened Addendum 3 (docs/PRO_PLAN.md) — matches wrangler.jsonc's FREE_USES.
-    FREE_USES: '1',
     PIN_ATTEMPTS: { idFromName: (name) => name, get: () => limiter },
     ASSETS: { fetch: async () => { assetHits++; return new Response('asset') } },
     DEEP_SWARM_DB: db,
@@ -165,27 +157,65 @@ const CONFIGURED = {
   STRIPE_WEBHOOK_SECRET: 'whsec_test_123',
   STRIPE_PRICE_YEAR: 'price_year_1',
   STRIPE_PRICE_MONTH: 'price_month_1',
-  STRIPE_PRICE_WEEK: 'price_week_1',
+  STRIPE_PRICE_PASS: 'price_pass_1',
 }
 
 const request = (path, options = {}) => new Request(`https://example.com${path}`, options)
 const jsonPost = (path, body, headers = {}) => new Request(`https://example.com${path}`, {
   method: 'POST', headers: { Origin: 'https://example.com', 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body),
 })
-const useRequest = (feature, headers = {}) => jsonPost('/api/pro/use', { feature }, headers)
+const nowSec = () => Math.floor(Date.now() / 1000)
+const WEEK_S = 7 * 24 * 3600
+const KEY_RE = /VV-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/
+const auDate = (unixSeconds) => new Intl.DateTimeFormat('en-AU', { dateStyle: 'long', timeZone: 'Australia/Sydney' }).format(new Date(unixSeconds * 1000))
 
-function extractAnonCookie(response) {
-  const raw = response.headers.get('Set-Cookie') || ''
-  const match = raw.match(/__Host-anon=([^;,]+)/)
-  return match ? `__Host-anon=${match[1]}` : null
+function cookieMaxAge(response, name) {
+  const match = (response.headers.get('Set-Cookie') || '').match(new RegExp(`${name}=[^;]*;[^,]*?Max-Age=(\\d+)`))
+  return match ? Number(match[1]) : null
 }
 
-// Mirrors worker/pro.ts's hmacBase64Url (same keyFor formula) so tests can
-// seed/derive the IP bucket key without exercising the handler first.
-async function hmacBase64Url(env, value) {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(`${env.SESSION_SECRET}:${env.SITE_PIN}`), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(value))
-  return base64Url(new Uint8Array(signature))
+function signedProExpiry(response) {
+  const match = (response.headers.get('Set-Cookie') || '').match(/__Host-pro=[A-Za-z0-9_-]{43}\.(\d+)\./)
+  return match ? Number(match[1]) : null
+}
+
+// A pass Checkout Session as Stripe returns it: the webhook payload carries the
+// customer as an id, a retrieve with expand[]=customer carries the object.
+function passSession({ id = 'cs_pass_1', customer = 'cus_pass_1', created = nowSec() - 60, paymentStatus = 'paid', plan = 'pass', expanded = false } = {}) {
+  return {
+    id, object: 'checkout.session', mode: 'payment', created, payment_status: paymentStatus, subscription: null,
+    customer: expanded ? { id: customer, email: 'pass@example.com' } : customer,
+    customer_details: { email: 'pass@example.com' },
+    metadata: plan == null ? {} : { plan },
+  }
+}
+
+// Stub Stripe for the pass flow: session retrieve + customer metadata read/write.
+function stubStripeForPass(session) {
+  const state = { storedKey: null, metadataWrites: 0 }
+  const customerId = session.customer
+  const fetch = async (url, init = {}) => {
+    const href = String(url)
+    if (href.startsWith(`https://api.stripe.com/v1/customers/${customerId}`)) {
+      if ((init.method || 'GET') === 'POST') {
+        state.metadataWrites++
+        state.storedKey = new URLSearchParams(String(init.body)).get('metadata[licence_key]')
+        return new Response(JSON.stringify({ id: customerId }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ id: customerId, metadata: state.storedKey ? { licence_key: state.storedKey } : {} }), { status: 200 })
+    }
+    if (href.startsWith(`https://api.stripe.com/v1/checkout/sessions/${session.id}`)) {
+      return new Response(JSON.stringify({ ...session, customer: { id: customerId, email: 'pass@example.com' } }), { status: 200 })
+    }
+    throw new Error(`unexpected fetch: ${href}`)
+  }
+  return { state, fetch }
+}
+
+async function sendWebhook(env, event) {
+  const payload = JSON.stringify(event)
+  const header = await stripeSignature(CONFIGURED.STRIPE_WEBHOOK_SECRET, payload)
+  return worker.fetch(new Request('https://example.com/api/pro/webhook', { method: 'POST', headers: { 'Stripe-Signature': header }, body: payload }), env)
 }
 
 async function login(env) {
@@ -224,14 +254,16 @@ test('PUBLIC_PATHS: /site/ falls through without a session, /kitchen/ and /api/s
 
 test('status: unconfigured/configured, owner, and Pro licence', async () => {
   const { env, db } = setup()
-  assert.deepEqual(await (await worker.fetch(request('/api/pro/status'), env)).json(), { pro: false, source: null, configured: false, freeRemaining: 1, freeLimit: 1 })
+  // deepEqual also proves the retired quota fields (freeLimit/freeRemaining) are gone.
+  assert.deepEqual(await (await worker.fetch(request('/api/pro/status'), env)).json(), { pro: false, source: null, configured: false })
 
   const configuredEnv = { ...env, ...CONFIGURED }
-  assert.deepEqual(await (await worker.fetch(request('/api/pro/status'), configuredEnv)).json(), { pro: false, source: null, configured: true, freeRemaining: 1, freeLimit: 1 })
+  assert.deepEqual(await (await worker.fetch(request('/api/pro/status'), configuredEnv)).json(), { pro: false, source: null, configured: true })
+  assert.equal((await (await worker.fetch(request('/api/pro/status'), { ...configuredEnv, STRIPE_PRICE_PASS: '' })).json()).configured, false)
 
   const sessionCookie = await login(configuredEnv)
   const ownerStatus = await worker.fetch(request('/api/pro/status', { headers: { Cookie: sessionCookie } }), configuredEnv)
-  assert.deepEqual(await ownerStatus.json(), { pro: true, source: 'owner', configured: true, freeRemaining: null, freeLimit: 1 })
+  assert.deepEqual(await ownerStatus.json(), { pro: true, source: 'owner', configured: true })
 
   const rawKey = 'VV-DDDD-EEEE-FFFF'
   const hash = await sha256(rawKey)
@@ -239,7 +271,7 @@ test('status: unconfigured/configured, owner, and Pro licence', async () => {
   const restored = await worker.fetch(jsonPost('/api/pro/restore', { key: rawKey }, { 'CF-Connecting-IP': '198.51.100.1' }), configuredEnv)
   const proCookie = restored.headers.get('Set-Cookie').split(';')[0]
   const licenceStatus = await worker.fetch(request('/api/pro/status', { headers: { Cookie: proCookie } }), configuredEnv)
-  assert.deepEqual(await licenceStatus.json(), { pro: true, source: 'licence', plan: 'month', periodEnd: 1888888888, configured: true, freeRemaining: null, freeLimit: 1 })
+  assert.deepEqual(await licenceStatus.json(), { pro: true, source: 'licence', plan: 'month', periodEnd: 1888888888, configured: true })
 })
 
 test('checkout: 503 unconfigured, 400 bad plan, 403 bad origin, 200 with a session url when configured', async () => {
@@ -248,8 +280,9 @@ test('checkout: 503 unconfigured, 400 bad plan, 403 bad origin, 200 with a sessi
 
   const configuredEnv = { ...env, ...CONFIGURED }
   assert.equal((await worker.fetch(jsonPost('/api/pro/checkout', { plan: 'decade' }), configuredEnv)).status, 400)
-  // A missing weekly price leaves the whole paywall unconfigured rather than half-open.
-  assert.equal((await worker.fetch(jsonPost('/api/pro/checkout', { plan: 'year' }), { ...configuredEnv, STRIPE_PRICE_WEEK: '' })).status, 503)
+  assert.equal((await worker.fetch(jsonPost('/api/pro/checkout', { plan: 'week' }), configuredEnv)).status, 400) // retired plan
+  // A missing pass price leaves the whole paywall unconfigured rather than half-open.
+  assert.equal((await worker.fetch(jsonPost('/api/pro/checkout', { plan: 'year' }), { ...configuredEnv, STRIPE_PRICE_PASS: '' })).status, 503)
   assert.equal((await worker.fetch(jsonPost('/api/pro/checkout', { plan: 'year' }, { Origin: 'https://evil.example' }), configuredEnv)).status, 403)
 
   const originalFetch = globalThis.fetch
@@ -265,36 +298,201 @@ test('checkout: 503 unconfigured, 400 bad plan, 403 bad origin, 200 with a sessi
     assert.equal(capturedUrl, 'https://api.stripe.com/v1/checkout/sessions')
     assert.match(capturedBody, /line_items%5B0%5D%5Bprice%5D=price_year_1/)
     assert.match(capturedBody, /success_url=.*pay%2Fsuccess/)
+    const yearForm = new URLSearchParams(capturedBody)
+    assert.equal(yearForm.get('mode'), 'subscription')
+    assert.equal(yearForm.get('customer_creation'), null) // Stripe rejects it outside payment mode
 
-    const week = await worker.fetch(jsonPost('/api/pro/checkout', { plan: 'week' }), configuredEnv)
-    assert.equal(week.status, 200)
-    assert.match(capturedBody, /line_items%5B0%5D%5Bprice%5D=price_week_1/)
-    assert.match(capturedBody, /metadata%5Bplan%5D=week/)
+    const pass = await worker.fetch(jsonPost('/api/pro/checkout', { plan: 'pass' }), configuredEnv)
+    assert.equal(pass.status, 200)
+    const form = new URLSearchParams(capturedBody)
+    assert.equal(form.get('mode'), 'payment')
+    assert.equal(form.get('customer_creation'), 'always')
+    assert.equal(form.get('line_items[0][price]'), 'price_pass_1')
+    assert.equal(form.get('line_items[0][quantity]'), '1')
+    assert.equal(form.get('metadata[plan]'), 'pass')
+    assert.equal(form.get('payment_intent_data[metadata][plan]'), 'pass')
+    const expiresIn = Number(form.get('expires_at')) - nowSec()
+    assert.ok(expiresIn >= 1800 && expiresIn <= 24 * 3600, `expires_at within Stripe's 30 min–24 h window (got ${expiresIn}s)`)
   } finally { globalThis.fetch = originalFetch }
 })
 
-test('/pay/success on a weekly price records plan "week" and says weekly', async () => {
+test('pass: webhook first mints the key; /pay/success then shows it once with the en-AU end date and cookies capped at the pass end', async () => {
+  const { env, db } = setup()
+  const configuredEnv = { ...env, ...CONFIGURED }
+  const session = passSession({ id: 'cs_pass_wh', customer: 'cus_pass_wh' })
+  const periodEnd = session.created + WEEK_S
+  const stub = stubStripeForPass(session)
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    const hook = await sendWebhook(configuredEnv, { id: 'evt_pass_wh', type: 'checkout.session.completed', data: { object: session } })
+    assert.equal(hook.status, 200)
+    assert.equal(db.licences.size, 1)
+    const row = [...db.licences.values()][0]
+    assert.equal(row.stripe_subscription, 'pass_cs_pass_wh')
+    assert.equal(row.plan, 'pass')
+    assert.equal(row.status, 'active')
+    assert.equal(row.current_period_end, periodEnd)
+    assert.equal(row.stripe_customer, 'cus_pass_wh')
+    assert.ok(stub.state.storedKey, 'webhook wrote the key to the Stripe customer')
+    assert.equal(row.licence_hash, await sha256(stub.state.storedKey))
+    assert.equal(db.metrics.get(`${today()}|pay_success`), 1)
+
+    const first = await worker.fetch(request('/pay/success?session_id=cs_pass_wh'), configuredEnv)
+    const html = await first.text()
+    assert.ok(html.includes(stub.state.storedKey), 'success page shows the webhook-minted key')
+    assert.ok(html.includes(`Your 7-day Pro pass is active until ${auDate(periodEnd)}.`))
+    assert.match(html, /active until \d{1,2} [A-Z][a-z]+ \d{4}\./)
+    assert.equal(signedProExpiry(first), periodEnd, 'signed cookie expiry is the pass end')
+    const age = cookieMaxAge(first, '__Host-pro')
+    assert.ok(age <= periodEnd - nowSec() && age >= periodEnd - nowSec() - 5, `__Host-pro Max-Age capped at the pass end (got ${age})`)
+    assert.equal(cookieMaxAge(first, 'vv_pro'), age)
+    assert.equal(db.licences.size, 1)
+    assert.equal(stub.state.metadataWrites, 1, 'the success page never re-mints or overwrites the key')
+    assert.equal(db.metrics.get(`${today()}|pay_success`), 1, 'not counted twice')
+
+    const second = await worker.fetch(request('/pay/success?session_id=cs_pass_wh'), configuredEnv)
+    const html2 = await second.text()
+    assert.doesNotMatch(html2, KEY_RE)
+    assert.match(html2, /shown once already/)
+    assert.ok(html2.includes(auDate(periodEnd)))
+
+    const status = await worker.fetch(request('/api/pro/status', { headers: { Cookie: first.headers.get('Set-Cookie').split(';')[0] } }), configuredEnv)
+    assert.deepEqual(await status.json(), { pro: true, source: 'licence', plan: 'pass', periodEnd, configured: true })
+  } finally { globalThis.fetch = originalFetch }
+})
+
+test('pass: /pay/success first mints the key; the later webhook and its replay reuse the row', async () => {
+  const { env, db } = setup()
+  const configuredEnv = { ...env, ...CONFIGURED }
+  const session = passSession({ id: 'cs_pass_sp', customer: 'cus_pass_sp' })
+  const stub = stubStripeForPass(session)
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    const first = await worker.fetch(request('/pay/success?session_id=cs_pass_sp'), configuredEnv)
+    const html = await first.text()
+    const shownKey = html.match(KEY_RE)?.[0]
+    assert.ok(shownKey)
+    assert.equal(shownKey, stub.state.storedKey)
+    assert.match(html, /7-day Pro pass is active until/)
+    assert.equal(signedProExpiry(first), session.created + WEEK_S)
+
+    const event = { id: 'evt_pass_sp', type: 'checkout.session.completed', data: { object: session } }
+    assert.equal((await sendWebhook(configuredEnv, event)).status, 200)
+    assert.equal((await sendWebhook(configuredEnv, event)).status, 200) // replay
+    assert.equal(db.licences.size, 1)
+    assert.equal([...db.licences.values()][0].licence_hash, await sha256(shownKey), 'the key the customer saw still works')
+    assert.equal(stub.state.metadataWrites, 1)
+    assert.equal(stub.state.storedKey, shownKey)
+    assert.equal(db.metrics.get(`${today()}|pay_success`), 1)
+
+    const revisit = await worker.fetch(request('/pay/success?session_id=cs_pass_sp'), configuredEnv)
+    assert.doesNotMatch(await revisit.text(), KEY_RE)
+  } finally { globalThis.fetch = originalFetch }
+})
+
+test('pass: losing the insert race to the other path keeps the winner\'s key and never shows a dead one', async () => {
+  const { env, db } = setup()
+  const configuredEnv = { ...env, ...CONFIGURED }
+  const session = passSession({ id: 'cs_pass_race', customer: 'cus_pass_race' })
+  const stub = stubStripeForPass(session)
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    await sendWebhook(configuredEnv, { id: 'evt_pass_race', type: 'checkout.session.completed', data: { object: session } })
+    const winnerKey = stub.state.storedKey
+    db.race.hideNextPassLookup = true
+    const page = await worker.fetch(request('/pay/success?session_id=cs_pass_race'), configuredEnv)
+    assert.equal(page.status, 200)
+    const html = await page.text()
+    assert.equal(html.match(KEY_RE)?.[0], winnerKey)
+    assert.equal(db.licences.size, 1)
+    assert.equal(stub.state.metadataWrites, 1)
+    assert.equal(db.metrics.get(`${today()}|pay_success`), 1)
+  } finally { globalThis.fetch = originalFetch }
+})
+
+test('pass: the webhook ignores unpaid sessions and one-off payments that are not our pass', async () => {
   const { env, db } = setup()
   const configuredEnv = { ...env, ...CONFIGURED }
   const originalFetch = globalThis.fetch
-  globalThis.fetch = async (url) => {
-    const href = String(url)
-    if (href.startsWith('https://api.stripe.com/v1/checkout/sessions/cs_test_week')) {
-      return new Response(JSON.stringify({
-        payment_status: 'paid',
-        customer: { id: 'cus_week', email: 'week@example.com' },
-        subscription: { id: 'sub_week', status: 'active', current_period_end: 1999999999, items: { data: [{ price: { id: CONFIGURED.STRIPE_PRICE_WEEK } }] } },
-      }), { status: 200 })
-    }
-    if (href.startsWith('https://api.stripe.com/v1/customers/cus_week')) return new Response(JSON.stringify({ id: 'cus_week' }), { status: 200 })
-    throw new Error(`unexpected fetch: ${href}`)
-  }
+  globalThis.fetch = async (url) => { throw new Error(`unexpected fetch: ${url}`) }
   try {
-    const res = await worker.fetch(request('/pay/success?session_id=cs_test_week'), configuredEnv)
-    assert.match(await res.text(), /weekly Pro subscription/)
-    const row = [...db.licences.values()].find((r) => r.stripe_subscription === 'sub_week')
-    assert.equal(row?.plan, 'week')
+    assert.equal((await sendWebhook(configuredEnv, { id: 'evt_unpaid', type: 'checkout.session.completed', data: { object: passSession({ id: 'cs_unpaid', paymentStatus: 'unpaid' }) } })).status, 200)
+    assert.equal((await sendWebhook(configuredEnv, { id: 'evt_other', type: 'checkout.session.completed', data: { object: passSession({ id: 'cs_other', plan: null }) } })).status, 200)
+    assert.equal(db.licences.size, 0)
+    assert.equal(db.metrics.size, 0)
   } finally { globalThis.fetch = originalFetch }
+})
+
+test('pass: once expired, status is not Pro, restore is 401 and /api/store is 401; subscriptions ignore period end', async () => {
+  const { env, db } = setup()
+  const configuredEnv = { ...env, ...CONFIGURED }
+  const rawKey = 'VV-PASS-2222-3333'
+  const hash = await sha256(rawKey)
+  const periodEnd = nowSec() + 3600
+  seedLicence(db, { hash, subscription: 'pass_cs_seed', plan: 'pass', status: 'active', periodEnd })
+
+  const restored = await worker.fetch(jsonPost('/api/pro/restore', { key: rawKey }, { 'CF-Connecting-IP': '203.0.113.60' }), configuredEnv)
+  assert.equal(restored.status, 200)
+  assert.deepEqual(await restored.json(), { ok: true, plan: 'pass' })
+  assert.equal(signedProExpiry(restored), periodEnd)
+  const age = cookieMaxAge(restored, '__Host-pro')
+  assert.ok(age <= 3600 && age >= 3595, `restore cookie capped at the pass end (got ${age})`)
+  assert.equal(cookieMaxAge(restored, 'vv_pro'), age)
+  const proCookie = restored.headers.get('Set-Cookie').split(';')[0]
+  assert.equal((await worker.fetch(request('/api/store/x', { headers: { Cookie: proCookie } }), configuredEnv)).status, 404) // authorised, just empty
+
+  db.licences.get(hash).current_period_end = nowSec() - 1
+  assert.deepEqual(await (await worker.fetch(request('/api/pro/status', { headers: { Cookie: proCookie } }), configuredEnv)).json(), { pro: false, source: null, configured: true })
+  assert.equal((await worker.fetch(request('/api/store/x', { headers: { Cookie: proCookie } }), configuredEnv)).status, 401)
+  assert.equal((await worker.fetch(jsonPost('/api/pro/restore', { key: rawKey }, { 'CF-Connecting-IP': '203.0.113.61' }), configuredEnv)).status, 401)
+
+  db.licences.get(hash).current_period_end = null // a pass with no end must never count as active
+  assert.equal((await worker.fetch(jsonPost('/api/pro/restore', { key: rawKey }, { 'CF-Connecting-IP': '203.0.113.62' }), configuredEnv)).status, 401)
+
+  // A subscription whose renewal webhook is late stays active past current_period_end, with a full-year cookie.
+  const subKey = 'VV-SUBS-4444-5555'
+  seedLicence(db, { hash: await sha256(subKey), subscription: 'sub_late', plan: 'year', status: 'active', periodEnd: nowSec() - 100 })
+  const subRestore = await worker.fetch(jsonPost('/api/pro/restore', { key: subKey }, { 'CF-Connecting-IP': '203.0.113.63' }), configuredEnv)
+  assert.equal(subRestore.status, 200)
+  assert.equal(cookieMaxAge(subRestore, '__Host-pro'), 365 * 24 * 3600)
+  const subCookie = subRestore.headers.get('Set-Cookie').split(';')[0]
+  assert.equal((await (await worker.fetch(request('/api/pro/status', { headers: { Cookie: subCookie } }), configuredEnv)).json()).pro, true)
+})
+
+test('pass: subscription webhooks never touch a pass row, and an expired pass revisiting /pay/success gets no cookie', async () => {
+  const { env, db } = setup()
+  const configuredEnv = { ...env, ...CONFIGURED }
+  const session = passSession({ id: 'cs_pass_old', customer: 'cus_pass_old', created: nowSec() - WEEK_S - 60 })
+  const stub = stubStripeForPass(session)
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    await sendWebhook(configuredEnv, { id: 'evt_pass_old', type: 'checkout.session.completed', data: { object: session } })
+    const row = [...db.licences.values()][0]
+    assert.equal(row.current_period_end, session.created + WEEK_S)
+
+    await sendWebhook(configuredEnv, { id: 'evt_sub_upd', type: 'customer.subscription.updated', data: { object: { id: 'pass_cs_pass_old', status: 'active', current_period_end: 2999999999, items: { data: [{ price: { id: CONFIGURED.STRIPE_PRICE_YEAR } }] } } } })
+    await sendWebhook(configuredEnv, { id: 'evt_sub_del', type: 'customer.subscription.deleted', data: { object: { id: 'pass_cs_pass_old' } } })
+    await sendWebhook(configuredEnv, { id: 'evt_inv_fail', type: 'invoice.payment_failed', data: { object: { subscription: 'pass_cs_pass_old' } } })
+    assert.equal(row.plan, 'pass')
+    assert.equal(row.status, 'active')
+    assert.equal(row.current_period_end, session.created + WEEK_S)
+
+    const page = await worker.fetch(request('/pay/success?session_id=cs_pass_old'), configuredEnv)
+    assert.match(await page.text(), /no longer active/)
+    assert.equal(page.headers.get('Set-Cookie'), null)
+    assert.equal(row.key_shown_at ?? null, null)
+  } finally { globalThis.fetch = originalFetch }
+})
+
+test('/api/pro/use is gone (404) and sets no anon cookie', async () => {
+  const { env } = setup()
+  const res = await worker.fetch(jsonPost('/api/pro/use', { feature: 'pdf-export' }), env)
+  assert.equal(res.status, 404)
+  assert.equal(res.headers.get('Set-Cookie'), null)
 })
 
 test('/pay/success issues a licence key once, sets both cookies, and re-visits show "already issued"', async () => {
@@ -429,70 +627,6 @@ test('/api/store/<key>: owner keeps a plain key, a Pro cookie gets a namespaced 
   assert.ok(db.store.has('cutlist')) // the owner's own row is untouched by the Pro customer's delete
 })
 
-test('free quota: one use allowed, the second is blocked, freeLimit is reported, and owner/Pro bypass entirely', async () => {
-  const { env, db } = setup()
-
-  const first = await worker.fetch(useRequest('pdf-export'), env)
-  assert.equal(first.status, 200)
-  assert.deepEqual(await first.json(), { allowed: true, remaining: 0, freeLimit: 1 })
-  const cookie = extractAnonCookie(first)
-  assert.ok(cookie)
-
-  const second = await worker.fetch(useRequest('pdf-export', { Cookie: cookie }), env)
-  assert.equal(second.status, 402)
-  const secondBody = await second.json()
-  assert.equal(secondBody.allowed, false)
-  assert.equal(secondBody.remaining, 0)
-  assert.equal(secondBody.freeLimit, 1)
-  assert.ok(secondBody.resetsAt > Math.floor(Date.now() / 1000))
-
-  const sessionCookie = await login(env)
-  assert.deepEqual(await (await worker.fetch(useRequest('pdf-export', { Cookie: sessionCookie }), env)).json(), { allowed: true, pro: true, freeLimit: 1 })
-
-  const rawKey = 'VV-FREE-0001-0002'
-  const hash = await sha256(rawKey)
-  seedLicence(db, { hash, subscription: 'sub_free_1', plan: 'year', status: 'active' })
-  const restored = await worker.fetch(jsonPost('/api/pro/restore', { key: rawKey }, { 'CF-Connecting-IP': '203.0.113.9' }), env)
-  const proCookie = restored.headers.get('Set-Cookie').split(';')[0]
-  assert.deepEqual(await (await worker.fetch(useRequest('pdf-export', { Cookie: proCookie }), env)).json(), { allowed: true, pro: true, freeLimit: 1 })
-})
-
-test('free quota: the IP bucket blocks a fresh anon cookie once the IP itself is exhausted', async () => {
-  const { env } = setup()
-  const ip = '198.51.100.77'
-  const first = await worker.fetch(useRequest('pdf-export', { 'CF-Connecting-IP': ip }), env)
-  assert.equal(first.status, 200) // no Cookie, so this is a genuinely fresh anon id sharing the IP
-
-  const blocked = await worker.fetch(useRequest('pdf-export', { 'CF-Connecting-IP': ip }), env)
-  assert.equal(blocked.status, 402)
-  assert.deepEqual((await blocked.json()).allowed, false)
-})
-
-test('free quota: a window older than 30 days resets the bucket instead of blocking it', async () => {
-  const { env, db } = setup()
-  const ip = '203.0.113.44'
-  const bucket = `ip:${await hmacBase64Url(env, ip)}`
-  db.freeUses.set(bucket, { count: 5, window_start: Date.now() - 31 * 24 * 3600 * 1000 })
-
-  const res = await worker.fetch(useRequest('pdf-export', { 'CF-Connecting-IP': ip }), env)
-  assert.equal(res.status, 200)
-  assert.deepEqual(await res.json(), { allowed: true, remaining: 0, freeLimit: 1 })
-  assert.equal(db.freeUses.get(bucket).count, 1)
-})
-
-test('free quota: a cookie with a bad signature is ignored and replaced', async () => {
-  const { env } = setup()
-  const forgedId = base64Url(crypto.getRandomValues(new Uint8Array(16)))
-  const forged = `__Host-anon=${forgedId}.${'A'.repeat(43)}`
-
-  const res = await worker.fetch(useRequest('pdf-export', { Cookie: forged }), env)
-  assert.equal(res.status, 200)
-  assert.deepEqual(await res.json(), { allowed: true, remaining: 0, freeLimit: 1 })
-  const setCookie = res.headers.get('Set-Cookie') || ''
-  assert.match(setCookie, /__Host-anon=/)
-  assert.ok(!setCookie.includes(forgedId)) // the forged id is discarded, not reused
-})
-
 test('metric: whitelist enforced, same-origin required (Origin or Sec-Fetch-Site), owner GET reads rows, anon GET is 401', async () => {
   const { env, db } = setup()
 
@@ -522,6 +656,14 @@ test('metric: whitelist enforced, same-origin required (Origin or Sec-Fetch-Site
   assert.equal(viaSecFetch.status, 204)
   assert.equal(db.metrics.get(`${today()}|nudge_click`), 1)
 
+  for (const event of ['export_free', 'export_pro', 'brand_saved']) {
+    const res = await worker.fetch(new Request('https://example.com/api/metric', {
+      method: 'POST', headers: { Origin: 'https://example.com', 'Content-Type': 'application/json' }, body: JSON.stringify({ event }),
+    }), env)
+    assert.equal(res.status, 204)
+    assert.equal(db.metrics.get(`${today()}|${event}`), 1, `${event} is whitelisted`)
+  }
+
   assert.equal((await worker.fetch(new Request('https://example.com/api/metric?days=30'), env)).status, 401)
 
   const sessionCookie = await login(env)
@@ -529,6 +671,9 @@ test('metric: whitelist enforced, same-origin required (Origin or Sec-Fetch-Site
   assert.equal(ownerGet.status, 200)
   const rows = (await ownerGet.json()).sort((a, b) => a.event.localeCompare(b.event))
   assert.deepEqual(rows, [
+    { day: today(), event: 'brand_saved', count: 1 },
+    { day: today(), event: 'export_free', count: 1 },
+    { day: today(), event: 'export_pro', count: 1 },
     { day: today(), event: 'nudge_click', count: 1 },
     { day: today(), event: 'nudge_shown', count: 1 },
   ])

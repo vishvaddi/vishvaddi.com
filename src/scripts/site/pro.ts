@@ -10,12 +10,12 @@
 
 const STATUS_KEY = "vv_pro_status";
 
-export type Plan = "year" | "month" | "week";
+export type Plan = "year" | "month" | "pass";
 // Must match the Stripe prices wired to STRIPE_PRICE_* in wrangler.jsonc.
 const PLAN_BUTTONS: ReadonlyArray<[Plan, string]> = [
   ["year", "Pro — A$100 / year"],
   ["month", "A$20 / month"],
-  ["week", "A$5 / week"],
+  ["pass", "7-day pass — A$5"],
 ];
 const METRIC_ENDPOINT = "/api/metric";
 
