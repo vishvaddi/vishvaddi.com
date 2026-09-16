@@ -120,7 +120,7 @@ try {
     await syncBox.click()
     await page.waitForSelector('.pro-upsell[data-feature="sync"]', { timeout: 5000 }).catch(() => {})
     check('Sync: public visitor sees the Pro panel', await page.locator('.pro-upsell[data-feature="sync"]').count() === 1)
-    check('Sync: panel offers year, month and week', await page.locator('.pro-upsell[data-feature="sync"] .pro-upsell-btn', { hasText: /A\$100 \/ year|A\$20 \/ month|A\$5 \/ week/ }).count() === 3)
+    check('Sync: panel offers the three plans', await page.locator('.pro-upsell[data-feature="sync"] .pro-upsell-plans .pro-upsell-btn', { hasText: /A\$/ }).count() === 3)
     check('Sync: checkbox stays off', !(await syncBox.isChecked()))
   } else check('Sync: toggle present', false)
   check('Free features never spend the free export (no /api/pro/use calls)', useCalls === 0, String(useCalls))

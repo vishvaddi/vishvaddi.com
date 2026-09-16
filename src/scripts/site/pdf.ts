@@ -1,6 +1,6 @@
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import { download } from './calc'
-import { brandedExport, stampPdf } from './export-brand'
+import { brandedExport, stampCanvas, stampPdf } from './export-brand'
 
 interface Src { name: string; bytes: Uint8Array; pdf: any; render?: any }
 interface PageRef { id: string; src: number; page: number; rot: number; selected: boolean }
@@ -290,22 +290,27 @@ export function initPdf() {
   }
 
   exportBtn.addEventListener('click', () => brandedExport('pdf-export', () => void savePdf(pages, 'edited', true), { anchor: exportBtn }))
-  byId<HTMLButtonElement>('pdf-extract')?.addEventListener('click', () => void savePdf(selected(), 'extracted'))
-  byId<HTMLButtonElement>('pdf-split')?.addEventListener('click', async () => {
+  const extractBtn = byId<HTMLButtonElement>('pdf-extract')
+  extractBtn?.addEventListener('click', () => brandedExport('pdf-extract', () => void savePdf(selected(), 'extracted', true), { anchor: extractBtn }))
+  const splitBtn = byId<HTMLButtonElement>('pdf-split')
+  splitBtn?.addEventListener('click', () => brandedExport('pdf-split', () => void splitPages(), { anchor: splitBtn }))
+  async function splitPages() {
     const refs = selected(); if (!refs.length) return; setStatus('Splitting pages…')
     const { default: JSZip } = await import('jszip'); const zip = new JSZip()
-    for (let index = 0; index < refs.length; index++) zip.file(`page-${String(index + 1).padStart(3, '0')}.pdf`, await build([refs[index]]))
+    for (let index = 0; index < refs.length; index++) zip.file(`page-${String(index + 1).padStart(3, '0')}.pdf`, await build([refs[index]], true))
     const blob = await zip.generateAsync({ type: 'blob' }); download('split-pages.zip', URL.createObjectURL(blob)); setStatus(`Split ${refs.length} page(s).`)
-  })
-  byId<HTMLButtonElement>('pdf-images')?.addEventListener('click', async () => {
+  }
+  const imagesBtn = byId<HTMLButtonElement>('pdf-images')
+  imagesBtn?.addEventListener('click', () => brandedExport('pdf-images', () => void pagesToPngs(), { anchor: imagesBtn }))
+  async function pagesToPngs() {
     const refs = selected(); if (!refs.length) return; setStatus('Rendering PNGs…')
     const { default: JSZip } = await import('jszip'); const zip = new JSZip()
     for (let index = 0; index < refs.length; index++) {
-      const canvas = await renderPage(refs[index], 2); const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('PNG failed')), 'image/png'))
+      const canvas = await stampCanvas(await renderPage(refs[index], 2)); const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('PNG failed')), 'image/png'))
       zip.file(`page-${String(index + 1).padStart(3, '0')}.png`, blob)
     }
     download('pdf-pages-png.zip', URL.createObjectURL(await zip.generateAsync({ type: 'blob' }))); setStatus(`Rendered ${refs.length} PNG(s).`)
-  })
+  }
 
   render()
 }

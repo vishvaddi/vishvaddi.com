@@ -612,7 +612,7 @@ export function initMoney(): void {
   {
     const panel = panels.get("investments")!;
     panel.append(mk("h2", undefined, "Investments"));
-    panel.append(mk("p", "calc-blurb", "Prices are entered by hand, or refreshed live with Pro. Note the date you looked them up."));
+    panel.append(mk("p", "calc-blurb", "Enter prices by hand or refresh them live for holdings with a symbol. Note the date you looked them up."));
     const totals = mk("div");
     const refreshRow = mk("div", "btn-row");
     const refreshStatus = mk("span", "calc-blurb");

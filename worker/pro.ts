@@ -243,6 +243,8 @@ async function checkoutHandler(request: Request, env: ProEnv, url: URL): Promise
     // Session metadata isn't shown on the dashboard's Payments page, where refunds are issued.
     form.set("payment_intent_data[metadata][plan]", "pass");
     form.set("expires_at", String(nowSeconds() + PASS_CHECKOUT_TTL_S));
+    // Card only: a delayed method (BECS, PayTo) completes as unpaid and no pass would ever be issued.
+    form.set("payment_method_types[0]", "card");
   }
   try {
     const upstream = await stripe(env, "/v1/checkout/sessions", { method: "POST", body: form.toString() });
@@ -687,7 +689,9 @@ export async function handleProRequest(request: Request, env: ProEnv, url: URL):
   const path = url.pathname;
   if (path === "/api/pro/status" && request.method === "GET") return statusHandler(request, env);
   if (path === "/api/pro/checkout" && request.method === "POST") return checkoutHandler(request, env, url);
-  if (path === "/pay/success" && (request.method === "GET" || request.method === "HEAD")) return successHandler(request, env, url);
+  // HEAD is answered without side effects so a link prefetcher can't spend the one-time key view.
+  if (path === "/pay/success" && request.method === "HEAD") return new Response(null, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+  if (path === "/pay/success" && request.method === "GET") return successHandler(request, env, url);
   if (path === "/api/pro/restore" && request.method === "POST") return restoreHandler(request, env, url);
   if (path === "/api/pro/logout" && request.method === "POST") return logoutHandler(request, url);
   if (path === "/api/pro/webhook" && request.method === "POST") return webhookHandler(request, env);

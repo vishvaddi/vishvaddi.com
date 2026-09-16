@@ -311,6 +311,7 @@ test('checkout: 503 unconfigured, 400 bad plan, 403 bad origin, 200 with a sessi
     assert.equal(form.get('line_items[0][quantity]'), '1')
     assert.equal(form.get('metadata[plan]'), 'pass')
     assert.equal(form.get('payment_intent_data[metadata][plan]'), 'pass')
+    assert.equal(form.get('payment_method_types[0]'), 'card')
     const expiresIn = Number(form.get('expires_at')) - nowSec()
     assert.ok(expiresIn >= 1800 && expiresIn <= 24 * 3600, `expires_at within Stripe's 30 min–24 h window (got ${expiresIn}s)`)
   } finally { globalThis.fetch = originalFetch }
@@ -526,6 +527,20 @@ test('/pay/success issues a licence key once, sets both cookies, and re-visits s
     assert.doesNotMatch(html2, /VV-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/)
     assert.match(html2, /already/i)
     assert.equal(db.metrics.get(`${today()}|pay_success`), 1) // unchanged — no new key issued on the revisit
+  } finally { globalThis.fetch = originalFetch }
+})
+
+test('/pay/success HEAD has no side effects (no Stripe call, no cookie) so prefetchers cannot spend the key view', async () => {
+  const { env } = setup()
+  const configuredEnv = { ...env, ...CONFIGURED }
+  const originalFetch = globalThis.fetch
+  let stripeCalls = 0
+  globalThis.fetch = async () => { stripeCalls++; return new Response('{}', { status: 200 }) }
+  try {
+    const response = await worker.fetch(request('/pay/success?session_id=cs_test_head', { method: 'HEAD' }), configuredEnv)
+    assert.equal(response.status, 200)
+    assert.equal(response.headers.get('Set-Cookie'), null)
+    assert.equal(stripeCalls, 0)
   } finally { globalThis.fetch = originalFetch }
 })
 
