@@ -738,3 +738,16 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Found: on a phone the 15/09 SEO intro filled the first screen above each tool, working against the adoption-first goal. `ToolIntro.astro` now clamps the intro to two lines under 640 px (full text stays in the DOM for crawlers) and hides it in print, so exported PDFs don't open with marketing copy.
 - Play Store screenshots (1080×1920, 9:16) saved outside the repo at `C:\Users\vishv\Projects\vishvaddi-play-assets\`.
 - Tests: seo 146, feature 18, site-tools-responsive 149 (run against a served dist).
+
+
+## 2026-09-16 - DEPLOYED adoption-first Pro (`68196ae` → version `74c8cbdb`)
+
+- Vish: "deploy". No pending D1 migrations; secrets present (SESSION_SECRET, SITE_PIN, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, sandbox). Built from a clean detached worktree of pushed `68196ae`; version `74c8cbdb-98e5-419d-91b2-f68e4e9ae1b5`.
+- Live checks:
+  - Routes: 17 routes 200 (tools, `/pro`, `/terms`, `/privacy`, `/offline/`, `/sw.js`, materials index/family/answer pages).
+  - APIs: `/api/pro/status` `configured:true` with no quota fields; `POST /api/pro/use` 404; HEAD `/pay/success` 200; `/api/store/x` anon 401; `/api/market` anon 200.
+  - Checkout: **real Stripe sandbox Checkout sessions created for year, month and pass**, which confirms price ids plus the pass-mode fields against the pinned API version.
+  - Sitemap has 126 materials URLs and no `/offline/`.
+  - `/pro` shows footer copy with no quota copy; `sw.js`/`chrome.js` registration is live.
+  - `pro-e2e` against production: 49/49.
+- Owed by Vish: one sandbox test purchase per plan (card 4242…), then Stripe live activation.
