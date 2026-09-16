@@ -14,17 +14,15 @@
   "vars": {
     "TTS_VOICE_NAME": "Charlie",
     "TTS_MONTHLY_CHARS": "150000",
-    // Pro (paywall experiment, docs/PRO_PLAN.md): Stripe price ids for A$100/year,
-    // A$20/month, A$5/week (Addendum 4). All three must be set or checkout reports
-    // "not configured" — blank until the new prices exist, so a deploy can never
-    // charge the retired A$39/A$5 prices. Secrets (not vars):
+    // Pro (paywall experiment, docs/PRO_PLAN.md): Stripe price ids for the A$100/year
+    // and A$20/month subscriptions and the A$5 one-off 7-day pass (a one-time price,
+    // not recurring). All three must be set or checkout reports "not configured" —
+    // blank until the prices exist, so a deploy can never charge the retired
+    // A$39/A$5 prices. Secrets (not vars):
     // `npx wrangler secret put STRIPE_SECRET_KEY` and `npx wrangler secret put STRIPE_WEBHOOK_SECRET`.
     "STRIPE_PRICE_YEAR": "",
     "STRIPE_PRICE_MONTH": "",
-    "STRIPE_PRICE_WEEK": "",
-    // Free-use quota addendum (tightened Addendum 3, docs/PRO_PLAN.md): gated
-    // actions per rolling 30 days before the upsell.
-    "FREE_USES": "1"
+    "STRIPE_PRICE_PASS": ""
   },
   "durable_objects": {
     "bindings": [
