@@ -5,35 +5,59 @@ import "../styles/site.css";
 
 <Base
   title="Pro"
-  description="vishvaddi.com Pro — every tool stays free and unlimited; Pro unlocks exports, saved projects, cross-device sync and MP3/stem export."
+  description="vishvaddi.com Pro — every tool and export stays free; Pro puts your business name and logo on your PDFs, prints and images, and adds sync and Studio MP3/stem export."
 >
   <div class="blueprint tool">
     <p class="eyebrow">Pro</p>
     <h1>Pro</h1>
     <p>
-      Every tool and feature on this site is free, with no limits on use. Pro is an optional
-      add-on for people who want more than the browser tab: exports, saved
-      projects, cross-device sync and Studio's MP3/stem export.
+      Every tool, feature and export on this site is free, with no limits. Pro is
+      for people who send what they make to clients: your business name on the
+      export instead of mine.
     </p>
 
     <h2>Free</h2>
     <p>
-      Every calculator, optimiser, tracker, dashboard and editor here — every
-      feature, unlimited use, no account, no watermark, nothing that expires or
-      throttles. Files never leave your browser unless a page says otherwise.
-      Exports are capped at <span id="free-limit-copy">1 export</span> every 30
-      days; Pro removes that limit.
+      Every calculator, optimiser, tracker, dashboard and editor here, and every
+      export — PDFs, prints, images, CSV and project files — unlimited, no
+      account. PDFs, prints and images carry a small "Made free at
+      vishvaddi.com" footer; CSV and project files don't. Files never leave your
+      browser unless a page says otherwise.
     </p>
 
     <h2>Pro adds</h2>
     <ul>
-      <li>PDF, CSV, project and image exports on the tools that support them</li>
-      <li>Saved projects you can reopen and re-export later</li>
+      <li>Your business name, ABN or contact line and logo on PDFs, prints and images — instead of the footer</li>
       <li>Cross-device sync for tools with a "Sync across devices" toggle</li>
       <li>MP3 and stem export in Studio — WAV master export stays free for everyone</li>
+      <li>MP3 download in Lo-fi and batch download in Audio Prep</li>
     </ul>
 
     <div id="pro-plans"></div>
+
+    <h2>Your brand</h2>
+    <p>What goes on your PDFs, prints and images. It's stored only in this browser.</p>
+    <p id="brand-free-note" class="pro-upsell-note" hidden>Applies to your exports with Pro — until then they carry the free footer.</p>
+    <form id="brand-form" class="brand-form" novalidate>
+      <div class="field">
+        <label for="brand-name">Business name</label>
+        <input type="text" id="brand-name" maxlength="80" autocomplete="organization" />
+      </div>
+      <div class="field">
+        <label for="brand-line">Line under it — ABN, phone or email (optional)</label>
+        <input type="text" id="brand-line" maxlength="120" />
+      </div>
+      <div class="field">
+        <label for="brand-logo">Logo — PNG or JPEG (optional)</label>
+        <input type="file" id="brand-logo" accept="image/png,image/jpeg" />
+      </div>
+      <div class="btn-row">
+        <button type="submit" class="btn">Save brand</button>
+        <button type="button" class="btn btn-ghost" id="brand-logo-clear" hidden>Remove logo</button>
+      </div>
+      <p id="brand-status" class="brand-status" role="status" aria-live="polite"></p>
+    </form>
+    <div id="brand-preview" class="brand-preview" aria-label="Export preview"></div>
 
     <h2>Updates</h2>
     <p>One email when something new lands — no other list, no spam.</p>
@@ -53,18 +77,14 @@ import "../styles/site.css";
   </div>
 
   <script>
-    import { mountPro, proState, onProChanged, freeLimitLabel, track, type ProStatus } from "../scripts/site/pro";
+    import { mountPro, track } from "../scripts/site/pro";
+    import { mountBrandEditor } from "../scripts/site/export-brand";
     mountPro(document.getElementById("pro-plans")!);
-
-    // Free section copy derives from the configured quota (Addendum 3,
-    // docs/PRO_PLAN.md) instead of hardcoding it — freeLimit only arrives once
-    // /api/pro/status has answered, so this updates in place when it does.
-    const freeLimitEl = document.getElementById("free-limit-copy");
-    const updateFreeLimitCopy = (status: ProStatus) => {
-      if (freeLimitEl && typeof status.freeLimit === "number") freeLimitEl.textContent = freeLimitLabel(status.freeLimit);
-    };
-    updateFreeLimitCopy(proState());
-    onProChanged(updateFreeLimitCopy);
+    mountBrandEditor(
+      document.getElementById("brand-form") as HTMLFormElement,
+      document.getElementById("brand-preview")!,
+      document.getElementById("brand-free-note")!,
+    );
 
     const waitlistForm = document.getElementById("waitlist-form") as HTMLFormElement;
     const waitlistEmail = document.getElementById("waitlist-email") as HTMLInputElement;

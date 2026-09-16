@@ -8,7 +8,7 @@ import {
   pid, depsToText, textToDeps,
 } from './programme-model'
 import { createProgrammeTutorial } from './programme-tutorial'
-import { requirePro } from './pro'
+import { brandedExport, stampCanvas } from './export-brand'
 
 const ZOOMS = [10, 20, 34]              // month / week / day feel
 const ROW_H = 30
@@ -239,14 +239,14 @@ export function initProgramme(el: HTMLElement): void {
       ctx.fillRect(0, 0, canvas.width, canvas.height)
       ctx.scale(2, 2)
       ctx.drawImage(img, 0, 0)
-      canvas.toBlob((blob) => {
+      void stampCanvas(canvas).then((stamped) => stamped.toBlob((blob) => {
         if (!blob || !prog) return
         const a = document.createElement('a')
         a.href = URL.createObjectURL(blob)
         a.download = `${prog.title.replace(/[^\w\- ]+/g, '')}-gantt.png`
         a.click()
         URL.revokeObjectURL(a.href)
-      })
+      }))
     }
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml)
   }
@@ -372,17 +372,17 @@ export function initProgramme(el: HTMLElement): void {
         bar.insertAdjacentElement('afterend', rb)
         inp.focus()
       })
-      mk('print / PDF', () => requirePro('programme-print', () => window.print(), menu))
-      mk('PNG', () => requirePro('programme-png', exportPNG, menu))
-      mk('CSV', () => requirePro('programme-csv', exportCSV, menu))
-      mk('JSON', () => requirePro('programme-json', () => {
+      mk('print / PDF', () => brandedExport('programme-print', () => window.print(), { anchor: menu, print: true }))
+      mk('PNG', () => brandedExport('programme-png', exportPNG, { anchor: menu }))
+      mk('CSV', exportCSV)
+      mk('JSON', () => {
         if (!prog) return
         const a = document.createElement('a')
         a.href = URL.createObjectURL(new Blob([JSON.stringify(prog, null, 2)], { type: 'application/json' }))
         a.download = `${prog.title.replace(/[^\w\- ]+/g, '')}.programme.json`
         a.click()
         URL.revokeObjectURL(a.href)
-      }, menu))
+      })
       mk('import JSON', () => {
         const input = document.createElement('input')
         input.type = 'file'
