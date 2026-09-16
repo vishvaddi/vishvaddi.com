@@ -686,3 +686,21 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Copy: `/pro`, `/money`, `/terms`, the chrome.js nudge (A$100 a year) and the r/AusFinance draft.
 - `wrangler.jsonc` price ids are **blank** until the A$100/yr, A$20/mo and A$5/wk Stripe prices exist, so a deploy shows "Not open yet" rather than charging the retired A$39/A$5 prices.
 - Gate: release-gate 3, auth 13, unit 74 (market 7, pro-api 16 incl. the weekly tests), `astro check` 0, Worker tsc 0, feature/life/money/kitchen green, pro 22/22, seo 146/146, audio 72/72, studio 102/102.
+
+
+## 2026-09-16 - Adoption-first Pro model + 7-day pass + materials answer pages (NOT deployed)
+
+- Vish: "i actually want people to use it first not get scared away" → "lets do all that, except google ads". Contract: `docs/PRO_PLAN.md` last addendum.
+- Three worktree agents, merged `--no-ff`:
+  - `49967a4` page side: `export-brand.ts`; free client-facing exports carry "Made free at vishvaddi.com", Pro gets the brand from `/pro`'s editor; data exports ungated; `requirePro` is panel-only.
+  - `0de709a` Worker: one-off A$5 pass (`mode=payment`, row `pass_<session>`, expiry enforced in one `licenceActive`, cookies capped); `/api/pro/use` and the quota code removed; `pro_events` written after handling so Stripe retries aren't lost.
+  - `7786f3a` 122 materials answer pages + 4 indexes under `/site/materials/<family>/`, with the formulas extracted to `src/data/materials-calc.ts`, `?calc=` presets, and a new `materials-answers-e2e` in the release gate.
+- Coordinator fixes (`40ec243` + this commit):
+  - PDF extract/split/page-PNG were unstamped (a free loophole) → now branded.
+  - Pass checkout card-only (a delayed method would leave a paid pass unissued).
+  - HEAD `/pay/success` has no side effects (prefetchers could spend the key view).
+  - Ctrl+P / browser-menu prints now stamp via `beforeprint`.
+  - Stale pass/live-price copy fixed.
+- Gate: full `release:check` exit 0 on the merged tree (release-gate 3, auth 13, unit 77, check 0), then after the print fix: pro 48, feature 18, money 32, materials 92, seo 146; Worker tsc 0; pro-api 19.
+- Distribution docs (Vish acts): `docs/PLAY_STORE.md` (12 testers × 14 days; needs an offline-fallback SW; hide checkout in the app), `docs/LISTINGS.md`, `docs/OUTREACH_TAFE.md`.
+- Deploy blocked on: new Stripe prices (A$100/yr, A$20/mo subscriptions; A$5 one-off pass) → `STRIPE_PRICE_YEAR/MONTH/PASS` in `wrangler.jsonc`, then Vish's go.

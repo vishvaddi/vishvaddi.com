@@ -94,6 +94,11 @@ try {
   check('Free: hint is dismissible', await freePage.locator('.vv-export-hint').count() === 0)
   await freePage.evaluate(() => window.dispatchEvent(new Event('afterprint')))
 
+  await freePage.evaluate(() => window.dispatchEvent(new Event('beforeprint')))
+  check('Free: Ctrl+P (browser print, no button) still gets the footer', await freePage.locator('.vv-export-brand--footer').count() === 1)
+  await freePage.evaluate(() => window.dispatchEvent(new Event('afterprint')))
+  check('Free: browser-print footer removed after print', await freePage.locator('.vv-export-brand').count() === 0)
+
   const csvDownload = freePage.waitForEvent('download', { timeout: 5000 }).catch(() => null)
   await freePage.locator('#export-csv').click()
   check('Free: Cut List CSV export downloads with no panel', !!(await csvDownload) && await freePage.locator('#pro-upsell').count() === 0)

@@ -98,6 +98,11 @@ function stampPrint(stamp: Stamp): void {
   window.addEventListener("afterprint", () => holder.remove(), { once: true });
 }
 
+// Ctrl+P and the browser menu print without touching an export button; stamp those too.
+window.addEventListener("beforeprint", () => {
+  if (!document.querySelector(".vv-export-brand")) stampPrint(exportStamp());
+});
+
 let hinted = false;
 
 function showHint(feature: string, anchor: HTMLElement): void {

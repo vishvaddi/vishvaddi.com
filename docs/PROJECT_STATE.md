@@ -1,5 +1,17 @@
 # Project State
 
+## 2026-09-16 - Pro is adoption-first (built, not deployed)
+
+The site is public; the PIN is only the owner login. Every tool and feature is free.
+
+- **Client-facing exports** (print/PDF/PNG in Cut List, Sheet, Programme, Charge-out, PDF Toolkit) are free and carry a "Made free at vishvaddi.com" footer. This includes Ctrl+P prints and PDF extract/split/page-PNG.
+- **Pro** replaces the footer with the visitor's own brand (name, line, logo; set on `/pro`, stored only in the browser) and unlocks sync, Studio MP3/stems and Audio batch downloads.
+- **Data exports** (CSV/JSON/project files) are free with no footer.
+- **Plans:** A$100/yr and A$20/mo subscriptions, or a one-off A$5 7-day pass (card only, expiry enforced server-side). There's no quota and no `/api/pro/use`.
+- **Materials answer pages:** 122 pages under `/site/materials/{plasterboard,paint,tiles,concrete}/` answer quantity searches using the calculator's own formulas (`src/data/materials-calc.ts`).
+- **To deploy:** Stripe prices for year/month/pass → `wrangler.jsonc` price ids (blank now, so checkout says "Not open yet") → Vish's go.
+- **Distribution:** `docs/PLAY_STORE.md`, `docs/LISTINGS.md`, `docs/OUTREACH_TAFE.md`.
+
 ## 2026-09-14 - Pro paywall experiment LIVE (sandbox Stripe)
 
 The site is hybrid: `/site`, `/audio`, `/studio`, `/pro`, `/terms`, `/privacy` are public and indexable; everything else stays behind the six-digit PIN. Free visitors can use every tool without limit; exports, prints, Studio MP3/stem export, batch audio and cross-device sync ask for Pro through an inline panel (`src/scripts/site/pro.ts`). Pro is a `__Host-pro` cookie issued by Stripe Checkout (A$39/year or A$5/month, sandbox prices in `wrangler.jsonc`) or by restoring a licence key `VV-XXXX-XXXX-XXXX` (hash in D1 `pro_licences`; the key is also on the Stripe customer's metadata). The owner's PIN session is always Pro. Contract: `docs/PRO_PLAN.md`. Deployed version `c695b680`. Stripe is still in sandbox mode; a live purchase requires activating the Stripe account and repeating prices/webhook/secrets in live mode.
