@@ -1,5 +1,6 @@
-// Pro (paywall) client. Every tool and feature is free; Pro unlocks unlimited
-// exports/saves and cross-device sync (Addendum 4). See docs/PRO_PLAN.md — this file is the page side
+// Pro (paywall) client. Every tool, feature and export is free; Pro puts the
+// visitor's brand on client-facing exports and unlocks sync and the Pro-only
+// audio exports (last addendum, docs/PRO_PLAN.md). This file is the page side
 // of that contract, the Worker routes are built separately from it.
 //
 // proState() reads the vv_pro/vv_owner cookie markers for an instant,
@@ -25,14 +26,6 @@ export interface ProStatus {
   plan?: Plan;
   periodEnd?: number;
   configured: boolean;
-  freeRemaining?: number | null;
-  // Configured quota (Addendum 3, docs/PRO_PLAN.md) — so copy never hardcodes it.
-  freeLimit?: number;
-}
-
-/** "1 export" / "3 exports" — the one place the plural is spelled out. */
-export function freeLimitLabel(limit: number): string {
-  return `${limit} export${limit === 1 ? "" : "s"}`;
 }
 
 /**
@@ -87,15 +80,8 @@ let current: ProStatus | null = null;
 let confirming: Promise<ProStatus> | null = null;
 
 function applyStatus(status: ProStatus): void {
-  // freeLimit is compared too (Addendum 3) — it starts undefined from the
-  // synchronous marker read and only arrives once /api/pro/status answers, so
-  // a listener relying purely on pro/source/configured would never be told.
   const changed =
-    !current ||
-    current.pro !== status.pro ||
-    current.source !== status.source ||
-    current.configured !== status.configured ||
-    current.freeLimit !== status.freeLimit;
+    !current || current.pro !== status.pro || current.source !== status.source || current.configured !== status.configured;
   current = status;
   writeCache(status);
   if (changed) window.dispatchEvent(new CustomEvent<ProStatus>("pro:changed", { detail: status }));
@@ -241,75 +227,27 @@ function buildUpsellPanel(feature: string, heading: string, onRestored: () => vo
   return panel;
 }
 
-function showFreeUseNote(anchor: HTMLElement, feature: string, remaining: number, freeLimit: number): void {
-  const host = anchor.parentElement;
-  host?.querySelector<HTMLElement>(`.pro-free-note[data-feature="${feature}"]`)?.remove();
-  const left = Math.max(0, remaining);
-  const note = document.createElement("p");
-  note.className = "pro-free-note";
-  note.dataset.feature = feature;
-  // freeLimit === 1 means this use was the free quota — "left" reads oddly at 0.
-  note.textContent =
-    left > 0
-      ? `${left} free export${left === 1 ? "" : "s"} left this month — Pro removes the limit`
-      : `That was your ${freeLimit === 1 ? "free export" : "last free export"} this month — Pro removes the limit`;
-  anchor.insertAdjacentElement("afterend", note);
-}
+const PRO_ONLY_HEADINGS: Record<string, string> = {
+  "studio-mp3-export": "MP3 export comes with Pro — WAV export stays free.",
+  "studio-stem-export": "Stem export comes with Pro — WAV master export stays free.",
+  "lofi-mp3-format": "MP3 download comes with Pro — WAV stays free.",
+  "audio-prep-batch-download": "Batch download comes with Pro — single files stay free.",
+};
 
 /**
- * Runs `run` unchanged for Pro/owner. Otherwise calls POST /api/pro/use first:
- * allowed (within the free quota) runs `run` and leaves a one-line note next
- * to `anchor`; blocked (402) or a network error (fail closed) shows the inline
- * upsell panel instead — never a modal, never `alert`.
+ * Pro-only features: runs `run` for Pro/owner, otherwise shows the inline
+ * upsell panel next to `anchor` (never a modal, never `alert`). Nothing is
+ * metered, so no request is made before deciding.
  */
 export function requirePro(feature: string, run: () => void, anchor: HTMLElement): void {
   if (proState().pro) {
     run();
     return;
   }
-  const host = anchor.parentElement;
-  const existingPanel = host?.querySelector<HTMLElement>(`.pro-upsell[data-feature="${feature}"]`);
-  if (existingPanel) {
-    existingPanel.remove();
-    return; // second click on the same button just closes the panel
-  }
-  host?.querySelectorAll(".pro-upsell").forEach((panel) => panel.remove());
-  host?.querySelector<HTMLElement>(`.pro-free-note[data-feature="${feature}"]`)?.remove();
-
-  const showPanel = (heading: string) => {
-    anchor.insertAdjacentElement(
-      "afterend",
-      buildUpsellPanel(feature, heading, () => {
-        host?.querySelector<HTMLElement>(`.pro-upsell[data-feature="${feature}"]`)?.remove();
-        run();
-      }),
-    );
-  };
-
-  fetch("/api/pro/use", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ feature }),
-  })
-    .then((res) => res.json() as Promise<{ allowed?: boolean; remaining?: number; pro?: boolean; freeLimit?: number }>)
-    .then((body) => {
-      const freeLimit = body.freeLimit ?? 1;
-      if (body.allowed) {
-        run();
-        if (!body.pro && typeof body.remaining === "number") showFreeUseNote(anchor, feature, body.remaining, freeLimit);
-        return;
-      }
-      showPanel(`You've used your ${freeLimit === 1 ? "free export" : `${freeLimit} free exports`} this month`);
-    })
-    .catch(() => {
-      showPanel("Couldn't check your free uses — try again.");
-    });
+  showProOnly(feature, PRO_ONLY_HEADINGS[feature] ?? "This comes with Pro.", anchor, run);
 }
 
-/**
- * Upsell for features that need a licence to work at all (sync stores data
- * against the licence hash) — shows the panel without spending a free export.
- */
+/** The one panel path: a second call for the same feature closes it. */
 export function showProOnly(feature: string, heading: string, anchor: HTMLElement, onRestored: () => void = () => {}): void {
   const host = anchor.parentElement;
   const existing = host?.querySelector<HTMLElement>(`.pro-upsell[data-feature="${feature}"]`);
@@ -335,7 +273,7 @@ export function mountPro(root: HTMLElement): void {
       const note = document.createElement("p");
       note.className = "pro-upsell-note";
       note.textContent =
-        status.source === "owner" ? "You're the owner — everything is unlocked." : "You're Pro — exports, saves and sync are unlocked.";
+        status.source === "owner" ? "You're the owner — everything is unlocked." : "You're Pro — your brand on exports, sync and Studio/audio MP3 exports are unlocked.";
       root.append(note);
       return;
     }

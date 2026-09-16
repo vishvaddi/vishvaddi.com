@@ -1,6 +1,6 @@
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import { download } from './calc'
-import { requirePro } from './pro'
+import { brandedExport, stampPdf } from './export-brand'
 
 interface Src { name: string; bytes: Uint8Array; pdf: any; render?: any }
 interface PageRef { id: string; src: number; page: number; rot: number; selected: boolean }
@@ -211,12 +211,13 @@ export function initPdf() {
   })
   byId<HTMLButtonElement>('pdf-compare-export')?.addEventListener('click', () => {
     const btn = byId<HTMLButtonElement>('pdf-compare-export')!
-    requirePro('pdf-compare-export', () => void exportComparison(), btn)
+    brandedExport('pdf-compare-export', () => void exportComparison(), { anchor: btn })
   })
   async function exportComparison() {
     if (!comparisonCanvas) return
     const L = await lib(); const out = await L.PDFDocument.create(); const png = await out.embedPng(comparisonCanvas.toDataURL('image/png'))
     const page = out.addPage([comparisonCanvas.width / 1.35, comparisonCanvas.height / 1.35]); page.drawImage(png, { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() })
+    await stampPdf(out)
     const data = await out.save(); download(`drawing-comparison-${new Date().toISOString().slice(0, 10)}.pdf`, URL.createObjectURL(new Blob([data.buffer as ArrayBuffer], { type: 'application/pdf' })))
   }
 
@@ -243,7 +244,7 @@ export function initPdf() {
   byId<HTMLButtonElement>('pdf-reverse')?.addEventListener('click', () => { pages.reverse(); render() })
   byId<HTMLButtonElement>('pdf-blank')?.addEventListener('click', async () => { const L = await lib(); const pdf = await L.PDFDocument.create(); pdf.addPage([595.28, 841.89]); await addPdf('Blank A4', await pdf.save()); render() })
 
-  async function build(refs: PageRef[]): Promise<Uint8Array> {
+  async function build(refs: PageRef[], branded = false): Promise<Uint8Array> {
     const L = await lib(); const out = await L.PDFDocument.create(); const font = await out.embedFont(L.StandardFonts.Helvetica)
     const raster = !!byId<HTMLInputElement>('pdf-raster')?.checked
     const quality = Number(byId<HTMLSelectElement>('pdf-quality')?.value ?? 0.86)
@@ -277,17 +278,18 @@ export function initPdf() {
       if (sign) page.drawText(sign, { x: Math.max(30, width - 30 - font.widthOfTextAtSize(sign, 10)), y: 34, size: 10, font, color: L.rgb(0.08, 0.18, 0.4) })
       if (stamp) page.drawText(stamp, { x: width / 2 - font.widthOfTextAtSize(stamp, 48) / 2, y: height / 2, size: 48, font, color: L.rgb(0.85, 0.1, 0.1), opacity: 0.16, rotate: L.degrees(30) })
     })
+    if (branded) await stampPdf(out)
     return out.save({ useObjectStreams: true })
   }
 
-  async function savePdf(refs: PageRef[], prefix: string) {
+  async function savePdf(refs: PageRef[], prefix: string, branded = false) {
     if (!refs.length) return; setStatus('Building PDF…')
-    try { const data = await build(refs); download(`${prefix}-${new Date().toISOString().slice(0, 10)}.pdf`, URL.createObjectURL(new Blob([data.buffer as ArrayBuffer], { type: 'application/pdf' }))); setStatus(`Exported ${refs.length} page(s).`) }
+    try { const data = await build(refs, branded); download(`${prefix}-${new Date().toISOString().slice(0, 10)}.pdf`, URL.createObjectURL(new Blob([data.buffer as ArrayBuffer], { type: 'application/pdf' }))); setStatus(`Exported ${refs.length} page(s).`) }
     catch (error) { setStatus(`Export failed: ${(error as Error).message}`) }
     finally { updateButtons() }
   }
 
-  exportBtn.addEventListener('click', () => requirePro('pdf-export', () => void savePdf(pages, 'edited'), exportBtn))
+  exportBtn.addEventListener('click', () => brandedExport('pdf-export', () => void savePdf(pages, 'edited', true), { anchor: exportBtn }))
   byId<HTMLButtonElement>('pdf-extract')?.addEventListener('click', () => void savePdf(selected(), 'extracted'))
   byId<HTMLButtonElement>('pdf-split')?.addEventListener('click', async () => {
     const refs = selected(); if (!refs.length) return; setStatus('Splitting pages…')

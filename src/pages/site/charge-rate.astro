@@ -33,7 +33,7 @@ import "../../styles/site.css";
 
   <script>
     import { mountCalcs, wireActions, type CalcSpec } from "../../scripts/site/calc";
-    import { requirePro } from "../../scripts/site/pro";
+    import { brandedExport } from "../../scripts/site/export-brand";
 
     const f2 = (n: number) => n.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
     const f0 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 0 });
@@ -97,6 +97,6 @@ import "../../styles/site.css";
 
     const root = document.getElementById("calcs")!;
     mountCalcs(root, specs);
-    wireActions(root, "Charge-out rate", (run, anchor) => requirePro("charge-rate-print", run, anchor));
+    wireActions(root, "Charge-out rate", (run, anchor) => brandedExport("charge-rate-print", run, { anchor, print: true }));
   </script>
 </Base>

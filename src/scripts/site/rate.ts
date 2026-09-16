@@ -1,5 +1,4 @@
 import { auFmt } from "./calc";
-import { requirePro } from "./pro";
 
 // Line-item rate build-up. Add as many lines as you like; pick each line's type
 // from a dropdown. No proprietary rates ship here; saved rates live only in
@@ -119,10 +118,10 @@ export function initRate() {
     const l = load(); l.unshift({ d, rate }); save(l); renderSaved();
   });
   const exportBtn = document.getElementById("r-export");
-  exportBtn?.addEventListener("click", () => requirePro("rate-export", () => {
+  exportBtn?.addEventListener("click", () => {
     const body = ["My rates — vishvaddi.com/site/rate", "", ...load().map((s) => `${s.d}: $${auFmt(s.rate)}`)].join("\n");
     location.href = `mailto:?subject=${encodeURIComponent("My rates")}&body=${encodeURIComponent(body)}`;
-  }, exportBtn as HTMLElement));
+  });
   document.getElementById("r-clear")?.addEventListener("click", () => {
     if (confirm("Delete all saved rates from this device?")) { save([]); renderSaved(); }
   });

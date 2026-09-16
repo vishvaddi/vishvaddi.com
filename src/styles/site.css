@@ -278,8 +278,43 @@
   color: var(--muted); font-size: 0.8rem; cursor: pointer;
 }
 .pro-upsell-note { font-size: 0.9rem; color: var(--muted); }
-/* One-line note left under the anchor after an allowed free-quota use. */
-.pro-free-note { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--muted); }
+
+/* Client-facing export stamp (export-brand.ts): printed only, removed after print. */
+.vv-export-brand { display: none; }
+@media print {
+  .vv-export-brand { display: block; }
+  /* Fixed greys, not theme vars: paper ignores the screen theme, and dark mode's
+     light --fg/--muted would print almost invisibly on white paper. */
+  .vv-export-brand--footer { position: fixed; left: 0; bottom: 0; font: 7pt var(--font-sans); color: #666; }
+  .vv-export-brand--brand { margin: 0 0 6mm; padding-bottom: 3mm; border-bottom: 0.5pt solid #bbb; color: #222; }
+}
+.vv-brand-mark--brand { display: flex; align-items: center; gap: 0.6rem; }
+.vv-brand-logo { max-height: 2.5rem; max-width: 10rem; object-fit: contain; }
+.vv-brand-text { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.vv-brand-text span { font-size: 0.85em; }
+
+/* One dismissible line under the button after a free client-facing export. */
+.vv-export-hint { display: flex; align-items: flex-start; gap: 0.4rem; max-width: 32rem; margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--muted); }
+.vv-export-hint a { color: var(--accent); font-weight: 600; }
+.vv-export-hint-dismiss { flex: 0 0 auto; background: none; border: none; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; padding: 0.1rem 0.3rem; }
+
+/* /pro "Your brand" editor and live preview */
+.brand-form { max-width: 32rem; margin: 0.75rem 0; }
+.brand-status { min-height: 1.2em; margin: 0.2rem 0 0; font-size: 0.85rem; color: var(--muted); }
+.brand-preview { display: flex; flex-wrap: wrap; gap: 1rem; margin: 0.5rem 0 1.5rem; }
+.brand-sheet { margin: 0; flex: 1 1 9.5rem; max-width: 15rem; }
+.brand-sheet-page {
+  aspect-ratio: 210 / 297; display: flex; flex-direction: column; gap: 0.6rem; padding: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent); border-radius: 4px;
+  background: var(--bg); color: var(--fg); font-size: 0.72rem;
+}
+.brand-sheet-body { flex: 1; display: flex; flex-direction: column; gap: 0.45rem; }
+.brand-sheet-body i { display: block; height: 0.45rem; border-radius: 2px; background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.brand-sheet-body i:nth-child(even) { width: 70%; }
+.brand-sheet .vv-brand-mark--footer { font-size: 0.62rem; color: var(--muted); }
+.brand-sheet .vv-brand-logo { max-height: 1.6rem; max-width: 5rem; }
+.brand-sheet-empty { margin: 0; color: var(--muted); }
+.brand-sheet figcaption { margin-top: 0.35rem; font-size: 0.8rem; color: var(--muted); }
 
 /* Free-tier session nudge bar (Addendum 3, docs/PRO_PLAN.md) — inserted at
    the top of <main> by public/scripts/chrome.js on the 3rd distinct tool page. */

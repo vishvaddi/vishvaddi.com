@@ -114,7 +114,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
     ],
     faq: [
       { q: 'Is Rate Builder free?', a: 'Yes, building and viewing rates is free and unlimited.' },
-      { q: 'Does exporting cost anything?', a: 'Pro unlocks exporting a rate; building, editing and viewing rates on this page stays free.' },
+      { q: 'Does exporting cost anything?', a: 'No — building, saving and emailing your rates are all free.' },
       { q: 'Where are my saved rates stored?', a: 'Locally in your browser — nothing is uploaded unless you turn on sync as a Pro customer.' },
       { q: 'Does it come pre-loaded with rates?', a: 'No — no rates ship with the tool; every rate is one you build yourself.' },
     ],
@@ -132,7 +132,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
     ],
     faq: [
       { q: 'Is the calculator itself free?', a: 'Yes — working out your rate is free and unlimited.' },
-      { q: 'What does Pro add here?', a: 'Pro unlocks printing the result; the calculation itself stays free.' },
+      { q: 'What does Pro add here?', a: 'Printing and saving as PDF are free with a small vishvaddi.com footer; Pro puts your business name and logo on the printout instead.' },
       { q: 'Is my financial information uploaded?', a: 'No — every figure is calculated locally in your browser.' },
       { q: 'Is this financial advice?', a: 'No — it\'s a planning calculator; check your numbers against your own accounting for tax and super obligations.' },
     ],
@@ -168,7 +168,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
     ],
     faq: [
       { q: 'Is building a programme free?', a: 'Yes — building, editing and viewing your programme is free and unlimited.' },
-      { q: 'What does Pro add?', a: 'Pro unlocks every export and print action — PDF, PNG/Gantt, CSV and project JSON. The scheduling itself stays free.' },
+      { q: 'What does Pro add?', a: 'Every export is free. Print/PDF and the PNG Gantt carry a small vishvaddi.com footer; Pro puts your business name and logo on them instead. CSV and project JSON have no footer.' },
       { q: 'Is my programme uploaded anywhere?', a: "No — it's built and stored in your browser unless you turn on Pro sync." },
       { q: 'Does it calculate the critical path properly?', a: 'Yes — it\'s a real CPM engine with FS/SS/FF links, lag and float, not a static task list.' },
     ],
@@ -186,7 +186,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
     ],
     faq: [
       { q: 'Is the optimiser free to use?', a: 'Yes — building a cut list is free and unlimited.' },
-      { q: 'What does Pro add?', a: 'Pro unlocks saving as PDF, exporting the project file and exporting CSV. Building and viewing the cut plan stays free.' },
+      { q: 'What does Pro add?', a: 'Saving as PDF, the project file and CSV are all free. The PDF carries a small vishvaddi.com footer; Pro puts your business name and logo on it instead.' },
       { q: 'Is my cut list uploaded anywhere?', a: "No — it's calculated and stored in your browser; the share link just encodes your inputs in the URL." },
       { q: "What's the difference between this and Sheet mode?", a: 'This is the 1D (linear) optimiser for stock lengths; Sheet is the 2D panel-nesting version for sheet goods.' },
     ],
@@ -204,7 +204,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
     ],
     faq: [
       { q: 'Is Lattice free?', a: 'Yes — building and viewing your grids is free and unlimited.' },
-      { q: 'What does Pro add?', a: 'Pro unlocks exporting and downloading your grid; building and viewing it stays free.' },
+      { q: 'What does Pro add?', a: 'Exporting your grid is free. Pro adds sync across devices and your business name on client-facing exports on other tools.' },
       { q: 'Is my data uploaded?', a: 'No — everything is stored locally in your browser unless you turn on Pro sync.' },
       { q: 'Can I paste in an existing spreadsheet?', a: 'Yes — pasting a spreadsheet range or an indented list keeps its shape.' },
     ],
@@ -240,7 +240,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
     ],
     faq: [
       { q: 'Is Site Records free?', a: 'Yes — adding and viewing entries is free and unlimited.' },
-      { q: 'What does Pro add?', a: 'Pro unlocks exporting a register to CSV; capturing and viewing your entries stays free.' },
+      { q: 'What does Pro add?', a: 'CSV export is free. Pro adds sync across devices and your business name on client-facing exports on other tools.' },
       { q: 'Where are my entries stored?', a: 'In your browser only, unless you turn on Pro sync across devices.' },
       { q: 'Which registers does it cover?', a: 'Variations, punch list, deliveries, contacts and a daily log.' },
     ],
@@ -312,7 +312,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
     ],
     faq: [
       { q: 'Is the PDF Toolkit free?', a: 'Yes — editing, organising and previewing pages is free and unlimited.' },
-      { q: 'What does Pro add?', a: 'Pro unlocks exporting the finished PDF and exporting a flattened drawing comparison. Editing and previewing stays free.' },
+      { q: 'What does Pro add?', a: 'Exporting the finished PDF and the drawing comparison is free, with a small vishvaddi.com footer on each page; Pro puts your business name and logo there instead.' },
       { q: 'Are my files uploaded?', a: 'No — files are read and processed entirely in your browser and never uploaded.' },
       { q: 'Can it remove passwords or run OCR?', a: "No — those need specialist engines not bundled here; encrypted PDFs must be unlocked before opening, and password removal/OCR aren't faked." },
     ],

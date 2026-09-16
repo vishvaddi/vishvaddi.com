@@ -264,9 +264,9 @@ export function summarize(root: HTMLElement, title: string): string {
 }
 
 // Wire a "Save as PDF" + "Email to myself" button pair for a calc page.
-// `gatePrint` is opt-in per page (only charge-rate gates print per the Pro
-// contract — geometry/materials/fitness keep it free) so the shared helper
-// stays free by default for every other caller.
+// `gatePrint` is opt-in per page (only charge-rate brands its print per the Pro
+// contract — geometry/materials/fitness print plain) so the shared helper
+// stays unbranded by default for every other caller.
 export function wireActions(root: HTMLElement, title: string, gatePrint?: (run: () => void, anchor: HTMLElement) => void) {
   const print = document.getElementById("print");
   const email = document.getElementById("email");

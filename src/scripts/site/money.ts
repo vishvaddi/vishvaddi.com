@@ -4,7 +4,7 @@
 import { createStore, mountStoreControls, uid, todayIso } from "./store";
 import { download } from "./calc";
 import { drawLineChart, watchTheme } from "./money-chart";
-import { requirePro, proState, showProOnly } from "./pro";
+import { proState, showProOnly } from "./pro";
 import {
   ACCOUNT_TYPES, ASSET_CLASSES, type MoneyData, type Transaction, type ColumnMapping, type DateFormat, type Strategy, type AccountType,
   type AssetClass, type Property, type PropertyMortgage, type Holding,
@@ -476,11 +476,11 @@ export function initMoney(): void {
     listSec.append(listStats, list);
     const exportRow = mk("div", "btn-row");
     const exportBtn = btn("Export CSV", "btn btn-ghost btn-sm", () => {}, "mt-export-csv");
-    exportBtn.addEventListener("click", () => requirePro("csv-export", () => {
+    exportBtn.addEventListener("click", () => {
       const d = store.get();
       const blob = new Blob(["﻿" + transactionsCsv(d.transactions, d.categories, d.accounts)], { type: "text/csv;charset=utf-8" });
       download("money-transactions.csv", URL.createObjectURL(blob));
-    }, exportBtn));
+    });
     exportRow.append(exportBtn, btn("Delete shown", "btn btn-ghost btn-sm", () => {
       const shown = filtered();
       if (!shown.length || !confirm(`Delete the ${shown.length} transactions currently shown?`)) return;
@@ -1139,8 +1139,8 @@ export function initMoney(): void {
       filename: "money.json",
       onImport: () => redraws.get(active)?.(),
     });
-    // Sync needs a licence (data is stored against its hash), so it stays Pro and
-    // never spends the free export. store.ts stays untouched — intercept the
+    // Sync needs a licence (data is stored against its hash), so it stays Pro.
+    // store.ts stays untouched — intercept the
     // checkbox in the capture phase so a free visitor sees the upsell instead
     // of a confusing 401 from /api/store/.
     const syncBox = controlsHost.querySelector<HTMLInputElement>('[data-store-sync="money"]');

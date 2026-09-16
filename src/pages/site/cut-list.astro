@@ -72,7 +72,7 @@ import "../../styles/site.css";
 
   <script>
     import { packAdvanced, type CutPiece, type AdvancedBin, type LinearStock } from "../../scripts/site/binpack";
-    import { requirePro } from "../../scripts/site/pro";
+    import { brandedExport } from "../../scripts/site/export-brand";
 
     const q = <T extends Element>(s: string, r: ParentNode = document) =>
       r.querySelector(s) as T | null;
@@ -279,15 +279,15 @@ import "../../styles/site.css";
 
     q<HTMLButtonElement>("#add-row")!.addEventListener("click", () => { addRow(); compute(); });
     const savePdfBtn = q<HTMLButtonElement>("#save-pdf")!;
-    savePdfBtn.addEventListener("click", () => requirePro("cut-list-save-pdf", () => window.print(), savePdfBtn));
+    savePdfBtn.addEventListener("click", () => brandedExport("cut-list-save-pdf", () => window.print(), { anchor: savePdfBtn, print: true }));
     const download = (name: string, content: string, type: string) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([content], { type })); a.download = name; a.click(); URL.revokeObjectURL(a.href); };
     const exportProjectBtn = q<HTMLButtonElement>("#export-project")!;
-    exportProjectBtn.addEventListener("click", () => requirePro("cut-list-export-project", () => download(`${projectEl.value.trim() || "cut-list"}.cutlist.json`, JSON.stringify(projectState(), null, 2), "application/json"), exportProjectBtn));
+    exportProjectBtn.addEventListener("click", () => download(`${projectEl.value.trim() || "cut-list"}.cutlist.json`, JSON.stringify(projectState(), null, 2), "application/json"));
     const exportCsvBtn = q<HTMLButtonElement>("#export-csv")!;
-    exportCsvBtn.addEventListener("click", () => requirePro("cut-list-export-csv", () => {
+    exportCsvBtn.addEventListener("click", () => {
       const esc = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
       download(`${projectEl.value.trim() || "cut-list"}.csv`, [["Piece", "Length", "Qty", "Unit"], ...readState().pieces.map((piece) => [piece.name, piece.length, piece.qty, u()])].map((row) => row.map(esc).join(",")).join("\r\n"), "text/csv");
-    }, exportCsvBtn));
+    });
     q<HTMLButtonElement>("#import-project")!.addEventListener("click", () => { const input = document.createElement("input"); input.type = "file"; input.accept = ".json,application/json"; input.addEventListener("change", async () => { const file = input.files?.[0]; if (!file) return; try { applyState(JSON.parse(await file.text())); } catch { alert("That is not a valid Cut List project."); } }); input.click(); });
     q<HTMLButtonElement>("#email")!.addEventListener("click", () => {
       location.href = `mailto:?subject=${encodeURIComponent("Cut list")}&body=${encodeURIComponent(summary())}`;
