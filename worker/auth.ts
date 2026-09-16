@@ -22,14 +22,16 @@ export class PinAttempts {
   constructor(state: { storage: PinAttempts["storage"] }) { this.storage = state.storage; }
 
   async fetch(request: Request): Promise<Response> {
-    const ip = new URL(request.url).searchParams.get("ip") || "unknown";
+    const params = new URL(request.url).searchParams;
+    const ip = params.get("ip") || "unknown";
+    const globalCap = Math.min(Math.max(Number(params.get("global")) || 20, 1), 1000);
     const now = Date.now();
     // A single transactional bucket bounds guesses even when attackers rotate IPs.
     return this.storage.transaction(async (txn) => {
       const attempts = ((await txn.get<Attempt[]>("attempts")) || []).filter((entry) => entry.at > now - 3_600_000);
       const local = attempts.filter((entry) => entry.ip === ip && entry.at > now - 900_000);
       const retry = Math.max(
-        attempts.length >= 20 ? attempts[0].at + 3_600_000 - now : 0,
+        attempts.length >= globalCap ? attempts[attempts.length - globalCap].at + 3_600_000 - now : 0,
         local.length >= 5 ? local[0].at + 900_000 - now : 0,
       );
       if (retry > 0) return new Response(null, { status: 429, headers: { "Retry-After": String(Math.ceil(retry / 1000)) } });

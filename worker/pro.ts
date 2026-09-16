@@ -108,12 +108,17 @@ function configured(env: ProEnv): boolean {
 
 // Every Stripe call goes through here so tests can stub globalThis.fetch instead
 // of standing up a fake Stripe server. Plain fetch + Bearer auth — no SDK.
+// Pinned to the webhook endpoint's version so API responses and webhook payloads
+// share one shape (basil+ moved current_period_end onto subscription items).
+export const STRIPE_API_VERSION = "2026-08-26.dahlia";
+
 async function stripe(env: ProEnv, path: string, init: RequestInit = {}): Promise<Response> {
   return fetch(`https://api.stripe.com${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${env.STRIPE_SECRET_KEY || ""}`,
       "Content-Type": "application/x-www-form-urlencoded",
+      "Stripe-Version": STRIPE_API_VERSION,
       ...(init.headers || {}),
     },
   });
@@ -146,6 +151,9 @@ async function verifiedLicenceHash(request: Request, env: PinEnv): Promise<strin
 }
 
 const ACTIVE_STATUSES = new Set(["active", "past_due"]);
+const PAST_DUE_GRACE_S = 14 * 24 * 3600;
+// Stripe never reactivates a cancelled subscription, so no later event may revive the row.
+const NOT_CANCELLED = "status NOT IN ('cancelled', 'canceled')";
 const LICENCE_STATE_SQL = "SELECT plan, status, current_period_end FROM pro_licences WHERE licence_hash = ?";
 
 type LicenceState = Pick<LicenceRow, "plan" | "status" | "current_period_end">;
@@ -157,7 +165,9 @@ const nowSeconds = () => Math.floor(Date.now() / 1000);
 // a pass has no renewal, so its end is final — and a pass without one never counts.
 function licenceActive(row: LicenceState, now: number): boolean {
   if (!ACTIVE_STATUSES.has(row.status)) return false;
-  return row.plan !== "pass" || (row.current_period_end != null && row.current_period_end > now);
+  if (row.plan === "pass") return row.current_period_end != null && row.current_period_end > now;
+  // If the dashboard is set to leave failed renewals past_due, don't stay Pro forever.
+  return row.status !== "past_due" || row.current_period_end == null || now < row.current_period_end + PAST_DUE_GRACE_S;
 }
 
 // Absolute cookie expiry: a year, but never past the end of a pass.
@@ -271,7 +281,7 @@ function htmlResponse(html: string, status: number, cookies: string[] = []): Res
 
 function successHtml(heading: string, message: string, key?: string): string {
   const body = key
-    ? `<p role="status">${message}</p><label for="key">Your licence key</label><input id="key" type="text" readonly value="${key}"><p class="hint">We only store its hash, so we can't show it again — it's also on your Stripe receipt. Use the Restore form on the Pro page to add it on another device.</p><p><a href="/pro">Continue to Pro</a></p>`
+    ? `<p role="status">${message}</p><label for="key">Your licence key</label><input id="key" type="text" readonly value="${key}"><p class="hint">Save it now — this page won't show it again. Use the Restore form on the Pro page to add it on another device; if you lose it, email vishvaddi@gmail.com with your Stripe receipt.</p><p><a href="/pro">Continue to Pro</a></p>`
     : `<p role="status">${message}</p><p><a href="/pro">Back to Pro</a></p>`;
   return `<!doctype html><html lang="en-AU"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pro · Vish Vaddi</title><style>
   :root{--bg:#fafaf7;--fg:#1a1a1a;--muted:#6b6b6b;--rule:#e5e5e0;--accent:#9e4e2e;color-scheme:light dark}
@@ -284,12 +294,17 @@ interface StripeSubscription {
   id: string;
   status: string;
   current_period_end?: number;
-  items?: { data?: Array<{ price?: { id?: string } }> };
+  items?: { data?: Array<{ price?: { id?: string }; current_period_end?: number }> };
+}
+
+function subscriptionPeriodEnd(sub: StripeSubscription): number | null {
+  return sub.items?.data?.[0]?.current_period_end ?? sub.current_period_end ?? null;
 }
 interface StripeCustomer { id: string; email?: string }
 interface StripeCheckoutSession {
   id?: string;
   mode?: string;
+  status?: string;
   created?: number;
   payment_status?: string;
   subscription?: StripeSubscription | null;
@@ -301,6 +316,7 @@ interface StripeCheckoutSession {
 const INSERT_LICENCE_SQL = "INSERT INTO pro_licences (licence_hash, stripe_customer, stripe_subscription, plan, status, current_period_end, email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 const PASS_ROW_SQL = "SELECT licence_hash, plan, status, current_period_end, key_shown_at FROM pro_licences WHERE stripe_subscription = ?";
 const KEY_SHOWN_SQL = "UPDATE pro_licences SET key_shown_at = ? WHERE licence_hash = ?";
+const ROLLBACK_LICENCE_SQL = "DELETE FROM pro_licences WHERE licence_hash = ? AND key_shown_at IS NULL";
 
 interface PassRow extends LicenceState { licence_hash: string; key_shown_at: number | null }
 
@@ -316,13 +332,21 @@ function alreadyIssuedHtml(what: "subscription" | "pass", keyShown: boolean, lea
     : successHtml("Almost there.", `${lead}Your licence key is still being issued. This browser is unlocked; refresh this page in a few seconds to see it, or email vishvaddi@gmail.com with your Stripe receipt if it doesn't appear.`);
 }
 
-async function storeLicenceKeyOnCustomer(env: ProEnv, customerId: string, key: string): Promise<void> {
+// The customer record is the only other copy of the plaintext key, so a failed
+// write rolls the fresh row back and throws: the webhook 500s, Stripe retries and
+// a new key is minted, rather than a paid licence whose key nobody can recover.
+async function storeLicenceKeyOnCustomer(env: ProEnv, db: D1Database, customerId: string, key: string, licenceHash: string): Promise<void> {
+  let ok = false;
   try {
-    await stripe(env, `/v1/customers/${encodeURIComponent(customerId)}`, {
+    const res = await stripe(env, `/v1/customers/${encodeURIComponent(customerId)}`, {
       method: "POST",
       body: new URLSearchParams({ "metadata[licence_key]": key }).toString(),
     });
-  } catch { /* best-effort — the licence still works without it */ }
+    ok = res.ok;
+  } catch { /* handled below */ }
+  if (ok) return;
+  await db.prepare(ROLLBACK_LICENCE_SQL).bind(licenceHash).run();
+  throw new Error("could not store licence key on Stripe customer");
 }
 
 // The webhook normally wins the race and has already minted the key; it lives
@@ -338,7 +362,8 @@ async function recoverUnshownKey(env: ProEnv, row: { licence_hash: string; key_s
 // both the webhook payload and the retrieved session, so either path computes
 // the same end (PASS_CHECKOUT_TTL_S bounds how long before payment that is).
 async function ensurePassLicence(env: ProEnv, db: D1Database, session: StripeCheckoutSession): Promise<{ row: PassRow; customerId: string; mintedKey?: string } | null> {
-  if (session.mode !== "payment" || session.metadata?.plan !== "pass" || session.payment_status !== "paid" || !session.id) return null;
+  const settled = session.payment_status === "paid" || (session.payment_status === "no_payment_required" && session.status === "complete");
+  if (session.mode !== "payment" || session.metadata?.plan !== "pass" || !settled || !session.id) return null;
   const customerId = stripeId(session.customer);
   if (!customerId) return null;
   const ref = PASS_PREFIX + session.id;
@@ -359,7 +384,7 @@ async function ensurePassLicence(env: ProEnv, db: D1Database, session: StripeChe
     if (winner) return { row: winner, customerId };
     throw error;
   }
-  await storeLicenceKeyOnCustomer(env, customerId, key);
+  await storeLicenceKeyOnCustomer(env, db, customerId, key, licenceHash);
   await bumpMetric(env, "pay_success");
   return { row: { licence_hash: licenceHash, plan: "pass", status: "active", current_period_end: periodEnd, key_shown_at: null }, customerId, mintedKey: key };
 }
@@ -392,32 +417,52 @@ async function successHandler(request: Request, env: ProEnv, url: URL): Promise<
   }
   const db = env.DEEP_SWARM_DB;
   if (!db) return notCompleted();
-  if (session.mode === "payment") return passSuccess(env, db, session);
+  try {
+    return session.mode === "payment" ? await passSuccess(env, db, session) : await subscriptionSuccess(env, db, session);
+  } catch {
+    return htmlResponse(successHtml("Almost there.", "Your payment went through but the licence key is still being issued. Refresh this page in a few seconds, or email vishvaddi@gmail.com with your Stripe receipt."), 200);
+  }
+}
+
+async function subscriptionSuccess(env: ProEnv, db: D1Database, session: StripeCheckoutSession): Promise<Response> {
   const sub = session.subscription;
   const paid = session.payment_status === "paid" || sub?.status === "active" || sub?.status === "trialing";
   if (!paid || !sub) return notCompleted();
   const customer = session.customer;
   const customerId = stripeId(customer);
-  const priceId = sub.items?.data?.[0]?.price?.id;
-  const plan: SubscriptionPlan = planForPrice(env, priceId) ?? (isSubscriptionPlan(session.metadata?.plan) ? session.metadata.plan : "month");
+  // Only this site's prices mint a licence — any other subscription on the account is not Pro.
+  const plan = planForPrice(env, sub.items?.data?.[0]?.price?.id);
+  if (!plan || !customerId) return notCompleted();
   const status = sub.status === "trialing" ? "active" : sub.status;
+  const periodEnd = subscriptionPeriodEnd(sub);
   const now = Date.now();
-  const existing = await db.prepare("SELECT licence_hash, key_shown_at FROM pro_licences WHERE stripe_subscription = ?")
-    .bind(sub.id).first<{ licence_hash: string; key_shown_at: number | null }>();
-  let licenceHash: string;
+  const existingSql = "SELECT licence_hash, key_shown_at FROM pro_licences WHERE stripe_subscription = ?";
+  let existing = await db.prepare(existingSql).bind(sub.id).first<{ licence_hash: string; key_shown_at: number | null }>();
+  let licenceHash = "";
   let issuedKey: string | undefined;
+  if (!existing) {
+    const key = generateLicenceKey();
+    const hash = await sha256Base64Url(key);
+    try {
+      await db.prepare(INSERT_LICENCE_SQL)
+        .bind(hash, customerId, sub.id, plan, status, periodEnd, (typeof customer === "object" && customer?.email) || null, now, now).run();
+    } catch (error) {
+      // Lost the insert race to the webhook: use its row, never our unstored key.
+      existing = await db.prepare(existingSql).bind(sub.id).first<{ licence_hash: string; key_shown_at: number | null }>();
+      if (!existing) throw error;
+    }
+    if (!existing) {
+      await storeLicenceKeyOnCustomer(env, db, customerId, key, hash);
+      await bumpMetric(env, "pay_success");
+      licenceHash = hash;
+      issuedKey = key;
+    }
+  }
   if (existing) {
     licenceHash = existing.licence_hash;
-    await db.prepare("UPDATE pro_licences SET status = ?, plan = ?, current_period_end = ?, updated_at = ? WHERE licence_hash = ?")
-      .bind(status, plan, sub.current_period_end ?? null, now, licenceHash).run();
+    await db.prepare(`UPDATE pro_licences SET status = ?, plan = ?, current_period_end = ?, updated_at = ? WHERE licence_hash = ? AND ${NOT_CANCELLED}`)
+      .bind(status, plan, periodEnd, now, licenceHash).run();
     issuedKey = await recoverUnshownKey(env, existing, customerId);
-  } else {
-    issuedKey = generateLicenceKey();
-    licenceHash = await sha256Base64Url(issuedKey);
-    await db.prepare(INSERT_LICENCE_SQL)
-      .bind(licenceHash, customerId, sub.id, plan, status, sub.current_period_end ?? null, (typeof customer === "object" && customer?.email) || null, now, now).run();
-    if (customerId) await storeLicenceKeyOnCustomer(env, customerId, issuedKey);
-    await bumpMetric(env, "pay_success");
   }
   if (issuedKey) await db.prepare(KEY_SHOWN_SQL).bind(now, licenceHash).run();
   const nowSec = Math.floor(now / 1000);
@@ -435,7 +480,9 @@ async function restoreHandler(request: Request, env: ProEnv, url: URL): Promise<
   const ipHash = await sha256Base64Url(ip);
   let limited: Response;
   try {
-    limited = await env.PIN_ATTEMPTS.get(env.PIN_ATTEMPTS.idFromName("pro-restore")).fetch(new Request(`https://attempts/?ip=${ipHash}`));
+    // Keys carry 60 bits of entropy, so the global cap only needs to stop floods; the
+    // PIN login's 20/hour cap would let one attacker lock every customer out of restore.
+    limited = await env.PIN_ATTEMPTS.get(env.PIN_ATTEMPTS.idFromName("pro-restore")).fetch(new Request(`https://attempts/?ip=${ipHash}&global=500`));
   } catch {
     return Response.json({ ok: false }, { status: 503, headers: NO_STORE_JSON });
   }
@@ -475,21 +522,24 @@ function timingSafeEqualHex(a: string, b: string): boolean {
 }
 
 async function verifyStripeSignature(header: string, payload: string, secret: string): Promise<boolean> {
-  const parts: Record<string, string> = {};
+  let t = "";
+  const v1: string[] = [];
   for (const piece of header.split(",")) {
     const eq = piece.indexOf("=");
     if (eq < 0) continue;
     const name = piece.slice(0, eq).trim();
     const value = piece.slice(eq + 1).trim();
-    if (name === "t" || (name === "v1" && !parts.v1)) parts[name] = value;
+    if (name === "t") t = value;
+    // Several v1 values arrive while a webhook secret is being rolled; any match is valid.
+    else if (name === "v1") v1.push(value.toLowerCase());
   }
-  const timestamp = Number(parts.t);
-  if (!parts.t || !parts.v1 || !Number.isFinite(timestamp)) return false;
+  const timestamp = Number(t);
+  if (!t || !v1.length || !Number.isFinite(timestamp)) return false;
   if (Math.abs(Date.now() / 1000 - timestamp) > WEBHOOK_TOLERANCE_S) return false;
   const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(`${parts.t}.${payload}`));
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(`${t}.${payload}`));
   const expectedHex = [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  return timingSafeEqualHex(expectedHex, parts.v1.toLowerCase());
+  return v1.some((candidate) => timingSafeEqualHex(expectedHex, candidate));
 }
 
 async function customerLicenceKey(env: ProEnv, customerId: string): Promise<string | null> {
@@ -510,13 +560,15 @@ async function upsertFromCheckoutCompleted(env: ProEnv, obj: Record<string, unkn
   const customerId = typeof obj.customer === "string" ? obj.customer : (obj.customer as { id?: string } | null)?.id;
   if (!subscriptionId || !customerId) return;
   const metadata = (obj.metadata as Record<string, string> | undefined) || {};
-  const plan: SubscriptionPlan = isSubscriptionPlan(metadata.plan) ? metadata.plan : "month";
+  // Our checkout always sets metadata.plan; other subscriptions on the account don't get a licence.
+  if (!isSubscriptionPlan(metadata.plan)) return;
+  const plan: SubscriptionPlan = metadata.plan;
   const email = (obj.customer_details as { email?: string } | undefined)?.email || null;
   const now = Date.now();
   const existing = await env.DEEP_SWARM_DB.prepare("SELECT licence_hash FROM pro_licences WHERE stripe_subscription = ?")
     .bind(subscriptionId).first<{ licence_hash: string }>();
   if (existing) {
-    await env.DEEP_SWARM_DB.prepare("UPDATE pro_licences SET status = 'active', updated_at = ? WHERE licence_hash = ?").bind(now, existing.licence_hash).run();
+    await env.DEEP_SWARM_DB.prepare(`UPDATE pro_licences SET status = 'active', updated_at = ? WHERE licence_hash = ? AND ${NOT_CANCELLED}`).bind(now, existing.licence_hash).run();
     return;
   }
   const key = generateLicenceKey();
@@ -524,7 +576,7 @@ async function upsertFromCheckoutCompleted(env: ProEnv, obj: Record<string, unkn
   await env.DEEP_SWARM_DB.prepare(
     "INSERT INTO pro_licences (licence_hash, stripe_customer, stripe_subscription, plan, status, current_period_end, email, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', NULL, ?, ?, ?)",
   ).bind(licenceHash, customerId, subscriptionId, plan, email, now, now).run();
-  await storeLicenceKeyOnCustomer(env, customerId, key);
+  await storeLicenceKeyOnCustomer(env, env.DEEP_SWARM_DB, customerId, key, licenceHash);
   await bumpMetric(env, "pay_success");
 }
 
@@ -537,16 +589,15 @@ async function updateFromSubscriptionUpdated(env: ProEnv, obj: Record<string, un
   const id = obj.id as string | undefined;
   if (!id || isPassRef(id)) return;
   const status = obj.status === "trialing" ? "active" : ((obj.status as string) || "active");
-  const periodEnd = (obj.current_period_end as number | undefined) ?? null;
-  const items = (obj.items as { data?: Array<{ price?: { id?: string } }> } | undefined)?.data;
-  const priceId = items?.[0]?.price?.id;
+  const periodEnd = subscriptionPeriodEnd(obj as unknown as StripeSubscription);
+  const priceId = (obj.items as StripeSubscription["items"])?.data?.[0]?.price?.id;
   const plan = planForPrice(env, priceId);
   const now = Date.now();
   if (plan) {
-    await env.DEEP_SWARM_DB.prepare("UPDATE pro_licences SET status = ?, plan = ?, current_period_end = ?, updated_at = ? WHERE stripe_subscription = ?")
+    await env.DEEP_SWARM_DB.prepare(`UPDATE pro_licences SET status = ?, plan = ?, current_period_end = ?, updated_at = ? WHERE stripe_subscription = ? AND ${NOT_CANCELLED}`)
       .bind(status, plan, periodEnd, now, id).run();
   } else {
-    await env.DEEP_SWARM_DB.prepare("UPDATE pro_licences SET status = ?, current_period_end = ?, updated_at = ? WHERE stripe_subscription = ?")
+    await env.DEEP_SWARM_DB.prepare(`UPDATE pro_licences SET status = ?, current_period_end = ?, updated_at = ? WHERE stripe_subscription = ? AND ${NOT_CANCELLED}`)
       .bind(status, periodEnd, now, id).run();
   }
 }
@@ -556,13 +607,6 @@ async function markCancelled(env: ProEnv, obj: Record<string, unknown>): Promise
   const id = obj.id as string | undefined;
   if (!id || isPassRef(id)) return;
   await env.DEEP_SWARM_DB.prepare("UPDATE pro_licences SET status = 'cancelled', updated_at = ? WHERE stripe_subscription = ?").bind(Date.now(), id).run();
-}
-
-async function markPastDue(env: ProEnv, obj: Record<string, unknown>): Promise<void> {
-  if (!env.DEEP_SWARM_DB) return;
-  const subscriptionId = typeof obj.subscription === "string" ? obj.subscription : (obj.subscription as { id?: string } | null)?.id;
-  if (!subscriptionId || isPassRef(subscriptionId)) return;
-  await env.DEEP_SWARM_DB.prepare("UPDATE pro_licences SET status = 'past_due', updated_at = ? WHERE stripe_subscription = ?").bind(Date.now(), subscriptionId).run();
 }
 
 async function webhookHandler(request: Request, env: ProEnv): Promise<Response> {
@@ -586,7 +630,8 @@ async function webhookHandler(request: Request, env: ProEnv): Promise<Response> 
       break;
     case "customer.subscription.updated": await updateFromSubscriptionUpdated(env, obj); break;
     case "customer.subscription.deleted": await markCancelled(env, obj); break;
-    case "invoice.payment_failed": await markPastDue(env, obj); break;
+    // invoice.payment_failed is deliberately unhandled: customer.subscription.updated
+    // carries past_due itself, and a late failure event must not revive a cancelled row.
     default: break; // unhandled event types are acknowledged, not errors
   }
   // Recorded only once handled: a D1/Stripe failure above throws, Stripe

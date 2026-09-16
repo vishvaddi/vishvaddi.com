@@ -704,3 +704,21 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Gate: full `release:check` exit 0 on the merged tree (release-gate 3, auth 13, unit 77, check 0), then after the print fix: pro 48, feature 18, money 32, materials 92, seo 146; Worker tsc 0; pro-api 19.
 - Distribution docs (Vish acts): `docs/PLAY_STORE.md` (12 testers × 14 days; needs an offline-fallback SW; hide checkout in the app), `docs/LISTINGS.md`, `docs/OUTREACH_TAFE.md`.
 - Deploy blocked on: new Stripe prices (A$100/yr, A$20/mo subscriptions; A$5 one-off pass) → `STRIPE_PRICE_YEAR/MONTH/PASS` in `wrangler.jsonc`, then Vish's go.
+
+
+## 2026-09-16 - Payment review fixes + sandbox prices wired (NOT deployed)
+
+- Independent read-only review of the Pro payment code (fresh agent). Fixed before any real money:
+  - **Cancelled can't be revived.** Every subscription UPDATE is guarded `status NOT IN ('cancelled','canceled')`; the `invoice.payment_failed` → past_due handler is removed (subscription.updated carries it, and a late failure could resurrect a cancelled row).
+  - **Only our plans mint licences.** Webhook subscription checkouts need `metadata.plan` year/month; the success page needs a configured price. Another subscription on the Stripe account no longer becomes Pro.
+  - **Key write must succeed.** A non-2xx or throw on the customer-metadata write rolls the fresh row back (`DELETE … AND key_shown_at IS NULL`) and throws. The webhook 500s, Stripe retries, a new key is minted; the success page shows "Almost there, refresh".
+  - **API version pinned** (`Stripe-Version: 2026-08-26.dahlia`, the webhook endpoint's version); period end read from `items.data[0].current_period_end` with a fallback.
+  - **past_due** stays Pro for 14 days after period end, then stops.
+  - **Restore limiter** gets its own global cap (500/h via `PinAttempts` `global` param; PIN login unchanged at 20), so junk POSTs can't lock customers out.
+  - **Subscription insert race** on the success page recovers like the pass path.
+  - **Promo passes:** a 100 % promo pass (`no_payment_required` + `complete`) is issued.
+  - **Signatures:** any of several `v1` values accepted during a secret roll.
+  - **Copy:** "also on your Stripe receipt" was false and is removed; privacy now says the plaintext key is kept in the Stripe customer record; cancellation copy no longer promises a portal link the code doesn't send.
+- Not fixed (noted): refunds/disputes don't revoke access (manual for now); a Worker killed between INSERT and the metadata write leaves an unrecoverable row (rare).
+- Sandbox prices created in the `vishvaddi.com sandbox` account (acct …1069bHoZmx): A$100/yr `price_1UGFl41069bHoZmxsrKc9R9X`, A$20/mo `price_1UGFlg1069bHoZmxbvoF0yQN`, A$5 one-off `price_1UGFmV1069bHoZmxcxlhqgo3` ("7-day pass"). Note there is a second, empty sandbox (acct …1kI9jn067R) that is not the one wired.
+- Tests: pro-api 24 (+6 regression tests for the above), store/market/auth green (48 total), release-gate 3, check 0, Worker tsc 0, pro-e2e 48, seo 146.

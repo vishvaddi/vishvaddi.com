@@ -47,6 +47,18 @@ function fakeD1() {
         throw new Error(`fakeD1: unexpected first(): ${sql}`)
       },
       async run() {
+        const guard = " AND status NOT IN ('cancelled', 'canceled')"
+        if (sql.includes(guard)) {
+          const base = sql.replace(guard, '')
+          const target = base.endsWith('WHERE licence_hash = ?') ? licences.get(args[args.length - 1]) : byStripeSub(args[args.length - 1])
+          if (target && (target.status === 'cancelled' || target.status === 'canceled')) return { success: true, meta: { changes: 0 } }
+          return prepare(base).bind(...args).run()
+        }
+        if (sql === 'DELETE FROM pro_licences WHERE licence_hash = ? AND key_shown_at IS NULL') {
+          const row = licences.get(args[0])
+          if (row && row.key_shown_at == null) { licences.delete(args[0]); return { success: true, meta: { changes: 1 } } }
+          return { success: true, meta: { changes: 0 } }
+        }
         if (/^INSERT INTO site_store/.test(sql)) {
           store.set(args[0], { revision: 1, json: args[1], updated_at: args[2] })
           return { success: true, meta: { changes: 1 } }
@@ -608,10 +620,108 @@ test('webhook: rejects a bad or stale signature, applies a handled event once, a
   assert.equal(replay.status, 200)
   assert.equal(db.licences.get(hash).status, 'active')
 
+  // invoice.payment_failed is acknowledged but ignored; subscription.updated carries past_due.
   const failedPayload = JSON.stringify({ id: 'evt_2', type: 'invoice.payment_failed', data: { object: { subscription: 'sub_5' } } })
   const failedHeader = await stripeSignature(secret, failedPayload)
-  await worker.fetch(new Request('https://example.com/api/pro/webhook', { method: 'POST', headers: { 'Stripe-Signature': failedHeader }, body: failedPayload }), configuredEnv)
+  assert.equal((await worker.fetch(new Request('https://example.com/api/pro/webhook', { method: 'POST', headers: { 'Stripe-Signature': failedHeader }, body: failedPayload }), configuredEnv)).status, 200)
+  assert.equal(db.licences.get(hash).status, 'active')
+
+  // During a secret roll Stripe sends several v1 signatures; a valid one in second place is accepted.
+  const rolledPayload = JSON.stringify({ id: 'evt_roll', type: 'customer.subscription.updated', data: { object: { id: 'sub_5', status: 'past_due', items: { data: [{ price: { id: CONFIGURED.STRIPE_PRICE_MONTH }, current_period_end: 1888888888 }] } } } })
+  const rolledGood = await stripeSignature(secret, rolledPayload)
+  const [tPart, v1Part] = rolledGood.split(',')
+  const rolled = await worker.fetch(new Request('https://example.com/api/pro/webhook', { method: 'POST', headers: { 'Stripe-Signature': `${tPart},v1=${'0'.repeat(64)},${v1Part}` }, body: rolledPayload }), configuredEnv)
+  assert.equal(rolled.status, 200)
   assert.equal(db.licences.get(hash).status, 'past_due')
+  assert.equal(db.licences.get(hash).current_period_end, 1888888888, 'period end read from subscription items (basil+ shape)')
+})
+
+test('webhook: a cancelled subscription is never revived by a late or out-of-order event', async () => {
+  const { env, db } = setup()
+  const configuredEnv = { ...env, ...CONFIGURED }
+  const hash = 'lic-cancel'
+  seedLicence(db, { hash, subscription: 'sub_c', status: 'active' })
+  assert.equal((await sendWebhook(configuredEnv, { id: 'evt_del', type: 'customer.subscription.deleted', data: { object: { id: 'sub_c' } } })).status, 200)
+  assert.equal(db.licences.get(hash).status, 'cancelled')
+  await sendWebhook(configuredEnv, { id: 'evt_late_upd', type: 'customer.subscription.updated', data: { object: { id: 'sub_c', status: 'past_due', items: { data: [{ price: { id: CONFIGURED.STRIPE_PRICE_YEAR }, current_period_end: 1999999999 }] } } } })
+  await sendWebhook(configuredEnv, { id: 'evt_late_fail', type: 'invoice.payment_failed', data: { object: { subscription: 'sub_c' } } })
+  await sendWebhook(configuredEnv, { id: 'evt_late_done', type: 'checkout.session.completed', data: { object: { mode: 'subscription', subscription: 'sub_c', customer: 'cus_1', metadata: { plan: 'year' } } } })
+  assert.equal(db.licences.get(hash).status, 'cancelled')
+})
+
+test('webhook + success page: only this site\'s plans mint a licence', async () => {
+  const { env, db } = setup()
+  const configuredEnv = { ...env, ...CONFIGURED }
+  const originalFetch = globalThis.fetch
+  let customerWrites = 0
+  globalThis.fetch = async (url, init) => {
+    const href = String(url)
+    if (href.startsWith('https://api.stripe.com/v1/customers/') && init?.method === 'POST') { customerWrites++; return new Response('{}', { status: 200 }) }
+    if (href.startsWith('https://api.stripe.com/v1/checkout/sessions/cs_foreign')) {
+      return new Response(JSON.stringify({
+        mode: 'subscription', payment_status: 'paid', customer: { id: 'cus_f', email: 'x@example.com' },
+        subscription: { id: 'sub_foreign', status: 'active', items: { data: [{ price: { id: 'price_someone_else' }, current_period_end: 1999999999 }] } },
+      }), { status: 200 })
+    }
+    throw new Error(`unexpected fetch: ${href}`)
+  }
+  try {
+    assert.equal((await sendWebhook(configuredEnv, { id: 'evt_foreign', type: 'checkout.session.completed', data: { object: { mode: 'subscription', subscription: 'sub_foreign', customer: 'cus_f', metadata: {} } } })).status, 200)
+    const page = await worker.fetch(request('/pay/success?session_id=cs_foreign'), configuredEnv)
+    assert.match(await page.text(), /not completed/i)
+    assert.equal(page.headers.get('Set-Cookie'), null)
+    assert.equal(db.licences.size, 0)
+    assert.equal(customerWrites, 0)
+  } finally { globalThis.fetch = originalFetch }
+})
+
+test('webhook: a failed licence-key write to Stripe rolls the row back and 500s so Stripe retries with a fresh key', async () => {
+  const { env, db } = setup()
+  const configuredEnv = { ...env, ...CONFIGURED }
+  const originalFetch = globalThis.fetch
+  let fail = true
+  const versions = new Set()
+  globalThis.fetch = async (url, init) => {
+    versions.add(new Headers(init?.headers).get('Stripe-Version'))
+    if (String(url).startsWith('https://api.stripe.com/v1/customers/')) return new Response('{"error":{}}', { status: fail ? 429 : 200 })
+    throw new Error(`unexpected fetch: ${url}`)
+  }
+  const event = { id: 'evt_write_fail', type: 'checkout.session.completed', data: { object: { mode: 'subscription', subscription: 'sub_wf', customer: 'cus_wf', metadata: { plan: 'month' } } } }
+  try {
+    await assert.rejects(async () => { const res = await sendWebhook(configuredEnv, event); if (res.status >= 500) throw new Error(String(res.status)) })
+    assert.equal(db.licences.size, 0, 'row rolled back')
+    assert.equal(db.events.has('evt_write_fail'), false, 'event not recorded, so the retry is processed')
+    fail = false
+    assert.equal((await sendWebhook(configuredEnv, event)).status, 200)
+    assert.equal(db.licences.size, 1)
+    assert.deepEqual([...versions], ['2026-08-26.dahlia'], 'every Stripe call pins the API version')
+  } finally { globalThis.fetch = originalFetch }
+})
+
+test('licence: past_due stays Pro for 14 days after period end, then stops', async () => {
+  const { env, db } = setup()
+  const configuredEnv = { ...env, ...CONFIGURED }
+  const graceKey = 'VV-GRAC-EEEE-KEY1'
+  const lapsedKey = 'VV-LAPS-EDDD-KEY2'
+  seedLicence(db, { hash: await sha256(graceKey), subscription: 'sub_grace', status: 'past_due', periodEnd: nowSec() - 3 * 24 * 3600 })
+  seedLicence(db, { hash: await sha256(lapsedKey), subscription: 'sub_lapsed', status: 'past_due', periodEnd: nowSec() - 15 * 24 * 3600 })
+  assert.equal((await worker.fetch(jsonPost('/api/pro/restore', { key: graceKey }, { 'CF-Connecting-IP': '203.0.113.7' }), configuredEnv)).status, 200)
+  assert.equal((await worker.fetch(jsonPost('/api/pro/restore', { key: lapsedKey }, { 'CF-Connecting-IP': '203.0.113.8' }), configuredEnv)).status, 401)
+})
+
+test('pass: a 100 % promo code (no_payment_required, complete) still issues the pass', async () => {
+  const { env, db } = setup()
+  const configuredEnv = { ...env, ...CONFIGURED }
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (url) => {
+    if (String(url).startsWith('https://api.stripe.com/v1/customers/')) return new Response('{}', { status: 200 })
+    throw new Error(`unexpected fetch: ${url}`)
+  }
+  try {
+    const res = await sendWebhook(configuredEnv, { id: 'evt_free_pass', type: 'checkout.session.completed', data: { object: { id: 'cs_free', mode: 'payment', status: 'complete', payment_status: 'no_payment_required', created: nowSec(), customer: 'cus_free', metadata: { plan: 'pass' } } } })
+    assert.equal(res.status, 200)
+    assert.equal([...db.licences.values()].filter((row) => row.stripe_subscription === 'pass_cs_free').length, 1)
+  } finally { globalThis.fetch = originalFetch }
 })
 
 test('/api/store/<key>: owner keeps a plain key, a Pro cookie gets a namespaced key, and DELETE only touches its own row', async () => {

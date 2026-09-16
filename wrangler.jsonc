@@ -16,13 +16,13 @@
     "TTS_MONTHLY_CHARS": "150000",
     // Pro (paywall experiment, docs/PRO_PLAN.md): Stripe price ids for the A$100/year
     // and A$20/month subscriptions and the A$5 one-off 7-day pass (a one-time price,
-    // not recurring). All three must be set or checkout reports "not configured" —
-    // blank until the prices exist, so a deploy can never charge the retired
-    // A$39/A$5 prices. Secrets (not vars):
+    // not recurring). All three must be set or checkout reports "not configured".
+    // These are the SANDBOX prices (acct ...1069bHoZmx); live mode needs its own ids.
+    // The retired A$39/yr and A$5/mo prices must never be wired back. Secrets (not vars):
     // `npx wrangler secret put STRIPE_SECRET_KEY` and `npx wrangler secret put STRIPE_WEBHOOK_SECRET`.
-    "STRIPE_PRICE_YEAR": "",
-    "STRIPE_PRICE_MONTH": "",
-    "STRIPE_PRICE_PASS": ""
+    "STRIPE_PRICE_YEAR": "price_1UGFl41069bHoZmxsrKc9R9X",
+    "STRIPE_PRICE_MONTH": "price_1UGFlg1069bHoZmxbvoF0yQN",
+    "STRIPE_PRICE_PASS": "price_1UGFmV1069bHoZmxcxlhqgo3"
   },
   "durable_objects": {
     "bindings": [
