@@ -85,12 +85,16 @@
     });
   });
 
-  // Only update existing registrations; the retirement worker unregisters itself.
+  // public/sw.js only serves an offline page for failed navigations (needed by the
+  // Play Store app); it caches nothing else.
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.getRegistration("/").then(function (registration) {
-      if (registration) return registration.update();
-    }).catch(function () {});
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(function () {});
   }
+  // Inside the Play Store app (Trusted Web Activity) the referrer is android-app://;
+  // remember it for the session so Pro checkout can stay out of the app.
+  try {
+    if (document.referrer.indexOf("android-app://com.vishvaddi.sitetools") === 0) sessionStorage.setItem("vv_twa", "1");
+  } catch (error) {}
   window.addEventListener("pageshow", function (event) {
     if (event.persisted) window.location.reload();
   });

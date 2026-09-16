@@ -1,0 +1,31 @@
+---
+// Served by public/sw.js when a navigation fails offline. Self-contained on
+// purpose: the site's CSS and scripts aren't cached, so nothing here may depend on them.
+---
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Offline · Vish Vaddi</title>
+    <style>
+      :root { --bg: #fafaf7; --fg: #1a1a1a; --muted: #6b6b6b; --accent: #9e4e2e; color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #161613; --fg: #e8e8e4; --muted: #aaa; --accent: #c5683f; } }
+      body { margin: 0; min-height: 100svh; display: grid; place-items: center; padding: 24px; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+      main { width: min(100%, 420px); }
+      h1 { font-family: Georgia, serif; font-weight: 400; font-size: 32px; margin: 12px 0; }
+      p { color: var(--muted); }
+      .brand { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
+      a { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="brand">Vish Vaddi · Site Tools</p>
+      <h1>You're offline.</h1>
+      <p>This page needs a connection. Anything you've saved in a tool is still on this device and will be there when you're back online.</p>
+      <p><a href="">Try again</a></p>
+    </main>
+  </body>
+</html>

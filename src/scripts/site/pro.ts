@@ -132,6 +132,28 @@ async function restore(key: string): Promise<{ ok: boolean; plan?: Plan }> {
   return body;
 }
 
+// Google Play's payments policy: no web checkout inside the Play Store app.
+function inPlayApp(): boolean {
+  try {
+    return sessionStorage.getItem("vv_twa") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function planChoices(): HTMLElement {
+  if (inPlayApp()) {
+    const note = document.createElement("p");
+    note.className = "pro-upsell-note";
+    note.textContent = "Pro is available at vishvaddi.com.";
+    return note;
+  }
+  const plans = document.createElement("div");
+  plans.className = "pro-upsell-plans";
+  plans.append(...PLAN_BUTTONS.map(([plan, label]) => planButton(plan, label)));
+  return plans;
+}
+
 function planButton(plan: Plan, label: string): HTMLButtonElement {
   const btn = document.createElement("button");
   btn.type = "button";
@@ -211,10 +233,7 @@ function buildUpsellPanel(feature: string, heading: string, onRestored: () => vo
     note.textContent = "Not open yet.";
     panel.append(note);
   } else {
-    const plans = document.createElement("div");
-    plans.className = "pro-upsell-plans";
-    plans.append(...PLAN_BUTTONS.map(([plan, label]) => planButton(plan, label)));
-    panel.append(plans);
+    panel.append(planChoices());
     panel.append(buildRestoreForm(onRestored));
   }
 
@@ -284,10 +303,7 @@ export function mountPro(root: HTMLElement): void {
       root.append(note);
       return;
     }
-    const plans = document.createElement("div");
-    plans.className = "pro-upsell-plans";
-    plans.append(...PLAN_BUTTONS.map(([plan, label]) => planButton(plan, label)));
-    root.append(plans);
+    root.append(planChoices());
     root.append(buildRestoreForm(() => render(proState())));
   };
   render(proState());

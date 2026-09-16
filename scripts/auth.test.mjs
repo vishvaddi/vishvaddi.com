@@ -210,32 +210,54 @@ test('browser form submissions preserve the origin for login and logout', async 
   } finally { await browser.close() }
 })
 
-test('retirement worker is public and removes only old content caches', async () => {
+test('service worker is public, caches only the offline page, retires old caches and falls back offline for navigations', async () => {
   const { env } = setup()
   assert.equal((await worker.fetch(request('/sw.js'), { ...env, SITE_PIN: undefined })).status, 200)
   const events = {}
   const deleted = []
+  const added = []
   const actions = []
   const code = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8')
+  const offline = new Response('offline page')
   vm.runInNewContext(code, {
     self: {
       addEventListener: (name, callback) => { events[name] = callback },
       skipWaiting: () => actions.push('skip'),
       registration: { unregister: async () => actions.push('unregister') },
-      clients: { claim: async () => {}, matchAll: async () => [{ url: 'https://example.com/site/', navigate: async () => actions.push('navigate') }] },
+      clients: { claim: async () => actions.push('claim') },
     },
-    caches: { keys: async () => ['workbox-precache-v2', 'books', 'gutendex', 'user-work'], delete: async (name) => deleted.push(name) },
+    // A service worker resolves relative URLs against its scope; Node's Request can't.
+    Request: class { constructor(url, init) { this.url = url; this.init = init } },
+    fetch: async () => { throw new TypeError('offline') },
+    caches: {
+      open: async (name) => ({ add: async (req) => added.push([name, req.url ?? String(req)]) }),
+      keys: async () => ['workbox-precache-v2', 'books', 'gutendex', 'user-work', 'offline-v0', 'offline-v1'],
+      delete: async (name) => deleted.push(name),
+      match: async (url, options) => (url === '/offline/' && options.cacheName === 'offline-v1' ? offline : undefined),
+    },
   })
-  events.install()
   let pending = Promise.resolve()
+  events.install({ waitUntil: (promise) => { pending = promise } })
+  await pending
+  assert.equal(added.length, 1)
+  assert.equal(added[0][0], 'offline-v1')
+  assert.match(added[0][1], /\/offline\/$/)
   events.activate({ waitUntil: (promise) => { pending = promise } })
   await pending
-  assert.deepEqual(deleted, ['workbox-precache-v2', 'books', 'gutendex'])
-  assert.deepEqual(actions, ['skip', 'unregister', 'navigate'])
+  assert.deepEqual(deleted, ['workbox-precache-v2', 'books', 'gutendex', 'offline-v0'], 'user caches kept, old offline cache retired')
+  assert.deepEqual(actions, ['skip', 'claim'], 'no longer unregisters itself')
+
+  let navResponse
+  events.fetch({ request: { mode: 'navigate' }, respondWith: (promise) => { navResponse = promise } })
+  assert.equal(await navResponse, offline)
+  let assetResponse = 'untouched'
+  events.fetch({ request: { mode: 'no-cors' }, respondWith: (promise) => { assetResponse = promise } })
+  assert.equal(assetResponse, 'untouched', 'non-navigation requests go straight to the network')
+
   const config = await readFile(new URL('../wrangler.jsonc', import.meta.url), 'utf8')
   assert.match(config, /"run_worker_first": true/)
   const chrome = await readFile(new URL('../public/scripts/chrome.js', import.meta.url), 'utf8')
-  assert.doesNotMatch(chrome, /serviceWorker\.register\(/)
+  assert.match(chrome, /serviceWorker\.register\("\/sw\.js"/)
 })
 
 test('unlocked site (no SITE_LOCKED) serves every page publicly while the PIN still logs the owner in', async () => {

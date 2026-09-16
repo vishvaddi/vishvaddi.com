@@ -231,7 +231,7 @@ export default defineConfig({
   site: 'https://vishvaddi.com',
   devToolbar: { enabled: false },
   // /site/lattice is deliberately unlisted — reachable only by direct URL
-  integrations: [sitemap({ filter: (page) => !page.includes('/site/lattice') })],
+  integrations: [sitemap({ filter: (page) => !page.includes('/site/lattice') && !page.includes('/offline') })],
   vite: {
     plugins: [tailwindcss(), localBookProxy()],
     // Never inline client scripts. The strict CSP (script-src 'self' + a couple

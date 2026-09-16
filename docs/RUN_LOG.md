@@ -722,3 +722,11 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Not fixed (noted): refunds/disputes don't revoke access (manual for now); a Worker killed between INSERT and the metadata write leaves an unrecoverable row (rare).
 - Sandbox prices created in the `vishvaddi.com sandbox` account (acct …1069bHoZmx): A$100/yr `price_1UGFl41069bHoZmxsrKc9R9X`, A$20/mo `price_1UGFlg1069bHoZmxbvoF0yQN`, A$5 one-off `price_1UGFmV1069bHoZmxcxlhqgo3` ("7-day pass"). Note there is a second, empty sandbox (acct …1kI9jn067R) that is not the one wired.
 - Tests: pro-api 24 (+6 regression tests for the above), store/market/auth green (48 total), release-gate 3, check 0, Worker tsc 0, pro-e2e 48, seo 146.
+
+
+## 2026-09-16 - Offline fallback service worker + no checkout inside the Play app (NOT deployed)
+
+- Play Store (TWA) prerequisite. `public/sw.js` now caches only `/offline/` (self-contained page, noindex, excluded from the sitemap) and serves it when a navigation fails. It still retires the old workbox/books/gutendex caches, keeps user caches, and no longer unregisters itself. `chrome.js` registers it site-wide.
+- Blast radius: every page gets a registered SW. It never intercepts non-navigation requests and never caches pages, so no stale or owner content can be served.
+- `chrome.js` sets `sessionStorage.vv_twa` when the referrer is `android-app://com.vishvaddi.sitetools`; `pro.ts` `planChoices()` then shows "Pro is available at vishvaddi.com" instead of checkout buttons (Google Play payments policy). Restore stays available.
+- Tests: auth SW test rewritten (install caches the offline page only, activate retires old caches + stale offline cache and claims, navigation falls back offline, assets untouched, chrome.js registers /sw.js); pro-e2e checks the Play app state. Full `release:check` exit 0 (unit 82).

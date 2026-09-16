@@ -131,6 +131,12 @@ try {
   await freePage.goto(`${BASE}/pro/`, { waitUntil: 'domcontentloaded' })
   const planLabels = await freePage.locator('#pro-plans .pro-upsell-plans .pro-upsell-btn').allInnerTexts()
   check('Pro page: at least two plan buttons, all priced in A$', planLabels.length >= 2 && planLabels.every((label) => label.includes('A$')), planLabels.join(' | '))
+  // Inside the Play Store app (sessionStorage flag set by chrome.js from an android-app:// referrer) there's no web checkout.
+  await freePage.evaluate(() => sessionStorage.setItem('vv_twa', '1'))
+  await freePage.reload({ waitUntil: 'domcontentloaded' })
+  await freePage.waitForSelector('#pro-plans .pro-upsell-note', { timeout: 5000 }).catch(() => {})
+  check('Play app: /pro shows no checkout buttons, only where to buy', await freePage.locator('#pro-plans .pro-upsell-btn').filter({ hasText: 'A$' }).count() === 0 && ((await freePage.locator('#pro-plans').textContent()) || '').includes('Pro is available at vishvaddi.com'))
+  await freePage.evaluate(() => sessionStorage.removeItem('vv_twa'))
   check('Pro page: no quota copy left', !(await freePage.locator('main').textContent() || '').match(/free exports? (left|this month)|#free-limit-copy/) && await freePage.locator('#free-limit-copy').count() === 0)
   check('Brand editor: free visitor sees "Applies to your exports with Pro"', await freePage.locator('#brand-free-note').isVisible() && (await freePage.locator('#brand-free-note').textContent() || '').includes('Applies to your exports with Pro'))
   await freePage.locator('#brand-name').fill(BRAND.name)
