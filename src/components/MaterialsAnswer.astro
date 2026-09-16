@@ -1,0 +1,115 @@
+---
+// Shared render for one /site/materials/<family>/<slug> search-intent answer
+// page. Data (numbers, copy, links) comes from src/data/materials-answers.ts,
+// which shares its maths with the live calculator at /site/materials via
+// src/data/materials-calc.ts — this component only lays it out.
+import type { AnswerPage } from "../data/materials-answers";
+
+interface Props {
+  page: AnswerPage;
+  familyHref: string;
+  familyLabel: string;
+}
+
+const { page, familyHref, familyLabel } = Astro.props;
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "FAQPage",
+      mainEntity: page.faq.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: { "@type": "Answer", text: item.a },
+      })),
+    },
+    {
+      "@type": "HowTo",
+      name: page.h1,
+      step: page.howTo.map((text) => ({ "@type": "HowToStep", text })),
+    },
+  ],
+};
+---
+
+<div class="blueprint tool mat-answer">
+  <p class="eyebrow">
+    <a href="/site" style="color:inherit;text-decoration:none">Site</a> /
+    <a href="/site/materials" style="color:inherit;text-decoration:none">Materials</a> /
+    <a href={familyHref} style="color:inherit;text-decoration:none">{familyLabel}</a>
+  </p>
+  <h1>{page.h1}</h1>
+  <p class="mat-answer-lead">{page.answerLead}</p>
+  <p class="mat-answer-context">{page.context}</p>
+
+  <table class="mat-answer-table">
+    <caption>Worked calculation</caption>
+    <tbody>
+      {page.rows.map((row) => (
+        <tr>
+          <th scope="row">{row.label}</th>
+          <td>{row.value}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+  <h2>Assumptions</h2>
+  <ul class="mat-answer-assumptions">
+    {page.assumptions.map((a) => <li>{a}</li>)}
+  </ul>
+
+  <p class="mat-answer-check"><strong>Check before you order:</strong> {page.checkNote}</p>
+
+  <div class="btn-row no-print">
+    <a class="btn" href={page.changeHref}>Change the numbers in the calculator →</a>
+  </div>
+
+  {page.neighbours.length > 0 && (
+    <nav class="mat-answer-neighbours" aria-label="Other sizes">
+      <h2>Other sizes</h2>
+      <ul>
+        {page.neighbours.map((n) => <li><a href={n.href}>{n.label}</a></li>)}
+      </ul>
+    </nav>
+  )}
+
+  <details class="tool-intro-more mat-answer-faq">
+    <summary>How this is worked out &amp; FAQ</summary>
+    <h2>How this is worked out</h2>
+    <ol>
+      {page.howTo.map((step) => <li>{step}</li>)}
+    </ol>
+    <h2>FAQ</h2>
+    {page.faq.map((item) => (
+      <details class="tool-faq-item">
+        <summary>{item.q}</summary>
+        <p>{item.a}</p>
+      </details>
+    ))}
+  </details>
+
+  <p class="note-foot">Estimates only — allow for laps, cuts and site conditions. <a href={familyHref}>← more {familyLabel.toLowerCase()}</a> · <a href="/site/materials">All material calculators</a></p>
+</div>
+
+<script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
+<style>
+  .mat-answer-lead { font-size: 1.05rem; margin: 0.75rem 0 0.4rem; }
+  .mat-answer-context { color: var(--muted); margin: 0 0 1.25rem; }
+  .mat-answer-table { width: 100%; border-collapse: collapse; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  .mat-answer-table caption { text-align: left; font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.4rem; }
+  .mat-answer-table th, .mat-answer-table td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--site-line); }
+  .mat-answer-table th { font-weight: 500; color: var(--muted); width: 55%; }
+  .mat-answer-table td { font-family: var(--font-mono); }
+  .mat-answer-assumptions { font-size: 0.88rem; color: var(--muted); padding-left: 1.2rem; margin: 0.4rem 0 1.25rem; }
+  .mat-answer-assumptions li { margin: 0.25rem 0; }
+  .mat-answer-check { font-size: 0.9rem; margin: 0 0 1.25rem; }
+  .mat-answer-neighbours { margin: 1.5rem 0; }
+  .mat-answer-neighbours h2 { font-size: 1rem; margin: 0 0 0.5rem; }
+  .mat-answer-neighbours ul { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0; }
+  .mat-answer-neighbours a { display: inline-flex; min-height: 40px; align-items: center; padding: 0.4rem 0.8rem; border: 1px solid var(--site-line-strong); border-radius: 999px; color: var(--fg); font-size: 0.85rem; text-decoration: none; }
+  .mat-answer-neighbours a:hover { border-color: var(--site-accent); }
+  .mat-answer-faq { margin: 0 0 1rem; }
+</style>

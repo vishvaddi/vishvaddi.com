@@ -1,0 +1,19 @@
+---
+import Base from "../../../../layouts/Base.astro";
+import MaterialsAnswer from "../../../../components/MaterialsAnswer.astro";
+import { PLASTERBOARD_PAGES } from "../../../../data/materials-answers";
+import "../../../../styles/site.css";
+
+export async function getStaticPaths() {
+  return PLASTERBOARD_PAGES.map((page) => ({
+    params: { slug: page.slug },
+    props: { page },
+  }));
+}
+
+const { page } = Astro.props;
+---
+
+<Base title={page.metaTitle} description={page.metaDescription} siteNav>
+  <MaterialsAnswer page={page} familyHref="/site/materials/plasterboard" familyLabel="Plasterboard sheets" />
+</Base>
