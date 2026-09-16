@@ -44,6 +44,8 @@ const browser = await chromium.launch({
   args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'],
 })
 const ctx = await browser.newContext({ acceptDownloads: true, viewport: { width: 1400, height: 950 } })
+// The static dist server has no Worker; the funnel counter's POST would 404 into the console check.
+await ctx.route('**/api/metric', (route) => route.fulfill({ status: 204 }))
 const page = await ctx.newPage()
 
 const consoleErrors = []

@@ -15,12 +15,11 @@ Body (≤180 words):
 > aggregator my transaction history. It's at vishvaddi.com/money — budget,
 > transactions, net worth, debts and simple projections. Everything is typed
 > or CSV-imported by you; nothing is uploaded, there's no account, and it
-> works offline once loaded. AUD by default, built for how Australian pay
-> cycles and debts actually work (HECS, super, etc.), not a US template with
-> the currency swapped.
+> works offline once loaded. AUD by default, with super projections and
+> Australian bank CSV imports, not a US template with the currency swapped.
 >
 > It's free with no functional limit on the core tracker. There's an optional
-> paid tier in progress (live prices, FIRE dashboard, property, CGT) for
+> paid tier (live prices, FIRE dashboard, property) for
 > people who want more than the free set — happy to take the flak if that
 > feels tacked-on, genuinely just trying to fund the hosting and my time.
 >

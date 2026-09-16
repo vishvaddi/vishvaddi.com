@@ -667,3 +667,12 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 ## 2026-09-15 - /pro: Money Pro paragraph removed
 
 - Vish: "remove the paragraph about money pro in the pro section". The paragraph also claimed Money Pro hadn't landed (it had). Section is now "Updates" with the same email form ("Keep me posted", waitlist source `updates`). pro 22/22, seo 146/146.
+
+
+## 2026-09-16 - Pre-live hygiene: dependency advisories, legal copy, harness stubs
+
+- Vish: "fix what needs to be fixed and lets go live". `npm audit fix` (no `--force`, lockfile only) cleared all 5 production advisories (astro critical RCE/auth-bypass, sharp, svgo, smol-toml, js-yaml — all build-time) → 0 vulnerabilities.
+- `/privacy` now matches what ships: Pro sync stores synced tool data on Cloudflare against the licence hash (off by default); free-export allowance (signed anon cookie + one-way IP hash, 30-day reset); updates-form email storage; aggregate funnel counts; the stale AdSense paragraph replaced with "no ads". `/terms` says free users get one Pro export per 30 days instead of "free and unlimited".
+- `docs/MARKETING_DRAFTS.md` r/AusFinance draft: removed the HECS claim (not built) and CGT from the paid list (wave 2 parked); super projections kept (built).
+- Harness fix: `audio-tools-e2e` and `studio-e2e` failed their console check on 404s from `POST /api/metric` (the 15/09 funnel counter) against the static dist server — gap since 15/09, not a product bug. Both now stub the route with 204, same as `pro-e2e`.
+- Gate: release-gate 3/3, auth 13/13, unit 75/75, `astro check` 0 errors, build, feature/life/money/kitchen/pro/seo green in the release run; audio 72/72 and studio 102/102 re-run after the stub.

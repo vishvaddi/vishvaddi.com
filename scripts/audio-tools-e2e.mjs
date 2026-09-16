@@ -66,6 +66,8 @@ function makeCentreWav(rate = 44100, seconds = 6) {
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] })
 const ctx = await browser.newContext({ viewport: { width: 1400, height: 950 } })
+// The static dist server has no Worker; the funnel counter's POST would 404 into the console check.
+await ctx.route('**/api/metric', (route) => route.fulfill({ status: 204 }))
 const page = await ctx.newPage()
 const consoleErrors = []
 const NOISE = /sw\.js|cloudflareinsights|ERR_FAILED|Outdated Optimize Dep/
