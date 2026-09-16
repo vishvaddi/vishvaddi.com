@@ -1,0 +1,12 @@
+---
+import Base from "../../../../layouts/Base.astro";
+import MaterialsAnswerIndex from "../../../../components/MaterialsAnswerIndex.astro";
+import { FAMILY_INDEXES } from "../../../../data/materials-answers";
+import "../../../../styles/site.css";
+
+const index = FAMILY_INDEXES.find((i) => i.family === "tiles")!;
+---
+
+<Base title={index.metaTitle} description={index.metaDescription} siteNav>
+  <MaterialsAnswerIndex index={index} />
+</Base>

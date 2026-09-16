@@ -1,0 +1,35 @@
+---
+// Shared render for a /site/materials/<family> index page — the crawlable
+// list of that family's worked-answer pages (see MaterialsAnswer.astro for
+// the individual pages, and src/data/materials-answers.ts for the data).
+import type { FamilyIndex } from "../data/materials-answers";
+
+interface Props {
+  index: FamilyIndex;
+}
+
+const { index } = Astro.props;
+---
+
+<div class="blueprint tool mat-answer-index">
+  <p class="eyebrow">
+    <a href="/site" style="color:inherit;text-decoration:none">Site</a> /
+    <a href="/site/materials" style="color:inherit;text-decoration:none">Materials</a> / {index.title}
+  </p>
+  <h1>{index.title}</h1>
+  <p>{index.intro}</p>
+
+  <ul class="mat-index-grid">
+    {index.pages.map((p) => (
+      <li><a href={p.href}>{p.label}</a></li>
+    ))}
+  </ul>
+
+  <p class="note-foot">Need a size that isn't listed? <a href="/site/materials">Use the calculator directly</a> — it takes any dimensions. <a href="/site">← all tools</a></p>
+</div>
+
+<style>
+  .mat-index-grid { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.5rem; margin: 1.25rem 0; padding: 0; }
+  .mat-index-grid a { display: flex; min-height: 44px; align-items: center; padding: 0.5rem 0.8rem; border: 1px solid var(--site-line-strong); border-radius: 8px; color: var(--fg); font-size: 0.88rem; text-decoration: none; }
+  .mat-index-grid a:hover { border-color: var(--site-accent); }
+</style>

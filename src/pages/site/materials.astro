@@ -24,18 +24,36 @@ import "../../styles/site.css";
       <button type="button" class="btn" id="print">Save as PDF</button>
       <button type="button" class="btn btn-ghost" id="email">Email to myself</button>
     </div>
+
+    <section class="mat-jobs no-print">
+      <h2>Common jobs</h2>
+      <p>Worked answers for specific room and slab sizes, using the same figures as the calculator above.</p>
+      <ul class="mat-jobs-list">
+        <li><a href="/site/materials/plasterboard/">Plasterboard sheets by room size</a></li>
+        <li><a href="/site/materials/paint/">Paint quantity by room size</a></li>
+        <li><a href="/site/materials/tiles/">Tile count by area and tile size</a></li>
+        <li><a href="/site/materials/concrete/">Concrete volume by slab size</a></li>
+      </ul>
+    </section>
+
     <p class="note-foot">Estimates only — allow for laps, cuts and site conditions. <a href="/site">← all tools</a></p>
   </div>
 
   <script>
     import { mountCalcs, wireActions, type CalcSpec } from "../../scripts/site/calc";
+    import {
+      up, pct,
+      paintNetArea, paintLitres,
+      sheetArea, sheetCount,
+      tileArea, tileCount,
+      concreteVolume, concreteBags,
+      type PaintInput, type SheetInput, type TileInput, type ConcreteInput,
+    } from "../../data/materials-calc";
 
     const f2 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 2 });
     const f1 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 1 });
     const f0 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 0 });
-    const up = (n: number) => Math.max(0, Math.ceil(n));
 
-    const pct = (waste: number) => 1 + (waste || 0) / 100;
     const groups: { trade: string; specs: CalcSpec[] }[] = [
       {
         trade: "Painting & coatings",
@@ -50,9 +68,9 @@ import "../../styles/site.css";
               { id: "cov", label: "Coverage (m²/L)", def: "11", min: "0.1", step: "0.5" },
             ],
             compute: (v) => {
-              const net = Math.max(0, v.area - v.openings);
-              if (v.cov <= 0) return null;
-              return { rows: [[f2((net * v.coats) / v.cov) + " L", "paint needed"], [f0(net) + " m²", "net area × " + (v.coats || 0) + " coats"]] };
+              const litres = paintLitres(v as unknown as PaintInput);
+              if (litres === null) return null;
+              return { rows: [[f2(litres) + " L", "paint needed"], [f0(paintNetArea(v as unknown as PaintInput)) + " m²", "net area × " + (v.coats || 0) + " coats"]] };
             },
           },
           {
@@ -80,9 +98,9 @@ import "../../styles/site.css";
               { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
             ],
             compute: (v) => {
-              const tileArea = (v.w / 1000) * (v.h / 1000);
-              if (tileArea <= 0 || v.area <= 0) return null;
-              return { rows: [[f0(up((v.area * pct(v.waste)) / tileArea)), "tiles (incl. wastage)"], [f2(1 / tileArea), "tiles / m²"]] };
+              const count = tileCount(v as unknown as TileInput);
+              if (count === null) return null;
+              return { rows: [[f0(count), "tiles (incl. wastage)"], [f2(1 / tileArea(v as unknown as TileInput)), "tiles / m²"]] };
             },
           },
           {
@@ -198,9 +216,9 @@ import "../../styles/site.css";
               { id: "waste", label: "Wastage (%)", def: "10", min: "0", step: "1" },
             ],
             compute: (v) => {
-              const sheetArea = (v.w / 1000) * (v.h / 1000);
-              if (sheetArea <= 0 || v.area <= 0) return null;
-              return { rows: [[f0(up((v.area * pct(v.waste)) / sheetArea)), "sheets"], [f2(sheetArea) + " m²", "per sheet"]] };
+              const count = sheetCount(v as unknown as SheetInput);
+              if (count === null) return null;
+              return { rows: [[f0(count), "sheets"], [f2(sheetArea(v as unknown as SheetInput)) + " m²", "per sheet"]] };
             },
           },
           {
@@ -279,10 +297,10 @@ import "../../styles/site.css";
               { id: "waste", label: "Wastage (%)", def: "5", min: "0", step: "1" },
             ],
             compute: (v) => {
-              const vol = v.l * v.w * (v.d / 1000) * pct(v.waste);
-              if (vol <= 0) return null;
+              const vol = concreteVolume(v as unknown as ConcreteInput);
+              if (vol === null) return null;
               return {
-                rows: [[f2(vol) + " m³", "concrete"], [f0(up(vol / 0.0108)), "× 20 kg bags"]],
+                rows: [[f2(vol) + " m³", "concrete"], [f0(concreteBags(vol)), "× 20 kg bags"]],
                 warn: vol > 1.5 ? "Over ~1.5 m³ — pre-mixed delivery is usually cheaper than bags." : undefined,
               };
             },
@@ -652,6 +670,24 @@ import "../../styles/site.css";
     const idx = groups.findIndex((g) => slug(g.trade) === want);
     if (idx > 0) buttons[idx].click();
 
+    // The /site/materials/<family> answer pages link back here with
+    // ?calc=<spec id>&<field id>=<value>&... so "change the numbers" lands
+    // pre-filled instead of dumping visitors back on the generic defaults.
+    const params = new URLSearchParams(location.search);
+    const wantCalc = params.get("calc");
+    if (wantCalc) {
+      const groupIdx = groups.findIndex((g) => g.specs.some((s) => s.id === wantCalc));
+      if (groupIdx >= 0) {
+        if (groupIdx !== 0) buttons[groupIdx].click();
+        for (const [key, value] of params) {
+          if (key === "calc") continue;
+          const input = document.getElementById(`${wantCalc}-${key}`) as HTMLInputElement | null;
+          if (input) { input.value = value; input.dispatchEvent(new Event("input", { bubbles: true })); }
+        }
+        document.getElementById(wantCalc)?.scrollIntoView({ block: "start" });
+      }
+    }
+
     wireActions(root, "Material calculators");
   </script>
 
@@ -671,5 +707,11 @@ import "../../styles/site.css";
       .mat-tab { border: 1px solid var(--rule); border-radius: 999px; padding: 0.45rem 1rem; text-align: center; }
       .mat-tab.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
     }
+    .mat-jobs { margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--site-line-strong); }
+    .mat-jobs h2 { font-size: 1rem; margin: 0 0 0.3rem; }
+    .mat-jobs p { color: var(--muted); font-size: 0.88rem; margin: 0 0 0.6rem; }
+    .mat-jobs-list { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; margin: 0; padding: 0; }
+    .mat-jobs-list a { display: inline-flex; min-height: 40px; align-items: center; padding: 0.4rem 0.8rem; border: 1px solid var(--site-line-strong); border-radius: 999px; color: var(--fg); font-size: 0.85rem; text-decoration: none; }
+    .mat-jobs-list a:hover { border-color: var(--site-accent); }
   </style>
 </Base>

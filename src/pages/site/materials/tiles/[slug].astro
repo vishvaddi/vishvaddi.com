@@ -1,0 +1,19 @@
+---
+import Base from "../../../../layouts/Base.astro";
+import MaterialsAnswer from "../../../../components/MaterialsAnswer.astro";
+import { TILE_PAGES } from "../../../../data/materials-answers";
+import "../../../../styles/site.css";
+
+export async function getStaticPaths() {
+  return TILE_PAGES.map((page) => ({
+    params: { slug: page.slug },
+    props: { page },
+  }));
+}
+
+const { page } = Astro.props;
+---
+
+<Base title={page.metaTitle} description={page.metaDescription} siteNav>
+  <MaterialsAnswer page={page} familyHref="/site/materials/tiles" familyLabel="Tile count" />
+</Base>
