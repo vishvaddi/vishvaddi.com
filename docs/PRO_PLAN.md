@@ -122,3 +122,48 @@ Vish: "5 dollars a week and 20 a month and 100 a year, with all features free an
 **Sync stays Pro.** Synced data is keyed by the licence hash, so there's no identity for a free visitor. The checkbox now calls `showProOnly()`, which shows the upsell without calling `/api/pro/use`. Before this change it went through `requirePro`, which spent the free export and did nothing.
 
 **Tests:** `pro-api.test.mjs` covers weekly checkout (price + metadata), unconfigured-without-week → 503, and weekly `/pay/success` → plan `week` + "weekly" copy. `market-proxy.test.mjs` covers anonymous 200. `money-e2e.mjs` checks that FIRE and property work for a public visitor, that sync shows a panel with three plans, and that free features make zero `/api/pro/use` calls.
+
+## Addendum 2026-09-16 (later) — adoption first: free exports with a footer, Pro = your brand; 7-day pass
+
+Vish: "i actually want people to use it first not get scared away" → plan accepted "all that, except google ads". **This supersedes the free-export allowance** (the 1-per-30-days quota and the "1 export ever" idea are both dropped).
+
+### Free vs Pro
+
+| Kind | Features | Free | Pro |
+|---|---|---|---|
+| Client-facing documents | print/PDF: `charge-rate-print`, `cut-list-save-pdf`, `sheet-save-pdf`, `programme-print`; pdf-lib: `pdf-export`, `pdf-compare-export`; canvas: `programme-png` | **Unlimited, with a footer**: `Made free at vishvaddi.com` | Clean, with **your brand** (business name, optional ABN/contact line, optional logo) |
+| Data exports | CSV/JSON/project files: `cut-list-export-*`, `sheet-save-project`, `sheet-export-csv`, `programme-csv`, `programme-json`, `csv-export` (Money), `records-*-export`, `rate-export`, `lattice-export` | Unlimited, unchanged, no footer | same |
+| Pro-only | `sync`, `studio-mp3-export`, `studio-stem-export`, `lofi-mp3-format`, `audio-prep-batch-download` | Upsell panel (no quota, no `/api/pro/use`) | Works |
+
+Every tool and feature stays free (Addendum 2026-09-16 still holds for FIRE, property and live prices). WAV export stays free.
+
+### Page side (`src/scripts/site/export-brand.ts`, new; `pro.ts`)
+
+- `requirePro(feature, run, anchor)`: Pro/owner → `run()`. Otherwise show the upsell panel and **never call `/api/pro/use`**. `showFreeUseNote`, the quota headings and `freeLimit` copy are removed.
+- `brandedExport(feature, run)` for the seven client-facing features. It always runs `run()` for everyone and, before running, applies the stamp. Pro/owner with a saved brand gets the brand; Pro with no brand gets no footer; free gets the vishvaddi footer. It fires `track("export_free")` for free visitors and `track("export_pro")` for Pro.
+  - **print:** inject one `.vv-export-brand` element that shows only under `@media print` (fixed footer for the vishvaddi line; header block for the brand), removed on `afterprint`. Styles in `site.css`, CSS vars only.
+  - **pdf-lib:** `stampPdf(doc)` draws the footer (or brand header) on every page, small, 60 % grey, bottom-left margin, without covering content (shrink-to-fit is out of scope; a 14 pt strip at the page edge is enough).
+  - **canvas:** `stampCanvas(canvas)` returns a new canvas with a 28 px band added below the image.
+- Brand store: `localStorage["vv_brand"] = { name, line, logo }`. `logo` is a PNG/JPEG data URL, ≤ 200 KB after downscaling to ≤ 400 px wide. Editing lives on `/pro` under "Your brand" for **everyone**, with a live preview: free visitors see "Applies to your exports with Pro" and the footer version; Pro sees exactly what exports get. It never leaves the browser.
+- After a free client-facing export, one dismissible line under the button: "Exported with the free footer — Pro puts your business name on it instead." (at most once per page view).
+- `public/scripts/chrome.js` nudge copy: "Pro is A$100 a year — your business name on every export, plus sync."
+
+### 7-day pass (replaces the weekly subscription)
+
+- Plans: `year` (A$100/yr sub), `month` (A$20/mo sub), `pass` (A$5 one-off, 7 days, **does not renew**). `week` is removed everywhere. Var `STRIPE_PRICE_PASS` replaces `STRIPE_PRICE_WEEK`; `configured()` needs year + month + pass.
+- Checkout for `pass`: `mode=payment`, `customer_creation=always`, `metadata[plan]=pass`; subscriptions keep `mode=subscription`.
+- Licence row for a pass: `stripe_subscription = "pass_" + checkout session id` (keeps `NOT NULL UNIQUE`), `plan = 'pass'`, `status = 'active'`, `current_period_end = paid time (unix s) + 7 × 86400`. Created by whichever of `/pay/success` or `checkout.session.completed` gets there first (**assume the webhook wins**, 15/09 lesson); licence key in the customer's metadata as for subs.
+- Expiry: `activeLicenceHash`, `resolvePro` and `/api/pro/restore` treat a `pass` whose `current_period_end` is in the past as inactive. The `__Host-pro` cookie lifetime for a pass is capped at the pass expiry.
+- Success copy: "Your 7-day Pro pass is active until <date, en-AU>." Status payload includes `plan: "pass"` and `periodEnd`.
+- `/pro` buttons: "Pro — A$100 / year", "A$20 / month", "7-day pass — A$5". Terms: the pass is one-off, lasts 7 days, doesn't renew; the 14-day refund applies to it.
+
+### Worker clean-up
+
+- `POST /api/pro/use` and the quota code are removed; `freeRemaining`/`freeLimit` are dropped from the status payload; `FREE_USES` is removed from `wrangler.jsonc`. The D1 `free_uses` table is left in place (no destructive migration). `__Host-anon` is no longer set.
+- `/api/metric` whitelist gains `export_free`, `export_pro` and `brand_saved`.
+- `/privacy`: remove the free-export-allowance section; add "Your brand (name, line, logo) is stored only in your browser."
+
+### Tests
+
+- `pro-api.test.mjs`: pass checkout (payment mode, `customer_creation`, metadata); pass via webhook-first then success page (key shown once); pass expiry → status `pro:false`, restore 401, `/api/store` 401; `/api/pro/use` → 404; status has no `freeLimit`; new metric events accepted.
+- `pro-e2e.mjs`: free visitor prints a Cut List → footer element present in print media and removed after; PDF Toolkit export for a free visitor → the saved PDF text contains `vishvaddi.com` (via pdf-lib parsing); a Pro stub with a saved brand → brand text present, footer absent; `/pro` brand editor saves to localStorage and previews; three plan buttons; Pro-only features show the panel and make zero `/api/pro/use` calls.
