@@ -802,3 +802,17 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
   - Public: `/`, `/site/`, Cut List, `/pro/`, `/audio/`, `/studio/`, `/music/` and a materials family page all 200.
   - The sitemap has no Life URLs; the three homepage cards are `data-private`; pass checkout still returns a Stripe URL.
 - The deploy worktree folder `C:\Users\vishv\tmp\vishvaddi-deploy-abc0c49` was locked on removal (Windows file handle); git's worktree record is pruned and the folder can be deleted later.
+
+
+## 2026-09-16 - LIVE MODE: Stripe live prices + webhook, deployed (`74110d4` → version `eea42b2f`)
+
+- Vish finished Stripe live onboarding: category Software, descriptor `VISHVADDI.COM PRO`, standard Radar, Stripe Tax and Climate skipped (GST registration isn't required under A$75k; get an accountant's view before overseas sales grow).
+- Claude in his Chrome (live account acct …1kI9jn067R):
+  - The copied product has 5 prices. **Archived** the retired A$39/yr `price_1UGI0h1kI9jn067RvM0FqzkJ` and A$5/mo `price_1UGI0h1kI9jn067Rh6WytZHV`.
+  - **Active live prices:** A$100/yr `price_1UGI0g1kI9jn067RBeTsI9Xq`, A$20/mo `price_1UGI0f1kI9jn067RZva0A7pl`, A$5 pass `price_1UGI0e1kI9jn067R5GkiwilY`.
+  - Created webhook `vishvaddi-pro-live` (`we_1UGI9O1kI9jn067RbywVNq2d`): `https://vishvaddi.com/api/pro/webhook`, API `2026-08-26.dahlia`, events `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`. The signing secret wasn't revealed to Claude.
+- Vish set both live secrets with `wrangler secret put` (two "Secret Change" deployments 12:43Z/12:45Z). Claude deployed `74110d4` from a clean worktree → `eea42b2f-1da5-40f8-9ef5-5dc9128a6a25`.
+- Live checks: `/api/pro/status` configured; checkout returns **`cs_live`** sessions for year/month/pass; unsigned webhook POST 400; `/`, `/site/`, `/pro/` 200.
+- **Owed:**
+  - (a) Retire the 4 sandbox licences in D1 (all created before 12:33Z): Claude's bulk UPDATE was blocked by the auto-mode classifier, so Vish runs it.
+  - (b) One real A$5 pass purchase on his card → key + webhook check → refund from the dashboard.
