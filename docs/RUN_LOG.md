@@ -816,3 +816,4 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - **Owed:**
   - (a) Retire the 4 sandbox licences in D1 (all created before 12:33Z): Claude's bulk UPDATE was blocked by the auto-mode classifier, so Vish runs it.
   - (b) One real A$5 pass purchase on his card → key + webhook check → refund from the dashboard.
+- Sandbox licences retired 16/09 late night (Vish: "ok do that"): 4 rows (year ×2, month, pass) set to cancelled; restoring an old test key on production now returns 401.
