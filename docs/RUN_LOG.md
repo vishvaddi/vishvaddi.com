@@ -760,3 +760,14 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - **Brand removed:** Pro exports are simply clean. Brand store/editor/logo code, brand CSS and brand copy are deleted (`/pro`, nudge, export hint, terms, privacy, 6 tool FAQ answers).
 - **Updates form removed** (0 signups in D1). `/privacy` keeps only the usage-counts paragraph.
 - Tests: pro-e2e rewritten for the brand sections (45: Pro print/PDF have no footer, no hint, sign-out calls logout); seo-e2e asserts the updates form is gone (145); release gate + unit 82, check 0; feature/life/money/kitchen green; materials 92, audio 72, studio 102.
+
+
+## 2026-09-16 - DEPLOYED brand/updates removal + Pro sign-out (`ac09e2a` → version `27c59ce2`)
+
+- Vish: "deploy". Built from a clean detached worktree of pushed `ac09e2a`; version `27c59ce2-67dc-47c3-8af4-03c48d1d79d9`.
+- Live checks:
+  - 8 routes 200.
+  - Brand/updates copy absent on `/pro`, `/terms` and `/privacy`; `/pro` says exports are "without the vishvaddi.com footer".
+  - Status configured.
+  - Sandbox checkout sessions created for year/month/pass.
+  - `pro-e2e` against production 45/45.
