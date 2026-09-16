@@ -75,5 +75,9 @@ const jsonLd = {
   .tool-faq-item { border-top: 1px solid var(--site-line); padding: 0.5rem 0 0.1rem; }
   .tool-faq-item summary { min-height: 40px; display: flex; align-items: center; cursor: pointer; font-size: 0.88rem; font-weight: 500; }
   .tool-faq-item p { margin: 0.3rem 0 0.6rem; color: var(--muted); font-size: 0.88rem; }
-  @media print { .tool-intro-more { display: none; } }
+  /* On a phone the tool should be on the first screen; the full intro stays in the DOM for crawlers. */
+  @media (max-width: 640px) {
+    .tool-intro-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: 0.9rem; }
+  }
+  @media print { .tool-intro-text, .tool-intro-more { display: none; } }
 </style>

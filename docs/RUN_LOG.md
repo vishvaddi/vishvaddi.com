@@ -730,3 +730,11 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Blast radius: every page gets a registered SW. It never intercepts non-navigation requests and never caches pages, so no stale or owner content can be served.
 - `chrome.js` sets `sessionStorage.vv_twa` when the referrer is `android-app://com.vishvaddi.sitetools`; `pro.ts` `planChoices()` then shows "Pro is available at vishvaddi.com" instead of checkout buttons (Google Play payments policy). Restore stays available.
 - Tests: auth SW test rewritten (install caches the offline page only, activate retires old caches + stale offline cache and claims, navigation falls back offline, assets untouched, chrome.js registers /sw.js); pro-e2e checks the Play app state. Full `release:check` exit 0 (unit 82).
+
+
+## 2026-09-16 - Phone pass: tool intro no longer pushes tools below the fold
+
+- Phone screenshots (360×640 @3x) of /site, a plasterboard answer, the tiles preset, Cut List, Programme and /pro: no horizontal overflow; the answers' numbers check out (4×5 m @ 2.4 m → 17 sheets; 20 m² of 300×600 tiles at 10 % → 123).
+- Found: on a phone the 15/09 SEO intro filled the first screen above each tool, working against the adoption-first goal. `ToolIntro.astro` now clamps the intro to two lines under 640 px (full text stays in the DOM for crawlers) and hides it in print, so exported PDFs don't open with marketing copy.
+- Play Store screenshots (1080×1920, 9:16) saved outside the repo at `C:\Users\vishv\Projects\vishvaddi-play-assets\`.
+- Tests: seo 146, feature 18, site-tools-responsive 149 (run against a served dist).
