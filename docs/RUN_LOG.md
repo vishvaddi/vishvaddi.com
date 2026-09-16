@@ -792,3 +792,13 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - The owner still reaches everything. Tool code, tests and D1 data are untouched.
 - Gate: full `release:check` exit 0 (auth 14 incl. a new hidden-sections test; unit 82; check 0; all e2e).
 - Owed: the r/AusFinance Money draft in `docs/MARKETING_DRAFTS.md` is moot while Money is hidden (Reddit isn't planned anyway).
+
+
+## 2026-09-16 - DEPLOYED Life hiding (`abc0c49` → version `1a994181`)
+
+- Vish: "deploy". Built from a clean detached worktree of pushed `abc0c49`; version `1a994181-abb2-4742-b0ce-e1bb271ddf7c`.
+- Live checks:
+  - Hidden: `/money/`, `/kitchen/`, `/kitchen/plan/`, `/training/`, `/api/market`, `/api/recipe` and the variants `/%6Doney/`, `//money`, `/Money`, `/money.html` all 404 with `X-Robots-Tag: noindex` and the site's "Not found" page.
+  - Public: `/`, `/site/`, Cut List, `/pro/`, `/audio/`, `/studio/`, `/music/` and a materials family page all 200.
+  - The sitemap has no Life URLs; the three homepage cards are `data-private`; pass checkout still returns a Stripe URL.
+- The deploy worktree folder `C:\Users\vishv\tmp\vishvaddi-deploy-abc0c49` was locked on removal (Windows file handle); git's worktree record is pruned and the folder can be deleted later.
