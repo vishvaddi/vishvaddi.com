@@ -771,3 +771,14 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
   - Status configured.
   - Sandbox checkout sessions created for year/month/pass.
   - `pro-e2e` against production 45/45.
+
+
+## 2026-09-16 - Sandbox purchases verified on all three plans (version `27c59ce2`)
+
+- Vish bought yearly, monthly and the 7-day pass with the test card. D1 `pro_licences` has three new rows, all `active` with `key_shown_at` set:
+  - **year:** period end 16/09/2027, read from subscription items under the pinned API version.
+  - **month:** period end 16/10/2026.
+  - **pass:** `pass_` ref, ends session.created + 7 d (23/09/2026 ~22:05 AEST).
+- Three `pro_events` rows, each ~1 s after its licence was created. Webhook signature, secret and pinned version all work in sandbox; the webhook minted the keys and the success page showed them from customer metadata (the 15/09 race design working).
+- Funnel counters for the day: `checkout_click` 3, `pay_success` 3 (once each, no double count).
+- He didn't copy the yearly key; it's recoverable from the Stripe customer metadata, and it's sandbox anyway.
