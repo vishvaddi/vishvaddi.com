@@ -676,3 +676,13 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - `docs/MARKETING_DRAFTS.md` r/AusFinance draft: removed the HECS claim (not built) and CGT from the paid list (wave 2 parked); super projections kept (built).
 - Harness fix: `audio-tools-e2e` and `studio-e2e` failed their console check on 404s from `POST /api/metric` (the 15/09 funnel counter) against the static dist server — gap since 15/09, not a product bug. Both now stub the route with 204, same as `pro-e2e`.
 - Gate: release-gate 3/3, auth 13/13, unit 75/75, `astro check` 0 errors, build, feature/life/money/kitchen/pro/seo green in the release run; audio 72/72 and studio 102/102 re-run after the stub.
+
+
+## 2026-09-16 - Pricing A$100/yr · A$20/mo · A$5/wk; every feature free, exports metered (NOT deployed)
+
+- Vish: "5 dollars a week and 20 a month and 100 a year, with all features free and 1 free export". Contract: `docs/PRO_PLAN.md` Addendum 2026-09-16.
+- Worker: `Plan` gains `week`, `STRIPE_PRICE_WEEK` added, `configured()` needs all three prices, `planForPrice()` replaces the year/month ternaries (success page, subscription update). `/api/market` is public, behind the existing per-IP `/api` limiter.
+- Client: `PLAN_BUTTONS` holds the three labels in one place. Money's FIRE tab, property add and live-price refresh are no longer gated. Sync stays Pro (it's keyed to the licence) via the new `showProOnly()`, which no longer spends the free export — before this, ticking sync used it up and did nothing.
+- Copy: `/pro`, `/money`, `/terms`, the chrome.js nudge (A$100 a year) and the r/AusFinance draft.
+- `wrangler.jsonc` price ids are **blank** until the A$100/yr, A$20/mo and A$5/wk Stripe prices exist, so a deploy shows "Not open yet" rather than charging the retired A$39/A$5 prices.
+- Gate: release-gate 3, auth 13, unit 74 (market 7, pro-api 16 incl. the weekly tests), `astro check` 0, Worker tsc 0, feature/life/money/kitchen green, pro 22/22, seo 146/146, audio 72/72, studio 102/102.

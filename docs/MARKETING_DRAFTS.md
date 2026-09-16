@@ -18,8 +18,8 @@ Body (≤180 words):
 > works offline once loaded. AUD by default, with super projections and
 > Australian bank CSV imports, not a US template with the currency swapped.
 >
-> It's free with no functional limit on the core tracker. There's an optional
-> paid tier (live prices, FIRE dashboard, property) for
+> Every feature is free, including live prices, the FIRE dashboard and
+> property. There's an optional paid tier (unlimited exports, sync) for
 > people who want more than the free set — happy to take the flak if that
 > feels tacked-on, genuinely just trying to fund the hosting and my time.
 >

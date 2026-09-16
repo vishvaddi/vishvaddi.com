@@ -165,6 +165,7 @@ const CONFIGURED = {
   STRIPE_WEBHOOK_SECRET: 'whsec_test_123',
   STRIPE_PRICE_YEAR: 'price_year_1',
   STRIPE_PRICE_MONTH: 'price_month_1',
+  STRIPE_PRICE_WEEK: 'price_week_1',
 }
 
 const request = (path, options = {}) => new Request(`https://example.com${path}`, options)
@@ -246,7 +247,9 @@ test('checkout: 503 unconfigured, 400 bad plan, 403 bad origin, 200 with a sessi
   assert.equal((await worker.fetch(jsonPost('/api/pro/checkout', { plan: 'year' }), env)).status, 503)
 
   const configuredEnv = { ...env, ...CONFIGURED }
-  assert.equal((await worker.fetch(jsonPost('/api/pro/checkout', { plan: 'week' }), configuredEnv)).status, 400)
+  assert.equal((await worker.fetch(jsonPost('/api/pro/checkout', { plan: 'decade' }), configuredEnv)).status, 400)
+  // A missing weekly price leaves the whole paywall unconfigured rather than half-open.
+  assert.equal((await worker.fetch(jsonPost('/api/pro/checkout', { plan: 'year' }), { ...configuredEnv, STRIPE_PRICE_WEEK: '' })).status, 503)
   assert.equal((await worker.fetch(jsonPost('/api/pro/checkout', { plan: 'year' }, { Origin: 'https://evil.example' }), configuredEnv)).status, 403)
 
   const originalFetch = globalThis.fetch
@@ -262,6 +265,35 @@ test('checkout: 503 unconfigured, 400 bad plan, 403 bad origin, 200 with a sessi
     assert.equal(capturedUrl, 'https://api.stripe.com/v1/checkout/sessions')
     assert.match(capturedBody, /line_items%5B0%5D%5Bprice%5D=price_year_1/)
     assert.match(capturedBody, /success_url=.*pay%2Fsuccess/)
+
+    const week = await worker.fetch(jsonPost('/api/pro/checkout', { plan: 'week' }), configuredEnv)
+    assert.equal(week.status, 200)
+    assert.match(capturedBody, /line_items%5B0%5D%5Bprice%5D=price_week_1/)
+    assert.match(capturedBody, /metadata%5Bplan%5D=week/)
+  } finally { globalThis.fetch = originalFetch }
+})
+
+test('/pay/success on a weekly price records plan "week" and says weekly', async () => {
+  const { env, db } = setup()
+  const configuredEnv = { ...env, ...CONFIGURED }
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (url) => {
+    const href = String(url)
+    if (href.startsWith('https://api.stripe.com/v1/checkout/sessions/cs_test_week')) {
+      return new Response(JSON.stringify({
+        payment_status: 'paid',
+        customer: { id: 'cus_week', email: 'week@example.com' },
+        subscription: { id: 'sub_week', status: 'active', current_period_end: 1999999999, items: { data: [{ price: { id: CONFIGURED.STRIPE_PRICE_WEEK } }] } },
+      }), { status: 200 })
+    }
+    if (href.startsWith('https://api.stripe.com/v1/customers/cus_week')) return new Response(JSON.stringify({ id: 'cus_week' }), { status: 200 })
+    throw new Error(`unexpected fetch: ${href}`)
+  }
+  try {
+    const res = await worker.fetch(request('/pay/success?session_id=cs_test_week'), configuredEnv)
+    assert.match(await res.text(), /weekly Pro subscription/)
+    const row = [...db.licences.values()].find((r) => r.stripe_subscription === 'sub_week')
+    assert.equal(row?.plan, 'week')
   } finally { globalThis.fetch = originalFetch }
 })
 

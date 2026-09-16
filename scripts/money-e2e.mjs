@@ -25,7 +25,7 @@ try {
   await page.route('**/api/pro/use', (route) => route.fulfill({ status: 402, contentType: 'application/json', body: '{"allowed":false}' }))
 
   await page.goto(`${BASE}/money/`, { waitUntil: 'domcontentloaded' })
-  check('Money: /money/ has no noindex meta (public + Pro-gated)', await page.locator('meta[name="robots"]').count() === 0)
+  check('Money: /money/ has no noindex meta (public)', await page.locator('meta[name="robots"]').count() === 0)
   await page.waitForSelector('#money-tabs .money-tab')
   check('Money: eleven section tabs render', await page.locator('#money-tabs .money-tab').count() === 11)
   check('Money: no horizontal body scroll at 390px', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1))
@@ -98,28 +98,12 @@ try {
   await page.locator('[data-tab="overview"]').click()
   check('Overview: renders debt-free and net worth stats', (await page.locator('[data-panel="overview"] .stat').count()) >= 8)
 
-  // ── Pro gating for a public visitor (stubbed /api/pro/status + /api/pro/use above) ──
+  // ── Every feature free for a public visitor (Addendum 4); /api/pro/use stubbed to 402 above ──
+  let useCalls = 0
+  page.on('request', (req) => { if (req.url().includes('/api/pro/use')) useCalls++ })
   await page.locator('[data-tab="fire"]').click()
-  // requirePro asks /api/pro/use before it renders the panel.
-  await page.waitForSelector('.pro-upsell[data-feature="fire"]', { timeout: 5000 }).catch(() => {})
-  check('FIRE: tab click shows the upsell panel for a public visitor', await page.locator('.pro-upsell[data-feature="fire"]').count() === 1)
-  check('FIRE: panel itself stays hidden (gate is on opening the tab)', await page.locator('[data-panel="fire"]').isHidden())
+  check('FIRE: public visitor opens the tab straight through', await page.locator('[data-panel="fire"]').isVisible() && await page.locator('.pro-upsell').count() === 0)
 
-  await page.locator('[data-tab="property"]').click()
-  check('Property: viewing the tab stays open for a public visitor', await page.locator('[data-panel="property"]').isVisible())
-  await page.locator('#mpr-name').fill('Investment unit')
-  await page.locator('#mpr-price').fill('500000')
-  await page.locator('#mpr-value').fill('800000')
-  await page.locator('#mpr-add').click()
-  await page.waitForSelector('.pro-upsell[data-feature="property"]', { timeout: 5000 }).catch(() => {})
-  check('Property: adding shows the upsell panel for a public visitor', await page.locator('.pro-upsell[data-feature="property"]').count() === 1)
-  check('Property: no property was added for a public visitor', await page.locator('.mp-row').count() === 0)
-
-  // ── Owner: always Pro ──
-  await page.unroute('**/api/pro/status')
-  await stubStatus({ pro: true, source: 'owner', configured: true })
-  await page.evaluate(() => { document.cookie = 'vv_owner=1; path=/' })
-  await page.reload({ waitUntil: 'domcontentloaded' })
   await page.locator('[data-tab="property"]').click()
   await page.locator('#mpr-name').fill('Investment unit')
   await page.locator('#mpr-price').fill('500000')
@@ -128,8 +112,24 @@ try {
   await page.locator('#mpr-valued-at').fill('2026-09-14')
   await page.locator('#mpr-add').click()
   const propertyRow = page.locator('.mp-row')
-  check('Property: owner can add a property and see LVR', await propertyRow.count() === 1 && (await propertyRow.first().innerText()).includes('LVR'))
+  check('Property: public visitor can add a property and see LVR', await propertyRow.count() === 1 && (await propertyRow.first().innerText()).includes('LVR'))
+  check('Property: no upsell for a public visitor', await page.locator('.pro-upsell').count() === 0)
 
+  const syncBox = page.locator('[data-store-sync="money"]')
+  if (await syncBox.count()) {
+    await syncBox.click()
+    await page.waitForSelector('.pro-upsell[data-feature="sync"]', { timeout: 5000 }).catch(() => {})
+    check('Sync: public visitor sees the Pro panel', await page.locator('.pro-upsell[data-feature="sync"]').count() === 1)
+    check('Sync: panel offers year, month and week', await page.locator('.pro-upsell[data-feature="sync"] .pro-upsell-btn', { hasText: /A\$100 \/ year|A\$20 \/ month|A\$5 \/ week/ }).count() === 3)
+    check('Sync: checkbox stays off', !(await syncBox.isChecked()))
+  } else check('Sync: toggle present', false)
+  check('Free features never spend the free export (no /api/pro/use calls)', useCalls === 0, String(useCalls))
+
+  // ── Owner: always Pro ──
+  await page.unroute('**/api/pro/status')
+  await stubStatus({ pro: true, source: 'owner', configured: true })
+  await page.evaluate(() => { document.cookie = 'vv_owner=1; path=/' })
+  await page.reload({ waitUntil: 'domcontentloaded' })
   await page.locator('[data-tab="fire"]').click()
   check('FIRE: owner opens the tab straight through', await page.locator('[data-panel="fire"]').isVisible() && await page.locator('.pro-upsell').count() === 0)
 

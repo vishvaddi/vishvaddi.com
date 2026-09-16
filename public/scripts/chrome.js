@@ -142,7 +142,7 @@
     bar.className = "vv-nudge";
     bar.setAttribute("role", "note");
     var text = document.createElement("span");
-    text.textContent = "Using these a lot? Pro is A$39 a year — unlimited exports, saved projects and sync. ";
+    text.textContent = "Using these a lot? Pro is A$100 a year — unlimited exports, saved projects and sync. ";
     var link = document.createElement("a");
     link.href = "/pro";
     link.textContent = "See Pro";

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { handleMarket } from '../worker/market.ts'
 import worker from '../worker/index.ts'
-import { PinAttempts, keyFor, base64Url } from '../worker/auth.ts'
+import { PinAttempts } from '../worker/auth.ts'
 
 const request = (path, options = {}) => new Request(`https://example.com${path}`, options)
 
@@ -17,16 +17,6 @@ async function ownerCookie(env) {
     method: 'POST', headers: { Origin: 'https://example.com', 'Content-Type': 'application/x-www-form-urlencoded', 'CF-Connecting-IP': '192.0.2.1' }, body: `pin=${env.SITE_PIN}`,
   }), loginEnv)
   return login.headers.get('Set-Cookie').split(';')[0]
-}
-
-async function proCookie(env, licenceHash, expirySeconds = Math.floor(Date.now() / 1000) + 3600) {
-  const key = await keyFor(env)
-  const signature = base64Url(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${licenceHash}.${expirySeconds}`))))
-  return `__Host-pro=${licenceHash}.${expirySeconds}.${signature}`
-}
-
-async function fakeLicenceHash(seed) {
-  return base64Url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed))))
 }
 
 function baseEnv(dbStatus = null) {
@@ -50,13 +40,19 @@ function stubFetch(handlers) {
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
-test('401 without an owner session or an active Pro licence', async () => {
+test('public: an anonymous visitor gets prices (every feature free, Addendum 4)', async () => {
   const env = baseEnv(null)
-  const res = await handleMarket(request('/api/market?symbols=AAPL'), env, new URL('https://example.com/api/market?symbols=AAPL'))
-  assert.equal(res.status, 401)
+  const restore = stubFetch([
+    ['finance.yahoo.com', () => json({ quoteResponse: { result: [{ symbol: 'VAS.AX', regularMarketPrice: 95.2, currency: 'AUD' }] } })],
+  ])
+  try {
+    const res = await handleMarket(request('/api/market?symbols=VAS.AX'), env, new URL('https://example.com/api/market?symbols=VAS.AX'))
+    assert.equal(res.status, 200)
+    assert.equal((await res.json()).prices['VAS.AX'].price, 95.2)
+  } finally { restore() }
 })
 
-test('owner session is accepted', async () => {
+test('owner session still works', async () => {
   const env = baseEnv(null)
   const cookie = await ownerCookie(env)
   const restore = stubFetch([
@@ -69,28 +65,6 @@ test('owner session is accepted', async () => {
     assert.equal(body.prices.AAPL.price, 227.5)
     assert.equal(body.prices.AAPL.currency, 'USD')
   } finally { restore() }
-})
-
-test('an active Pro licence cookie is accepted', async () => {
-  const env = baseEnv('active')
-  const hash = await fakeLicenceHash('licence-1')
-  const cookie = await proCookie(env, hash)
-  const restore = stubFetch([
-    ['finance.yahoo.com', () => json({ quoteResponse: { result: [{ symbol: 'VAS.AX', regularMarketPrice: 95.2, currency: 'AUD' }] } })],
-  ])
-  try {
-    const res = await handleMarket(request('/api/market?symbols=VAS.AX', { headers: { Cookie: cookie } }), env, new URL('https://example.com/api/market?symbols=VAS.AX'))
-    assert.equal(res.status, 200)
-    assert.equal((await res.json()).prices['VAS.AX'].price, 95.2)
-  } finally { restore() }
-})
-
-test('a cancelled Pro licence is rejected', async () => {
-  const env = baseEnv('cancelled')
-  const hash = await fakeLicenceHash('licence-2')
-  const cookie = await proCookie(env, hash)
-  const res = await handleMarket(request('/api/market?symbols=AAPL', { headers: { Cookie: cookie } }), env, new URL('https://example.com/api/market?symbols=AAPL'))
-  assert.equal(res.status, 401)
 })
 
 test('symbols are validated, deduplicated, uppercased and capped at 25', async () => {

@@ -1,5 +1,5 @@
-// Pro (paywall) client. Every tool stays free and unlimited; Pro unlocks
-// exports, saves and sync. See docs/PRO_PLAN.md — this file is the page side
+// Pro (paywall) client. Every tool and feature is free; Pro unlocks unlimited
+// exports/saves and cross-device sync (Addendum 4). See docs/PRO_PLAN.md — this file is the page side
 // of that contract, the Worker routes are built separately from it.
 //
 // proState() reads the vv_pro/vv_owner cookie markers for an instant,
@@ -9,12 +9,20 @@
 // closed — but never blocks the free tool underneath.
 
 const STATUS_KEY = "vv_pro_status";
+
+export type Plan = "year" | "month" | "week";
+// Must match the Stripe prices wired to STRIPE_PRICE_* in wrangler.jsonc.
+const PLAN_BUTTONS: ReadonlyArray<[Plan, string]> = [
+  ["year", "Pro — A$100 / year"],
+  ["month", "A$20 / month"],
+  ["week", "A$5 / week"],
+];
 const METRIC_ENDPOINT = "/api/metric";
 
 export interface ProStatus {
   pro: boolean;
   source: "owner" | "licence" | null;
-  plan?: "year" | "month";
+  plan?: Plan;
   periodEnd?: number;
   configured: boolean;
   freeRemaining?: number | null;
@@ -127,18 +135,18 @@ export function onProChanged(fn: (status: ProStatus) => void): () => void {
   return () => window.removeEventListener("pro:changed", handler);
 }
 
-async function restore(key: string): Promise<{ ok: boolean; plan?: "year" | "month" }> {
+async function restore(key: string): Promise<{ ok: boolean; plan?: Plan }> {
   const res = await fetch("/api/pro/restore", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ key }),
   });
-  const body = (await res.json()) as { ok: boolean; plan?: "year" | "month" };
+  const body = (await res.json()) as { ok: boolean; plan?: Plan };
   if (body.ok) applyStatus({ pro: true, source: "licence", plan: body.plan, configured: true });
   return body;
 }
 
-function planButton(plan: "year" | "month", label: string): HTMLButtonElement {
+function planButton(plan: Plan, label: string): HTMLButtonElement {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "pro-upsell-btn";
@@ -219,7 +227,7 @@ function buildUpsellPanel(feature: string, heading: string, onRestored: () => vo
   } else {
     const plans = document.createElement("div");
     plans.className = "pro-upsell-plans";
-    plans.append(planButton("year", "Pro — A$39 / year"), planButton("month", "A$5 / month"));
+    plans.append(...PLAN_BUTTONS.map(([plan, label]) => planButton(plan, label)));
     panel.append(plans);
     panel.append(buildRestoreForm(onRestored));
   }
@@ -298,6 +306,27 @@ export function requirePro(feature: string, run: () => void, anchor: HTMLElement
     });
 }
 
+/**
+ * Upsell for features that need a licence to work at all (sync stores data
+ * against the licence hash) — shows the panel without spending a free export.
+ */
+export function showProOnly(feature: string, heading: string, anchor: HTMLElement, onRestored: () => void = () => {}): void {
+  const host = anchor.parentElement;
+  const existing = host?.querySelector<HTMLElement>(`.pro-upsell[data-feature="${feature}"]`);
+  if (existing) {
+    existing.remove();
+    return;
+  }
+  host?.querySelectorAll(".pro-upsell").forEach((panel) => panel.remove());
+  anchor.insertAdjacentElement(
+    "afterend",
+    buildUpsellPanel(feature, heading, () => {
+      host?.querySelector<HTMLElement>(`.pro-upsell[data-feature="${feature}"]`)?.remove();
+      onRestored();
+    }),
+  );
+}
+
 /** Mounts the buttons/restore/owner-note block used by the /pro page. */
 export function mountPro(root: HTMLElement): void {
   const render = (status: ProStatus) => {
@@ -319,7 +348,7 @@ export function mountPro(root: HTMLElement): void {
     }
     const plans = document.createElement("div");
     plans.className = "pro-upsell-plans";
-    plans.append(planButton("year", "Pro — A$39 / year"), planButton("month", "A$5 / month"));
+    plans.append(...PLAN_BUTTONS.map(([plan, label]) => planButton(plan, label)));
     root.append(plans);
     root.append(buildRestoreForm(() => render(proState())));
   };

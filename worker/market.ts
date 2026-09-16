@@ -1,11 +1,9 @@
-// Live prices for /money (Pro only — free tools stay unlimited, this proxy
-// costs real upstream requests per refresh). See docs/PRO_PLAN.md addendum
-// "Money goes public". Follows the /api/prices and /api/fx proxy style in
+// Live prices for /money. Public since 16/09 (docs/PRO_PLAN.md Addendum 4 —
+// every feature free, only exports metered); the per-IP /api limiter in
+// worker/index.ts and the upstream edge cache below keep refreshes cheap. Follows the /api/prices and /api/fx proxy style in
 // worker/index.ts: cache the *upstream* fetch at the edge (cf.cacheEverything)
 // rather than the Worker's own response, so a repeat symbol set is cheap
 // without needing a manual Cache API round trip.
-import { ownerSession } from "./auth.ts";
-import { activeLicenceHash } from "./pro.ts";
 import type { ProEnv } from "./pro.ts";
 
 const SYMBOL_RE = /^[A-Z0-9.=^-]{1,15}$/;
@@ -102,13 +100,9 @@ async function usdToAud(): Promise<number | null> {
   }
 }
 
-export async function handleMarket(request: Request, env: ProEnv, url: URL): Promise<Response> {
+export async function handleMarket(request: Request, _env: ProEnv, url: URL): Promise<Response> {
   const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
   if (request.method !== "GET") return Response.json({ error: "method not allowed" }, { status: 405, headers });
-
-  const isOwner = await ownerSession(request, env);
-  const licenceHash = isOwner ? null : await activeLicenceHash(request, env);
-  if (!isOwner && !licenceHash) return Response.json({ error: "unauthorised" }, { status: 401, headers });
 
   const raw = (url.searchParams.get("symbols") || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
   const symbols = Array.from(new Set(raw)).filter((s) => SYMBOL_RE.test(s)).slice(0, MAX_SYMBOLS);

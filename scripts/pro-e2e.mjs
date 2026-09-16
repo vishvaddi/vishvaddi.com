@@ -63,7 +63,8 @@ try {
   check('Pro: cut-list Save as PDF shows the upsell panel', await publicPage.locator('#pro-upsell[data-feature="cut-list-save-pdf"]').count() === 1)
 
   await publicPage.goto(`${BASE}/pro/`, { waitUntil: 'domcontentloaded' })
-  check('Pro: /pro renders two plan buttons', await publicPage.locator('.pro-upsell-plans .pro-upsell-btn').count() === 2)
+  const planLabels = await publicPage.locator('.pro-upsell-plans .pro-upsell-btn').allInnerTexts()
+  check('Pro: /pro renders year, month and week plans at A$100 / A$20 / A$5', planLabels.length === 3 && /A\$100 \/ year/.test(planLabels[0]) && /A\$20 \/ month/.test(planLabels[1]) && /A\$5 \/ week/.test(planLabels[2]), planLabels.join(' | '))
   check(
     'Pro: /pro has no horizontal scroll at 390px',
     await publicPage.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1),

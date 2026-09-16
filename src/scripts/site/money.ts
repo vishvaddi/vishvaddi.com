@@ -4,7 +4,7 @@
 import { createStore, mountStoreControls, uid, todayIso } from "./store";
 import { download } from "./calc";
 import { drawLineChart, watchTheme } from "./money-chart";
-import { requirePro, proState } from "./pro";
+import { requirePro, proState, showProOnly } from "./pro";
 import {
   ACCOUNT_TYPES, ASSET_CLASSES, type MoneyData, type Transaction, type ColumnMapping, type DateFormat, type Strategy, type AccountType,
   type AssetClass, type Property, type PropertyMortgage, type Holding,
@@ -21,11 +21,6 @@ const PANELS: [Panel, string][] = [
   ["investments", "Investments"], ["property", "Property"], ["super", "Super"], ["debts", "Debts"], ["fire", "FIRE"],
   ["projections", "Projections"], ["history", "History"],
 ];
-// Gated at the tab level (clicking the tab checks Pro first, matching
-// docs/PRO_PLAN.md — "Pro-gated ... on opening the tab"). Property gates only
-// the add action, so it is deliberately not in this set.
-const GATED_TABS: Partial<Record<Panel, string>> = { fire: "fire" };
-
 // ── tiny DOM helpers ──
 const mk = (tag: string, cls?: string, text?: string): HTMLElement => {
   const e = document.createElement(tag);
@@ -108,8 +103,7 @@ export function initMoney(): void {
   if (!PANELS.some(([p]) => p === active)) active = "overview";
 
   for (const [id, label] of PANELS) {
-    const gate = GATED_TABS[id];
-    const b = btn(label, "money-tab", gate ? () => requirePro(gate, () => show(id), b) : () => show(id));
+    const b = btn(label, "money-tab", () => show(id));
     b.dataset.tab = id;
     b.setAttribute("role", "tab");
     tabs.append(b);
@@ -655,7 +649,7 @@ export function initMoney(): void {
     }, "mi-add");
     formRow.append(saveBtn);
     form.append(formRow);
-    const refreshBtn = btn("Refresh prices", "btn btn-ghost btn-sm", () => requirePro("live-prices", () => { void refreshPrices(); }, refreshBtn), "mi-refresh");
+    const refreshBtn = btn("Refresh prices", "btn btn-ghost btn-sm", () => { void refreshPrices(); }, "mi-refresh");
     refreshRow.append(refreshBtn, refreshStatus);
     panel.append(totals, refreshRow, tableWrap, form);
     const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
@@ -666,7 +660,7 @@ export function initMoney(): void {
       refreshStatus.textContent = "Refreshing…";
       try {
         const res = await fetch(`/api/market?symbols=${symbols.map(encodeURIComponent).join(",")}`, { headers: { Accept: "application/json" } });
-        if (!res.ok) { refreshStatus.textContent = res.status === 401 ? "Pro required for live prices." : `Refresh failed (${res.status}).`; return; }
+        if (!res.ok) { refreshStatus.textContent = res.status === 429 ? "Too many refreshes — try again in a minute." : `Refresh failed (${res.status}).`; return; }
         const body = (await res.json()) as { prices: Record<string, { price: number; asAt: string; change?: number; changePercent?: number }> };
         let updated = 0;
         store.update((d) => {
@@ -769,7 +763,7 @@ export function initMoney(): void {
       editing = null; saveBtn.textContent = "Add property";
       pName.value = ""; pPrice.value = ""; pValue.value = ""; pRent.value = ""; pExpenses.value = "0"; mBalance.value = ""; mRate.value = ""; mRepayment.value = ""; mOffset.value = "0";
     };
-    saveBtn.addEventListener("click", () => requirePro("property", doSave, saveBtn));
+    saveBtn.addEventListener("click", doSave);
     formRow.append(saveBtn);
     form.append(formRow);
     panel.append(totals, list, form);
@@ -967,8 +961,6 @@ export function initMoney(): void {
   }
 
   // ════════ FIRE ════════
-  // Whole tab is Pro-gated at the tab button (GATED_TABS); this panel's own
-  // content always renders once reached, matching the other free tabs.
   {
     const panel = panels.get("fire")!;
     panel.append(mk("h2", undefined, "FIRE"));
@@ -1147,15 +1139,16 @@ export function initMoney(): void {
       filename: "money.json",
       onImport: () => redraws.get(active)?.(),
     });
-    // Sync is Pro-only for public tools (docs/PRO_PLAN.md). store.ts stays
-    // untouched — intercept the checkbox in the capture phase so a free
-    // visitor sees the upsell instead of a confusing 401 from /api/store/.
+    // Sync needs a licence (data is stored against its hash), so it stays Pro and
+    // never spends the free export. store.ts stays untouched — intercept the
+    // checkbox in the capture phase so a free visitor sees the upsell instead
+    // of a confusing 401 from /api/store/.
     const syncBox = controlsHost.querySelector<HTMLInputElement>('[data-store-sync="money"]');
     syncBox?.addEventListener("click", (event) => {
       if (!proState().pro) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        requirePro("sync", () => {}, syncBox);
+        showProOnly("sync", "Sync across devices comes with Pro", syncBox);
       }
     }, true);
   }

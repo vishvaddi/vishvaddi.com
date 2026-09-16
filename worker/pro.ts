@@ -7,8 +7,25 @@ export interface ProEnv extends PinEnv {
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_YEAR?: string;
   STRIPE_PRICE_MONTH?: string;
+  STRIPE_PRICE_WEEK?: string;
   // Free-use quota (addendum, docs/PRO_PLAN.md) — gated actions per rolling 30 days.
   FREE_USES?: string;
+}
+
+export type Plan = "year" | "month" | "week";
+const PLANS: readonly Plan[] = ["year", "month", "week"];
+const PLAN_LABEL: Record<Plan, string> = { year: "yearly", month: "monthly", week: "weekly" };
+
+function isPlan(value: unknown): value is Plan {
+  return typeof value === "string" && (PLANS as readonly string[]).includes(value);
+}
+
+function priceFor(env: ProEnv, plan: Plan): string | undefined {
+  return plan === "year" ? env.STRIPE_PRICE_YEAR : plan === "month" ? env.STRIPE_PRICE_MONTH : env.STRIPE_PRICE_WEEK;
+}
+
+function planForPrice(env: ProEnv, priceId: string | undefined): Plan | null {
+  return PLANS.find((plan) => priceId && priceFor(env, plan) === priceId) ?? null;
 }
 
 interface D1Result<T = unknown> { results?: T[]; success: boolean; meta?: { changes?: number } }
@@ -153,7 +170,7 @@ function originOk(request: Request, url: URL): boolean {
 }
 
 function configured(env: ProEnv): boolean {
-  return !!(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET && env.STRIPE_PRICE_YEAR && env.STRIPE_PRICE_MONTH);
+  return !!(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET && PLANS.every((plan) => priceFor(env, plan)));
 }
 
 // Every Stripe call goes through here so tests can stub globalThis.fetch instead
@@ -210,7 +227,7 @@ export async function activeLicenceHash(request: Request, env: ProEnv): Promise<
 interface ProStatus {
   pro: boolean;
   source: "owner" | "licence" | null;
-  plan?: "year" | "month";
+  plan?: Plan;
   periodEnd?: number;
   configured: boolean;
 }
@@ -230,7 +247,7 @@ async function resolvePro(request: Request, env: ProEnv): Promise<ProStatus> {
   return {
     pro: true,
     source: "licence",
-    plan: row.plan === "year" ? "year" : "month",
+    plan: isPlan(row.plan) ? row.plan : "month",
     periodEnd: row.current_period_end ?? undefined,
     configured: conf,
   };
@@ -294,9 +311,9 @@ async function checkoutHandler(request: Request, env: ProEnv, url: URL): Promise
   if (!configured(env)) return Response.json({ error: "not configured" }, { status: 503, headers: NO_STORE_JSON });
   let body: { plan?: string };
   try { body = (await request.json()) as { plan?: string }; } catch { return Response.json({ error: "invalid json" }, { status: 400, headers: NO_STORE_JSON }); }
-  if (body.plan !== "year" && body.plan !== "month") return Response.json({ error: "bad plan" }, { status: 400, headers: NO_STORE_JSON });
+  if (!isPlan(body.plan)) return Response.json({ error: "bad plan" }, { status: 400, headers: NO_STORE_JSON });
   const plan = body.plan;
-  const price = plan === "year" ? env.STRIPE_PRICE_YEAR : env.STRIPE_PRICE_MONTH;
+  const price = priceFor(env, plan);
   const form = new URLSearchParams({
     mode: "subscription",
     "line_items[0][price]": price || "",
@@ -351,6 +368,7 @@ interface StripeCheckoutSession {
   payment_status?: string;
   subscription?: StripeSubscription | null;
   customer?: StripeCustomer | string | null;
+  metadata?: Record<string, string> | null;
 }
 
 async function successHandler(request: Request, env: ProEnv, url: URL): Promise<Response> {
@@ -370,7 +388,7 @@ async function successHandler(request: Request, env: ProEnv, url: URL): Promise<
   const customer = session.customer;
   const customerId = typeof customer === "string" ? customer : customer?.id || "";
   const priceId = sub.items?.data?.[0]?.price?.id;
-  const plan: "year" | "month" = priceId === env.STRIPE_PRICE_YEAR ? "year" : "month";
+  const plan: Plan = planForPrice(env, priceId) ?? (isPlan(session.metadata?.plan) ? session.metadata.plan : "month");
   const status = sub.status === "trialing" ? "active" : sub.status;
   const now = Date.now();
   const existing = await env.DEEP_SWARM_DB.prepare("SELECT licence_hash, key_shown_at FROM pro_licences WHERE stripe_subscription = ?")
@@ -408,7 +426,7 @@ async function successHandler(request: Request, env: ProEnv, url: URL): Promise<
   const token = await signPro(env, licenceHash, expiry);
   const cookies = [proCookie(token, PRO_COOKIE_SECONDS), proMarker("1", PRO_COOKIE_SECONDS)];
   const html = issuedKey
-    ? successHtml("You're in.", `Your ${plan === "year" ? "yearly" : "monthly"} Pro subscription is active.`, issuedKey)
+    ? successHtml("You're in.", `Your ${PLAN_LABEL[plan]} Pro subscription is active.`, issuedKey)
     : successHtml("Already issued.", "This subscription's licence key was shown once already. This browser is unlocked; for another device use Restore on the Pro page with the key you saved, or email vishvaddi@gmail.com with your Stripe receipt and I'll recover it.");
   return htmlResponse(html, 200, cookies);
 }
@@ -498,7 +516,7 @@ async function upsertFromCheckoutCompleted(env: ProEnv, obj: Record<string, unkn
   const customerId = typeof obj.customer === "string" ? obj.customer : (obj.customer as { id?: string } | null)?.id;
   if (!subscriptionId || !customerId) return;
   const metadata = (obj.metadata as Record<string, string> | undefined) || {};
-  const plan = metadata.plan === "year" ? "year" : "month";
+  const plan: Plan = isPlan(metadata.plan) ? metadata.plan : "month";
   const email = (obj.customer_details as { email?: string } | undefined)?.email || null;
   const now = Date.now();
   const existing = await env.DEEP_SWARM_DB.prepare("SELECT licence_hash FROM pro_licences WHERE stripe_subscription = ?")
@@ -526,7 +544,7 @@ async function updateFromSubscriptionUpdated(env: ProEnv, obj: Record<string, un
   const periodEnd = (obj.current_period_end as number | undefined) ?? null;
   const items = (obj.items as { data?: Array<{ price?: { id?: string } }> } | undefined)?.data;
   const priceId = items?.[0]?.price?.id;
-  const plan = priceId === env.STRIPE_PRICE_YEAR ? "year" : priceId === env.STRIPE_PRICE_MONTH ? "month" : null;
+  const plan = planForPrice(env, priceId);
   const now = Date.now();
   if (plan) {
     await env.DEEP_SWARM_DB.prepare("UPDATE pro_licences SET status = ?, plan = ?, current_period_end = ?, updated_at = ? WHERE stripe_subscription = ?")
