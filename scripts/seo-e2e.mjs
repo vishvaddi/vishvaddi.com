@@ -64,8 +64,7 @@ try {
   }
 
   await page.goto(`${BASE}/pro/`, { waitUntil: 'domcontentloaded' })
-  check('Pro: waitlist form present', await page.locator('#waitlist-form').count() === 1)
-  check('Pro: waitlist email input present', await page.locator('#waitlist-email').count() === 1)
+  check('Pro: updates form removed (16/09)', await page.locator('#waitlist-form, #waitlist-email').count() === 0)
 
   const phonePage = await browser.newPage({ viewport: { width: 390, height: 844 } })
   phonePage.on('pageerror', (error) => errors.push(String(error)))

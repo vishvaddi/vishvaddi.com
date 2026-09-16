@@ -167,3 +167,12 @@ Every tool and feature stays free (Addendum 2026-09-16 still holds for FIRE, pro
 
 - `pro-api.test.mjs`: pass checkout (payment mode, `customer_creation`, metadata); pass via webhook-first then success page (key shown once); pass expiry → status `pro:false`, restore 401, `/api/store` 401; `/api/pro/use` → 404; status has no `freeLimit`; new metric events accepted.
 - `pro-e2e.mjs`: free visitor prints a Cut List → footer element present in print media and removed after; PDF Toolkit export for a free visitor → the saved PDF text contains `vishvaddi.com` (via pdf-lib parsing); a Pro stub with a saved brand → brand text present, footer absent; `/pro` brand editor saves to localStorage and previews; three plan buttons; Pro-only features show the panel and make zero `/api/pro/use` calls.
+
+## Addendum 2026-09-16 (night) — brand option and updates form removed
+
+Vish: "remove the stuff about your brand for now. remove the updates thing as well."
+
+- **Pro exports are clean:** no footer and no brand header. Free client-facing exports keep the "Made free at vishvaddi.com" footer (print incl. Ctrl+P, pdf-lib, canvas). `export-brand.ts` keeps `brandedExport` / `stampPdf` / `stampCanvas`; `Stamp` is `footer | none`. The brand store (`vv_brand`), `/pro` editor, logo downscaling and brand print/PDF/canvas rendering are deleted (recoverable from git before this addendum).
+- **Pro value** is now footer-free PDFs, prints and images; cross-device sync; Studio MP3/stems; Lo-fi MP3; Audio Prep batch download.
+- **Updates form removed** from `/pro` (zero signups in D1 `waitlist` at removal). `/api/waitlist` and its table stay, unused. `/privacy` drops the updates paragraph.
+- **Sign out:** `/pro` shows "Sign out of Pro on this browser" for a licence holder (`POST /api/pro/logout`, then reload).

@@ -5,15 +5,15 @@ import "../styles/site.css";
 
 <Base
   title="Pro"
-  description="vishvaddi.com Pro — every tool and export stays free; Pro puts your business name and logo on your PDFs, prints and images, and adds sync and Studio MP3/stem export."
+  description="vishvaddi.com Pro — every tool and export stays free; Pro removes the footer from your PDFs, prints and images, and adds sync and Studio MP3/stem export."
 >
   <div class="blueprint tool">
     <p class="eyebrow">Pro</p>
     <h1>Pro</h1>
     <p>
       Every tool, feature and export on this site is free, with no limits. Pro is
-      for people who send what they make to clients: your business name on the
-      export instead of mine.
+      for people who send what they make to clients: clean exports without my
+      footer, plus sync across devices.
     </p>
 
     <h2>Free</h2>
@@ -27,46 +27,13 @@ import "../styles/site.css";
 
     <h2>Pro adds</h2>
     <ul>
-      <li>Your business name, ABN or contact line and logo on PDFs, prints and images — instead of the footer</li>
+      <li>PDFs, prints and images without the vishvaddi.com footer</li>
       <li>Cross-device sync for tools with a "Sync across devices" toggle</li>
       <li>MP3 and stem export in Studio — WAV master export stays free for everyone</li>
       <li>MP3 download in Lo-fi and batch download in Audio Prep</li>
     </ul>
 
     <div id="pro-plans"></div>
-
-    <h2>Your brand</h2>
-    <p>What goes on your PDFs, prints and images. It's stored only in this browser.</p>
-    <p id="brand-free-note" class="pro-upsell-note" hidden>Applies to your exports with Pro — until then they carry the free footer.</p>
-    <form id="brand-form" class="brand-form" novalidate>
-      <div class="field">
-        <label for="brand-name">Business name</label>
-        <input type="text" id="brand-name" maxlength="80" autocomplete="organization" />
-      </div>
-      <div class="field">
-        <label for="brand-line">Line under it — ABN, phone or email (optional)</label>
-        <input type="text" id="brand-line" maxlength="120" />
-      </div>
-      <div class="field">
-        <label for="brand-logo">Logo — PNG or JPEG (optional)</label>
-        <input type="file" id="brand-logo" accept="image/png,image/jpeg" />
-      </div>
-      <div class="btn-row">
-        <button type="submit" class="btn">Save brand</button>
-        <button type="button" class="btn btn-ghost" id="brand-logo-clear" hidden>Remove logo</button>
-      </div>
-      <p id="brand-status" class="brand-status" role="status" aria-live="polite"></p>
-    </form>
-    <div id="brand-preview" class="brand-preview" aria-label="Export preview"></div>
-
-    <h2>Updates</h2>
-    <p>One email when something new lands — no other list, no spam.</p>
-    <form id="waitlist-form" class="waitlist-form" novalidate>
-      <label for="waitlist-email" class="sr-only">Email address</label>
-      <input type="email" id="waitlist-email" name="email" placeholder="you@example.com" maxlength="254" required autocomplete="email" />
-      <button type="submit" class="btn">Keep me posted</button>
-      <p id="waitlist-status" class="waitlist-status" role="status" aria-live="polite" hidden></p>
-    </form>
 
     <h2>Questions</h2>
     <p><strong>Cancel any time.</strong> Email vishvaddi@gmail.com to cancel a subscription, or use the manage-subscription link in your Stripe emails where one is included. The 7-day pass is a one-off payment, so there's nothing to cancel.</p>
@@ -77,48 +44,7 @@ import "../styles/site.css";
   </div>
 
   <script>
-    import { mountPro, track } from "../scripts/site/pro";
-    import { mountBrandEditor } from "../scripts/site/export-brand";
+    import { mountPro } from "../scripts/site/pro";
     mountPro(document.getElementById("pro-plans")!);
-    mountBrandEditor(
-      document.getElementById("brand-form") as HTMLFormElement,
-      document.getElementById("brand-preview")!,
-      document.getElementById("brand-free-note")!,
-    );
-
-    const waitlistForm = document.getElementById("waitlist-form") as HTMLFormElement;
-    const waitlistEmail = document.getElementById("waitlist-email") as HTMLInputElement;
-    const waitlistStatus = document.getElementById("waitlist-status") as HTMLParagraphElement;
-    waitlistForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const email = waitlistEmail.value.trim();
-      const say = (text: string) => { waitlistStatus.textContent = text; waitlistStatus.hidden = false; };
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
-        say("That doesn't look like a valid email address.");
-        return;
-      }
-      const submitBtn = waitlistForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-      submitBtn.disabled = true;
-      try {
-        const res = await fetch("/api/waitlist", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, source: "updates" }),
-        });
-        if (res.ok) {
-          say("Done — you'll hear from me when something new lands.");
-          track("waitlist_signup");
-          waitlistForm.reset();
-        } else if (res.status === 429) {
-          say("Too many requests from this connection today — try again tomorrow.");
-        } else {
-          say("That didn't work — check the address and try again.");
-        }
-      } catch {
-        say("Couldn't reach the server — check your connection and try again.");
-      } finally {
-        submitBtn.disabled = false;
-      }
-    });
   </script>
 </Base>

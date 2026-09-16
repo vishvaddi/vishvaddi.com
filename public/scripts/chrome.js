@@ -146,7 +146,7 @@
     bar.className = "vv-nudge";
     bar.setAttribute("role", "note");
     var text = document.createElement("span");
-    text.textContent = "Pro is A$100 a year — your business name on every export, plus sync. ";
+    text.textContent = "Pro is A$100 a year — clean exports without the footer, plus sync. ";
     var link = document.createElement("a");
     link.href = "/pro";
     link.textContent = "See Pro";

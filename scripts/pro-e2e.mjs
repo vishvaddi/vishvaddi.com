@@ -56,8 +56,6 @@ const recordMetrics = async (context) => {
 // controls when "printing" ends.
 const stubPrint = (context) => context.addInitScript(() => { window.print = () => { window.__printCalls = (window.__printCalls || 0) + 1 } })
 
-const TINY_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAMAASsJTYQAAAAASUVORK5CYII='
-const BRAND = { name: 'Acme Shopfitting', line: 'ABN 12 345 678 901', logo: TINY_PNG }
 
 let browser
 try {
@@ -87,7 +85,7 @@ try {
   await freePage.emulateMedia({ media: 'screen' })
   await freePage.evaluate(() => window.dispatchEvent(new Event('afterprint')))
   check('Free: footer removed after print', await freePage.locator('.vv-export-brand').count() === 0)
-  check('Free: one post-export hint under the button', await freePage.locator('.vv-export-hint').count() === 1 && (await freePage.locator('.vv-export-hint').textContent() || '').includes('Pro puts your business name on it instead'))
+  check('Free: one post-export hint under the button', await freePage.locator('.vv-export-hint').count() === 1 && (await freePage.locator('.vv-export-hint').textContent() || '').includes('Pro exports are clean'))
   await freePage.locator('#save-pdf').click()
   check('Free: hint shows at most once per page view', await freePage.locator('.vv-export-hint').count() === 1)
   await freePage.locator('.vv-export-hint-dismiss').click()
@@ -127,7 +125,7 @@ try {
   await freePage.setViewportSize({ width: 390, height: 844 })
   check('Pro-only: zero /api/pro/use requests across every free export and panel', freeUse.calls === 0, String(freeUse.calls))
 
-  // ── /pro: plans, brand editor for a free visitor ──
+  // ── /pro: plans for a free visitor ──
   await freePage.goto(`${BASE}/pro/`, { waitUntil: 'domcontentloaded' })
   const planLabels = await freePage.locator('#pro-plans .pro-upsell-plans .pro-upsell-btn').allInnerTexts()
   check('Pro page: at least two plan buttons, all priced in A$', planLabels.length >= 2 && planLabels.every((label) => label.includes('A$')), planLabels.join(' | '))
@@ -138,32 +136,7 @@ try {
   check('Play app: /pro shows no checkout buttons, only where to buy', await freePage.locator('#pro-plans .pro-upsell-btn').filter({ hasText: 'A$' }).count() === 0 && ((await freePage.locator('#pro-plans').textContent()) || '').includes('Pro is available at vishvaddi.com'))
   await freePage.evaluate(() => sessionStorage.removeItem('vv_twa'))
   check('Pro page: no quota copy left', !(await freePage.locator('main').textContent() || '').match(/free exports? (left|this month)|#free-limit-copy/) && await freePage.locator('#free-limit-copy').count() === 0)
-  check('Brand editor: free visitor sees "Applies to your exports with Pro"', await freePage.locator('#brand-free-note').isVisible() && (await freePage.locator('#brand-free-note').textContent() || '').includes('Applies to your exports with Pro'))
-  await freePage.locator('#brand-name').fill(BRAND.name)
-  await freePage.locator('#brand-line').fill(BRAND.line)
-  const previewText = await freePage.locator('#brand-preview').textContent() || ''
-  check('Brand editor: live preview shows the typed name and the free footer version', previewText.includes(BRAND.name) && previewText.includes('Made free at vishvaddi.com'), previewText)
-
-  const bigLogo = await freePage.evaluate(() => {
-    const canvas = document.createElement('canvas'); canvas.width = 1200; canvas.height = 400
-    const ctx = canvas.getContext('2d'); const image = ctx.createImageData(canvas.width, canvas.height)
-    for (let i = 0; i < image.data.length; i++) image.data[i] = (i * 2654435761) % 251
-    ctx.putImageData(image, 0, 0)
-    return canvas.toDataURL('image/png').split(',')[1]
-  })
-  await freePage.locator('#brand-logo').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: Buffer.from(bigLogo, 'base64') })
-  await freePage.waitForSelector('#brand-preview .vv-brand-logo', { timeout: 5000 }).catch(() => {})
-  check('Brand editor: uploaded logo appears in the preview', await freePage.locator('#brand-preview .vv-brand-logo').count() >= 1)
-  await freePage.locator('#brand-form button[type="submit"]').click()
-  const stored = await freePage.evaluate(async () => {
-    const brand = JSON.parse(localStorage.getItem('vv_brand') || 'null')
-    if (!brand?.logo) return { brand }
-    const img = new Image(); img.src = brand.logo; await img.decode()
-    return { brand, logoWidth: img.naturalWidth, logoBytes: brand.logo.length }
-  })
-  check('Brand editor: saves name and line to localStorage', stored.brand?.name === BRAND.name && stored.brand?.line === BRAND.line)
-  check('Brand editor: logo downscaled to ≤400 px wide and ≤200 KB', /^data:image\/(png|jpeg);base64,/.test(stored.brand?.logo || '') && stored.logoWidth <= 400 && stored.logoBytes <= 200_000, `${stored.logoWidth}px, ${stored.logoBytes} bytes`)
-  check('Metrics: brand_saved beacon recorded', freeMetrics.some((call) => call?.event === 'brand_saved'))
+  check('Pro page: brand editor and updates form are gone', await freePage.locator('#brand-form, #brand-preview, #waitlist-form').count() === 0 && !((await freePage.locator('main').textContent()) || '').includes('business name'))
   check('Pro page: no horizontal scroll at 390px', await freePage.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1))
 
   await freePage.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' })
@@ -172,46 +145,47 @@ try {
   await freePage.close()
   await freeCtx.close()
 
-  // ── Pro with a saved brand: brand on exports, no footer, no hint ──
-  const brandCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, acceptDownloads: true })
-  await stubStatus(brandCtx, { pro: true, source: 'licence', plan: 'year', configured: true })
-  const brandUse = await countUseCalls(brandCtx)
-  const brandMetrics = await recordMetrics(brandCtx)
-  await stubPrint(brandCtx)
-  await brandCtx.addInitScript((brand) => {
-    document.cookie = 'vv_pro=1; path=/'
-    try { localStorage.setItem('vv_brand', JSON.stringify(brand)) } catch { /* about:blank has no storage */ }
-  }, BRAND)
-  const brandPage = await brandCtx.newPage()
-  brandPage.on('pageerror', (error) => errors.push(String(error)))
+  // ── Pro licence: clean exports (no footer, no hint), sign-out on /pro ──
+  const proCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, acceptDownloads: true })
+  await stubStatus(proCtx, { pro: true, source: 'licence', plan: 'year', configured: true })
+  const proUse = await countUseCalls(proCtx)
+  const proMetrics = await recordMetrics(proCtx)
+  await stubPrint(proCtx)
+  await proCtx.addInitScript(() => { document.cookie = 'vv_pro=1; path=/' })
+  let logoutCalls = 0
+  await proCtx.route('**/api/pro/logout', (route) => { logoutCalls++; route.fulfill({ status: 204 }) })
+  const proPage = await proCtx.newPage()
+  proPage.on('pageerror', (error) => errors.push(String(error)))
 
-  await brandPage.goto(`${BASE}/site/cut-list/`, { waitUntil: 'domcontentloaded' })
-  await brandPage.waitForSelector('#save-pdf:not([hidden])')
-  await brandPage.locator('#save-pdf').click()
-  await brandPage.emulateMedia({ media: 'print' })
-  const brandHeader = brandPage.locator('.vv-export-brand--brand')
-  check('Pro brand: print shows the brand header, not the footer', await brandHeader.isVisible() && (await brandHeader.textContent() || '').includes(BRAND.name) && await brandPage.locator('.vv-export-brand--footer').count() === 0)
-  const brandPrinted = await pdfText(await brandPage.pdf({ format: 'A4' }))
-  check('Pro brand: printed PDF carries the business name and no vishvaddi footer', brandPrinted.pages[0].includes(BRAND.name) && !brandPrinted.pages.some((text) => text.includes('Made free at vishvaddi.com')))
-  await brandPage.emulateMedia({ media: 'screen' })
-  await brandPage.evaluate(() => window.dispatchEvent(new Event('afterprint')))
-  check('Pro brand: no free-footer hint', await brandPage.locator('.vv-export-hint').count() === 0)
+  await proPage.goto(`${BASE}/site/cut-list/`, { waitUntil: 'domcontentloaded' })
+  await proPage.waitForSelector('#save-pdf:not([hidden])')
+  await proPage.locator('#save-pdf').click()
+  check('Pro: print injects no footer', await proPage.locator('.vv-export-brand').count() === 0)
+  await proPage.emulateMedia({ media: 'print' })
+  const proPrinted = await pdfText(await proPage.pdf({ format: 'A4' }))
+  check('Pro: printed Cut List PDF has no vishvaddi footer', !proPrinted.pages.some((text) => text.includes('Made free at vishvaddi.com')))
+  await proPage.emulateMedia({ media: 'screen' })
+  check('Pro: no free-footer hint', await proPage.locator('.vv-export-hint').count() === 0)
 
-  await brandPage.goto(`${BASE}/site/pdf/`, { waitUntil: 'domcontentloaded' })
-  await brandPage.locator('#pdf-file').setInputFiles({ name: 'base.pdf', mimeType: 'application/pdf', buffer: await makePdf([0.2, 0.6, 0.3]) })
-  await brandPage.waitForSelector('.pdf-page-card')
-  const brandDownload = brandPage.waitForEvent('download', { timeout: 10000 })
-  await brandPage.locator('#pdf-export').click()
-  const brandPdf = await pdfText(readFileSync(await (await brandDownload).path()))
-  check('Pro brand: PDF Toolkit export has the brand text and no footer', brandPdf.pages.every((text) => text.includes(BRAND.name) && text.includes(BRAND.line) && !text.includes('vishvaddi.com')), brandPdf.pages.join(' | '))
+  await proPage.goto(`${BASE}/site/pdf/`, { waitUntil: 'domcontentloaded' })
+  await proPage.locator('#pdf-file').setInputFiles({ name: 'base.pdf', mimeType: 'application/pdf', buffer: await makePdf([0.2, 0.6, 0.3]) })
+  await proPage.waitForSelector('.pdf-page-card')
+  const proDownload = proPage.waitForEvent('download', { timeout: 10000 })
+  await proPage.locator('#pdf-export').click()
+  const proPdf = await pdfText(readFileSync(await (await proDownload).path()))
+  check('Pro: PDF Toolkit export has no footer', proPdf.pages.every((text) => !text.includes('vishvaddi.com')))
 
-  await brandPage.goto(`${BASE}/pro/`, { waitUntil: 'domcontentloaded' })
-  check('Pro brand: /pro preview shows exactly the brand and hides the free note', await brandPage.locator('#brand-free-note').isHidden() && await brandPage.locator('#brand-preview .brand-sheet').count() === 1 && !((await brandPage.locator('#brand-preview').textContent()) || '').includes('vishvaddi.com'))
-  check('Metrics: export_pro beacons recorded for Pro', brandMetrics.filter((call) => call?.event === 'export_pro').length >= 2 && !brandMetrics.some((call) => call?.event === 'export_free'))
-  check('Pro brand: zero /api/pro/use requests', brandUse.calls === 0, String(brandUse.calls))
+  await proPage.goto(`${BASE}/pro/`, { waitUntil: 'domcontentloaded' })
+  const signOut = proPage.locator('#pro-plans button', { hasText: 'Sign out of Pro on this browser' })
+  await signOut.waitFor({ timeout: 5000 }).catch(() => {})
+  check('Pro: /pro offers "Sign out of Pro on this browser" for a licence holder', await signOut.count() === 1)
+  await Promise.all([proPage.waitForEvent('load', { timeout: 5000 }).catch(() => {}), signOut.click()])
+  check('Pro: sign-out calls /api/pro/logout and reloads', logoutCalls === 1)
+  check('Metrics: export_pro beacons recorded for Pro', proMetrics.filter((call) => call?.event === 'export_pro').length >= 2 && !proMetrics.some((call) => call?.event === 'export_free'))
+  check('Pro: zero /api/pro/use requests', proUse.calls === 0, String(proUse.calls))
 
-  await brandPage.close()
-  await brandCtx.close()
+  await proPage.close()
+  await proCtx.close()
 
   // ── owner: always Pro, marker cookie set before first paint ──
   const ownerCtx = await browser.newContext({ viewport: { width: 390, height: 844 } })
@@ -254,7 +228,7 @@ try {
   await nudgePage.waitForSelector('.vv-nudge', { timeout: 3000 }).catch(() => {})
   check('Nudge: shown on the 3rd distinct tool page', await nudgePage.locator('.vv-nudge').count() === 1)
   check('Nudge: links to /pro', await nudgePage.locator('.vv-nudge a[href="/pro"]').count() === 1)
-  check('Nudge: copy sells the brand, not an export limit', (await nudgePage.locator('.vv-nudge').textContent() || '').includes('your business name on every export, plus sync'))
+  check('Nudge: copy sells clean exports and sync, not an export limit', (await nudgePage.locator('.vv-nudge').textContent() || '').includes('clean exports without the footer, plus sync'))
   check('Metrics: tool_view beacon recorded for each tool page visited', metricCalls.filter((call) => call?.event === 'tool_view').length === 3)
   check('Metrics: nudge_shown beacon recorded once', metricCalls.filter((call) => call?.event === 'nudge_shown').length === 1)
 

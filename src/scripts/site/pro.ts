@@ -1,5 +1,5 @@
-// Pro (paywall) client. Every tool, feature and export is free; Pro puts the
-// visitor's brand on client-facing exports and unlocks sync and the Pro-only
+// Pro (paywall) client. Every tool, feature and export is free; Pro removes the
+// footer from client-facing exports and unlocks sync and the Pro-only
 // audio exports (last addendum, docs/PRO_PLAN.md). This file is the page side
 // of that contract, the Worker routes are built separately from it.
 //
@@ -292,8 +292,29 @@ export function mountPro(root: HTMLElement): void {
       const note = document.createElement("p");
       note.className = "pro-upsell-note";
       note.textContent =
-        status.source === "owner" ? "You're the owner — everything is unlocked." : "You're Pro — your brand on exports, sync and Studio/audio MP3 exports are unlocked.";
+        status.source === "owner" ? "You're the owner — everything is unlocked." : "You're Pro — clean exports, sync and Studio/audio MP3 exports are unlocked.";
       root.append(note);
+      if (status.source === "licence") {
+        // Lets a customer (or Vish testing a purchase) drop the licence cookie from this browser.
+        const signOut = document.createElement("button");
+        signOut.type = "button";
+        signOut.className = "btn btn-ghost";
+        signOut.textContent = "Sign out of Pro on this browser";
+        signOut.addEventListener("click", () => {
+          signOut.disabled = true;
+          fetch("/api/pro/logout", { method: "POST", credentials: "same-origin" })
+            .catch(() => {})
+            .finally(() => {
+              try {
+                sessionStorage.removeItem(STATUS_KEY);
+              } catch {
+                /* the cleared cookies are what matters */
+              }
+              location.reload();
+            });
+        });
+        root.append(signOut);
+      }
       return;
     }
     if (status.configured === false) {

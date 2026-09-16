@@ -751,3 +751,12 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
   - `/pro` shows footer copy with no quota copy; `sw.js`/`chrome.js` registration is live.
   - `pro-e2e` against production: 49/49.
 - Owed by Vish: one sandbox test purchase per plan (card 4242…), then Stripe live activation.
+
+
+## 2026-09-16 - Brand option + updates form removed; Pro sign-out added (NOT deployed)
+
+- Vish: "remove the stuff about your brand for now. remove the updates thing as well. it says im already pro". Contract: `docs/PRO_PLAN.md` last addendum.
+- **"Already Pro":** his Chrome holds the licence cookie from the 15/09 sandbox purchase (old A$39/yr test subscription, still active), so the message was correct. `/pro` now offers "Sign out of Pro on this browser".
+- **Brand removed:** Pro exports are simply clean. Brand store/editor/logo code, brand CSS and brand copy are deleted (`/pro`, nudge, export hint, terms, privacy, 6 tool FAQ answers).
+- **Updates form removed** (0 signups in D1). `/privacy` keeps only the usage-counts paragraph.
+- Tests: pro-e2e rewritten for the brand sections (45: Pro print/PDF have no footer, no hint, sign-out calls logout); seo-e2e asserts the updates form is gone (145); release gate + unit 82, check 0; feature/life/money/kitchen green; materials 92, audio 72, studio 102.
