@@ -58,7 +58,7 @@ const ownerCookie = (value: string, age: number) => `${OWNER_COOKIE}=${value}; P
 
 // Public routes bypass the PIN entirely (contract: docs/PRO_PLAN.md). Checked
 // before the PIN logic so an anonymous visitor gets the page, not a 401/redirect.
-const PUBLIC_EXACT_OR_DIR = ["/site", "/audio", "/studio", "/pro", "/terms", "/privacy", "/money"];
+const PUBLIC_EXACT_OR_DIR = ["/site", "/audio", "/studio", "/pro", "/terms", "/privacy"];
 const PUBLIC_PREFIXES = [
   "/pay/", "/_astro/", "/scripts/", "/fonts/", "/media/", "/worklets/", "/data/", "/og/", "/icon-",
   "/api/pro/", "/api/waitlist", "/api/poi/", "/api/tiles/", "/api/store/", "/sitemap",
@@ -66,13 +66,29 @@ const PUBLIC_PREFIXES = [
 const PUBLIC_EXACT = [
   "/login", "/logout",
   "/favicon.ico", "/favicon.svg", "/apple-touch-icon.png", "/manifest.webmanifest",
-  "/robots.txt", "/sw.js", "/api/fx", "/api/prices", "/api/market",
+  "/robots.txt", "/sw.js", "/api/fx", "/api/prices",
   // Funnel counters (Addendum 3, docs/PRO_PLAN.md) — POST from any page,
   // GET is owner-only (checked in the handler, not here).
   "/api/metric",
 ];
 
 export function siteLocked(env: PinEnv): boolean { return env.SITE_LOCKED === "1"; }
+
+// The Life tools are built but hidden until they're developed further (Vish,
+// 16/09/26): owner-only, a plain 404 for everyone else, their APIs included.
+const OWNER_ONLY_DIRS = ["/kitchen", "/money", "/training", "/api/recipe", "/api/market"];
+
+export function isOwnerOnlyPath(pathname: string): boolean {
+  let path = pathname;
+  try {
+    path = decodeURIComponent(pathname);
+  } catch {
+    /* malformed escapes: match on the raw path */
+  }
+  // Normalise the variants static asset routing would still resolve (//money, /Money, /money.html).
+  path = path.replace(/\/{2,}/g, "/").toLowerCase();
+  return OWNER_ONLY_DIRS.some((base) => path === base || path.startsWith(`${base}/`) || path.startsWith(`${base}.`));
+}
 
 export function isPublicPath(pathname: string): boolean {
   if (PUBLIC_EXACT.includes(pathname)) return true;

@@ -11,9 +11,9 @@ const useful = [
   { href: "/radio", title: "Radio", desc: "Australian and international live radio with stream metadata and track identification." },
   { href: "/feeds", title: "Feeds", desc: "Major news, financial reporting, Australian and global construction, and The Conversation." },
   { href: "/reader", title: "Reader", desc: "Free public-domain books with page turning, bookmarks and annotations." },
-  { href: "/kitchen", title: "Kitchen", desc: "Recipe database, fortnight meal plan and an aggregated shopping list." },
-  { href: "/money", title: "Money", desc: "Free budget, bank CSV import, net worth, holdings, debt payoff and projections tracker." },
-  { href: "/training", title: "Training", desc: "Programme, session log with RPE and rule-based progression." },
+  { href: "/kitchen", title: "Kitchen", desc: "Recipe database, fortnight meal plan and an aggregated shopping list.", private: true },
+  { href: "/money", title: "Money", desc: "Free budget, bank CSV import, net worth, holdings, debt payoff and projections tracker.", private: true },
+  { href: "/training", title: "Training", desc: "Programme, session log with RPE and rule-based progression.", private: true },
   { href: "/games", title: "Games", desc: "Browser games and prototypes." },
 ];
 
@@ -45,7 +45,7 @@ const other: [string, string, boolean?][] = [
     <p>Working tools and media, directly accessible.</p>
     <div class="home-grid">
       {useful.map((item) => (
-        <a class="home-card reveal" href={item.href}>
+        <a class="home-card reveal" href={item.href} data-private={"private" in item && item.private ? "" : undefined}>
           <strong>{item.title}</strong>
           <span>{item.desc}</span>
         </a>

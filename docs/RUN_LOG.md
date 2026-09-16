@@ -782,3 +782,13 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Three `pro_events` rows, each ~1 s after its licence was created. Webhook signature, secret and pinned version all work in sandbox; the webhook minted the keys and the success page showed them from customer metadata (the 15/09 race design working).
 - Funnel counters for the day: `checkout_click` 3, `pay_success` 3 (once each, no double count).
 - He didn't copy the yearly key; it's recoverable from the Stripe customer metadata, and it's sandbox anyway.
+
+
+## 2026-09-16 - Life section (Kitchen, Money, Training) hidden (NOT deployed)
+
+- Vish: "lets also hide the entire life section for the moment until we develop it further".
+- **Worker:** `isOwnerOnlyPath()` in `worker/auth.ts`. `/kitchen`, `/money`, `/training` and their APIs `/api/recipe`, `/api/market` return the site 404 page with noindex/no-store for anyone without an owner session. Paths are decoded, slash-collapsed and lowercased first, so `/%6Doney/`, `//money`, `/Money` and `/money.html` are covered. `/money` and `/api/market` left the public allowlists.
+- **Site:** the Life nav group and the three homepage cards are `data-private` (owner-only via chrome.js); the sitemap drops the three sections.
+- The owner still reaches everything. Tool code, tests and D1 data are untouched.
+- Gate: full `release:check` exit 0 (auth 14 incl. a new hidden-sections test; unit 82; check 0; all e2e).
+- Owed: the r/AusFinance Money draft in `docs/MARKETING_DRAFTS.md` is moot while Money is hidden (Reddit isn't planned anyway).

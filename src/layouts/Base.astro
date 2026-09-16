@@ -46,7 +46,8 @@ const navPrimary: [string, string][] = [
 const navMoreGroups: { label: string | null; links: [string, string][]; private?: boolean }[] = [
   { label: "Music", links: [["/studio", "Studio"], ["/audio", "Audio tools"], ["/radio", "Radio"]] },
   { label: "Read", links: [["/notes", "Notes"], ["/reader", "Reader"], ["/feeds", "Feeds"]] },
-  { label: "Life", links: [["/kitchen", "Kitchen"], ["/money", "Money"], ["/training", "Training"]] },
+  // Life is hidden (owner-only) until it is developed further; the Worker 404s it for everyone else.
+  { label: "Life", links: [["/kitchen", "Kitchen"], ["/money", "Money"], ["/training", "Training"]], private: true },
   { label: "Logs", links: [["/music", "Listening"], ["/tv", "TV"], ["/movies", "Movies"], ["/books", "Books"]] },
   { label: null, links: [["/games", "Games"], ["/pro", "Pro"], ["/about", "About"], ["/logout", "Lock site"]] },
 ];

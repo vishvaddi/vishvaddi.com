@@ -44,7 +44,7 @@ test('private content stays closed without a session, including APIs and alterna
 
 test('PUBLIC_PATHS fall through to the site without a session', async () => {
   const { env, assets } = setup()
-  for (const path of ['/site/', '/terms/', '/privacy/', '/money/', '/sitemap-index.xml', '/_astro/app.js', '/fonts/font.woff2']) {
+  for (const path of ['/site/', '/terms/', '/privacy/', '/pro/', '/sitemap-index.xml', '/_astro/app.js', '/fonts/font.woff2']) {
     const response = await worker.fetch(request(path), env)
     assert.equal(response.status, 200, path)
     assert.equal(await response.text(), 'private asset', path)
@@ -260,10 +260,25 @@ test('service worker is public, caches only the offline page, retires old caches
   assert.match(chrome, /serviceWorker\.register\("\/sw\.js"/)
 })
 
+test('hidden Life tools and their APIs 404 for visitors (all path variants) but open for the owner', async () => {
+  const { env } = setup()
+  delete env.SITE_LOCKED
+  for (const path of ['/money', '/money/', '/kitchen/', '/kitchen/plan/', '/training/', '/api/market?symbols=VAS.AX', '/api/recipe?url=https://example.com', '/%6Doney/', '//money', '/Money', '/money.html']) {
+    const response = await worker.fetch(request(path), env)
+    assert.equal(response.status, 404, path)
+    assert.match(response.headers.get('X-Robots-Tag') || '', /noindex/, `${path} is noindex`)
+  }
+  assert.equal((await worker.fetch(request('/moneyball/'), env)).status, 200, 'only the exact sections are hidden')
+  const owner = tokenFrom(await worker.fetch(login(), env))
+  for (const path of ['/money/', '/kitchen/plan/', '/training/']) {
+    assert.equal((await worker.fetch(request(path, { headers: { Cookie: owner } }), env)).status, 200, `owner ${path}`)
+  }
+})
+
 test('unlocked site (no SITE_LOCKED) serves every page publicly while the PIN still logs the owner in', async () => {
   const { env, assets } = setup()
   delete env.SITE_LOCKED
-  for (const path of ['/', '/money', '/notes/', '/kitchen/']) {
+  for (const path of ['/', '/notes/', '/site/', '/pro/']) {
     const response = await worker.fetch(request(path), env)
     assert.equal(response.status, 200, path)
     assert.equal(response.headers.get('X-Robots-Tag'), null, path)
