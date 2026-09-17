@@ -97,7 +97,7 @@ export function initProgramme(el: HTMLElement): void {
     if (!saved.length) {
       const p = document.createElement('p')
       p.className = 'prog-blurb'
-      p.textContent = 'Nothing yet — generate one below. Everything stays in this browser.'
+      p.textContent = 'Nothing yet — generate one below.'
       listCard.appendChild(p)
     }
     for (const s of saved) {

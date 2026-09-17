@@ -1,5 +1,18 @@
 # Project State
 
+## 2026-09-17 - Site refresh phase 1 (built, tests green, NOT deployed)
+
+Tools first, quieter chrome, less boilerplate. Vish's brief: futuristic-minimal, tools are the value, trim the fat.
+
+- **Tool pages:** the tool is now the first thing under the H1. `ToolIntro` renders one collapsed "About this tool" block (intro, how-to, FAQ, JSON-LD) after the tool, before the note-foot, on all 26 site/audio tool pages.
+- **Hub cards** (`/site`, `/audio`): icon, title, one-line description. Problem/promise stay in the catalogues for the About block; the `privacy` field is gone.
+- **Privacy boilerplate removed** from page copy, meta descriptions and intros ("runs in your browser", "nothing is uploaded", "stays on this device"...). It survives only on `/privacy` and in the collapsed FAQ answers. Vish will rewrite remaining copy himself.
+- **Pro nudge bar** (3rd tool view, `chrome.js`) removed; the inline export hint in `export-brand.ts` is the only in-tool Pro prompt. `tool_view` metric still fires.
+- **Nav:** More menu is Music / Read (Feeds, Reader) / Games, TV, Pro, About / Logs collapsed behind a nested `<details>` (Listening, Movies, Books, Notes). Homepage: WIP callout and the Weather deep-link card dropped; "More" links reordered to match.
+- **Games:** order Deep Swarm, Last Cast, Carromancy, Big 2; "Charm engine" gone from descriptions. **About:** GitHub link removed. Price Tracker moved to Documents & reference.
+- **Tests:** `feature-upgrades-e2e` hub assertion and `pro-e2e` nudge block rewritten for the new markup; `release:check` all green.
+- **Not done / next (phase 2):** Calculator + Calc Notepad merge behind one toggle with a rebuilt notepad engine (plan in vault `Projects/vishvaddi.com.md` 17/09); Ctrl+K command palette; monochrome glyphs; "pick up where you left off" strip; Span → Materials, Resources + Quick Reference merge with redirects.
+
 ## 2026-09-16 - Pro is adoption-first (built, not deployed)
 
 The site is public; the PIN is only the owner login. Every tool and feature is free.

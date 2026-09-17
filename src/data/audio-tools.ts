@@ -17,13 +17,12 @@ export interface AudioTool {
   description: string
   problem: string
   promise: string
-  privacy: string
   category: AudioToolCategory
   aliases: string
   quick?: boolean
 }
 
-const RAW_AUDIO_TOOLS: Omit<AudioTool, 'problem' | 'promise' | 'privacy'>[] = [
+const RAW_AUDIO_TOOLS: Omit<AudioTool, 'problem' | 'promise'>[] = [
   { href: '/audio/chords', title: 'Chord & Scale Lab', shortTitle: 'Chord lab', icon: '🎹', description: 'Diatonic chords for any key and scale, Roman numerals, Camelot, progression presets, loop playback and MIDI export.', category: 'Compose', aliases: 'chords scale key progression roman numeral camelot midi diatonic inversion voicing scaler', quick: true },
   { href: '/audio/prep', title: 'Sample Prep', shortTitle: 'Sample prep', icon: '✂️', description: 'Batch trim, normalise, fade, reverse, pitch, stretch to BPM, centre-channel vocal remover, mono, resample, WAV/MP3.', category: 'Prepare & convert', aliases: 'trim normalise normalize lufs fade reverse pitch stretch bpm vocal remover karaoke instrumental mono convert resample wav mp3 batch', quick: true },
   { href: '/audio/bpm', title: 'BPM Maths', shortTitle: 'BPM maths', icon: '⏱️', description: 'Note values in ms and Hz, reverb times, bars to seconds and samples, Hz to note and MIDI, tap tempo.', category: 'Prepare & convert', aliases: 'delay time ms lfo hz reverb predelay decay bars seconds samples tap tempo hz note midi cents', quick: true },
@@ -47,5 +46,4 @@ export const AUDIO_TOOLS: AudioTool[] = RAW_AUDIO_TOOLS.map((tool) => ({
   ...tool,
   problem: POSITIONING[tool.href][0],
   promise: POSITIONING[tool.href][1],
-  privacy: 'Audio stays in this browser; nothing is uploaded.',
 }))

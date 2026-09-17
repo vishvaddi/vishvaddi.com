@@ -202,16 +202,10 @@ try {
   await ownerPage.locator('#export-project').click()
   check('Pro: owner sees no upsell panel on /site/cut-list/', await ownerPage.locator('#pro-upsell').count() === 0)
 
-  // A 3rd distinct tool page would trigger the nudge for a public visitor —
-  // confirm the owner marker suppresses it.
-  await ownerPage.goto(`${BASE}/site/pdf/`, { waitUntil: 'domcontentloaded' })
-  await ownerPage.goto(`${BASE}/site/sheet/`, { waitUntil: 'domcontentloaded' })
-  check('Nudge: never shown with the owner marker even at the 3rd distinct tool page', await ownerPage.locator('.vv-nudge').count() === 0)
-
   await ownerPage.close()
   await ownerCtx.close()
 
-  // ── funnel counters: session nudge on the 3rd distinct tool page, tool_view/nudge beacons ──
+  // ── funnel counters: tool_view beacons; the 3rd-view nudge bar was removed 17/09/26 ──
   const nudgeCtx = await browser.newContext({ viewport: { width: 390, height: 844 } })
   await stubStatus(nudgeCtx, { pro: false, source: null, configured: true })
   const metricCalls = await recordMetrics(nudgeCtx)
@@ -219,21 +213,12 @@ try {
   nudgePage.on('pageerror', (error) => errors.push(String(error)))
 
   await nudgePage.goto(`${BASE}/site/pdf/`, { waitUntil: 'domcontentloaded' })
-  check('Nudge: not shown on the 1st distinct tool page', await nudgePage.locator('.vv-nudge').count() === 0)
-
   await nudgePage.goto(`${BASE}/site/cut-list/`, { waitUntil: 'domcontentloaded' })
-  check('Nudge: not shown on the 2nd distinct tool page', await nudgePage.locator('.vv-nudge').count() === 0)
-
   await nudgePage.goto(`${BASE}/site/sheet/`, { waitUntil: 'domcontentloaded' })
-  await nudgePage.waitForSelector('.vv-nudge', { timeout: 3000 }).catch(() => {})
-  check('Nudge: shown on the 3rd distinct tool page', await nudgePage.locator('.vv-nudge').count() === 1)
-  check('Nudge: links to /pro', await nudgePage.locator('.vv-nudge a[href="/pro"]').count() === 1)
-  check('Nudge: copy sells clean exports and sync, not an export limit', (await nudgePage.locator('.vv-nudge').textContent() || '').includes('clean exports without the footer, plus sync'))
+  await nudgePage.waitForTimeout(500)
+  check('Nudge: no top-of-page Pro bar even on the 3rd distinct tool page', await nudgePage.locator('.vv-nudge').count() === 0)
   check('Metrics: tool_view beacon recorded for each tool page visited', metricCalls.filter((call) => call?.event === 'tool_view').length === 3)
-  check('Metrics: nudge_shown beacon recorded once', metricCalls.filter((call) => call?.event === 'nudge_shown').length === 1)
-
-  await nudgePage.locator('.vv-nudge-dismiss').click()
-  check('Nudge: dismiss button removes the bar', await nudgePage.locator('.vv-nudge').count() === 0)
+  check('Metrics: no nudge_shown beacon', metricCalls.filter((call) => call?.event === 'nudge_shown').length === 0)
 
   await nudgePage.close()
   await nudgeCtx.close()

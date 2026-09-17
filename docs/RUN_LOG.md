@@ -817,3 +817,12 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
   - (a) Retire the 4 sandbox licences in D1 (all created before 12:33Z): Claude's bulk UPDATE was blocked by the auto-mode classifier, so Vish runs it.
   - (b) One real A$5 pass purchase on his card → key + webhook check → refund from the dashboard.
 - Sandbox licences retired 16/09 late night (Vish: "ok do that"): 4 rows (year ×2, month, pass) set to cancelled; restoring an old test key on production now returns 401.
+
+## 2026-09-17 - Site refresh phase 1 (Claude Code)
+
+- Brief: "now that pro is live, improve the website overall — futuristic but minimal, tools are the priority, trim the fat". Planned first (vault note), then Vish: calc + notepad become one switchable tool with a rebuilt notepad; "do what you think is best for the rest".
+- Live survey found: tool pages buried the tool ~500 px down (nudge bar + SEO intro + FAQ + second intro); hub cards carried three lines each; ~40 privacy sentences; cache headers are `max-age=0, must-revalidate` + ETag with an offline-only SW, so the requested hard-refresh pop-up is unnecessary and was not built.
+- Changes: ToolIntro moved below the tool as one collapsed block (26 pages); hub cards one-line; privacy sentences stripped from copy/meta/intros (FAQ + `/privacy` keep them); nudge bar removed; nav regrouped with Logs nested; games reordered; About GitHub link gone; homepage WIP callout gone.
+- Incident during the sweep: a comma-cleanup regex stripped `, "` inside script blocks (geometry row arrays). Caught by the build, files restored from git, sweep redone with explicit sentence strings only.
+- Tests updated (`feature-upgrades-e2e`, `pro-e2e`); `npm run release:check` all green. Committed and pushed; **not deployed** (Vish's call).
+

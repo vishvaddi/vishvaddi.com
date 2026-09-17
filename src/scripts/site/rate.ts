@@ -96,7 +96,7 @@ export function initRate() {
   function renderSaved() {
     const list = load();
     savedEl!.textContent = "";
-    if (!list.length) { savedEl!.textContent = "No saved rates yet — saved rates stay only on this device."; savedEl!.style.color = "var(--muted)"; return; }
+    if (!list.length) { savedEl!.textContent = "No saved rates yet."; savedEl!.style.color = "var(--muted)"; return; }
     savedEl!.style.color = "";
     list.forEach((s, i) => {
       const row = document.createElement("div");

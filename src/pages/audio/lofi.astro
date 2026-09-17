@@ -13,11 +13,10 @@ import "../../styles/audio.css";
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/audio" style="color:inherit;text-decoration:none">Audio</a> / Lo-fi processor</p>
     <h1>Lo-fi Processor</h1>
-    <ToolIntro href="/audio/lofi" />
     <p>
       Pick a character, turn one knob, blend it in. Each transform is a fixed
       chain of filters, saturation, wobble and noise tuned to sound like the
-      thing on the tin. The file never leaves this tab.
+      thing on the tin.
     </p>
 
     <div class="au-drop" id="lf-drop">
@@ -43,6 +42,7 @@ import "../../styles/audio.css";
       <button type="button" class="btn" id="lf-download">Download</button>
     </div>
 
+    <ToolIntro href="/audio/lofi" />
     <p class="note-foot">
       Noise and crackle are seeded, so the same file with the same settings renders the same bytes every time. Peaks over full scale are pulled back to −0.2 dBFS after the output gain.
     </p>

@@ -1,7 +1,6 @@
 ---
-// Drops under a tool page's <h1>: a visible intro sentence for humans and
-// crawlers, then How to use + FAQ collapsed in <details> so the tool's own
-// controls don't shift down the page. JSON-LD (SoftwareApplication + FAQPage)
+// Sits after a tool's controls: intro, How to use and FAQ collapsed in one
+// <details> so the tool itself is the first thing on the page. JSON-LD (SoftwareApplication + FAQPage)
 // travels with it so every /site and /audio tool page carries structured data
 // without repeating it by hand.
 import { TOOL_SEO } from "../data/tool-seo";
@@ -46,9 +45,9 @@ const jsonLd = {
 ---
 
 <div class="tool-intro">
-  <p class="tool-intro-text">{seo.intro}</p>
   <details class="tool-intro-more">
-    <summary>How to use it &amp; FAQ</summary>
+    <summary>About this tool</summary>
+    <p class="tool-intro-text">{seo.intro}</p>
     <h2>How to use it</h2>
     <ol>
       {seo.howTo.map((step) => <li>{step}</li>)}
@@ -66,7 +65,8 @@ const jsonLd = {
 <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 
 <style>
-  .tool-intro-text { color: var(--muted); margin: 0 0 0.75rem; }
+  .tool-intro { margin-top: 1.5rem; }
+  .tool-intro-text { color: var(--muted); margin: 0.6rem 0 0; font-size: 0.92rem; }
   .tool-intro-more { border: 1px solid var(--site-line-strong); border-radius: 8px; padding: 0.6rem 0.8rem; margin: 0 0 1rem; }
   .tool-intro-more summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
   .tool-intro-more h2 { font-size: 0.95rem; margin: 0.9rem 0 0.4rem; }
@@ -75,9 +75,5 @@ const jsonLd = {
   .tool-faq-item { border-top: 1px solid var(--site-line); padding: 0.5rem 0 0.1rem; }
   .tool-faq-item summary { min-height: 40px; display: flex; align-items: center; cursor: pointer; font-size: 0.88rem; font-weight: 500; }
   .tool-faq-item p { margin: 0.3rem 0 0.6rem; color: var(--muted); font-size: 0.88rem; }
-  /* On a phone the tool should be on the first screen; the full intro stays in the DOM for crawlers. */
-  @media (max-width: 640px) {
-    .tool-intro-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: 0.9rem; }
-  }
   @media print { .tool-intro-text, .tool-intro-more { display: none; } }
 </style>

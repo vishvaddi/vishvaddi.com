@@ -14,8 +14,8 @@ export interface ToolSeo {
 export const TOOL_SEO: Record<string, ToolSeo> = {
   '/site/calc': {
     metaTitle: 'Free Site Calculator — expressions & variables (AU)',
-    metaDescription: 'A free browser calculator for site maths — full expressions, functions, constants, your own variables and a running history. Nothing is uploaded.',
-    intro: 'This is an expression calculator built for site and office maths, not just a four-function pad. Type full expressions with functions and constants, define your own variables, and recall earlier results from the history. It runs entirely in your browser, so nothing you type is ever uploaded.',
+    metaDescription: 'A free browser calculator for site maths — full expressions, functions, constants, your own variables and a running history.',
+    intro: 'This is an expression calculator built for site and office maths, not just a four-function pad. Type full expressions with functions and constants, define your own variables, and recall earlier results from the history.',
     howTo: [
       'Type an expression like 2400/600 or sin(45) and press Enter.',
       'Define a variable, e.g. r = 3, then use it in later expressions such as pi * r^2.',
@@ -33,7 +33,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   '/site/notepad': {
     metaTitle: 'Calculation Notepad — free takeoff maths (Australia)',
     metaDescription: 'Type takeoff-style lines with variables, GST, currency and metric units and get running totals as you go — a free, browser-only calculation notepad.',
-    intro: "The Calculation Notepad is for takeoff-style working: type one plain-English line per calculation and it carries variables down the page, handling GST, currency and common metric units as it goes. It's built for estimators who want to see their workings later, not just a final number. Everything runs in your browser and nothing is uploaded.",
+    intro: "The Calculation Notepad is for takeoff-style working: type one plain-English line per calculation and it carries variables down the page, handling GST, currency and common metric units as it goes. It's built for estimators who want to see their workings later, not just a final number.",
     howTo: [
       'Type a line such as area = 12 * 8 and press Enter to see the result.',
       'Reference an earlier variable in a later line, e.g. cost = area * 45.',
@@ -50,8 +50,8 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   },
   '/site/convert': {
     metaTitle: 'Free Unit Converter — metric, imperial & AUD (Australia)',
-    metaDescription: 'Convert length, area, volume, mass, pressure, energy, data and more, plus live AUD currency exchange — updates as you type, runs in your browser.',
-    intro: 'A fast unit converter for the categories a builder or estimator actually needs — metric and imperial length, area, volume, mass, pressure, power, energy, data, angle, force and more — plus live currency conversion. Results update as you type. It runs entirely in your browser; nothing is uploaded.',
+    metaDescription: 'Convert length, area, volume, mass, pressure, energy, data and more, plus live AUD currency exchange — updates as you type.',
+    intro: 'A fast unit converter for the categories a builder or estimator actually needs — metric and imperial length, area, volume, mass, pressure, power, energy, data, angle, force and more — plus live currency conversion. Results update as you type.',
     howTo: [
       'Choose a category from the Type dropdown, e.g. Length or Currency.',
       'Type a value in either field and the other converts instantly.',
@@ -69,7 +69,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   '/site/materials': {
     metaTitle: 'Material Calculators — paint, tiles, concrete (AU)',
     metaDescription: 'Free quantity calculators by trade — paint, tiles, plasterboard, concrete, footings, timber and roofing — with practical waste allowances.',
-    intro: 'Material Calculators works out practical quantities by trade — paint coverage, tile counts, plasterboard sheets, concrete and footing volumes, timber board feet and roofing quantities — each with a sensible waste allowance built in. Pick a trade tab and the figures update as you type. It runs entirely in your browser.',
+    intro: 'Material Calculators works out practical quantities by trade — paint coverage, tile counts, plasterboard sheets, concrete and footing volumes, timber board feet and roofing quantities — each with a sensible waste allowance built in. Pick a trade tab and the figures update as you type.',
     howTo: [
       'Choose a trade tab, e.g. Paint, Tiles or Concrete.',
       'Enter your dimensions or area — figures update live.',
@@ -87,7 +87,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   '/site/geometry': {
     metaTitle: 'Geometry & Setout Calculator — rafters, stairs (AU)',
     metaDescription: 'Free setout maths for the field — feet-inch fractions, square check, trig, stairs, rafters, mitres and volumes. Updates as you type.',
-    intro: 'Geometry & Setout is a set of construction-master style calculators for setting out in the field — feet-inch-fraction and metric dimensions, square checks, trig and triangle solving, circles and arcs, stair and rafter geometry, and compound mitres. Choose a section and the maths updates as you type. It runs entirely in your browser.',
+    intro: 'Geometry & Setout is a set of construction-master style calculators for setting out in the field — feet-inch-fraction and metric dimensions, square checks, trig and triangle solving, circles and arcs, stair and rafter geometry, and compound mitres. Choose a section and the maths updates as you type.',
     howTo: [
       'Pick a section from the tabs, e.g. Setout, Stairs or Rafters.',
       'Enter your known dimensions in feet-inches or metric.',
@@ -104,8 +104,8 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   },
   '/site/rate': {
     metaTitle: 'Rate Builder — build unit rates free (Australia)',
-    metaDescription: 'Build an auditable unit rate from material, labour, plant and margin, line by line. Save your rates locally. Free, runs entirely in your browser.',
-    intro: "Rate Builder lets you construct a unit rate from its components — material, labour, plant and margin — one line at a time, so the final number is auditable rather than a guess. Anything you save stays on your device. It's aimed at estimators who need to show how a rate was built, not just what it costs.",
+    metaDescription: 'Build an auditable unit rate from material, labour, plant and margin, line by line. Save your rates locally.',
+    intro: "Rate Builder lets you construct a unit rate from its components — material, labour, plant and margin — one line at a time, so the final number is auditable rather than a guess. It's aimed at estimators who need to show how a rate was built, not just what it costs.",
     howTo: [
       "Name the rate, e.g. 'Install 100x100 SHS bracket'.",
       'Add a line for each cost component and choose its type (material, labour, plant).',
@@ -123,7 +123,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   '/site/charge-rate': {
     metaTitle: 'Charge-Out Rate Calculator — sole trader (AU)',
     metaDescription: 'Work out your hourly charge-out rate from wage, super, overheads, billable hours and margin — free, for Australian sole traders and subbies.',
-    intro: "This calculator works out the hourly rate an Australian sole trader or subbie actually needs to charge — starting from the wage you want, then adding super, overheads and unbilled time before your margin. It's built to stop \"charging your wage\" as your rate, which is a fast way to go broke. Everything runs in your browser.",
+    intro: "This calculator works out the hourly rate an Australian sole trader or subbie actually needs to charge — starting from the wage you want, then adding super, overheads and unbilled time before your margin. It's built to stop \"charging your wage\" as your rate, which is a fast way to go broke.",
     howTo: [
       'Enter the annual wage you want to end up with.',
       'Add superannuation, overheads and expected billable hours.',
@@ -158,8 +158,8 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   },
   '/site/programme': {
     metaTitle: 'Programme Builder — free CPM Gantt tool (Australia)',
-    metaDescription: 'Build a critical-path construction programme with FS/SS/FF links, working-day calendars and a fitout trade sequence, free, in your browser.',
-    intro: "Programme Builder is a proper critical-path scheduler for construction and shopfitting: build from a template or task by task, with FS/SS/FF links, lag, a working-day calendar and float — plus a fitout trade sequence built in. It's aimed at estimators and project managers who need a real Gantt, not a simple task list. Everything runs in your browser.",
+    metaDescription: 'Build a critical-path construction programme with FS/SS/FF links, working-day calendars and a fitout trade sequence.',
+    intro: "Programme Builder is a proper critical-path scheduler for construction and shopfitting: build from a template or task by task, with FS/SS/FF links, lag, a working-day calendar and float — plus a fitout trade sequence built in. It's aimed at estimators and project managers who need a real Gantt, not a simple task list.",
     howTo: [
       'Start from a shopfitting template or add tasks from scratch.',
       'Link tasks with FS, SS or FF dependencies and add lag where needed.',
@@ -176,8 +176,8 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   },
   '/site/cut-list': {
     metaTitle: 'Cut List Optimiser — free timber & sheet nesting (AU)',
-    metaDescription: 'Pack pieces into stock lengths to minimise offcut waste, allowing for saw kerf and end trim. Free linear cut optimiser, runs in your browser.',
-    intro: "The Cut List Optimiser packs your list of pieces into one or more stock lengths — timber, trim, tube or extrusion — to waste as little material as possible, allowing for saw kerf and end trim. There's a matching Sheet (2D) mode for panel nesting. It's built for estimators and tradies who want a practical cutting plan, not just a total length. Everything runs in your browser.",
+    metaDescription: 'Pack pieces into stock lengths to minimise offcut waste, allowing for saw kerf and end trim.',
+    intro: "The Cut List Optimiser packs your list of pieces into one or more stock lengths — timber, trim, tube or extrusion — to waste as little material as possible, allowing for saw kerf and end trim. There's a matching Sheet (2D) mode for panel nesting. It's built for estimators and tradies who want a practical cutting plan, not just a total length.",
     howTo: [
       'Enter your stock lengths, available quantity and cost.',
       'Set your saw kerf and end trim allowance.',
@@ -195,7 +195,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   '/site/lattice': {
     metaTitle: 'Lattice — free nested estimating grid (Australia)',
     metaDescription: 'A hierarchical spreadsheet where every cell can hold another grid — break a job into trades and items with roll-up totals. Free, local-only.',
-    intro: 'Lattice is a hierarchical estimating grid: every cell can hold another grid, so you can break a job into trades, a trade into items, and let the costs roll up automatically. Formulas like =B2*D2 calculate quantity times rate, and [[Sheet]] links between sheets. It\'s built for scopes that get unreadable in a flat spreadsheet. Everything stays in your browser.',
+    intro: 'Lattice is a hierarchical estimating grid: every cell can hold another grid, so you can break a job into trades, a trade into items, and let the costs roll up automatically. Formulas like =B2*D2 calculate quantity times rate, and [[Sheet]] links between sheets. It\'s built for scopes that get unreadable in a flat spreadsheet.',
     howTo: [
       'Start a sheet and add rows for trades or items.',
       'Nest a grid inside a cell to break an item down further.',
@@ -213,7 +213,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   '/site/span': {
     metaTitle: 'Timber Span Lookup — indicative joist & rafter spans',
     metaDescription: 'Quick indicative spans for floor joists, ceiling joists and rafters (MGP10/MGP12) for estimating member counts. Free; verify against AS1684.',
-    intro: 'Timber Span Lookup gives ballpark single-span figures for floor joists, ceiling joists and rafters in MGP10/MGP12, so you can estimate member counts early in a job. It is deliberately indicative only — final sizing must always come from the current AS1684 span table supplement or a structural engineer for your grade, load, wind and spacing. It runs entirely in your browser.',
+    intro: 'Timber Span Lookup gives ballpark single-span figures for floor joists, ceiling joists and rafters in MGP10/MGP12, so you can estimate member counts early in a job. It is deliberately indicative only — final sizing must always come from the current AS1684 span table supplement or a structural engineer for your grade, load, wind and spacing.',
     howTo: [
       'Choose the member type — floor joist, ceiling joist or rafter.',
       'Select the timber grade, e.g. MGP10 or MGP12.',
@@ -230,7 +230,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   },
   '/site/records': {
     metaTitle: 'Site Records — free variations & punch list tracker',
-    metaDescription: 'Running site registers — variations, punch list, deliveries, contacts and a daily log — with CSV export. Free, runs entirely in your browser.',
+    metaDescription: 'Running site registers — variations, punch list, deliveries, contacts and a daily log — with CSV export.',
     intro: "Site Records keeps running registers for a job — variations, punch list, deliveries, contacts and a daily log — so nothing gets forgotten before it reaches the commercial record. Add and edit entries, see live totals, and export any register when you need to share it. It's built for project managers and estimators who need this captured consistently, not scattered across notebooks and texts.",
     howTo: [
       'Pick a register, e.g. Variations or Punch List.',
@@ -248,8 +248,8 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   },
   '/site/voice': {
     metaTitle: 'Voice Notes — hands-free site transcription (AU)',
-    metaDescription: 'Speak and it transcribes live — take hands-free site notes, then edit, timestamp and export. Free; transcript and audio stay on your device.',
-    intro: "Voice Notes lets you record and transcribe site notes hands-free — hit record, talk, and it transcribes as you speak, then you can edit, timestamp and export the result. It's built for anyone whose hands are full on site. The transcript and any audio stay on your device, with one exception noted below for browser speech recognition.",
+    metaDescription: 'Speak and it transcribes live — take hands-free site notes, then edit, timestamp and export.',
+    intro: "Voice Notes lets you record and transcribe site notes hands-free — hit record, talk, and it transcribes as you speak, then you can edit, timestamp and export the result. It's built for anyone whose hands are full on site.",
     howTo: [
       'Tap record and start talking.',
       'Watch the transcript build live as you speak.',
@@ -266,8 +266,8 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   },
   '/site/sketch': {
     metaTitle: 'Sketchpad — free site markup & PNG export (AU)',
-    metaDescription: 'Quick site marks and drawing mark-ups by mouse, touch or stylus, with PNG export. Free, runs entirely in your browser.',
-    intro: "Sketchpad is a quick drawing tool for site marks and mark-ups — draw with a mouse, touch or stylus and export a clean PNG when you're done. It's for the moment a photo or plan just needs one explanatory sketch, without opening another app. Everything runs in your browser.",
+    metaDescription: 'Quick site marks and drawing mark-ups by mouse, touch or stylus, with PNG export.',
+    intro: "Sketchpad is a quick drawing tool for site marks and mark-ups — draw with a mouse, touch or stylus and export a clean PNG when you're done. It's for the moment a photo or plan just needs one explanatory sketch, without opening another app.",
     howTo: [
       'Pick a colour and start drawing on the canvas.',
       'Add marks, arrows or notes over your sketch.',
@@ -302,8 +302,8 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   },
   '/site/pdf': {
     metaTitle: 'PDF Toolkit — free browser PDF editor (Australia)',
-    metaDescription: 'Merge, split, organise, rotate, sign, watermark, number and compress PDF pages, plus compare two drawings — free, files stay on your device.',
-    intro: "PDF Toolkit is a local-first PDF editor for construction documents: merge, split, extract, reorder, rotate, duplicate, sign, watermark, number, crop and raster-compress pages, plus overlay two drawings to compare revisions. It's built for estimators issuing and checking drawings without uploading them anywhere. Files are read and processed in your browser and never leave your device.",
+    metaDescription: 'Merge, split, organise, rotate, sign, watermark, number and compress PDF pages, plus compare two drawings.',
+    intro: "PDF Toolkit is a local-first PDF editor for construction documents: merge, split, extract, reorder, rotate, duplicate, sign, watermark, number, crop and raster-compress pages, plus overlay two drawings to compare revisions. It's built for estimators issuing and checking drawings without uploading them anywhere.",
     howTo: [
       'Drop in one or more PDFs or images.',
       'Select pages and rotate, delete, duplicate or reorder as needed.',
@@ -356,7 +356,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   '/audio/chords': {
     metaTitle: 'Chord & Scale Lab — free diatonic chords & MIDI (AU)',
     metaDescription: 'Hear every diatonic chord in any key and scale, build a progression with Roman numerals and Camelot codes, loop it and export MIDI. Free.',
-    intro: "Chord & Scale Lab shows and plays every diatonic chord in any key and scale, labelled with Roman numerals and Camelot codes, so you can stop re-deriving which chords belong mid-session. Build a progression from presets or by hand with inversions and voicings, loop it at tempo, then export it as a MIDI file to drag into your DAW. It runs entirely in your browser.",
+    intro: "Chord & Scale Lab shows and plays every diatonic chord in any key and scale, labelled with Roman numerals and Camelot codes, so you can stop re-deriving which chords belong mid-session. Build a progression from presets or by hand with inversions and voicings, loop it at tempo, then export it as a MIDI file to drag into your DAW.",
     howTo: [
       'Pick a key and scale from the selectors.',
       'Tap chords to hear them, or choose a progression preset.',
@@ -392,7 +392,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   '/audio/bpm': {
     metaTitle: 'BPM Maths — free delay, LFO & note value calculator',
     metaDescription: 'Type or tap a tempo and read every delay/LFO note value in ms and Hz, reverb times, bars to seconds and Hz-to-note/MIDI/cents. Free.',
-    intro: "BPM Maths turns a tempo into every number you'd otherwise work out on a phone calculator mid-session — note values in milliseconds for delays, in hertz for LFOs, reverb pre-delay and decay starting points that land on the grid, bars converted to seconds and samples, and Hz converted to note, MIDI and cents. Tap the tempo or type it directly. It runs entirely in your browser.",
+    intro: "BPM Maths turns a tempo into every number you'd otherwise work out on a phone calculator mid-session — note values in milliseconds for delays, in hertz for LFOs, reverb pre-delay and decay starting points that land on the grid, bars converted to seconds and samples, and Hz converted to note, MIDI and cents. Tap the tempo or type it directly.",
     howTo: [
       'Type a BPM or tap the tempo button in time.',
       'Read note values in milliseconds and hertz for delay and LFO settings.',
@@ -410,7 +410,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   '/audio/metronome': {
     metaTitle: 'Tuner & Metronome — free polyrhythm practice tool',
     metaDescription: 'A chromatic mic tuner with cents readout and reference tone, plus a metronome with accents, subdivisions and polyrhythms. Free, no ads.',
-    intro: "Tuner & Metronome covers the two things every practice session needs, without the ads most phone apps bury them under. The metronome schedules clicks on the audio clock so it doesn't drift over long sessions, with accents, subdivisions and polyrhythm layers; the tuner listens on your microphone with a cents readout and reference tone, and never records. It runs entirely in your browser.",
+    intro: "Tuner & Metronome covers the two things every practice session needs, without the ads most phone apps bury them under. The metronome schedules clicks on the audio clock so it doesn't drift over long sessions, with accents, subdivisions and polyrhythm layers; the tuner listens on your microphone with a cents readout and reference tone, and never records.",
     howTo: [
       'Set your tempo and choose accents or subdivisions for the metronome.',
       "Layer a second polyrhythm if you're practising against it.",
@@ -428,7 +428,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   '/audio/lofi': {
     metaTitle: 'Lo-fi Processor — free VHS, tape & vinyl effects (AU)',
     metaDescription: 'Sixteen one-knob retro transforms — VHS, tape, vinyl, radio, telephone, 8-bit and more — with dry/wet blend. Free preview; browser-only.',
-    intro: 'Lo-fi Processor applies sixteen one-knob retro character transforms to a sample — VHS, tape, vinyl, FM/AM radio, telephone, walkie-talkie, megaphone, underwater, 8-bit, sample crush, old film, lo-fi hip hop, detune drift and backwards swell — each a tuned chain of filters, saturation, wobble and noise. Pick a character, turn one knob, blend it with dry/wet, and the file never leaves your browser.',
+    intro: 'Lo-fi Processor applies sixteen one-knob retro character transforms to a sample — VHS, tape, vinyl, FM/AM radio, telephone, walkie-talkie, megaphone, underwater, 8-bit, sample crush, old film, lo-fi hip hop, detune drift and backwards swell — each a tuned chain of filters, saturation, wobble and noise. Pick a character, turn one knob, blend it with dry/wet',
     howTo: [
       'Drop in a sample.',
       'Pick a character, e.g. VHS, tape or vinyl.',
@@ -446,7 +446,7 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   '/audio/ear': {
     metaTitle: 'Ear Training — free interval, chord & EQ drills (AU)',
     metaDescription: 'Six ear-training exercises: note, interval and chord ID on staff, keyboard and fretboard, EQ band ear training and rhythm dictation. Free.',
-    intro: 'Ear Training runs six drills for producers and musicians: note, interval and chord identification on staff, piano keyboard and guitar fretboard views, plus interval ear training, EQ band ear training, and rhythm dictation — the two most web ear-trainers skip. Answer with the on-screen buttons or number keys, track your streak, and share a drill\'s exact settings by link. It runs entirely in your browser.',
+    intro: 'Ear Training runs six drills for producers and musicians: note, interval and chord identification on staff, piano keyboard and guitar fretboard views, plus interval ear training, EQ band ear training, and rhythm dictation — the two most web ear-trainers skip. Answer with the on-screen buttons or number keys, track your streak, and share a drill\'s exact settings by link.',
     howTo: [
       'Pick an exercise, e.g. Interval ID or EQ band ear training.',
       'Answer using the buttons or keys 1–9.',
@@ -463,8 +463,8 @@ export const TOOL_SEO: Record<string, ToolSeo> = {
   },
   '/audio/analyser': {
     metaTitle: 'Track Analyser — free BPM, key & LUFS checker (AU)',
-    metaDescription: 'Drop a track and read tempo, key, Camelot code, LUFS, true peak, loudness range, stereo width and streaming targets. Free, in-browser.',
-    intro: "Track Analyser reads a dropped file's tempo, key and Camelot code, integrated and short-term loudness (LUFS), true peak, loudness range and stereo width, then shows how far you sit from Spotify, Apple Music, YouTube and club loudness targets. It's built for mastering decisions you'd otherwise need a paid meter or a DAW to see. The audio is decoded and measured in your browser and never uploaded.",
+    metaDescription: 'Drop a track and read tempo, key, Camelot code, LUFS, true peak, loudness range, stereo width and streaming targets.',
+    intro: "Track Analyser reads a dropped file's tempo, key and Camelot code, integrated and short-term loudness (LUFS), true peak, loudness range and stereo width, then shows how far you sit from Spotify, Apple Music, YouTube and club loudness targets. It's built for mastering decisions you'd otherwise need a paid meter or a DAW to see.",
     howTo: [
       'Drop in an audio file.',
       'Read the detected tempo, key and Camelot code.',

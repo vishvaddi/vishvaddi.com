@@ -14,4 +14,3 @@ Outside of work I listen to and produce music, watch films and YouTube videos �
 ## Find me
 
 - Email — [vishvaddi@gmail.com](mailto:vishvaddi@gmail.com).
-- GitHub — [github.com/vishvaddi](https://github.com/vishvaddi).

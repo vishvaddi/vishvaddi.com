@@ -62,7 +62,7 @@ try {
   check('Radio: persistent mini player exposes playback controls', await page.locator('#mini-play').count() === 1)
 
   await page.goto(`${BASE}/site/`, { waitUntil: 'domcontentloaded' })
-  check('Hub: every tool states problem and privacy', await page.locator('[data-tool-item]').count() === await page.locator('[data-tool-item] .tool-privacy').count())
+  check('Hub: every tool card has a one-line description and no privacy line', await page.locator('[data-tool-item]').count() === await page.locator('[data-tool-item] .d').count() && await page.locator('.tool-privacy').count() === 0)
 
   await page.goto(`${BASE}/site/voice/`, { waitUntil: 'domcontentloaded' })
   await page.locator('#capture-files').setInputFiles({ name: 'wall.jpg', mimeType: 'image/jpeg', buffer: Buffer.from([255, 216, 255, 217]) })

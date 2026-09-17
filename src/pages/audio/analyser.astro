@@ -7,17 +7,15 @@ import "../../styles/audio.css";
 
 <Base
   title="Track Analyser — free BPM, key & LUFS checker (AU)"
-  description="Drop a track and read tempo, key, Camelot code, LUFS, true peak, loudness range, stereo width and streaming targets. Free, in-browser."
+  description="Drop a track and read tempo, key, Camelot code, LUFS, true peak, loudness range, stereo width and streaming targets."
   audioNav
 >
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/audio" style="color:inherit;text-decoration:none">Audio</a> / Track analyser</p>
     <h1>Track Analyser</h1>
-    <ToolIntro href="/audio/analyser" />
     <p>
       Tempo, key, loudness, peaks, width and tonal balance from one file, plus how
-      far it sits from each streaming and club target. The audio is decoded and
-      measured in this tab and never uploaded.
+      far it sits from each streaming and club target.
     </p>
 
     <div class="au-drop" id="au-drop">
@@ -76,6 +74,7 @@ import "../../styles/audio.css";
         <button type="button" class="btn btn-ghost" id="au-json">Download JSON</button>
       </div>
 
+      <ToolIntro href="/audio/analyser" />
       <p class="note-foot">
         Loudness follows ITU-R BS.1770-4 with EBU R128 gating; range follows EBU Tech 3342; true peak is 4× oversampled.
         Key uses Krumhansl–Kessler profile correlation on a chroma of the whole track, so modulating songs report the dominant key.

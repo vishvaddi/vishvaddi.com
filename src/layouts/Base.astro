@@ -43,13 +43,14 @@ const navPrimary: [string, string][] = [
 // listening log, so it is labelled by what it is to avoid two "Music" entries.
 // The site is public; chrome.js hides [data-private] (owner-only links such as
 // Lock site) for anyone without the vv_owner marker cookie.
-const navMoreGroups: { label: string | null; links: [string, string][]; private?: boolean }[] = [
+const navMoreGroups: { label: string | null; links: [string, string][]; private?: boolean; collapsed?: boolean }[] = [
   { label: "Music", links: [["/studio", "Studio"], ["/audio", "Audio tools"], ["/radio", "Radio"]] },
-  { label: "Read", links: [["/notes", "Notes"], ["/reader", "Reader"], ["/feeds", "Feeds"]] },
+  { label: "Read", links: [["/feeds", "Feeds"], ["/reader", "Reader"]] },
   // Life is hidden (owner-only) until it is developed further; the Worker 404s it for everyone else.
   { label: "Life", links: [["/kitchen", "Kitchen"], ["/money", "Money"], ["/training", "Training"]], private: true },
-  { label: "Logs", links: [["/music", "Listening"], ["/tv", "TV"], ["/movies", "Movies"], ["/books", "Books"]] },
-  { label: null, links: [["/games", "Games"], ["/pro", "Pro"], ["/about", "About"], ["/logout", "Lock site"]] },
+  { label: null, links: [["/games", "Games"], ["/tv", "TV"], ["/pro", "Pro"], ["/about", "About"], ["/logout", "Lock site"]] },
+  // Logs are dormant, so they sit behind a second disclosure instead of taking menu space.
+  { label: "Logs", links: [["/music", "Listening"], ["/movies", "Movies"], ["/books", "Books"], ["/notes", "Notes"]], collapsed: true },
 ];
 const navMore: [string, string][] = navMoreGroups.flatMap((group) => group.links);
 const pathOnly = (href: string) => href.split("#")[0].split("?")[0].replace(/\/$/, "") || "/";
@@ -113,7 +114,16 @@ const updatedFmt = updatedDate
           <details class="nav-more">
             <summary class={moreActive ? "active" : ""}>More</summary>
             <div class="nav-more-menu">
-              {navMoreGroups.map((group) => (
+              {navMoreGroups.map((group) => group.collapsed ? (
+                <details class="nav-more-sub" open={group.links.some(([href]) => isActive(href)) || undefined}>
+                  <summary class="nav-more-label">{group.label}</summary>
+                  <div class="nav-more-group">
+                    {group.links.map(([href, label]) => (
+                      <a href={href} class={isActive(href) ? "active" : ""}>{label}</a>
+                    ))}
+                  </div>
+                </details>
+              ) : (
                 <div class="nav-more-group" data-private={group.private ? "" : undefined}>
                   {group.label && <span class="nav-more-label">{group.label}</span>}
                   {group.links.map(([href, label]) => (

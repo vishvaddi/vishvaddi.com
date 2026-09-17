@@ -6,18 +6,16 @@ import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../../data/site-tools";
 
 <Base
   title="Site Tools"
-  description="Free browser-based tools for trades and estimators. Nothing leaves your device."
+  description="Free tools for trades and estimators — cut lists, programmes, rates, PDFs, materials and more."
   siteNav
 >
   <div class="blueprint">
     <p class="eyebrow">Field tools</p>
     <h1>Site Tools</h1>
     <p>
-      Free calculators and trackers for Australian estimators, shopfitters,
-      builders and DIY — a cut list optimiser, a critical-path programme
-      builder, a PDF toolkit, unit and material calculators and more. Everything
-      runs entirely in your browser — no account, no sign-up, nothing uploaded.
-      Print to PDF or email a copy to yourself.
+      Calculators and trackers for Australian estimators, shopfitters, builders
+      and DIY — a cut list optimiser, a critical-path programme builder, a PDF
+      toolkit, unit and material calculators and more. Free, no account.
     </p>
 
     <label class="hub-search-label" for="site-hub-search">Find the right tool</label>
@@ -38,9 +36,7 @@ import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../../data/site-tools";
               <a class="tool-card" href={tool.href} data-tool={tool.href}>
                 <span class="tool-ico" aria-hidden="true">{tool.icon}</span>
                 <span class="t">{tool.title}</span>
-                <span class="d"><strong>Problem:</strong> {tool.problem}</span>
-                <span class="d"><strong>Does:</strong> {tool.promise}</span>
-                <span class="tool-privacy">Private · {tool.privacy}</span>
+                <span class="d">{tool.description}</span>
               </a>
             </li>
           ))}
@@ -68,9 +64,7 @@ import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../../data/site-tools";
       </details>
     </section>
 
-    <p class="note-foot">
-      Nothing you type leaves your browser. <a href="/">← vishvaddi.com</a>
-    </p>
+    <p class="note-foot"><a href="/">← vishvaddi.com</a></p>
   </div>
 
   <script src="/scripts/site-hub.js" defer></script>

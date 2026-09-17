@@ -6,17 +6,16 @@ import "../../styles/site.css";
 
 <Base
   title="Voice Notes — hands-free site transcription (AU)"
-  description="Speak and it transcribes live — take hands-free site notes, then edit, timestamp and export. Free; transcript and audio stay on your device."
+  description="Speak and it transcribes live — take hands-free site notes, then edit, timestamp and export."
   siteNav
 >
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site Tools</a> / Voice notes</p>
     <h1>Voice Notes</h1>
-    <ToolIntro href="/site/voice" />
     <p>Hit record and talk — it transcribes as you speak so you can take site notes hands-free, then edit, timestamp and export.</p>
 
     <p class="disclosure">
-      The transcript and any audio stay on your device. One exception: the live
+      The live
       speech-to-text is done by your browser's speech service (in Chrome that
       means audio is sent to Google to transcribe) — so don't dictate anything
       confidential. Works in Chrome, Edge and Safari.
@@ -47,7 +46,7 @@ import "../../styles/site.css";
     <section class="capture-panel no-print" aria-labelledby="capture-title">
       <p class="eyebrow">Guided site capture / local only</p>
       <h2 id="capture-title">Photograph a space consistently</h2>
-      <p>Enter the area, work through the coverage prompts, then export a manifest with your notes. Photos remain in this browser session and are not uploaded.</p>
+      <p>Enter the area, work through the coverage prompts, then export a manifest with your notes.</p>
       <div class="capture-fields">
         <label>Area / room <input id="capture-zone" type="text" placeholder="Level 2 — tenancy kitchen" /></label>
         <label>Reference object (optional) <input id="capture-reference" type="text" placeholder="e.g. 600 mm ruler" /></label>
@@ -67,6 +66,7 @@ import "../../styles/site.css";
       <button type="button" class="btn btn-ghost" id="capture-export" disabled>Export capture manifest</button>
     </section>
 
+    <ToolIntro href="/site/voice" />
     <p class="note-foot"><a href="/site">← all tools</a></p>
   </div>
 

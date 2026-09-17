@@ -5,7 +5,6 @@ import Base from "../layouts/Base.astro";
 const useful = [
   { href: "/site", title: "Site tools", desc: "Construction calculators, cut lists, rate building, drawing and PDF utilities." },
   { href: "/prepping/tools", title: "Prepping tools", desc: "Field calculators, get-home estimate, pack-weight lists, live map, weather and night-sky." },
-  { href: "/prepping/tools#weather-forecast", title: "Weather & sky", desc: "Location-based current weather, seven-day forecast, official warnings and night-sky view." },
   { href: "/studio", title: "Studio", desc: "A browser drum machine, synth, mixer and audio exporter." },
   { href: "/audio", title: "Audio tools", desc: "Track analysis, loudness and key, MIDI export, sample prep, ear training and more, all in the browser." },
   { href: "/radio", title: "Radio", desc: "Australian and international live radio with stream metadata and track identification." },
@@ -21,13 +20,14 @@ const other: [string, string, boolean?][] = [
   ["/prepping", "Prepping notes"],
   ["/prepping/gear", "Gear lists"],
   ["/prepping/health", "Health & wellbeing"],
-  ["/music", "Listening"],
   ["/tv", "TV"],
-  ["/movies", "Movies"],
-  ["/books", "Books"],
   ["/blog", "Blog"],
   ["/now", "Now"],
   ["/about", "About"],
+  ["/music", "Listening"],
+  ["/movies", "Movies"],
+  ["/books", "Books"],
+  ["/notes", "Notes"],
 ];
 ---
 
@@ -36,14 +36,10 @@ const other: [string, string, boolean?][] = [
     Estimator in Sydney working across premium retail and commercial fit-out. I build practical tools for estimating, scope generation and project work.
   </p>
 
-  <p class="home-wip" role="note">
-    Everything on this site is still a work in progress. Tools, games and pages may change or break while I keep building them.
-  </p>
 
   <section class="home-section" aria-labelledby="useful-title">
     <h2 id="useful-title">Useful now</h2>
-    <p>Working tools and media, directly accessible.</p>
-    <div class="home-grid">
+        <div class="home-grid">
       {useful.map((item) => (
         <a class="home-card reveal" href={item.href} data-private={"private" in item && item.private ? "" : undefined}>
           <strong>{item.title}</strong>
@@ -61,12 +57,5 @@ const other: [string, string, boolean?][] = [
   </section>
 
   <style>
-    .home-wip {
-      margin: 1rem 0 2rem;
-      padding: 0.75rem 1rem;
-      border-left: 3px solid var(--accent);
-      color: var(--muted);
-      font-size: 0.92rem;
-    }
   </style>
 </Base>

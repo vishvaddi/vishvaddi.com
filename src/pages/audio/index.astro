@@ -6,7 +6,7 @@ import { AUDIO_TOOLS, AUDIO_TOOL_CATEGORIES } from "../../data/audio-tools";
 
 <Base
   title="Audio Tools"
-  description="Free browser-based tools for producers and DJs: track analysis, loudness, key and BPM, MIDI, sample prep and ear training. Audio never leaves your device."
+  description="Free browser-based tools for producers and DJs: track analysis, loudness, key and BPM, MIDI, sample prep and ear training."
   audioNav
 >
   <div class="blueprint">
@@ -40,9 +40,7 @@ import { AUDIO_TOOLS, AUDIO_TOOL_CATEGORIES } from "../../data/audio-tools";
               <a class="tool-card" href={tool.href} data-tool={tool.href}>
                 <span class="tool-ico" aria-hidden="true">{tool.icon}</span>
                 <span class="t">{tool.title}</span>
-                <span class="d"><strong>Problem:</strong> {tool.problem}</span>
-                <span class="d"><strong>Does:</strong> {tool.promise}</span>
-                <span class="tool-privacy">Private · {tool.privacy}</span>
+                <span class="d">{tool.description}</span>
               </a>
             </li>
           ))}
@@ -71,7 +69,7 @@ import { AUDIO_TOOLS, AUDIO_TOOL_CATEGORIES } from "../../data/audio-tools";
     </section>
 
     <p class="note-foot">
-      Nothing you load leaves your browser. <a href="/">← vishvaddi.com</a>
+      <a href="/">← vishvaddi.com</a>
     </p>
   </div>
 

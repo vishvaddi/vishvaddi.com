@@ -6,14 +6,13 @@ import "../../styles/site.css";
 
 <Base
   title="Rate Builder — build unit rates free (Australia)"
-  description="Build an auditable unit rate from material, labour, plant and margin, line by line. Save your rates locally. Free, runs entirely in your browser."
+  description="Build an auditable unit rate from material, labour, plant and margin, line by line. Save your rates locally."
   siteNav
 >
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site Tools</a> / Rate builder</p>
     <h1>Rate Builder</h1>
-    <ToolIntro href="/site/rate" />
-    <p>Add a line for each cost, pick its type, and set quantity and unit cost. Add a margin and you have a unit rate. No rates ship with this tool; anything you save stays on your device.</p>
+    <p>Add a line for each cost, pick its type, and set quantity and unit cost. Add a margin and you have a unit rate.</p>
 
     <div class="field" style="max-width:28rem;">
       <label for="r-desc">Rate name</label>
@@ -41,8 +40,9 @@ import "../../styles/site.css";
 
     <h2 style="font-size:1rem;margin-top:1.5rem;">Saved rates</h2>
     <div id="r-saved"></div>
-    <p class="disclosure">Saved rates are stored only in this browser (localStorage) — never uploaded. Clear them any time.</p>
+    <p class="disclosure">Saved rates are kept in this browser. Clear them any time.</p>
 
+    <ToolIntro href="/site/rate" />
     <p class="note-foot">Estimates only. <a href="/site">← all tools</a></p>
   </div>
 
