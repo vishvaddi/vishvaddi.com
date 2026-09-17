@@ -34,6 +34,12 @@
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --dur: 0.45s;
   --dur-fast: 0.18s;
+  --control-h: 38px;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --gap-1: 0.5rem;
+  --gap-2: 0.75rem;
+  --gap-3: 1.25rem;
 }
 
 :root[data-theme="dark"] {
@@ -345,17 +351,25 @@ header nav.topnav {
 .note-group .note-row:last-of-type { border-bottom: none; }
 
 .theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
   background: none;
   border: none;
+  border-radius: var(--radius-sm);
   color: var(--muted);
   cursor: pointer;
   padding: 0;
   margin-left: auto;
   align-self: center;
-  font-size: 1.2rem;
+  font-size: 1rem;
   line-height: 1;
 }
-.theme-toggle:hover { color: var(--fg); }
+.theme-toggle:hover { color: var(--fg); background: var(--code-bg); }
+/* The magnifier glyph sits low relative to ◷ / ◐ at the same font-size — nudge it up. */
+#palette-toggle { font-size: 1.05rem; transform: translateY(-1px); }
 
 .site-quote {
   margin: 3rem 0 0;
@@ -401,7 +415,7 @@ header nav.topnav {
 .home-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 0.75rem;
+  gap: var(--gap-2);
   margin-top: 1rem;
 }
 
@@ -410,16 +424,15 @@ header nav.topnav {
   flex-direction: column;
   gap: 0.35rem;
   min-height: 8.5rem;
-  padding: 1rem;
+  padding: 0.9rem 1rem;
   border: 1px solid var(--rule);
-  border-radius: 10px;
+  border-radius: var(--radius);
   color: var(--fg);
   text-decoration: none;
 }
 
 .home-card:hover {
   border-color: var(--accent);
-  transform: translateY(-2px);
 }
 
 .home-card strong {
@@ -591,9 +604,9 @@ body.vv-palette-open { overflow: hidden; }
 }
 
 .vv-resume-title {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.06em;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
   margin: 0 0 0.6rem;
@@ -602,14 +615,14 @@ body.vv-palette-open { overflow: hidden; }
 .vv-resume-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.75rem;
+  gap: var(--gap-2);
 }
 
 .vv-resume-card {
   display: block;
   border: 1px solid var(--rule);
-  border-radius: 10px;
-  padding: 0.8rem 0.9rem;
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
   color: var(--fg);
   text-decoration: none;
 }

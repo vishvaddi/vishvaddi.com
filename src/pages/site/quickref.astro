@@ -2,16 +2,44 @@
 import Base from "../../layouts/Base.astro";
 import ToolIntro from "../../components/ToolIntro.astro";
 import "../../styles/site.css";
+
+const standards = [
+  ["AS 1428.1", "Design for access and mobility"],
+  ["AS 1657", "Fixed platforms, walkways, stairways & ladders"],
+  ["AS 1170", "Structural design actions (loads)"],
+  ["AS 1288", "Glass in buildings — selection & installation"],
+  ["AS 2047", "Windows & external glazed doors"],
+  ["AS 3600", "Concrete structures"],
+  ["AS 1684", "Residential timber-framed construction"],
+  ["AS 3740", "Waterproofing of domestic wet areas"],
+  ["AS 1530", "Fire tests — building materials & structures"],
+  ["AS 4386", "Cabinetry — kitchen units & components"],
+];
+
+const links = [
+  ["Standards Australia store", "https://www.standards.org.au", "Buy the standards themselves (they're copyright — link, don't pirate)."],
+  ["NCC / BCA (ABCB)", "https://ncc.abcb.gov.au", "The National Construction Code — free to read after a no-cost sign-up."],
+  ["Bureau of Meteorology", "http://www.bom.gov.au", "Wind regions, rainfall intensity, climate data for set-out."],
+  ["WorkSafe / SafeWork (your state)", "https://www.safeworkaustralia.gov.au", "Codes of practice, SWMS templates, height & silica guidance."],
+];
+
+const refs = [
+  ["Common stock lengths", "Timber/trim 5.4 / 4.8 / 3.6 / 2.4 m · SHS/RHS 6.5 / 8 m · plasterboard sheet 1200 × 2400/2700/3000 mm"],
+  ["Paint coverage", "≈ 10–12 m²/L per coat on a sealed surface (always check the data sheet)."],
+  ["Concrete bag yield", "20 kg pre-mix ≈ 0.0108 m³; ~92 bags per m³."],
+  ["Tile wastage", "Allow 10% standard, 15% for diagonal/large-format or patterned lays."],
+  ["Stair comfort (AS 1657)", "Riser 115–190 mm · going 240–355 mm · 2R + G ≈ 550–700 mm."],
+];
 ---
 
 <Base
-  title="Site Quick Reference — stairs, falls & fixings (AU)"
-  description="Searchable on-site reference for stair and balustrade rules, ceiling heights, falls, tiling, brick courses and fixings. Free; indicative only."
+  title="Reference — dimensions, rules of thumb & NCC (AU)"
+  description="Searchable site dimensions, rules of thumb, standards and NCC links."
   siteNav
 >
   <div class="blueprint tool">
-    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Quick reference</p>
-    <h1>Site Quick Reference</h1>
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Reference</p>
+    <h1>Reference</h1>
     <p>
       The numbers you google mid-job — stairs, barriers, heights, falls, courses,
       fixings. Type to filter. <strong>Indicative only:</strong> always verify
@@ -25,8 +53,26 @@ import "../../styles/site.css";
     <div id="qr-list"></div>
     <p class="qr-empty" hidden>No matches — try another term.</p>
 
+    <section class="qr-links" id="links">
+      <h2 style="font-size:1.05rem;">Australian Standards (commonly referenced in fit-out)</h2>
+      <ul>
+        {standards.map(([n, t]) => (<li><strong style="font-family:var(--font-mono)">{n}</strong> — {t}</li>))}
+      </ul>
+      <p class="disclosure">Standards are copyright to Standards Australia — buy them from the official store; this is a reference to the numbers, not the content.</p>
+
+      <h2 style="font-size:1.05rem;">Useful links</h2>
+      <ul>
+        {links.map(([t, u, d]) => (<li><a href={u} rel="noopener noreferrer external">{t}</a> — {d}</li>))}
+      </ul>
+
+      <h2 style="font-size:1.05rem;">Rules of thumb</h2>
+      <ul>
+        {refs.map(([t, d]) => (<li><strong>{t}:</strong> {d}</li>))}
+      </ul>
+    </section>
+
     <ToolIntro href="/site/quickref" />
-    <p class="note-foot">Indicative trade figures, not a compliance document. <a href="/site/resources">Standards &amp; resources →</a></p>
+    <p class="note-foot">Indicative trade figures and references only — verify against the current standard. <a href="/site">← all tools</a></p>
   </div>
 
   <script>
@@ -55,5 +101,8 @@ import "../../styles/site.css";
     .qr-item .qr-val { font-family: var(--font-mono); color: var(--site-accent, #2c63d6); white-space: nowrap; text-align: right; }
     .qr-item .qr-note { grid-column: 1 / -1; font-size: 0.85rem; color: var(--muted); }
     .qr-empty { color: var(--muted); margin-top: 1.5rem; }
+    .qr-links { margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--site-line-strong); }
+    .qr-links h2 { margin: 1.5rem 0 0.5rem; }
+    .qr-links h2:first-child { margin-top: 0; }
   </style>
 </Base>

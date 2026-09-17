@@ -9,8 +9,8 @@ const check = (name, value, detail = '') => {
 
 const routes = [
   '/site/calc/', '/site/notepad/', '/site/convert/', '/site/materials/', '/site/geometry/', '/site/rate/',
-  '/site/charge-rate/', '/site/prices/', '/site/programme/', '/site/cut-list/', '/site/lattice/', '/site/span/',
-  '/site/records/', '/site/voice/', '/site/sketch/', '/site/gauges/', '/site/pdf/', '/site/quickref/', '/site/resources/',
+  '/site/charge-rate/', '/site/prices/', '/site/programme/', '/site/cut-list/', '/site/lattice/',
+  '/site/records/', '/site/voice/', '/site/sketch/', '/site/gauges/', '/site/pdf/', '/site/quickref/',
   '/audio/analyser/', '/audio/chords/', '/audio/prep/', '/audio/bpm/', '/audio/metronome/', '/audio/lofi/', '/audio/ear/',
 ]
 
@@ -51,7 +51,7 @@ try {
   await page.goto(`${BASE}/site/calc/`, { waitUntil: 'domcontentloaded' })
   await page.locator('.site-picker summary').click()
   const order = await page.locator('.site-picker [data-site-tool-link]').allTextContents()
-  check('navigation: Converter appears before Span Lookup', order.indexOf('Converter') < order.indexOf('Span Lookup'))
+  check('navigation: Converter appears before Reference', order.indexOf('Converter') < order.indexOf('Reference'))
   await page.locator('.site-picker [data-site-tool-search]').fill('variation')
   check('navigation: search finds Site Records', await page.locator('.site-picker [data-site-tool-link]:visible').allTextContents().then(items => items.includes('Site Records')))
 

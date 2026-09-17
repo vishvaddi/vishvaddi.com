@@ -2,6 +2,7 @@
 import Base from "../../layouts/Base.astro";
 import "../../styles/site.css";
 import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../../data/site-tools";
+import { TOOL_ICONS, TOOL_ICON_FALLBACK } from "../../data/tool-icons";
 ---
 
 <Base
@@ -34,7 +35,7 @@ import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../../data/site-tools";
           {SITE_TOOLS.filter((tool) => tool.category === category).map((tool) => (
             <li data-tool-item data-search={`${tool.title} ${tool.aliases}`}>
               <a class="tool-card" href={tool.href} data-tool={tool.href}>
-                <span class="tool-ico" aria-hidden="true">{tool.icon}</span>
+                <span class="tool-ico" aria-hidden="true" set:html={TOOL_ICONS[tool.href] ?? TOOL_ICON_FALLBACK} />
                 <span class="t">{tool.title}</span>
                 <span class="d">{tool.description}</span>
               </a>

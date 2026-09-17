@@ -119,7 +119,7 @@ export function initNotepad(): void {
     const rawLines = text.split(/\r?\n/);
     rawLines.forEach((raw, i) => {
       const row = document.createElement("div");
-      row.className = "pad-row";
+      row.className = "np-row";
       const padLine = lines[i];
 
       const cIdx = commentIndex(raw);
@@ -295,7 +295,7 @@ export function initNotepad(): void {
 
   const tallBtn = g<HTMLButtonElement>("pad-tall");
   tallBtn?.addEventListener("click", () => {
-    const wrap = input.closest(".pad-wrap");
+    const wrap = input.closest(".np-wrap");
     const tall = wrap?.classList.toggle("tall") ?? false;
     tallBtn.setAttribute("aria-pressed", String(tall));
     tallBtn.textContent = tall ? "Shorter" : "Taller";

@@ -833,3 +833,10 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - One unreproduced event: the Chrome tab froze once while the extension typed a multi-line string into the notepad. Engine and tokeniser ran every typing prefix in <1 ms in Node and a step-by-step replay in Chrome did not reproduce it. Logged as unconfirmed; watch for it on the live site.
 - `npm run release:check` all green; `astro check` 0 errors. Committed and pushed; not deployed.
 
+## 2026-09-17 - Site refresh phase 3 (Claude Code, Sonnet agents + Fable review)
+
+- Two Sonnet agents on disjoint files: polish pass (styles, hubs, icons) and tool merges (Span → Materials, Resources + Quick Reference → Reference, Worker 301s, e2e lists). Both verified green independently; combined tree re-verified.
+- Fable review in Chrome (dark + light): fixed staggered inputs on Charge-Out (`.calc-fields` bottom-aligned), `#span` anchor lost to scroll restoration (deferred scroll), notepad saved-pads row stacking, and a `.pad-wrap` class collision between the notepad and the Sketchpad.
+- Chased the notepad "freeze" seen twice via the extension: `get_page_text` still worked while `Page.captureScreenshot` timed out, so it is a capture stall, not a JS loop. Playwright headed/headless with real wheel + typing: no hang, screenshots ~45 ms under eight CSS variants. Filed as extension-only.
+- `astro check` 0 errors; `npm run release:check` all green. Committed and pushed; not deployed.
+

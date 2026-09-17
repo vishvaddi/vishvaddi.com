@@ -9,7 +9,7 @@ const check = (name, value, detail = '') => {
   if (!value) failures++
 }
 
-const SITE_TOOLS = ['calc', 'notepad', 'convert', 'materials', 'geometry', 'rate', 'charge-rate', 'prices', 'programme', 'cut-list', 'lattice', 'span', 'records', 'voice', 'sketch', 'gauges', 'pdf', 'quickref', 'resources']
+const SITE_TOOLS = ['calc', 'notepad', 'convert', 'materials', 'geometry', 'rate', 'charge-rate', 'prices', 'programme', 'cut-list', 'lattice', 'records', 'voice', 'sketch', 'gauges', 'pdf', 'quickref']
 const AUDIO_TOOLS = ['chords', 'prep', 'bpm', 'metronome', 'lofi', 'ear', 'analyser']
 const PATHS = [
   '/site/', '/audio/',

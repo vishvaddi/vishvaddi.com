@@ -35,6 +35,45 @@ import "../../styles/site.css";
       </ul>
     </section>
 
+    <section class="mat-span" id="span">
+      <h2>Timber span lookup</h2>
+      <div class="span-warn" role="alert">
+        <strong>Indicative — not for construction.</strong> These are ballpark single-span
+        figures for <em>estimating</em> member counts only. Final sizing must come from the
+        current <strong>AS1684</strong> span table supplement or a structural engineer, for your
+        timber grade, load, wind and spacing.
+      </div>
+
+      <div class="span-grid">
+        <label class="span-f"><span>Member</span>
+          <select id="sp-member"></select>
+        </label>
+        <label class="span-f"><span>Grade</span>
+          <select id="sp-grade">
+            <option value="MGP10">MGP10</option>
+            <option value="MGP12">MGP12</option>
+            <option value="F7">F7</option>
+          </select>
+        </label>
+        <label class="span-f"><span>Size (mm)</span>
+          <select id="sp-size"></select>
+        </label>
+        <label class="span-f"><span>Spacing (mm)</span>
+          <select id="sp-spacing">
+            <option value="450">450</option>
+            <option value="600" selected>600</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="span-out" id="sp-out" aria-live="polite"></div>
+      <p class="span-src">
+        Official free sources:
+        <a href="https://www.woodsolutions.com.au/" target="_blank" rel="noopener">WoodSolutions</a>,
+        and your timber supplier's AS1684 span table supplement.
+      </p>
+    </section>
+
     <ToolIntro href="/site/materials" />
     <p class="note-foot">Estimates only — allow for laps, cuts and site conditions. <a href="/site">← all tools</a></p>
   </div>
@@ -669,6 +708,8 @@ import "../../styles/site.css";
     const want = location.hash.slice(1);
     const idx = groups.findIndex((g) => slug(g.trade) === want);
     if (idx > 0) buttons[idx].click();
+    // The calculators mount after the browser's own anchor jump, pushing #span out of view.
+    if (want === "span") setTimeout(() => document.getElementById("span")?.scrollIntoView({ block: "start" }), 50);
 
     // The /site/materials/<family> answer pages link back here with
     // ?calc=<spec id>&<field id>=<value>&... so "change the numbers" lands
@@ -689,6 +730,76 @@ import "../../styles/site.css";
     }
 
     wireActions(root, "Material calculators");
+
+    // Timber span lookup (indicative single-span maxima, metres) — folded in from
+    // the former /site/span tool; kept as its own selects-driven section because
+    // it doesn't fit the numeric-field CalcSpec shape above.
+    type SpanSizes = Record<string, { 450: number; 600: number }>;
+    const SPAN_DATA: Record<string, { note: string; sizes: SpanSizes }> = {
+      "Floor joist": {
+        note: "Residential floor load (1.5 kPa), single span.",
+        sizes: {
+          "90×45": { 450: 1.6, 600: 1.4 },
+          "120×45": { 450: 2.1, 600: 1.9 },
+          "140×45": { 450: 2.5, 600: 2.2 },
+          "190×45": { 450: 3.3, 600: 3.0 },
+          "240×45": { 450: 4.1, 600: 3.7 },
+          "290×45": { 450: 4.9, 600: 4.4 },
+        },
+      },
+      "Ceiling joist": {
+        note: "Light ceiling, no roof load / no access.",
+        sizes: {
+          "70×35": { 450: 1.8, 600: 1.6 },
+          "90×35": { 450: 2.3, 600: 2.0 },
+          "90×45": { 450: 2.6, 600: 2.3 },
+          "120×45": { 450: 3.3, 600: 2.9 },
+          "140×45": { 450: 3.8, 600: 3.4 },
+        },
+      },
+      "Rafter (sheet roof)": {
+        note: "Light sheet roof, single span. Tiled roofs span less.",
+        sizes: {
+          "90×45": { 450: 2.3, 600: 2.0 },
+          "120×45": { 450: 2.9, 600: 2.6 },
+          "140×45": { 450: 3.4, 600: 3.0 },
+          "190×45": { 450: 4.5, 600: 4.0 },
+          "240×45": { 450: 5.5, 600: 4.9 },
+        },
+      },
+    };
+    const SPAN_GRADE: Record<string, number> = { MGP10: 1, MGP12: 1.12, F7: 1.05 };
+
+    const spanEl = (id: string) => document.getElementById(id) as HTMLSelectElement;
+    const spMember = spanEl("sp-member"), spGrade = spanEl("sp-grade"), spSize = spanEl("sp-size"), spSpacing = spanEl("sp-spacing");
+    const spOut = document.getElementById("sp-out")!;
+
+    for (const m of Object.keys(SPAN_DATA)) {
+      const o = document.createElement("option"); o.value = m; o.textContent = m; spMember.append(o);
+    }
+    function fillSpanSizes() {
+      spSize.textContent = "";
+      for (const s of Object.keys(SPAN_DATA[spMember.value].sizes)) {
+        const o = document.createElement("option"); o.value = s; o.textContent = s; spSize.append(o);
+      }
+    }
+    function renderSpan() {
+      const member = SPAN_DATA[spMember.value];
+      const base = member.sizes[spSize.value];
+      if (!base) { spOut.textContent = "—"; return; }
+      const spacing = Number(spSpacing.value) as 450 | 600;
+      const span = base[spacing] * (SPAN_GRADE[spGrade.value] || 1);
+      spOut.textContent = "";
+      const big = document.createElement("div"); big.className = "span-big";
+      big.textContent = `≈ ${span.toFixed(1)} m`;
+      const lbl = document.createElement("div"); lbl.className = "span-lbl";
+      lbl.textContent = `indicative max single span · ${spSize.value} ${spGrade.value} ${spMember.value.toLowerCase()} @ ${spSpacing.value} mm`;
+      const note = document.createElement("div"); note.className = "span-note"; note.textContent = member.note;
+      spOut.append(big, lbl, note);
+    }
+    spMember.addEventListener("change", () => { fillSpanSizes(); renderSpan(); });
+    [spGrade, spSize, spSpacing].forEach((el) => el.addEventListener("change", renderSpan));
+    fillSpanSizes(); renderSpan();
   </script>
 
   <style>
@@ -713,5 +824,19 @@ import "../../styles/site.css";
     .mat-jobs-list { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; margin: 0; padding: 0; }
     .mat-jobs-list a { display: inline-flex; min-height: 40px; align-items: center; padding: 0.4rem 0.8rem; border: 1px solid var(--site-line-strong); border-radius: 999px; color: var(--fg); font-size: 0.85rem; text-decoration: none; }
     .mat-jobs-list a:hover { border-color: var(--site-accent); }
+  </style>
+
+  <style is:global>
+    .mat-span { margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--site-line-strong); }
+    .mat-span h2 { font-size: 1rem; margin: 0 0 0.3rem; }
+    .span-src { margin-top: 0.6rem; font-size: 0.85rem; color: var(--muted); }
+    .span-warn { background: color-mix(in srgb, #b42318 10%, transparent); border: 1px solid color-mix(in srgb, #b42318 45%, var(--rule)); border-radius: 8px; padding: 0.75rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+    .span-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 0.75rem; margin: 1.25rem 0; }
+    .span-f { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--muted); }
+    .span-f select { padding: 0.5rem; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: 1rem; }
+    .span-out { padding: 1.25rem; border: 1px solid var(--rule); border-radius: 10px; background: var(--code-bg); text-align: center; }
+    .span-big { font-family: var(--font-mono); font-size: 2.6rem; font-weight: 800; color: var(--site-accent, #2c63d6); line-height: 1; }
+    .span-lbl { margin-top: 0.4rem; font-size: 0.9rem; }
+    .span-note { margin-top: 0.3rem; font-size: 0.8rem; color: var(--muted); }
   </style>
 </Base>

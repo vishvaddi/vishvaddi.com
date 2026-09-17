@@ -1,11 +1,12 @@
 ---
 import Base from "../../layouts/Base.astro";
+import { TOOL_ICONS, TOOL_ICON_FALLBACK } from "../../data/tool-icons";
 
 const games = [
-  { href: "/games/deep-swarm/", icon: "🫧", title: "Deep Swarm", desc: "Deep-sea horror survival. Pilot a survey sub into a trench that notices you." },
-  { href: "/games/last-cast/", icon: "🎣", title: "Last Cast", desc: "Alien xeno-survey fishing on a dying skiff. Slow, heavy, weather-driven survival." },
-  { href: "/games/carromancy/", icon: "◉", title: "Carromancy", desc: "Mystical carrom roguelike. Read the board, bend the flick and outplay rivals across a changing journey." },
-  { href: "/games/big2", icon: "🧧", title: "Big 2", desc: "The classic shedding card game as a roguelike. Outplay the family across a 12-table run." },
+  { href: "/games/deep-swarm/", title: "Deep Swarm", desc: "Deep-sea horror survival. Pilot a survey sub into a trench that notices you." },
+  { href: "/games/last-cast/", title: "Last Cast", desc: "Alien xeno-survey fishing on a dying skiff. Slow, heavy, weather-driven survival." },
+  { href: "/games/carromancy/", title: "Carromancy", desc: "Mystical carrom roguelike. Read the board, bend the flick and outplay rivals across a changing journey." },
+  { href: "/games/big2", title: "Big 2", desc: "The classic shedding card game as a roguelike. Outplay the family across a 12-table run." },
 ];
 ---
 
@@ -17,7 +18,7 @@ const games = [
     {games.map((g) => (
       <li class="reveal">
         <a class="game-card" href={g.href}>
-          <span class="game-ico" aria-hidden="true">{g.icon}</span>
+          <span class="game-ico" aria-hidden="true" set:html={TOOL_ICONS[g.href] ?? TOOL_ICON_FALLBACK} />
           <span class="t">{g.title}</span>
           <span class="d">{g.desc}</span>
         </a>
@@ -26,10 +27,12 @@ const games = [
   </ul>
 
   <style>
-    .game-grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
-    .game-card { display: flex; flex-direction: column; gap: 0.3rem; padding: 1.1rem; border: 1px solid var(--rule); border-radius: 10px; text-decoration: none; color: var(--fg); transition: border-color .2s var(--ease, ease), transform .2s var(--ease, ease); }
-    .game-card:hover { border-color: var(--accent); transform: translateY(-3px); }
-    .game-ico { font-size: 1.6rem; }
+    .game-grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--gap-2); margin-top: 1.5rem; }
+    .game-card { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.9rem 1rem; border: 1px solid var(--rule); border-radius: var(--radius); text-decoration: none; color: var(--fg); transition: border-color .2s var(--ease, ease); }
+    .game-card:hover { border-color: var(--accent); }
+    .game-card:hover .game-ico { color: var(--accent); }
+    .game-ico { display: block; width: 24px; height: 24px; color: var(--muted); transition: color .2s var(--ease, ease); }
+    .game-ico svg { display: block; width: 100%; height: 100%; }
     .game-card .t { font-weight: 600; }
     .game-card .d { font-size: 0.88rem; color: var(--muted); }
   </style>

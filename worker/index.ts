@@ -958,15 +958,26 @@ const site = {
   },
 };
 
+// Tool consolidation (17/09/26): span folded into Material Calculators,
+// resources folded into the renamed Reference tool at quickref.
+const RETIRED_TOOL_REDIRECTS: Record<string, string> = {
+  "/site/span": "/site/materials#span",
+  "/site/span/": "/site/materials#span",
+  "/site/resources": "/site/quickref#links",
+  "/site/resources/": "/site/quickref#links",
+};
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
     // Old installations must receive the cache-retirement worker without signing in.
-    if (new URL(request.url).pathname === "/sw.js" && ["GET", "HEAD"].includes(request.method)) {
+    if (url.pathname === "/sw.js" && ["GET", "HEAD"].includes(request.method)) {
       return privateResponse(await env.ASSETS.fetch(request));
     }
+    const redirectTarget = RETIRED_TOOL_REDIRECTS[url.pathname];
+    if (redirectTarget) return Response.redirect(new URL(redirectTarget, url).toString(), 301);
     const denied = await pinGate(request, env);
     if (denied) return privateResponse(denied);
-    const url = new URL(request.url);
     if (isOwnerOnlyPath(url.pathname) && !(await ownerSession(request, env))) {
       const notFound = await env.ASSETS.fetch(new Request(new URL("/404", url)));
       return privateResponse(new Response(notFound.ok ? notFound.body : "Not found", {
@@ -977,7 +988,7 @@ export default {
     const response = await site.fetch(request, env);
     // Public tool pages are meant to be found and cached; only the owner's
     // private pages and every gate response carry noindex + no-store.
-    if ((!siteLocked(env) || isPublicPath(new URL(request.url).pathname)) && !(await ownerSession(request, env))) return publicResponse(response);
+    if ((!siteLocked(env) || isPublicPath(url.pathname)) && !(await ownerSession(request, env))) return publicResponse(response);
     return privateResponse(response);
   },
 };
