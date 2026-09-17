@@ -59,21 +59,57 @@ const HELP_TOPICS: HelpTopic[] = [
   { section: 'Data', title: 'Grid operations', text: 'The ⧉ menu also sorts rows by the selected cell’s column, transposes the grid, flattens a hierarchy into an outline, and does find-and-replace across the whole sheet when a search is active.' },
 ]
 
-const SHORTCUTS: [string, string][] = [
-  ['Arrows', 'Walk cells and the gaps between them'],
-  ['Type on a gap', 'Insert a row or column there'],
-  ['Enter', 'Edit the selected cell'],
-  ['Ctrl+Enter', 'Add and enter a nested child'],
-  ['Alt+Enter', 'Add a sibling at this level'],
-  ['Insert / PageDown', 'Dive into a cell (creates a grid)'],
-  ['PageUp', 'Climb out to the parent grid'],
-  ['Tab / Shift+Tab', 'Next / previous cell'],
-  ['Shift+arrows', 'Select a block'],
-  ['Ctrl+arrows', 'Move the selected cell'],
-  ['Ctrl+C / X / V', 'Copy / cut / paste a block'],
-  ['Ctrl+Z / Ctrl+Y', 'Undo / redo'],
-  ['Ctrl+scroll', 'Zoom into or out of a grid'],
-  ['Escape', 'Clear the selection'],
+const SHORTCUT_GROUPS: { group: string; items: [string, string][] }[] = [
+  {
+    group: 'Navigate', items: [
+      ['Arrows', 'Walk cells and the gaps between them'],
+      ['Tab / Shift+Tab', 'Next / previous cell'],
+      ['Home / End', 'First / last cell in the row'],
+    ],
+  },
+  {
+    group: 'Edit', items: [
+      ['Enter', 'Edit the selected cell; commit while editing'],
+      ['Shift+Enter', 'Line break inside a cell (while editing)'],
+      ['Escape', 'Cancel edit → clear selection → zoom out'],
+      ['Backspace / Delete', 'Clear cell text; on a row/column line, remove that row/column'],
+      ['Ctrl+Z / Ctrl+Y', 'Undo / redo'],
+      ['Ctrl+C / X / V', 'Copy / cut / paste a block'],
+    ],
+  },
+  {
+    group: 'Insert', items: [
+      ['Type on a gap', 'Insert a row or column there'],
+      ['Ctrl+Enter', 'Add and enter a nested child'],
+      ['Alt+Enter', 'Add a sibling at this level'],
+    ],
+  },
+  {
+    group: 'Move', items: [
+      ['Ctrl+arrows', 'Move (swap) the selected cell with its neighbour'],
+    ],
+  },
+  {
+    group: 'Select', items: [
+      ['Shift+arrows', 'Extend a rectangular selection'],
+      ['Ctrl+A', 'Select all cells in the current grid'],
+      ['Click a gap', 'Select that row/column line'],
+    ],
+  },
+  {
+    group: 'Zoom', items: [
+      ['Insert / PageDown', 'Dive into a cell (creates a grid)'],
+      ['PageUp', 'Climb out to the parent grid'],
+      ['Ctrl+scroll / pinch', 'Zoom into or out of a grid'],
+    ],
+  },
+  {
+    group: 'Search', items: [
+      ['Ctrl+F', 'Jump to the find box'],
+      ['Enter (in find box)', 'Jump to the next match'],
+      ['F3 / Shift+F3', 'Next / previous match'],
+    ],
+  },
 ]
 
 export function createLatticeTutorial(root: HTMLElement, helpBtn: HTMLElement): void {
@@ -99,10 +135,13 @@ export function createLatticeTutorial(root: HTMLElement, helpBtn: HTMLElement): 
   const topicList = el('div', 'lat-tut-topics')
   const shortcutBox = el('div', 'lat-tut-shortcuts')
   shortcutBox.append(el('div', 'lat-tut-sec', 'KEYBOARD'))
-  for (const [key, desc] of SHORTCUTS) {
-    const row = el('div', 'lat-tut-sc-row')
-    row.append(el('span', 'lat-tut-key', key), el('span', 'lat-tut-desc', desc))
-    shortcutBox.append(row)
+  for (const { group, items } of SHORTCUT_GROUPS) {
+    shortcutBox.append(el('div', 'lat-tut-sc-group', group))
+    for (const [key, desc] of items) {
+      const row = el('div', 'lat-tut-sc-row')
+      row.append(el('span', 'lat-tut-key', key), el('span', 'lat-tut-desc', desc))
+      shortcutBox.append(row)
+    }
   }
   browseView.append(el('h2', 'lat-tut-title', 'Lattice help'), search, topicList, shortcutBox)
 

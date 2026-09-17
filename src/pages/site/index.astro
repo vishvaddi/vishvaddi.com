@@ -22,9 +22,9 @@ import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../../data/site-tools";
     <input id="site-hub-search" class="hub-search" type="search" placeholder="Try ‘convert’, ‘programme’, ‘variation’…" autocomplete="off" />
     <p id="site-search-empty" class="note-foot" hidden>No matching tools.</p>
 
-    <section id="site-recent" class="site-recent" hidden>
-      <h2 class="site-group-title">Recently used</h2>
-      <ul class="tool-grid" id="site-recent-grid"></ul>
+    <section class="vv-resume" id="vv-resume" hidden aria-labelledby="vv-resume-title">
+      <h2 id="vv-resume-title" class="vv-resume-title">Pick up where you left off</h2>
+      <div class="vv-resume-grid" id="vv-resume-grid" data-scope="site"></div>
     </section>
 
     {SITE_TOOL_CATEGORIES.map((category) => (
@@ -67,6 +67,7 @@ import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../../data/site-tools";
     <p class="note-foot"><a href="/">← vishvaddi.com</a></p>
   </div>
 
+  <script src="/scripts/resume.js" defer></script>
   <script src="/scripts/site-hub.js" defer></script>
   <script type="application/ld+json" set:html={JSON.stringify({
     "@context": "https://schema.org",

@@ -826,3 +826,10 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Incident during the sweep: a comma-cleanup regex stripped `, "` inside script blocks (geometry row arrays). Caught by the build, files restored from git, sweep redone with explicit sentence strings only.
 - Tests updated (`feature-upgrades-e2e`, `pro-e2e`); `npm run release:check` all green. Committed and pushed; **not deployed** (Vish's call).
 
+## 2026-09-17 - Site refresh phase 2 (Claude Code, Sonnet subagents + Fable review)
+
+- Vish: "keep going and use lower models where you can to save tokens then reevaluate in fable at the end for bugs"; "yes to that calc plan"; later added Programme Builder keyboard/resizable UX, Lattice TreeSheets parity, a font question and a site-wide polish ask.
+- Five Sonnet agents on disjoint files (calc engine + notepad, palette, resume strip, Programme, Lattice) plus a Haiku read-only localStorage catalogue. Fable review found and fixed: `total` blending unit and money lines (now money-only in mixed sections); notepad Save-as used `window.prompt` (inline name field); textarea `resize` desynced the overlay (locked, Taller toggle added); print clipped the pad (print CSS); generic `.tool textarea` rule out-ranked the pad rules and hid the results overlay (specificity fix); resume strip dropped recently used tools with no saved state (title map + "Recently used" fallback).
+- One unreproduced event: the Chrome tab froze once while the extension typed a multi-line string into the notepad. Engine and tokeniser ran every typing prefix in <1 ms in Node and a step-by-step replay in Chrome did not reproduce it. Logged as unconfirmed; watch for it on the live site.
+- `npm run release:check` all green; `astro check` 0 errors. Committed and pushed; not deployed.
+

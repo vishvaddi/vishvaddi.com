@@ -28,7 +28,8 @@ const {
 } = Astro.props;
 
 const here = Astro.url.pathname.replace(/\/$/, "");
-const activeToolHref = here === "/site/sheet" ? "/site/cut-list" : here;
+// Sheet and Notepad are modes of Cut List and Calculator, so the rail highlights the parent.
+const activeToolHref = here === "/site/sheet" ? "/site/cut-list" : here === "/site/notepad" ? "/site/calc" : here;
 // One rail component, two catalogues: /site tools and /audio tools share the markup.
 const rail = audioNav
   ? { tools: AUDIO_TOOLS as readonly { href: string; title: string; shortTitle: string; aliases: string; category: string }[], categories: AUDIO_TOOL_CATEGORIES as readonly string[], hub: "/audio", title: "Audio tools" }
@@ -53,6 +54,42 @@ const navMoreGroups: { label: string | null; links: [string, string][]; private?
   { label: "Logs", links: [["/music", "Listening"], ["/movies", "Movies"], ["/books", "Books"], ["/notes", "Notes"]], collapsed: true },
 ];
 const navMore: [string, string][] = navMoreGroups.flatMap((group) => group.links);
+
+// Command-palette index (Ctrl+K), built once server-side and shipped as a JSON
+// data block — see public/scripts/palette.js. Keyed by href so the same page
+// linked from two places (e.g. /studio from both the nav and the extra-pages
+// list below) only appears once.
+interface PaletteEntry { href: string; title: string; group: string; keywords: string }
+const paletteIndex = new Map<string, PaletteEntry>();
+const addPalette = (href: string, title: string, group: string, keywords = "") => {
+  if (!paletteIndex.has(href)) paletteIndex.set(href, { href, title, group, keywords });
+};
+SITE_TOOLS.forEach((tool) => addPalette(tool.href, tool.title, "Site tools", `${tool.shortTitle} ${tool.aliases}`));
+AUDIO_TOOLS.forEach((tool) => addPalette(tool.href, tool.title, "Audio tools", `${tool.shortTitle} ${tool.aliases}`));
+navPrimary.forEach(([href, label]) => addPalette(href, label, "Pages"));
+// Life is owner-only and /logout isn't a destination worth finding — both excluded.
+navMoreGroups
+  .filter((group) => !group.private)
+  .forEach((group) => group.links.forEach(([href, label]) => {
+    if (href !== "/logout") addPalette(href, label, "Pages");
+  }));
+([
+  ["/studio", "Studio"],
+  ["/radio", "Radio"],
+  ["/reader", "Reader"],
+  ["/feeds", "Feeds"],
+  ["/prepping/tools", "Prepping tools"],
+] as [string, string][]).forEach(([href, label]) => addPalette(href, label, "Pages"));
+// Games hub links to these but they aren't Astro pages under src/pages, so they
+// need listing by hand (kept in sync with src/pages/games/index.astro).
+([
+  ["/games/deep-swarm/", "Deep Swarm", "deep sea horror survival sub"],
+  ["/games/last-cast/", "Last Cast", "alien fishing survival"],
+  ["/games/carromancy/", "Carromancy", "carrom roguelike"],
+  ["/games/big2", "Big 2", "shedding card game roguelike"],
+] as [string, string, string][]).forEach(([href, title, keywords]) => addPalette(href, title, "Games", keywords));
+const paletteIndexJson = JSON.stringify(Array.from(paletteIndex.values())).replace(/</g, "\\u003c");
+
 const pathOnly = (href: string) => href.split("#")[0].split("?")[0].replace(/\/$/, "") || "/";
 const isActive = (href: string) => {
   const path = pathOnly(href);
@@ -134,6 +171,13 @@ const updatedFmt = updatedDate
             </div>
           </details>
         </div>
+        <button
+          type="button"
+          class="theme-toggle"
+          id="palette-toggle"
+          aria-label="Go to (Ctrl+K)"
+          title="Go to (Ctrl+K)"
+        >⌕</button>
         <button
           type="button"
           class="theme-toggle"
@@ -229,9 +273,32 @@ const updatedFmt = updatedDate
         <a href="/privacy">Privacy</a> · <a href="/logout" data-private>Lock site</a>
       </p>
     </footer>}
+    {!immersive && (
+      <div class="vv-palette" id="vv-palette" hidden role="dialog" aria-modal="true" aria-label="Go to">
+        <div class="vv-palette-panel">
+          <input
+            class="vv-palette-input"
+            id="vv-palette-input"
+            type="text"
+            placeholder="Go to a tool or page…"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Go to a tool or page"
+            aria-controls="vv-palette-results"
+            role="combobox"
+            aria-expanded="false"
+          />
+          <ul class="vv-palette-results" id="vv-palette-results" role="listbox"></ul>
+        </div>
+      </div>
+    )}
+    <!-- JSON data block, not a script — the CSP's script-src has no 'unsafe-inline', so
+         palette.js (a plain /public asset) fetches this by id rather than running inline. -->
+    <script type="application/json" id="vv-palette-index" set:html={paletteIndexJson} />
     <script src="/scripts/chrome.js" defer></script>
     <script src="/scripts/reveal.js" defer></script>
     <script src="/scripts/standby.js" defer></script>
     <script src="/scripts/quotes.js" defer></script>
+    <script src="/scripts/palette.js" defer></script>
   </body>
 </html>

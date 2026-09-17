@@ -21,8 +21,7 @@ export interface SiteTool {
 }
 
 const RAW_SITE_TOOLS: Omit<SiteTool, 'problem' | 'promise'>[] = [
-  { href: '/site/calc', title: 'Calculator', shortTitle: 'Calculator', icon: '🧮', description: 'Expressions, functions, constants, variables and history.', category: 'Estimate & price', aliases: 'maths arithmetic percentage formula', quick: true },
-  { href: '/site/notepad', title: 'Calculation Notepad', shortTitle: 'Calc Notepad', icon: '🧾', description: 'Takeoff notes with variables, GST, currency and metric units.', category: 'Estimate & price', aliases: 'soulver takeoff estimate notes' },
+  { href: '/site/calc', title: 'Calculator', shortTitle: 'Calculator', icon: '🧮', description: 'Expression pad and a takeoff notepad: variables, units, GST, percentages, running totals.', category: 'Estimate & price', aliases: 'maths arithmetic percentage formula notepad tape soulver calctape takeoff estimate notes', quick: true },
   { href: '/site/convert', title: 'Unit Converter', shortTitle: 'Converter', icon: '🔁', description: 'Metric, imperial, pressure, data and live currency conversion.', category: 'Estimate & price', aliases: 'mm inches metres feet aud usd temperature', quick: true },
   { href: '/site/materials', title: 'Material Calculators', shortTitle: 'Materials', icon: '🧱', description: 'Paint, tiles, plasterboard, concrete, footings, timber and roofing quantities.', category: 'Estimate & price', aliases: 'quantity takeoff paint tile concrete plasterboard footing weight density board feet timber sheathing roof tiles bricks blocks' },
   { href: '/site/geometry', title: 'Geometry & Setout', shortTitle: 'Geometry', icon: '📐', description: 'Feet-inch maths, square check, rafters, stairs, arcs, mitres and volumes.', category: 'Estimate & price', aliases: 'setout trig triangle roof stair area fall rafter hip valley jack compound mitre crown feet inches fraction dms polygon cylinder cone construction master' },
@@ -43,8 +42,7 @@ const RAW_SITE_TOOLS: Omit<SiteTool, 'problem' | 'promise'>[] = [
 ]
 
 const POSITIONING: Record<string, [problem: string, promise: string]> = {
-  '/site/calc': ['Site maths gets lost across separate calculator steps.', 'Keep complete expressions and reusable results in one history.'],
-  '/site/notepad': ['Takeoff workings are hard to audit after the estimate.', 'Turn written calculations into traceable totals as you type.'],
+  '/site/calc': ['Site maths and takeoff workings get lost across separate steps and scraps of paper.', 'Keep expressions, variables and traceable running totals in one place — a quick Pad or a full takeoff Notepad.'],
   '/site/convert': ['Unit and currency conversions interrupt estimating flow.', 'Convert construction units and live currencies in one place.'],
   '/site/materials': ['Manual quantity formulas invite omissions and rework.', 'Calculate common trade materials with practical waste allowances.'],
   '/site/geometry': ['Setout geometry is slow and error-prone by hand.', 'Resolve construction dimensions with purpose-built calculators.'],

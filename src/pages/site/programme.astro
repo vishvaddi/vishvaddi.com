@@ -86,24 +86,44 @@ import "../../styles/site.css";
     .programme :global(.prog-stats) { display: flex; gap: 1.2rem; flex-wrap: wrap; font-size: 0.85rem; color: var(--muted); padding: 0.2rem 0 0.6rem; }
     .programme :global(.prog-stats strong) { color: var(--fg); }
 
-    .programme :global(.prog-split) { display: grid; grid-template-columns: minmax(340px, 46%) 1fr; gap: 0; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+    .programme :global(.prog-split) { display: grid; grid-template-columns: minmax(340px, 46%) 1fr; gap: 0; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; align-items: stretch; }
     @media (max-width: 900px) { .programme :global(.prog-split) { grid-template-columns: 1fr; } }
-    .programme :global(.prog-table-wrap) { overflow-x: auto; border-right: 1px solid var(--rule); }
-    .programme :global(.prog-table) { border-collapse: collapse; width: 100%; font-size: 0.78rem; }
-    .programme :global(.prog-table th) { text-align: left; font-family: ui-monospace, monospace; font-size: 0.62rem; letter-spacing: 0.06em; color: var(--muted); padding: 0.4rem 0.3rem; border-bottom: 1px solid var(--rule); height: 44px; box-sizing: border-box; }
-    .programme :global(.prog-table td) { border-bottom: 1px solid var(--rule); padding: 0 0.15rem; height: 30px; box-sizing: border-box; }
-    .programme :global(.prog-table input) { width: 100%; background: none; border: none; color: var(--fg); font: inherit; font-size: 0.78rem; padding: 0.2rem; }
+    .programme :global(.prog-resize-handle) { background: var(--rule); cursor: col-resize; touch-action: none; }
+    .programme :global(.prog-resize-handle:hover), .programme :global(.prog-resize-handle:active) { background: var(--accent); }
+    .programme :global(.prog-table-pane) { display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--rule); }
+    .programme :global(.prog-table-toolbar) { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--rule); }
+    .programme :global(.prog-table-footer) { display: flex; gap: 0.5rem; padding: 0.5rem; }
+    .programme :global(.prog-tb-secondary) { opacity: 0.75; }
+    .programme :global(.prog-cols), .programme :global(.prog-kbd) { position: relative; }
+    .programme :global(.prog-cols summary), .programme :global(.prog-kbd summary) { list-style: none; }
+    .programme :global(.prog-cols summary::-webkit-details-marker), .programme :global(.prog-kbd summary::-webkit-details-marker) { display: none; }
+    .programme :global(.prog-cols-list), .programme :global(.prog-kbd-list) {
+      position: absolute; top: calc(100% + 4px); left: 0; z-index: 20;
+      background: var(--bg); border: 1px solid var(--rule); border-radius: 8px;
+      padding: 0.5rem; box-shadow: 0 8px 24px rgba(0,0,0,0.2); min-width: 13rem;
+    }
+    .programme :global(.prog-kbd-list) { right: 0; left: auto; min-width: 18rem; }
+    .programme :global(.prog-cols-item) { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.2rem; font-size: 0.82rem; min-height: 28px; }
+    .programme :global(.prog-cols-item input) { width: 16px; height: 16px; }
+    .programme :global(.prog-cols-reset) { width: 100%; margin-top: 0.4rem; }
+    .programme :global(.prog-kbd-row) { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.3rem 0; font-size: 0.78rem; border-bottom: 1px solid var(--rule); }
+    .programme :global(.prog-kbd-row:last-child) { border-bottom: none; }
+    .programme :global(.prog-kbd-row kbd) { font-family: ui-monospace, monospace; background: var(--code-bg); border: 1px solid var(--rule); border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.72rem; white-space: nowrap; }
+    .programme :global(.prog-table-wrap) { overflow-x: auto; flex: 1; }
+    .programme :global(.prog-table) { border-collapse: collapse; table-layout: fixed; font-size: 0.76rem; }
+    .programme :global(.prog-table th) { position: relative; text-align: left; font-family: ui-monospace, monospace; font-size: 0.62rem; letter-spacing: 0.06em; color: var(--muted); padding: 0.4rem 0.3rem; border-bottom: 1px solid var(--rule); height: 44px; box-sizing: border-box; }
+    .programme :global(.pc-resize) { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; touch-action: none; z-index: 2; }
+    .programme :global(.pc-resize:hover) { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+    .programme :global(.prog-table td) { border-bottom: 1px solid var(--rule); padding: 0 0.12rem; height: 30px; box-sizing: border-box; overflow: hidden; }
+    .programme :global(.prog-table input) { width: 100%; background: none; border: none; color: var(--fg); font: inherit; font-size: 0.76rem; padding: 0.2rem; box-sizing: border-box; min-height: 28px; }
     .programme :global(.prog-table input:focus) { outline: 1px solid var(--accent); border-radius: 3px; }
     .programme :global(.prog-bad) { outline: 1px solid var(--prog-crit) !important; }
+    .programme :global(.pc-pred input.prog-invalid) { border: 1px solid color-mix(in srgb, var(--prog-crit) 55%, transparent) !important; border-radius: 3px; }
     .programme :global(.pc-num) { width: 1.6rem; color: var(--muted); text-align: right; font-family: ui-monospace, monospace; font-size: 0.68rem; }
-    .programme :global(.pc-dur) { width: 2.6rem; }
-    .programme :global(.pc-trade) { width: 5.5rem; }
-    .programme :global(.pc-pred) { width: 5rem; }
-    .programme :global(.pc-date) { width: 4.2rem; white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
-    .programme :global(.pc-hrs) { width: 3rem; }
+    .programme :global(.pc-date) { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
     .programme :global(.pc-x) { width: 2rem; }
-    .programme :global(.pc-x button) { background: none; border: none; color: var(--muted); cursor: pointer; min-height: 28px; }
-    .programme :global(.pc-x button:hover) { color: var(--prog-crit); }
+    .programme :global(.pc-x button) { background: none; border: none; color: var(--muted); cursor: pointer; min-width: 28px; min-height: 28px; opacity: 0.6; }
+    .programme :global(.pc-x button:hover), .programme :global(.pc-x button:focus-visible) { color: var(--prog-crit); opacity: 1; }
     .programme :global(.prog-crit-row .pc-name input) { color: var(--prog-crit); }
     .programme :global(.prog-ms-row .pc-name input) { font-weight: 600; }
 
@@ -122,6 +142,8 @@ import "../../styles/site.css";
     .programme :global(.pg-milestone) { fill: var(--fg); }
     .programme :global(.pg-mslabel) { font-size: 10px; fill: var(--muted); }
     :global(.prog-toast) { position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%); background: var(--fg); color: var(--bg); font-size: 0.85rem; padding: 0.5rem 1rem; border-radius: 8px; z-index: 50; }
+    :global(.prog-undochip) { position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 0.75rem; background: var(--fg); color: var(--bg); font-size: 0.85rem; padding: 0.5rem 0.6rem 0.5rem 1rem; border-radius: 8px; z-index: 55; }
+    :global(.prog-undochip button) { background: color-mix(in srgb, var(--bg) 20%, transparent); color: inherit; border: 1px solid color-mix(in srgb, var(--bg) 40%, transparent); border-radius: 6px; padding: 0.25rem 0.6rem; cursor: pointer; min-height: 28px; font: inherit; }
 
     .programme :global(.pg-link) { fill: none; stroke: var(--muted); stroke-width: 1.2; opacity: 0.55; cursor: pointer; }
     .programme :global(.pg-link:hover) { stroke: var(--accent); opacity: 1; stroke-width: 2; }
@@ -155,7 +177,7 @@ import "../../styles/site.css";
     .programme :global(.prog-hintchip button) { background: none; border: none; color: var(--muted); cursor: pointer; min-width: 32px; min-height: 32px; }
     .programme :global(.pg-barlabel-in) { font-size: 10px; fill: #fff; font-family: ui-monospace, monospace; }
     @media (max-width: 900px) {
-      .programme :global(.prog-chart-only .prog-table-wrap) { display: none; }
+      .programme :global(.prog-chart-only .prog-table-pane) { display: none; }
       .programme :global(.prog-chart-only) { grid-template-columns: 1fr; }
       .programme :global(.prog-table-only .prog-gantt-wrap) { display: none; }
       .programme :global(.prog-table-only) { grid-template-columns: 1fr; }
@@ -220,8 +242,10 @@ import "../../styles/site.css";
     @media print {
       :global(nav), :global(.site-rail), :global(.eyebrow), :global(.note-foot),
       .programme :global(.prog-toolbar), .programme :global(.prog-card:has(.prog-tpl)),
-      .programme :global(.pc-x), .programme :global(.pg-linkdot) { display: none !important; }
-      .programme :global(.prog-split) { grid-template-columns: 34% 1fr; border: none; }
+      .programme :global(.pc-x), .programme :global(.pg-linkdot),
+      .programme :global(.prog-table-toolbar), .programme :global(.prog-table-footer),
+      .programme :global(.prog-resize-handle), .programme :global(.pc-resize) { display: none !important; }
+      .programme :global(.prog-split) { grid-template-columns: 34% 1fr !important; border: none; }
       .programme :global(#programme-root) { left: auto; width: 100%; transform: none; }
       .programme :global(.prog-gantt-wrap), .programme :global(.prog-table-wrap) { overflow: visible; }
       :global(body) { max-width: none; padding: 0; }

@@ -1,5 +1,14 @@
 # Project State
 
+## 2026-09-17 - Site refresh phase 2 (built, release check green, NOT deployed)
+
+- **Calculator + Notepad merged** at `/site/calc` with a Pad / Notepad toggle (Cut List ↔ Sheet pattern; both URLs live, one rail entry). New shared engine `src/scripts/site/calc-engine.ts`: the Calculator's parser moved unchanged, plus `evaluatePad()` for the notepad: multi-word variables, `ans`/`line N`, percent semantics (`x + 10%`, `10% of x`, `x as % of y`), GST words, metric units with arithmetic and `in` conversion, `qty @ $rate`, comments, labels, `total`/`subtotal`/`grand total` (money-only when a section mixes money and units), `+`/`-` running balance. UI `src/scripts/site/notepad.ts`: overlay editor with syntax colour and inline results, autosave (same key), named saved pads, share link in the hash, Copy results, Print with the free footer, Taller toggle, Tab autocomplete, Ctrl+Enter total. `public/scripts/notepad.js` deleted.
+- **Command palette** Ctrl+K / Cmd+K / "/" (`public/scripts/palette.js`, index built in `Base.astro` as a JSON block): every tool, page and game, recents, keyboard navigation. `⌕` button in the nav.
+- **Resume strip** "Pick up where you left off" (`public/scripts/resume.js`) on the homepage and both hubs, summarising saved work per tool from localStorage; replaces the hubs' "Recently used" row.
+- **Programme Builder**: draggable table/Gantt split and column widths (persisted in `vv_programme_layout_v1`), Columns menu, pane collapse, Enter/Tab/arrow row entry, Ctrl+Enter insert, Ctrl+D duplicate, Ctrl+Backspace delete with undo chip, Alt+↑/↓ reorder, Ctrl+Z/Shift+Z undo stack (50), Add task / + 5 rows, predecessor validation, Keys panel.
+- **Lattice**: TreeSheets audit (source: TreeSheets tutorial.html). Already had most bindings; added Escape hierarchy (edit → selection → zoom out → fullscreen), Ctrl+A, Ctrl+F, F3 / Shift+F3, grouped Keyboard reference. Not built: per-cell relative sizing, column width keys (no model support).
+- **Next:** polish pass (inputs off monospace, control heights/radii/gaps unified, alignment, monochrome glyphs), Span → Materials and Resources + Quick Reference merges with redirects, then deploy on Vish's word.
+
 ## 2026-09-17 - Site refresh phase 1 (built, tests green, NOT deployed)
 
 Tools first, quieter chrome, less boilerplate. Vish's brief: futuristic-minimal, tools are the value, trim the fat.

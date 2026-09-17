@@ -7,7 +7,7 @@ import {
   locate, pathTo, gridAtPath, setText, insertSubgrid, removeSubgrid,
   insertRow, deleteRow, insertCol, deleteCol, moveCell, rollupLabel,
   fromIndentedText, toIndentedText, fromTSV, toTSV, templateSheets, newSheet, latticeId,
-  sortGrid, transposeGrid, flattenGrid, subtreeMatches, replaceAll, recalculate,
+  sortGrid, transposeGrid, flattenGrid, subtreeMatches, replaceAll, recalculate, findAllMatches,
 } from './lattice-model'
 
 export interface LatticeAdapter {
@@ -229,6 +229,23 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
   function editAfterDraw(cell: LatticeCell): void {
     const cellDiv = el.querySelector<HTMLElement>(`.lat-cell[data-id="${cell.id}"]`)
     if (cellDiv) startEdit(cell, cellDiv)
+  }
+
+  /** F3/Shift+F3 and the find box's Enter: cycle to the next/previous match anywhere in the sheet,
+   *  zooming there if it is nested outside the current view. Returns false if there was nothing to find. */
+  function jumpToMatch(dir: 1 | -1): boolean {
+    if (!sheet || !searchQ) return false
+    const matches = findAllMatches(sheet.root, searchQ)
+    if (!matches.length) { adapter.toast('No matches', 'error'); return false }
+    const curIdx = selectedId ? matches.findIndex(m => m.cell.id === selectedId) : -1
+    const next = matches[(curIdx + dir + matches.length) % matches.length]
+    const path = pathTo(sheet.root, next.cell.id) ?? [next.cell]
+    zoomPath = path.slice(0, -1).map(item => item.id)
+    selectedId = next.cell.id
+    lineSel = null
+    rectSel = null
+    drawEditor()
+    return true
   }
 
   function addChild(parent: LatticeCell): void {
@@ -756,7 +773,23 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
         if (s2) { s2.focus(); s2.setSelectionRange(s2.value.length, s2.value.length) }
       }, 300)
     })
-    search.addEventListener('keydown', e => e.stopPropagation())
+    search.addEventListener('keydown', (e) => {
+      if (e.key === 'F3') {
+        e.preventDefault()
+        jumpToMatch(e.shiftKey ? -1 : 1)
+        el.querySelector<HTMLInputElement>('.lat-search')?.focus()
+        return
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        clearTimeout(searchT)
+        searchQ = search.value.trim().toLowerCase()
+        jumpToMatch(1)
+        el.querySelector<HTMLInputElement>('.lat-search')?.focus()
+        return
+      }
+      e.stopPropagation()
+    })
     const filterB = document.createElement('button')
     filterB.className = 'lat-tb'
     filterB.setAttribute('aria-label', 'Filter to matches')
@@ -1286,6 +1319,27 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
         else if (zoomPath.length) { zoomPath = zoomPath.slice(0, -1); selectedId = owner; lineSel = null; drawEditor() }
       }
 
+      // search: global regardless of selection mode
+      if (e.ctrlKey && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault()
+        const s = el.querySelector<HTMLInputElement>('.lat-search')
+        s?.focus(); s?.select()
+        return
+      }
+      if (e.key === 'F3') { e.preventDefault(); jumpToMatch(e.shiftKey ? -1 : 1); el.focus(); return }
+
+      // select all cells in the currently displayed grid
+      if (e.ctrlKey && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault()
+        if (grid.rows.length && grid.cols) {
+          rectSel = { owner: zoomOwner, r0: 0, c0: 0, r1: grid.rows.length - 1, c1: grid.cols - 1 }
+          selectedId = null
+          lineSel = null
+          drawEditor()
+        }
+        return
+      }
+
       // grid-line mode
       if (lineSel) {
         const g = resolveGrid(lineSel.owner, sheet.root)
@@ -1354,7 +1408,10 @@ export function createLatticeView(el: HTMLElement, adapter: LatticeAdapter): voi
         return
       }
       if (e.key === 'Escape') {
+        // hierarchy: cancel edit (handled by the textarea's own Escape) → clear
+        // selection → zoom out → drop out of the fullscreen workspace
         if (rectSel || selectedId) { e.preventDefault(); rectSel = null; selectedId = null; drawEditor() }
+        else if (zoomPath.length) { e.preventDefault(); zoomPath = zoomPath.slice(0, -1); selectedId = null; drawEditor() }
         else if (workspace.classList.contains('lat-app-mode')) {
           e.preventDefault()
           workspace.classList.remove('lat-app-mode')

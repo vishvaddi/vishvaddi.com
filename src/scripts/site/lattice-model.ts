@@ -118,6 +118,24 @@ export function findByText(root: LatticeGrid, query: string): CellLoc | null {
   return null
 }
 
+/** Every cell (DFS pre-order) whose text or tag contains the query — F3/Shift+F3 walk this list. */
+export function findAllMatches(root: LatticeGrid, query: string): CellLoc[] {
+  const q = query.trim().toLowerCase()
+  const out: CellLoc[] = []
+  if (!q) return out
+  const walk = (grid: LatticeGrid) => {
+    for (let r = 0; r < grid.rows.length; r++) {
+      for (let c = 0; c < grid.rows[r].length; c++) {
+        const cell = grid.rows[r][c]
+        if (cell.text.toLowerCase().includes(q) || (cell.tag ?? '').toLowerCase().includes(q)) out.push({ grid, row: r, col: c, cell })
+        if (cell.grid) walk(cell.grid)
+      }
+    }
+  }
+  walk(root)
+  return out
+}
+
 // ---- =expression cells -------------------------------------------------------
 // Safe recursive-descent arithmetic: numbers, + - * / ( ) and % (of 1).
 // A1 references and SUM/AVG ranges are resolved inside the containing grid;

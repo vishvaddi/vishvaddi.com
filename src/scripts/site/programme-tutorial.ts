@@ -18,6 +18,9 @@ const TOPICS: Topic[] = [
   { section: 'Control', title: 'Look-ahead and procurement', keys: 'three week six week order by lead time', text: 'Look-ahead filters the programme to current work. Procurement lead times generate order-by dates from each linked installation activity.' },
   { section: 'Calendar', title: 'Working week', keys: 'five six day weekend calendar', text: 'The calendar controls working days for every duration and lag. Switch five/six-day mode before relying on calculated dates.' },
   { section: 'Data', title: 'Save, export and privacy', keys: 'json csv png pdf print backup local', text: 'Programmes autosave in this browser. JSON is the editable backup; CSV is for spreadsheets; PNG and Print/PDF are issue formats. Nothing is uploaded.' },
+  { section: 'Keyboard', title: 'Quick task entry', keys: 'enter tab shortcut add row keyboard', text: 'Enter in the last row adds a new task and focuses its name; Enter elsewhere moves to the next row’s name. Shift+Enter goes back a row. Tab moves across fields left to right and wraps to the next row.' },
+  { section: 'Keyboard', title: 'Row shortcuts', keys: 'duplicate insert delete undo move reorder', text: 'Ctrl+Enter inserts a task after the current row, Ctrl+D duplicates it, and Ctrl+Backspace (or Ctrl+Delete) removes it with a 5-second Undo chip. Alt+↑ / Alt+↓ move the task up or down. Ctrl+Z undoes, Ctrl+Shift+Z redoes.' },
+  { section: 'Keyboard', title: 'Resizing and columns', keys: 'resize columns hide show layout width pane', text: 'Drag the handle between the table and chart to resize either pane, or drag a column edge to resize it — double-click a column edge to auto-fit. Use Columns to show or hide fields, and Table/Gantt to collapse a pane. Reset layout restores the defaults.' },
 ]
 
 const STEPS = [

@@ -10,41 +10,64 @@ import "../../styles/site.css";
   siteNav
 >
   <div class="blueprint tool">
-    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site Tools</a> / Calculation Notepad</p>
-    <h1>Calculation Notepad</h1>
+    <p class="eyebrow"><a href="/site" style="color:inherit;text-decoration:none">Site</a> / Calculator</p>
+    <h1>Calculator</h1>
+    <div class="seg-toggle no-print">
+      <a href="/site/calc">Pad</a>
+      <a href="/site/notepad" class="active">Notepad</a>
+    </div>
     <p>
-      Type takeoff-style lines. Use variables, percentages, GST, currency and common metric units.
+      Type takeoff-style lines. Use variables (even multi-word ones), percentages, GST,
+      currency and common metric units — each line's result shows inline as you type.
     </p>
 
-    <div class="notepad-help">
-      <strong>Examples</strong>
-      <code>sheets = 12</code>
-      <code>area = sheets * 2.88 m2</code>
-      <code>waste = area * 10%</code>
-      <code>total = ($4500 + 10% gst)</code>
+    <div class="pad-wrap">
+      <div id="pad-overlay" class="pad-overlay" aria-hidden="true"></div>
+      <textarea id="pad-input" class="pad-input" spellcheck="false" autocapitalize="off"></textarea>
     </div>
 
-    <div class="notepad-shell">
-      <textarea id="calc-note" spellcheck="false">sheets = 12
-sheet area = 2.88 m2
-wall area = sheets * sheet area
-waste = wall area * 10%
-material = $4500
-gst total = material * 1.1</textarea>
-      <div id="calc-results" class="notepad-results" aria-live="polite"></div>
+    <div id="pad-confirm" class="pad-confirm no-print" hidden>
+      <span id="pad-confirm-text"></span>
+      <button type="button" class="btn btn-sm" id="pad-confirm-yes">Yes</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="pad-confirm-no">Cancel</button>
     </div>
 
-    <div class="btn-row no-print">
-      <button type="button" class="btn" id="copy-results">Copy results</button>
-      <button type="button" class="btn btn-ghost" id="clear-note">Clear</button>
+    <div class="btn-row no-print" id="pad-actions">
+      <button type="button" class="btn" id="pad-copy-results">Copy results</button>
+      <button type="button" class="btn btn-ghost" id="pad-copy-link">Copy link</button>
+      <button type="button" class="btn btn-ghost" id="pad-print">Print</button>
+      <button type="button" class="btn btn-ghost" id="pad-clear">Clear</button>
+      <button type="button" class="btn btn-ghost" id="pad-tall" aria-pressed="false">Taller</button>
+    </div>
+    <div class="btn-row no-print pad-saved-row">
+      <select id="pad-saved" class="pad-saved-select" aria-label="Saved pads"></select>
+      <button type="button" class="btn btn-ghost btn-sm" id="pad-load">Load</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="pad-delete">Delete</button>
+      <input type="text" id="pad-save-name" class="pad-saved-select" placeholder="Name this pad…" maxlength="60" aria-label="Name for the saved pad" />
+      <button type="button" class="btn btn-ghost btn-sm" id="pad-save-as">Save</button>
     </div>
 
-    <p class="disclosure">
-      MVP parser: supports arithmetic, brackets, variables, <code>$</code>, <code>%</code>, GST wording, and basic metric area/length units.
-    </p>
+    <details class="calc-ref">
+      <summary>Syntax</summary>
+      <p><code>name = expr</code> — variable, name can have spaces, e.g. <code>sheet area = 2.88 m2</code></p>
+      <p><code>ans</code>, <code>line 3</code> / <code>L3</code> — reuse the previous or a numbered line's result</p>
+      <p><code>x + 10%</code> / <code>x - 10%</code> — add or remove a percentage, e.g. <code>4500 + 10%</code></p>
+      <p><code>10% of x</code> / <code>x as % of y</code> — percentage of a value, or what percent one is of another</p>
+      <p><code>x + gst</code> / <code>x ex gst</code> / <code>gst on x</code> — Australian GST at 10%</p>
+      <p><code>12 m2 @ $45</code> — rate idiom: quantity at a unit price</p>
+      <p><code>2400 mm + 1.2 m</code> — mixed units convert automatically</p>
+      <p><code>x in m</code> — convert a value to another unit</p>
+      <p><code>total</code> / <code>subtotal</code> — sum the current section; <code>grand total</code> sums the whole pad</p>
+      <p><code>+ 4500 deposit</code> / <code>- 1200 rent</code> — a section of these shows a running balance</p>
+      <p><code># note</code> or <code>// note</code> — a comment; plain words with no number are a label</p>
+    </details>
+
     <ToolIntro href="/site/notepad" />
-    <p class="note-foot"><a href="/site">← all tools</a></p>
+    <p class="note-foot">Estimates only — always verify on site. <a href="/site">← all tools</a></p>
   </div>
 
-  <script src="/scripts/notepad.js" defer></script>
+  <script>
+    import { initNotepad } from "../../scripts/site/notepad";
+    initNotepad();
+  </script>
 </Base>

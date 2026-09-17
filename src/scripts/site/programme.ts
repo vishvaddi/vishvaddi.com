@@ -22,6 +22,70 @@ function tradeColour(trade: string | undefined, trades: string[]): string {
   return TRADE_COLOURS[Math.max(0, trades.indexOf(trade)) % TRADE_COLOURS.length]
 }
 
+// ---- layout persistence (table/gantt split, column widths, visibility) --------
+// Separate key from programme_v1: this is view state, not project data, and must
+// never block an existing saved programme from loading.
+const LAYOUT_KEY = 'vv_programme_layout_v1'
+
+interface ProgLayout {
+  split: number                          // px width of the table pane; 0 = use computed default
+  cols: Record<string, number>
+  hidden: string[]
+  panes: { table: boolean; gantt: boolean }
+}
+
+function defaultLayout(): ProgLayout {
+  return { split: 0, cols: {}, hidden: [], panes: { table: true, gantt: true } }
+}
+
+function loadLayout(): ProgLayout {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? 'null')
+    if (!raw || typeof raw !== 'object') return defaultLayout()
+    return {
+      split: typeof raw.split === 'number' ? raw.split : 0,
+      cols: raw.cols && typeof raw.cols === 'object' ? raw.cols : {},
+      hidden: Array.isArray(raw.hidden) ? raw.hidden.filter((h: unknown) => typeof h === 'string') : [],
+      panes: { table: raw.panes?.table !== false, gantt: raw.panes?.gantt !== false },
+    }
+  } catch { return defaultLayout() }
+}
+
+function saveLayout(layout: ProgLayout): void {
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)) } catch { /* private mode etc — layout is disposable */ }
+}
+
+interface ColDef { id: string; label: string; cls: string; aria: string; min: number; def: number; hideable: boolean }
+
+const COLUMNS: ColDef[] = [
+  { id: 'name', label: 'Task', cls: 'pc-name', aria: 'Task name', min: 120, def: 220, hideable: false },
+  { id: 'trade', label: 'Trade', cls: 'pc-trade', aria: 'Trade', min: 56, def: 90, hideable: true },
+  { id: 'dur', label: 'Dur', cls: 'pc-dur', aria: 'Duration (working days)', min: 44, def: 56, hideable: false },
+  { id: 'pred', label: 'Preds', cls: 'pc-pred', aria: 'Predecessors', min: 56, def: 84, hideable: true },
+  { id: 'start', label: 'Start', cls: 'pc-date', aria: 'Start date', min: 58, def: 68, hideable: true },
+  { id: 'finish', label: 'Finish', cls: 'pc-date', aria: 'Finish date', min: 58, def: 68, hideable: true },
+  { id: 'hrs', label: 'Hrs', cls: 'pc-hrs', aria: 'Labour hours', min: 40, def: 52, hideable: true },
+]
+
+const SHORTCUTS: [string, string][] = [
+  ['Enter', 'Name field: add a task (last row) or go to the next row'],
+  ['Shift+Enter', 'Name field: go to the previous row'],
+  ['Tab / Shift+Tab', 'Move across fields, wraps to the next/previous row'],
+  ['↑ / ↓', 'Move to the same field in the row above/below'],
+  ['Ctrl+Enter', 'Insert a new task after this row'],
+  ['Ctrl+D', 'Duplicate this task'],
+  ['Ctrl+Backspace / Ctrl+Delete', 'Delete this task (Undo chip appears for 5s)'],
+  ['Alt+↑ / Alt+↓', 'Move this task up/down'],
+  ['Ctrl+Z / Ctrl+Shift+Z', 'Undo / redo'],
+]
+
+// shared canvas for column auto-fit text measurement — created lazily, reused
+let measureCtx: CanvasRenderingContext2D | null = null
+function textWidthCtx(): CanvasRenderingContext2D {
+  if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d')!
+  return measureCtx
+}
+
 function toast(msg: string): void {
   const t = document.createElement('div')
   t.className = 'prog-toast'
@@ -56,6 +120,10 @@ export function initProgramme(el: HTMLElement): void {
   let demoMode = false
   let beforeDemo: Programme | null = null
   let observedWidth = 0
+  let layout: ProgLayout = loadLayout()
+  let undoStack: string[] = []
+  let redoStack: string[] = []
+  let pendingFocus: { taskId: string; col: string } | null = null
 
   const appMode = () => !!document.fullscreenElement || el.classList.contains('prog-app-mode')
 
@@ -75,6 +143,11 @@ export function initProgramme(el: HTMLElement): void {
     if (event.key === 'Escape' && el.classList.contains('prog-app-mode')) {
       el.classList.remove('prog-app-mode'); document.body.classList.remove('prog-app-open'); if (prog) drawEditor()
     }
+    // app-level undo beats the browser's per-input undo — matches spreadsheet conventions
+    if (prog && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+      event.preventDefault()
+      if (event.shiftKey) performRedo(); else performUndo()
+    }
   })
 
   function scheduleSave() {
@@ -82,6 +155,63 @@ export function initProgramme(el: HTMLElement): void {
     prog.updated = Date.now()
     clearTimeout(saveTimer)
     saveTimer = window.setTimeout(() => { if (prog) persistProgramme(prog) }, 400)
+  }
+
+  // ---- undo/redo: bounded in-memory history of task-list snapshots --------------
+
+  function snapshotTasks(): string { return JSON.stringify(prog!.tasks) }
+
+  function commitHistoryEntry(before: string): void {
+    undoStack.push(before)
+    if (undoStack.length > 50) undoStack.shift()
+    redoStack = []
+  }
+
+  function pushHistory(): void {
+    if (!prog) return
+    commitHistoryEntry(snapshotTasks())
+  }
+
+  function performUndo(): void {
+    if (!prog || !undoStack.length) return
+    redoStack.push(snapshotTasks())
+    if (redoStack.length > 50) redoStack.shift()
+    prog.tasks = JSON.parse(undoStack.pop()!)
+    scheduleSave()
+    drawEditor()
+  }
+
+  function performRedo(): void {
+    if (!prog || !redoStack.length) return
+    undoStack.push(snapshotTasks())
+    if (undoStack.length > 50) undoStack.shift()
+    prog.tasks = JSON.parse(redoStack.pop()!)
+    scheduleSave()
+    drawEditor()
+  }
+
+  function showUndoChip(message: string): void {
+    document.querySelector('.prog-undochip')?.remove()
+    const chip = document.createElement('div')
+    chip.className = 'prog-undochip'
+    const span = document.createElement('span')
+    span.textContent = message
+    const btn = document.createElement('button')
+    btn.textContent = 'Undo'
+    btn.addEventListener('click', () => { chip.remove(); performUndo() })
+    chip.append(span, btn)
+    document.body.appendChild(chip)
+    setTimeout(() => chip.remove(), 5000)
+  }
+
+  function deleteTaskWithUndo(task: Task): void {
+    if (!prog) return
+    pushHistory()
+    prog.tasks = prog.tasks.filter(x => x.id !== task.id)
+    for (const other of prog.tasks) other.deps = other.deps.filter(d => d.id !== task.id)
+    scheduleSave()
+    drawEditor()
+    showUndoChip(`Deleted "${task.name}"`)
   }
 
   // ---- list + generator screen ------------------------------------------------
@@ -255,6 +385,7 @@ export function initProgramme(el: HTMLElement): void {
     if (!prog) return
     const sched = compute()
     el.innerHTML = ''
+    const narrow = window.matchMedia('(max-width: 900px)').matches
 
     // toolbar
     const bar = document.createElement('div')
@@ -409,8 +540,11 @@ export function initProgramme(el: HTMLElement): void {
     addBtn.textContent = '＋ task'
     addBtn.addEventListener('click', () => {
       if (!prog) return
-      prog.tasks.push({ id: pid(), name: 'New task', duration: 1, deps: [] })
+      pushHistory()
+      const nt: Task = { id: pid(), name: 'New task', duration: 1, deps: [] }
+      prog.tasks.push(nt)
       scheduleSave()
+      pendingFocus = { taskId: nt.id, col: 'name' }
       drawEditor()
     })
     const helpBtn = document.createElement('button')
@@ -418,11 +552,64 @@ export function initProgramme(el: HTMLElement): void {
     helpBtn.textContent = '? Help'
     helpBtn.setAttribute('data-programme-help', '')
     helpBtn.setAttribute('aria-label', 'Programme Builder tutorial and help')
-    bar.append(back, title, start, spacer, fsBtn, fitBtn, zoomOut, zoomIn, menuBtn, helpBtn, addBtn)
+
+    // pane collapse — narrow already has its own Chart/Table switcher below
+    let tableToggle: HTMLButtonElement | null = null
+    let ganttToggle: HTMLButtonElement | null = null
+    if (!narrow) {
+      tableToggle = document.createElement('button')
+      tableToggle.className = 'prog-tb' + (layout.panes.table ? ' prog-seg-on' : '')
+      tableToggle.textContent = 'Table'
+      tableToggle.title = 'Show or hide the table pane'
+      tableToggle.setAttribute('aria-pressed', String(layout.panes.table))
+      tableToggle.addEventListener('click', () => {
+        if (layout.panes.table && !layout.panes.gantt) return
+        layout.panes.table = !layout.panes.table
+        if (!layout.panes.table && !layout.panes.gantt) layout.panes.gantt = true
+        saveLayout(layout)
+        drawEditor()
+      })
+      ganttToggle = document.createElement('button')
+      ganttToggle.className = 'prog-tb' + (layout.panes.gantt ? ' prog-seg-on' : '')
+      ganttToggle.textContent = 'Gantt'
+      ganttToggle.title = 'Show or hide the Gantt pane'
+      ganttToggle.setAttribute('aria-pressed', String(layout.panes.gantt))
+      ganttToggle.addEventListener('click', () => {
+        if (layout.panes.gantt && !layout.panes.table) return
+        layout.panes.gantt = !layout.panes.gantt
+        if (!layout.panes.gantt && !layout.panes.table) layout.panes.table = true
+        saveLayout(layout)
+        drawEditor()
+      })
+    }
+
+    const kbdDetails = document.createElement('details')
+    kbdDetails.className = 'prog-kbd'
+    const kbdSummary = document.createElement('summary')
+    kbdSummary.className = 'prog-tb'
+    kbdSummary.textContent = '⌨ Keys'
+    kbdSummary.setAttribute('aria-label', 'Keyboard shortcuts reference')
+    kbdDetails.appendChild(kbdSummary)
+    const kbdList = document.createElement('div')
+    kbdList.className = 'prog-kbd-list'
+    for (const [combo, desc] of SHORTCUTS) {
+      const row = document.createElement('div')
+      row.className = 'prog-kbd-row'
+      const k = document.createElement('kbd')
+      k.textContent = combo
+      const d = document.createElement('span')
+      d.textContent = desc
+      row.append(k, d)
+      kbdList.appendChild(row)
+    }
+    kbdDetails.appendChild(kbdList)
+
+    bar.append(back, title, start, spacer)
+    if (tableToggle && ganttToggle) bar.append(tableToggle, ganttToggle)
+    bar.append(fsBtn, fitBtn, zoomOut, zoomIn, menuBtn, kbdDetails, helpBtn, addBtn)
     el.appendChild(bar)
 
     // narrow screens: chart-first with a Chart/Table switcher + one-time rotate hint
-    const narrow = window.matchMedia('(max-width: 900px)').matches
     if (narrow) {
       const seg = document.createElement('div')
       seg.className = 'prog-seg'
@@ -490,76 +677,264 @@ export function initProgramme(el: HTMLElement): void {
       split.appendChild(none)
     }
 
+    // ---- table toolbar: column visibility + layout reset ----------------------
+    const visibleColumns = COLUMNS.filter(c => !c.hideable || !layout.hidden.includes(c.id))
+    const tableToolbar = document.createElement('div')
+    tableToolbar.className = 'prog-table-toolbar'
+    const colsDetails = document.createElement('details')
+    colsDetails.className = 'prog-cols'
+    const colsSummary = document.createElement('summary')
+    colsSummary.className = 'prog-tb'
+    colsSummary.textContent = 'Columns'
+    colsSummary.setAttribute('aria-label', 'Show or hide table columns')
+    colsDetails.appendChild(colsSummary)
+    const colsList = document.createElement('div')
+    colsList.className = 'prog-cols-list'
+    for (const col of COLUMNS) {
+      const label = document.createElement('label')
+      label.className = 'prog-cols-item'
+      const cb = document.createElement('input')
+      cb.type = 'checkbox'
+      cb.checked = !layout.hidden.includes(col.id)
+      cb.disabled = !col.hideable
+      cb.addEventListener('change', () => {
+        if (!col.hideable) return
+        layout.hidden = cb.checked ? layout.hidden.filter(h => h !== col.id) : [...layout.hidden, col.id]
+        saveLayout(layout)
+        drawEditor()
+      })
+      const span = document.createElement('span')
+      span.textContent = col.hideable ? col.label : `${col.label} (required)`
+      label.append(cb, span)
+      colsList.appendChild(label)
+    }
+    const resetLayoutBtn = document.createElement('button')
+    resetLayoutBtn.type = 'button'
+    resetLayoutBtn.className = 'prog-tb prog-cols-reset'
+    resetLayoutBtn.textContent = 'Reset layout'
+    resetLayoutBtn.addEventListener('click', () => {
+      layout = defaultLayout()
+      saveLayout(layout)
+      drawEditor()
+    })
+    colsList.appendChild(resetLayoutBtn)
+    colsDetails.appendChild(colsList)
+    tableToolbar.appendChild(colsDetails)
+
     // table
     const table = document.createElement('table')
     table.className = 'prog-table'
-    table.innerHTML = `
-      <thead><tr>
-        <th class="pc-num">#</th><th class="pc-name">Task</th><th class="pc-trade">Trade</th>
-        <th class="pc-dur">Dur</th><th class="pc-pred">Preds</th>
-        <th class="pc-date">Start</th><th class="pc-date">Finish</th><th class="pc-hrs">Hrs</th><th class="pc-x"></th>
-      </tr></thead>
-    `
+    const colgroup = document.createElement('colgroup')
+    const numCol = document.createElement('col')
+    numCol.className = 'pc-num'
+    colgroup.appendChild(numCol)
+    for (const col of visibleColumns) {
+      const c = document.createElement('col')
+      c.dataset.col = col.id
+      c.style.width = `${layout.cols[col.id] ?? col.def}px`
+      colgroup.appendChild(c)
+    }
+    const xCol = document.createElement('col')
+    xCol.className = 'pc-x'
+    colgroup.appendChild(xCol)
+    table.appendChild(colgroup)
+
+    const thead = document.createElement('thead')
+    const headRow = document.createElement('tr')
+    const numTh = document.createElement('th')
+    numTh.className = 'pc-num'
+    numTh.textContent = '#'
+    headRow.appendChild(numTh)
+    for (const col of visibleColumns) {
+      const th = document.createElement('th')
+      th.className = col.cls
+      th.dataset.col = col.id
+      th.textContent = col.label
+      const grip = document.createElement('span')
+      grip.className = 'pc-resize'
+      grip.dataset.resizeCol = col.id
+      grip.setAttribute('aria-hidden', 'true')
+      th.appendChild(grip)
+      headRow.appendChild(th)
+    }
+    const xTh = document.createElement('th')
+    xTh.className = 'pc-x'
+    headRow.appendChild(xTh)
+    thead.appendChild(headRow)
+    table.appendChild(thead)
+
     const tbody = document.createElement('tbody')
-    prog.tasks.forEach((t, i) => {
-      if (winEnd && !visTasks.includes(t)) return
+
+    function focusCellByTaskId(taskId: string, colId: string): void {
+      tbody.querySelector<HTMLInputElement>(`input[data-task="${taskId}"][data-col="${colId}"]`)?.focus()
+    }
+
+    // quick-entry keyboard model — native Tab order already covers left-to-right +
+    // row wrap, so only Enter/Arrow/Ctrl/Alt combinations need custom handling
+    function onCellKeydown(e: KeyboardEvent, task: Task, visIdx: number, colId: string, input: HTMLInputElement): void {
+      if (!prog) return
+      const isCtrl = e.ctrlKey || e.metaKey
+      const realIndex = prog.tasks.indexOf(task)
+
+      if (isCtrl && !e.shiftKey && e.key === 'Enter') {
+        e.preventDefault()
+        pushHistory()
+        const nt: Task = { id: pid(), name: 'New task', duration: 1, deps: [] }
+        prog.tasks.splice(realIndex + 1, 0, nt)
+        scheduleSave(); pendingFocus = { taskId: nt.id, col: 'name' }; drawEditor()
+        return
+      }
+      if (isCtrl && !e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault()
+        pushHistory()
+        const copy: Task = JSON.parse(JSON.stringify(task))
+        copy.id = pid()
+        copy.name = `${task.name} (copy)`
+        prog.tasks.splice(realIndex + 1, 0, copy)
+        scheduleSave(); pendingFocus = { taskId: copy.id, col: 'name' }; drawEditor()
+        return
+      }
+      if (isCtrl && (e.key === 'Backspace' || e.key === 'Delete')) {
+        e.preventDefault()
+        deleteTaskWithUndo(task)
+        return
+      }
+      if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault()
+        const dir = e.key === 'ArrowUp' ? -1 : 1
+        const neighbour = visTasks[visIdx + dir]
+        if (!neighbour) return
+        const a = realIndex, b = prog.tasks.indexOf(neighbour)
+        pushHistory()
+        ;[prog.tasks[a], prog.tasks[b]] = [prog.tasks[b], prog.tasks[a]]
+        scheduleSave(); pendingFocus = { taskId: task.id, col: colId }; drawEditor()
+        return
+      }
+      if (!isCtrl && !e.altKey && e.key === 'Enter' && colId === 'name') {
+        e.preventDefault()
+        input.blur() // fires the pending 'change' commit before we navigate away
+        if (e.shiftKey) {
+          const prev = visTasks[visIdx - 1]
+          if (prev) focusCellByTaskId(prev.id, 'name')
+        } else if (visIdx === visTasks.length - 1) {
+          pushHistory()
+          const nt: Task = { id: pid(), name: 'New task', duration: 1, deps: [] }
+          prog.tasks.push(nt)
+          scheduleSave(); pendingFocus = { taskId: nt.id, col: 'name' }; drawEditor()
+        } else {
+          const next = visTasks[visIdx + 1]
+          if (next) focusCellByTaskId(next.id, 'name')
+        }
+        return
+      }
+      if (!isCtrl && !e.altKey && !e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        // only steal the arrow when it wouldn't otherwise move the caret
+        const atStart = input.selectionStart === 0 && input.selectionEnd === 0
+        const atEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length
+        const dir = e.key === 'ArrowUp' ? -1 : 1
+        if ((dir < 0 && !atStart) || (dir > 0 && !atEnd)) return
+        const neighbour = visTasks[visIdx + dir]
+        if (!neighbour) return
+        e.preventDefault()
+        focusCellByTaskId(neighbour.id, colId)
+      }
+    }
+
+    visTasks.forEach((t, visIdx) => {
+      const i = prog!.tasks.indexOf(t)
       const s = sched.get(t.id)!
       const tr = document.createElement('tr')
       if (s.critical) tr.classList.add('prog-crit-row')
       if (t.duration === 0) tr.classList.add('prog-ms-row')
-      const cellInput = (value: string, cls: string, aria: string, onChange: (v: string) => boolean) => {
+
+      const cellInput = (colId: string, value: string, cls: string, aria: string, onChange: (v: string) => boolean, extra?: (inp: HTMLInputElement) => void) => {
         const td = document.createElement('td')
         td.className = cls
         const inp = document.createElement('input')
         inp.value = value
+        inp.dataset.task = t.id
+        inp.dataset.col = colId
         inp.setAttribute('aria-label', `${aria} — row ${i + 1}`)
         inp.addEventListener('change', () => {
+          const before = snapshotTasks()
           if (!onChange(inp.value)) { inp.classList.add('prog-bad'); setTimeout(() => inp.classList.remove('prog-bad'), 1200) }
-          else { scheduleSave(); drawEditor() }
+          else { commitHistoryEntry(before); scheduleSave(); drawEditor() }
         })
+        inp.addEventListener('keydown', e => onCellKeydown(e, t, visIdx, colId, inp))
+        extra?.(inp)
         td.appendChild(inp)
         return td
       }
+
+      const buildCell = (colId: string): HTMLTableCellElement => {
+        switch (colId) {
+          case 'name':
+            return cellInput('name', t.name, 'pc-name', 'Task name', v => { if (!v.trim()) return false; t.name = v.trim(); return true })
+          case 'trade':
+            return cellInput('trade', t.trade ?? '', 'pc-trade', 'Trade', v => { t.trade = v.trim() || undefined; return true })
+          case 'dur':
+            return cellInput('dur', String(t.duration), 'pc-dur', 'Duration (working days)', v => {
+              const n = Math.round(Number(v))
+              if (!Number.isFinite(n) || n < 0) return false
+              t.duration = n
+              return true
+            })
+          case 'pred':
+            return cellInput('pred', depsToText(t, prog!.tasks), 'pc-pred', 'Predecessors', v => {
+              const deps = textToDeps(v, prog!.tasks)
+              if (deps === null) return false
+              if (deps.some(d => d.id === t.id)) return false
+              t.deps = deps
+              return true
+            }, inp => {
+              inp.title = 'Predecessor row numbers, e.g. "3", "3FS+2", "5SS-1, 7FF"'
+              const markValidity = () => {
+                const valid = !inp.value.trim() || textToDeps(inp.value, prog!.tasks) !== null
+                inp.classList.toggle('prog-invalid', !valid)
+                if (valid) inp.removeAttribute('aria-invalid'); else inp.setAttribute('aria-invalid', 'true')
+              }
+              inp.addEventListener('input', markValidity)
+              markValidity()
+            })
+          case 'hrs':
+            return cellInput('hrs', t.hours ? String(t.hours) : '', 'pc-hrs', 'Labour hours', v => {
+              if (!v.trim()) { t.hours = undefined; return true }
+              const n = Number(v)
+              if (!Number.isFinite(n) || n < 0) return false
+              t.hours = Math.round(n)
+              return true
+            })
+          case 'start': {
+            const td = document.createElement('td')
+            td.className = 'pc-date'
+            td.textContent = fmtAU(s.esDate)
+            return td
+          }
+          case 'finish': {
+            const td = document.createElement('td')
+            td.className = 'pc-date'
+            td.textContent = t.duration === 0 ? '◆' : fmtAU(s.efDate)
+            return td
+          }
+          default:
+            return document.createElement('td')
+        }
+      }
+
       const num = document.createElement('td')
       num.className = 'pc-num'
       num.textContent = String(i + 1)
       tr.appendChild(num)
-      tr.appendChild(cellInput(t.name, 'pc-name', 'Task name', v => { if (!v.trim()) return false; t.name = v.trim(); return true }))
-      tr.appendChild(cellInput(t.trade ?? '', 'pc-trade', 'Trade', v => { t.trade = v.trim() || undefined; return true }))
-      tr.appendChild(cellInput(String(t.duration), 'pc-dur', 'Duration (working days)', v => {
-        const n = Math.round(Number(v))
-        if (!Number.isFinite(n) || n < 0) return false
-        t.duration = n
-        return true
-      }))
-      tr.appendChild(cellInput(depsToText(t, prog!.tasks), 'pc-pred', 'Predecessors', v => {
-        const deps = textToDeps(v, prog!.tasks)
-        if (deps === null) return false
-        if (deps.some(d => d.id === t.id)) return false
-        t.deps = deps
-        return true
-      }))
-      const startTd = document.createElement('td')
-      startTd.className = 'pc-date'
-      startTd.textContent = fmtAU(s.esDate)
-      const finTd = document.createElement('td')
-      finTd.className = 'pc-date'
-      finTd.textContent = t.duration === 0 ? '◆' : fmtAU(s.efDate)
-      tr.append(startTd, finTd)
-      tr.appendChild(cellInput(t.hours ? String(t.hours) : '', 'pc-hrs', 'Labour hours', v => {
-        if (!v.trim()) { t.hours = undefined; return true }
-        const n = Number(v)
-        if (!Number.isFinite(n) || n < 0) return false
-        t.hours = Math.round(n)
-        return true
-      }))
+      for (const col of visibleColumns) tr.appendChild(buildCell(col.id))
       const xTd = document.createElement('td')
       xTd.className = 'pc-x'
       const del = document.createElement('button')
       del.textContent = '✕'
+      del.title = 'Delete task'
       del.setAttribute('aria-label', `Delete row ${i + 1}`)
       armTwice(del, '?', () => {
         if (!prog) return
+        pushHistory()
         prog.tasks = prog.tasks.filter(x => x.id !== t.id)
         for (const other of prog.tasks) other.deps = other.deps.filter(d => d.id !== t.id)
         scheduleSave()
@@ -570,13 +945,130 @@ export function initProgramme(el: HTMLElement): void {
       tbody.appendChild(tr)
     })
     table.appendChild(tbody)
+
+    // column resize (drag to resize, dblclick to auto-fit to content)
+    headRow.querySelectorAll<HTMLElement>('.pc-resize').forEach(handle => {
+      const colId = handle.dataset.resizeCol!
+      const def = COLUMNS.find(c => c.id === colId)!
+      handle.addEventListener('pointerdown', e => {
+        e.preventDefault()
+        handle.setPointerCapture(e.pointerId)
+        const colEl = table.querySelector<HTMLTableColElement>(`col[data-col="${colId}"]`)!
+        const startX = e.clientX
+        const startWidth = colEl.getBoundingClientRect().width
+        const onMove = (ev: PointerEvent) => {
+          colEl.style.width = `${Math.max(def.min, Math.round(startWidth + (ev.clientX - startX)))}px`
+        }
+        const onUp = (ev: PointerEvent) => {
+          handle.releasePointerCapture(ev.pointerId)
+          handle.removeEventListener('pointermove', onMove)
+          handle.removeEventListener('pointerup', onUp)
+          layout.cols[colId] = Math.round(parseFloat(colEl.style.width))
+          saveLayout(layout)
+        }
+        handle.addEventListener('pointermove', onMove)
+        handle.addEventListener('pointerup', onUp, { once: true })
+      })
+      handle.addEventListener('dblclick', () => {
+        const ctx = textWidthCtx()
+        ctx.font = `${getComputedStyle(table).fontSize} ${getComputedStyle(table).fontFamily}`
+        let max = ctx.measureText(def.label).width
+        table.querySelectorAll<HTMLElement>(`[data-col="${colId}"]`).forEach(cellEl => {
+          const val = cellEl instanceof HTMLInputElement ? cellEl.value : (cellEl.textContent ?? '')
+          max = Math.max(max, ctx.measureText(val).width)
+        })
+        const width = Math.max(def.min, Math.min(420, Math.round(max + 28)))
+        const colEl = table.querySelector<HTMLTableColElement>(`col[data-col="${colId}"]`)
+        if (colEl) colEl.style.width = `${width}px`
+        layout.cols[colId] = width
+        saveLayout(layout)
+      })
+    })
+
     const tableWrap = document.createElement('div')
     tableWrap.className = 'prog-table-wrap'
     tableWrap.appendChild(table)
-    split.appendChild(tableWrap)
+
+    const tableFooter = document.createElement('div')
+    tableFooter.className = 'prog-table-footer'
+    const addRowBtn = document.createElement('button')
+    addRowBtn.type = 'button'
+    addRowBtn.className = 'prog-tb'
+    addRowBtn.textContent = '+ Add task'
+    addRowBtn.addEventListener('click', () => {
+      if (!prog) return
+      pushHistory()
+      const nt: Task = { id: pid(), name: 'New task', duration: 1, deps: [] }
+      prog.tasks.push(nt)
+      scheduleSave()
+      pendingFocus = { taskId: nt.id, col: 'name' }
+      drawEditor()
+    })
+    const addFiveBtn = document.createElement('button')
+    addFiveBtn.type = 'button'
+    addFiveBtn.className = 'prog-tb prog-tb-secondary'
+    addFiveBtn.textContent = '+ 5 rows'
+    addFiveBtn.addEventListener('click', () => {
+      if (!prog) return
+      pushHistory()
+      for (let n = 0; n < 5; n++) prog.tasks.push({ id: pid(), name: 'New task', duration: 1, deps: [] })
+      scheduleSave()
+      drawEditor()
+    })
+    tableFooter.append(addRowBtn, addFiveBtn)
+
+    const tablePane = document.createElement('div')
+    tablePane.className = 'prog-table-pane'
+    tablePane.append(tableToolbar, tableWrap, tableFooter)
 
     // timeline
-    split.appendChild(renderTimeline(prog, sched, trades, visTasks))
+    const ganttWrap = renderTimeline(prog, sched, trades, visTasks)
+
+    if (narrow) {
+      split.append(tablePane, ganttWrap)
+    } else {
+      const tableVisible = layout.panes.table
+      const ganttVisible = layout.panes.gantt
+      if (tableVisible) split.appendChild(tablePane)
+      if (tableVisible && ganttVisible) {
+        const handle = document.createElement('div')
+        handle.className = 'prog-resize-handle'
+        handle.setAttribute('role', 'separator')
+        handle.setAttribute('aria-orientation', 'vertical')
+        handle.setAttribute('aria-label', 'Resize table and Gantt panes')
+        split.appendChild(handle)
+        handle.addEventListener('pointerdown', e => {
+          e.preventDefault()
+          handle.setPointerCapture(e.pointerId)
+          const startX = e.clientX
+          const startWidth = tablePane.getBoundingClientRect().width
+          const totalWidth = split.getBoundingClientRect().width
+          const onMove = (ev: PointerEvent) => {
+            const w = Math.max(280, Math.min(totalWidth - 288, Math.round(startWidth + (ev.clientX - startX))))
+            split.style.gridTemplateColumns = `${w}px 8px 1fr`
+          }
+          const onUp = (ev: PointerEvent) => {
+            handle.releasePointerCapture(ev.pointerId)
+            handle.removeEventListener('pointermove', onMove)
+            handle.removeEventListener('pointerup', onUp)
+            const m = /^([\d.]+)px/.exec(split.style.gridTemplateColumns)
+            if (m) { layout.split = Math.round(Number(m[1])); saveLayout(layout) }
+          }
+          handle.addEventListener('pointermove', onMove)
+          handle.addEventListener('pointerup', onUp, { once: true })
+        })
+      }
+      if (ganttVisible) split.appendChild(ganttWrap)
+      split.style.gridTemplateColumns = (tableVisible && ganttVisible)
+        ? `${Math.max(280, layout.split || Math.round((el.getBoundingClientRect().width || 900) * (appMode() ? 0.3 : 0.46)))}px 8px 1fr`
+        : '1fr'
+    }
+
+    if (pendingFocus) {
+      const pf = pendingFocus
+      pendingFocus = null
+      focusCellByTaskId(pf.taskId, pf.col)
+    }
 
     // baseline variance
     if (prog.baseline) {
@@ -683,7 +1175,9 @@ export function initProgramme(el: HTMLElement): void {
     }
     const narrow = window.matchMedia('(max-width: 900px)').matches
     const rootWidth = el.getBoundingClientRect().width || innerWidth
-    const tableWidth = narrow ? 0 : Math.max(280, rootWidth * (appMode() ? .3 : .46))
+    const tableWidth = narrow || !layout.panes.table
+      ? 0
+      : (layout.panes.gantt ? (layout.split || Math.round(rootWidth * (appMode() ? .3 : .46))) : 0)
     const timelineWidth = Math.max(240, rootWidth - tableWidth - (appMode() ? 32 : 12))
     const DAY_W = fitMode ? Math.max(3, Math.min(34, timelineWidth / days.length)) : ZOOMS[zoom]
     const calIdx = new Map(days.map((d, i) => [fmtDate(d), i]))

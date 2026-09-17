@@ -501,3 +501,131 @@ header nav.topnav {
 .flipper-back p.bk-hd:first-child {
   margin-top: 0;
 }
+
+/* Command palette (17/09/26) */
+.vv-palette {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  padding: 15vh 1rem 1rem;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.vv-palette[hidden] { display: none; }
+.vv-palette-panel {
+  width: 100%;
+  max-width: 34rem;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.24);
+  overflow: hidden;
+  animation: vv-palette-in 0.12s var(--ease, ease);
+}
+@keyframes vv-palette-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.vv-palette-input {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 1.05rem;
+  padding: 0.9rem 1rem;
+  outline: none;
+}
+.vv-palette-results {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem 0;
+  overflow-y: auto;
+}
+.vv-palette-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  color: var(--fg);
+}
+.vv-palette-row.active {
+  background: var(--code-bg);
+  color: var(--fg);
+}
+.vv-palette-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vv-palette-tag {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+body.vv-palette-open { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .vv-palette-panel { animation: none; }
+}
+
+/* Resume strip (17/09/26) */
+.vv-resume[hidden] { display: none; }
+
+.vv-resume {
+  margin-block: 1.25rem 2rem;
+}
+
+.vv-resume-title {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 0.6rem;
+}
+
+.vv-resume-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.vv-resume-card {
+  display: block;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 0.8rem 0.9rem;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.vv-resume-card:hover {
+  border-color: var(--accent);
+}
+
+.vv-resume-card .t {
+  display: block;
+  font-weight: 600;
+}
+
+.vv-resume-card .d {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
