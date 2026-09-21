@@ -32,10 +32,18 @@ import "../../styles/site.css";
 
     <div id="r-out" class="result" aria-live="polite"></div>
 
+    <div id="r-confirm" class="pad-confirm no-print" hidden>
+      <span id="r-confirm-text"></span>
+      <button type="button" class="btn btn-sm" id="r-confirm-yes">Yes</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="r-confirm-no">Cancel</button>
+    </div>
+
     <div class="btn-row no-print">
       <button type="button" class="btn" id="r-save">Save rate</button>
       <button type="button" class="btn btn-ghost" id="r-export">Email my rates</button>
+      <button type="button" class="btn btn-ghost" id="r-copy-link">Copy link</button>
       <button type="button" class="btn btn-ghost" id="r-clear">Clear saved</button>
+      <span id="r-copied" style="align-self:center;font-size:0.85rem;color:var(--muted)" hidden>Link copied ✓</span>
     </div>
 
     <h2 style="font-size:1rem;margin-top:1.5rem;">Saved rates</h2>

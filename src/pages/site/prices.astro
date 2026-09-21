@@ -133,15 +133,15 @@ import "../../styles/site.css";
   </script>
 
   <style is:global>
-    .pr-controls { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 1.25rem 0; }
+    .pr-controls { display: flex; flex-wrap: wrap; gap: var(--gap-2); margin: 1.25rem 0; }
     .pr-f { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--muted); }
-    .pr-f select { padding: 0.5rem; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: 1rem; }
+    .pr-f select { border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: 1rem; }
     .pr-summary { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin: 0.5rem 0 0.75rem; min-height: 2rem; }
     .pr-price { font-family: var(--font-mono); font-size: 1.8rem; font-weight: 800; }
     .pr-change { font-weight: 600; }
     .pr-change.up { color: #1f9d4d; }
     .pr-change.down { color: #c0392b; }
-    .pr-chart { width: 100%; height: auto; aspect-ratio: 900 / 340; border: 1px solid var(--rule); border-radius: 10px; background: var(--code-bg); }
+    .pr-chart { width: 100%; height: auto; aspect-ratio: 900 / 340; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--code-bg); }
     .pr-status { color: var(--muted); font-size: 0.9rem; min-height: 1.2em; margin-top: 0.5rem; }
   </style>
 </Base>

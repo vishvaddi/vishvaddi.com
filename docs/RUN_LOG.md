@@ -840,3 +840,9 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Chased the notepad "freeze" seen twice via the extension: `get_page_text` still worked while `Page.captureScreenshot` timed out, so it is a capture stall, not a JS loop. Playwright headed/headless with real wheel + typing: no hang, screenshots ~45 ms under eight CSS variants. Filed as extension-only.
 - `astro check` 0 errors; `npm run release:check` all green. Committed and pushed; not deployed.
 
+## 2026-09-21 - Site refresh phase 4 (Claude Code, Sonnet agents + Fable review)
+
+- Vish: "keep going". Session start: tree clean and in sync; live site found already on phase 3 (Vish deployed between sessions).
+- Two Sonnet agents on disjoint files: page-scoped style token sweep (style blocks only) and share links + install chip (scripts/markup + one Base.astro line + global.css append). The first agent saw a studio e2e timeout mid-run caused by the second agent's not-yet-written install.js being referenced; the combined tree passed `release:check` cleanly afterwards.
+- Fable review of install.js and rate.ts: no defects found. Not deployed.
+

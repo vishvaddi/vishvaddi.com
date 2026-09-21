@@ -642,3 +642,71 @@ body.vv-palette-open { overflow: hidden; }
   font-size: 0.85rem;
   color: var(--muted);
 }
+
+/* Install chip (21/09/26) */
+.vv-install {
+  position: fixed;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  right: 1rem;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-1);
+  max-width: calc(100vw - 2rem);
+  padding: 0.6rem 0.8rem;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--fg);
+  animation: vv-install-in var(--dur-fast) var(--ease);
+}
+
+.vv-install-text {
+  flex: 1 1 auto;
+}
+
+.vv-install-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+
+.vv-install-add,
+.vv-install-close {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--rule);
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+  padding: 0.4rem 0.65rem;
+}
+
+.vv-install-add {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.vv-install-close {
+  padding: 0.4rem 0.55rem;
+}
+
+@keyframes vv-install-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media print {
+  .vv-install { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vv-install { animation: none; }
+}

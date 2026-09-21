@@ -1,5 +1,14 @@
 # Project State
 
+## 2026-09-21 - Site refresh phase 4 (built, release check green, NOT deployed)
+
+Phases 1–3 were deployed by Vish between 17/09 and 21/09 (live checks 21/09: `/site/span` 301s, hubs carry the resume strip and SVG glyphs).
+
+- **Share links** on Rate Builder (`{v:1,name,margin,lines[]}`) and Charge-Out Rate (`{v:1,charge:{…},markup:{…}}`): base64url JSON in the hash, confirm bar before replacing existing input, malformed hashes ignored. Cut List and Sheet already had `?d=` share links and were left alone.
+- **Install chip** (`public/scripts/install.js`): holds `beforeinstallprompt`; shows "Add to home screen" bottom-right only on a 2nd+ session or on a tool page with saved work, never in the TWA, standalone, studio or immersive pages, dismissable for 30 days, permanent flag on `appinstalled`.
+- **Token sweep** of the page-scoped `<style>` blocks in calc, geometry, lattice, materials, pdf, prices, programme, quickref and voice: radii, gaps and fonts on the 17/09 tokens; chart/Gantt palettes, status colours, paper canvases and print rules deliberately untouched.
+- **Deploy:** `npm run build && npx wrangler deploy` on Vish's word, then live-verify `/site/rate` (Copy link), `/site/charge-rate`, `/site/programme`, and that `/scripts/install.js` returns 200.
+
 ## 2026-09-17 - Site refresh phase 3 (built, release check green, NOT deployed)
 
 - **Polish pass:** tokens `--control-h`, `--radius`, `--radius-sm`, `--gap-1/2/3` in global.css. Inputs, selects, textareas and buttons in tools now sans (0.95rem); mono only for numeric readouts and the calculator/notepad editors. Eyebrows and rail labels sans with tracking. One shared control rule (height, padding, border, radius, focus ring) and one box rule (border, radius, padding, hover = border colour only, no transform). Rail rows 32px with a background active state (they were silently rendering in serif before). Nav buttons identical 34px boxes. Blueprint grid opacity 0.32 → 0.22. Emoji icons replaced by inline monochrome SVG glyphs from `src/data/tool-icons.ts` on the hubs and games grid.

@@ -96,10 +96,10 @@ import "../../styles/site.css";
   </div>
 
   <style>
-    .calc-bar { display: flex; gap: 0.5rem; align-items: stretch; margin: 1rem 0 0.5rem; }
+    .calc-bar { display: flex; gap: var(--gap-1); align-items: stretch; margin: 1rem 0 0.5rem; }
     .calc-input {
       flex: 1; font-family: var(--font-mono); font-size: 1.15rem;
-      padding: 0.6rem 0.8rem; border: 1px solid var(--rule); border-radius: 6px;
+      padding: 0.6rem 0.8rem; border: 1px solid var(--rule); border-radius: var(--radius-sm);
       background: var(--bg); color: var(--fg); min-width: 0;
     }
     .calc-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -122,7 +122,7 @@ import "../../styles/site.css";
     .calc-row .calc-out { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 600; white-space: nowrap; background: none; border: none; cursor: pointer; color: var(--fg); padding: 0; }
     .calc-row .calc-out:hover { color: var(--accent-dark); }
     .calc-pad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0.75rem 0 1rem; max-width: 440px; }
-    .calc-pad button { padding: 0.6rem 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--code-bg); color: var(--fg); font-family: var(--font-mono); font-size: 0.95rem; cursor: pointer; transition: background 0.12s var(--ease, ease), transform 0.05s; }
+    .calc-pad button { padding: 0.6rem 0; border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--code-bg); color: var(--fg); font-family: var(--font-mono); font-size: 0.95rem; cursor: pointer; transition: background 0.12s var(--ease, ease), transform 0.05s; }
     .calc-pad button:hover { background: color-mix(in srgb, var(--accent) 14%, var(--code-bg)); }
     .calc-pad button:active { transform: translateY(1px); }
     .calc-pad .k-num { font-weight: 700; }

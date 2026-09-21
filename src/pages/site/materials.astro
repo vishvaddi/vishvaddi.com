@@ -821,7 +821,7 @@ import "../../styles/site.css";
     .mat-jobs { margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--site-line-strong); }
     .mat-jobs h2 { font-size: 1rem; margin: 0 0 0.3rem; }
     .mat-jobs p { color: var(--muted); font-size: 0.88rem; margin: 0 0 0.6rem; }
-    .mat-jobs-list { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; margin: 0; padding: 0; }
+    .mat-jobs-list { display: flex; flex-wrap: wrap; gap: var(--gap-1); list-style: none; margin: 0; padding: 0; }
     .mat-jobs-list a { display: inline-flex; min-height: 40px; align-items: center; padding: 0.4rem 0.8rem; border: 1px solid var(--site-line-strong); border-radius: 999px; color: var(--fg); font-size: 0.85rem; text-decoration: none; }
     .mat-jobs-list a:hover { border-color: var(--site-accent); }
   </style>
@@ -830,11 +830,11 @@ import "../../styles/site.css";
     .mat-span { margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--site-line-strong); }
     .mat-span h2 { font-size: 1rem; margin: 0 0 0.3rem; }
     .span-src { margin-top: 0.6rem; font-size: 0.85rem; color: var(--muted); }
-    .span-warn { background: color-mix(in srgb, #b42318 10%, transparent); border: 1px solid color-mix(in srgb, #b42318 45%, var(--rule)); border-radius: 8px; padding: 0.75rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
-    .span-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 0.75rem; margin: 1.25rem 0; }
+    .span-warn { background: color-mix(in srgb, #b42318 10%, transparent); border: 1px solid color-mix(in srgb, #b42318 45%, var(--rule)); border-radius: var(--radius); padding: 0.75rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+    .span-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: var(--gap-2); margin: 1.25rem 0; }
     .span-f { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--muted); }
-    .span-f select { padding: 0.5rem; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: 1rem; }
-    .span-out { padding: 1.25rem; border: 1px solid var(--rule); border-radius: 10px; background: var(--code-bg); text-align: center; }
+    .span-f select { border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: 1rem; }
+    .span-out { padding: 1.25rem; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--code-bg); text-align: center; }
     .span-big { font-family: var(--font-mono); font-size: 2.6rem; font-weight: 800; color: var(--site-accent, #2c63d6); line-height: 1; }
     .span-lbl { margin-top: 0.4rem; font-size: 0.9rem; }
     .span-note { margin-top: 0.3rem; font-size: 0.8rem; color: var(--muted); }

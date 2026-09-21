@@ -6,6 +6,20 @@ import { auFmt } from "./calc";
 const KEY = "vv_rates";
 const TYPES = ["Material", "Labour", "Plant", "Subcontract", "Other"];
 interface Saved { d: string; rate: number }
+interface ShareLine { type: string; desc: string; qty: number; cost: number }
+interface ShareState { v: 1; name: string; margin: number; lines: ShareLine[] }
+
+function toBase64Url(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  let bin = "";
+  bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function fromBase64Url(encoded: string): string {
+  const bin = atob(encoded.replace(/-/g, "+").replace(/_/g, "/"));
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
 
 export function initRate() {
   const linesEl = document.getElementById("r-lines");
@@ -15,9 +29,37 @@ export function initRate() {
   const descEl = document.getElementById("r-desc") as HTMLInputElement | null;
   if (!linesEl || !out || !savedEl || !marginEl) return;
 
+  const copyLinkBtn = document.getElementById("r-copy-link");
+  const copiedEl = document.getElementById("r-copied");
+  const confirmBar = document.getElementById("r-confirm");
+  const confirmText = document.getElementById("r-confirm-text");
+  const confirmYes = document.getElementById("r-confirm-yes");
+  const confirmNo = document.getElementById("r-confirm-no");
+
+  let pendingAction: (() => void) | null = null;
+  function askConfirm(message: string, action: () => void): void {
+    pendingAction = action;
+    if (confirmText) confirmText.textContent = message;
+    if (confirmBar) confirmBar.hidden = false;
+  }
+  confirmYes?.addEventListener("click", () => {
+    if (confirmBar) confirmBar.hidden = true;
+    const action = pendingAction;
+    pendingAction = null;
+    action?.();
+  });
+  confirmNo?.addEventListener("click", () => {
+    if (confirmBar) confirmBar.hidden = true;
+    pendingAction = null;
+  });
+
   const num = (el: Element | null) => {
     const v = parseFloat((el as HTMLInputElement)?.value ?? "");
     return Number.isFinite(v) ? v : 0;
+  };
+  const toNum = (v: unknown): number => {
+    const n = parseFloat(String(v));
+    return Number.isFinite(n) ? n : 0;
   };
   const field = (label: string, el: HTMLElement) => {
     const f = document.createElement("div");
@@ -68,6 +110,54 @@ export function initRate() {
       qty: num(r.querySelector(".r-qty")),
       cost: num(r.querySelector(".r-cost")),
     }));
+  }
+  function readLinesFull(): ShareLine[] {
+    return [...linesEl!.querySelectorAll(".row-grid")].map((r) => ({
+      type: (r.querySelector(".r-type") as HTMLSelectElement | null)?.value || "Material",
+      desc: (r.querySelector(".r-d") as HTMLInputElement | null)?.value || "",
+      qty: num(r.querySelector(".r-qty")),
+      cost: num(r.querySelector(".r-cost")),
+    }));
+  }
+  function buildState(): ShareState {
+    return { v: 1, name: descEl?.value.trim() ?? "", margin: num(marginEl), lines: readLinesFull() };
+  }
+  function normalizeShared(raw: any): ShareState {
+    const lines: ShareLine[] = Array.isArray(raw?.lines)
+      ? raw.lines.map((l: any) => ({
+          type: TYPES.includes(l?.type) ? l.type : "Material",
+          desc: String(l?.desc ?? "").slice(0, 120),
+          qty: toNum(l?.qty),
+          cost: toNum(l?.cost),
+        }))
+      : [];
+    return { v: 1, name: String(raw?.name ?? "").slice(0, 60), margin: toNum(raw?.margin ?? 15), lines };
+  }
+  function applyShared(state: ShareState): void {
+    if (descEl) descEl.value = state.name;
+    marginEl!.value = String(state.margin);
+    linesEl!.textContent = "";
+    if (state.lines.length) {
+      state.lines.forEach((l) => addLine(l.type, l.desc, String(l.qty), String(l.cost)));
+    } else {
+      addLine("Material", "", "1", "40");
+      addLine("Labour", "", "1.5", "65");
+    }
+    render();
+  }
+  function applyHash(): void {
+    const hash = location.hash.slice(1);
+    if (!hash) return;
+    let raw: any;
+    try { raw = JSON.parse(fromBase64Url(hash)); } catch { return; }
+    if (!raw || typeof raw !== "object" || !Array.isArray(raw.lines)) return;
+    const incoming = normalizeShared(raw);
+    const current = JSON.stringify(buildState());
+    if (current !== JSON.stringify(incoming)) {
+      askConfirm("Replace the current build-up with the one from this link?", () => applyShared(incoming));
+    } else {
+      applyShared(incoming);
+    }
   }
   function calc() {
     const sub = readLines().reduce((s, l) => s + l.qty * l.cost, 0);
@@ -125,6 +215,13 @@ export function initRate() {
   document.getElementById("r-clear")?.addEventListener("click", () => {
     if (confirm("Delete all saved rates from this device?")) { save([]); renderSaved(); }
   });
+  copyLinkBtn?.addEventListener("click", async () => {
+    const url = `${location.origin}${location.pathname}#${toBase64Url(JSON.stringify(buildState()))}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      if (copiedEl) { copiedEl.hidden = false; setTimeout(() => { copiedEl.hidden = true; }, 1800); }
+    } catch { /* clipboard is optional */ }
+  });
   marginEl.addEventListener("input", render);
 
   // sensible starting lines
@@ -132,4 +229,5 @@ export function initRate() {
   addLine("Labour", "", "1.5", "65");
   render();
   renderSaved();
+  applyHash();
 }
