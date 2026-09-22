@@ -203,11 +203,72 @@ interface Value {
   pctSrc?: boolean;
   /** format as a percentage (from "x as % of y") */
   pctDisplay?: boolean;
+  /** n is a day-index — whole days since 1970-01-01 UTC, calendar date only */
+  isDate?: boolean;
+  /** produced by date - date; keeps both operands so "in wd" can recompute as working days */
+  dateDiff?: boolean;
+  diffA?: number;
+  diffB?: number;
 }
 
 const LENGTH: Record<string, number> = { mm: 1, cm: 10, m: 1000, km: 1e6, lm: 1000 };
 const MASS: Record<string, number> = { kg: 1, t: 1000 };
 const TIMEU: Record<string, number> = { min: 1, hr: 60 };
+
+// -- date maths: represent a calendar date as an integer day-index (days since
+// the Unix epoch, UTC) so add/subtract is plain integer arithmetic with no
+// timezone or DST drift; only construction (from local "today") and display
+// touch a real Date object. --
+const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH_INDEX: Record<string, number> = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+};
+
+function dayIndexUTC(y: number, m: number, d: number): number {
+  return Math.round(Date.UTC(y, m - 1, d) / 86400000);
+}
+function formatDate(idx: number): string {
+  const d = new Date(idx * 86400000);
+  return `${WEEKDAY_NAMES[d.getUTCDay()]} ${d.getUTCDate()} ${MONTH_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+function dateToISO(idx: number): string {
+  const d = new Date(idx * 86400000);
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${mm}-${dd}`;
+}
+// epoch day 0 (1970-01-01) was a Thursday, hence the +4 offset; 0=Sun..6=Sat
+function dayOfWeek(idx: number): number {
+  const m = (idx + 4) % 7;
+  return m < 0 ? m + 7 : m;
+}
+function isWeekendIdx(idx: number): boolean {
+  const dow = dayOfWeek(idx);
+  return dow === 0 || dow === 6;
+}
+function addWorkingDays(startIdx: number, n: number): number {
+  const step = n >= 0 ? 1 : -1;
+  let remaining = Math.abs(Math.round(n));
+  let idx = startIdx;
+  while (remaining > 0) {
+    idx += step;
+    if (!isWeekendIdx(idx)) remaining--;
+  }
+  return idx;
+}
+// working days strictly between two day-indexes (fromIdx, toIdx] — signed so
+// it inverts cleanly: countWorkingDays(a, addWorkingDays(a, n)) === n
+function countWorkingDays(fromIdx: number, toIdx: number): number {
+  const step = toIdx >= fromIdx ? 1 : -1;
+  let idx = fromIdx;
+  let count = 0;
+  while (idx !== toIdx) {
+    idx += step;
+    if (!isWeekendIdx(idx)) count++;
+  }
+  return step > 0 ? count : -count;
+}
 
 function familyOf(u?: string): string {
   if (!u) return "none";
@@ -224,6 +285,7 @@ function isLengthUnit(u?: string): boolean {
 }
 
 function convertTo(v: Value, target: string): Value {
+  if (v.dateDiff && target === "wd") return { n: countWorkingDays(v.diffB!, v.diffA!), unit: "wd" };
   if (!v.unit) throw new Error(`Can't convert a plain number to ${target}`);
   if (v.unit === target) return v;
   if (familyOf(v.unit) !== familyOf(target)) throw new Error(`Can't convert ${v.unit} to ${target}`);
@@ -231,7 +293,16 @@ function convertTo(v: Value, target: string): Value {
   return { ...v, n: base / factorOf(target), unit: target };
 }
 
+function addDateValue(a: Value, b: Value): Value {
+  const [d, other] = a.isDate ? [a, b] : [b, a];
+  if (other.isDate) throw new Error("Can't add two dates");
+  if (other.unit === "wd") return { n: addWorkingDays(d.n, other.n), isDate: true };
+  if (!other.unit || other.unit === "days") return { n: d.n + Math.round(other.n), isDate: true };
+  throw new Error(`Can't add ${other.unit} to a date`);
+}
+
 function addValues(a: Value, b: Value): Value {
+  if (a.isDate || b.isDate) return addDateValue(a, b);
   const currency = (a.currency || b.currency) || undefined;
   if (a.unit === b.unit) return { n: a.n + b.n, unit: a.unit, currency };
   if (a.unit && b.unit) {
@@ -246,6 +317,13 @@ function addValues(a: Value, b: Value): Value {
   return { n: a.n + b.n, unit: a.unit || b.unit, currency };
 }
 function subtractValues(a: Value, b: Value): Value {
+  if (a.isDate && b.isDate) return { n: a.n - b.n, unit: "days", dateDiff: true, diffA: a.n, diffB: b.n };
+  if (a.isDate) {
+    if (b.unit === "wd") return { n: addWorkingDays(a.n, -b.n), isDate: true };
+    if (!b.unit || b.unit === "days") return { n: a.n - Math.round(b.n), isDate: true };
+    throw new Error(`Can't subtract ${b.unit} from a date`);
+  }
+  if (b.isDate) throw new Error("Can't subtract a date from a number");
   const currency = (a.currency || b.currency) || undefined;
   if (a.unit === b.unit) return { n: a.n - b.n, unit: a.unit, currency };
   if (a.unit && b.unit) {
@@ -294,6 +372,7 @@ function clean(n: number): number {
 }
 
 function formatValue(v: Value): string {
+  if (v.isDate) return formatDate(v.n);
   const n = clean(v.n);
   if (Number.isNaN(n)) return "NaN";
   if (!Number.isFinite(n)) return n > 0 ? "∞" : "-∞";
@@ -306,6 +385,7 @@ function formatValue(v: Value): string {
 }
 
 function valueToLiteral(v: Value): string {
+  if (v.isDate) return dateToISO(v.n);
   const n = clean(v.n);
   const sign = n < 0 ? "-" : "";
   const abs = Math.abs(n);
@@ -317,9 +397,11 @@ function valueToLiteral(v: Value): string {
 
 // -- unit words, longest match first, so "sqm" beats "m" and "m2" beats "m" --
 const UNIT_MATCH_LIST: [string, string][] = [
+  ["business days", "wd"], ["working days", "wd"],
   ["sqm", "m2"], ["cum", "m3"], ["hrs", "hr"], ["min", "min"],
   ["m²", "m2"], ["m³", "m3"], ["mm", "mm"], ["cm", "cm"], ["km", "km"],
   ["lm", "lm"], ["kg", "kg"], ["m2", "m2"], ["m3", "m3"], ["hr", "hr"], ["ea", "ea"],
+  ["days", "days"], ["day", "days"], ["wd", "wd"],
   ["t", "t"], ["m", "m"], ["l", "L"],
 ];
 const UNIT_WORD_MAP = new Map(UNIT_MATCH_LIST.map(([text, canon]) => [text, canon]));
@@ -363,6 +445,40 @@ function scanNumber(src: string, start: number, currency: boolean): { value: Val
   return { value: { n, currency: currency || undefined }, end: j };
 }
 
+function tryScanDate(src: string, i: number): { value: Value; end: number } | null {
+  const rest = src.slice(i);
+  const boundaryOk = (end: number) => {
+    const after = src[end];
+    return after === undefined || !/[a-zA-Z0-9_]/.test(after);
+  };
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(rest);
+  if (iso) {
+    const end = i + iso[0].length;
+    const m = +iso[2], d = +iso[3];
+    if (boundaryOk(end) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return { value: { n: dayIndexUTC(+iso[1], m, d), isDate: true }, end };
+    }
+  }
+  const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(rest);
+  if (slash) {
+    const end = i + slash[0].length;
+    const d = +slash[1], m = +slash[2];
+    if (boundaryOk(end) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return { value: { n: dayIndexUTC(+slash[3], m, d), isDate: true }, end };
+    }
+  }
+  // Australian "1 Oct 2026" / "1 October 2026"
+  const named = /^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})/.exec(rest);
+  if (named) {
+    const mon = MONTH_INDEX[named[2].slice(0, 3).toLowerCase()];
+    const end = i + named[0].length;
+    if (mon && boundaryOk(end) && +named[1] >= 1 && +named[1] <= 31) {
+      return { value: { n: dayIndexUTC(+named[3], mon, +named[1]), isDate: true }, end };
+    }
+  }
+  return null;
+}
+
 function tokenizePad(src: string): PTok[] {
   const toks: PTok[] = [];
   let i = 0;
@@ -378,6 +494,12 @@ function tokenizePad(src: string): PTok[] {
       continue;
     }
     if (isDigit(c) || (c === "." && isDigit(src[i + 1]))) {
+      const dateTok = isDigit(c) ? tryScanDate(src, i) : null;
+      if (dateTok) {
+        toks.push({ t: "num", v: "", value: dateTok.value });
+        i = dateTok.end;
+        continue;
+      }
       const { value, end } = scanNumber(src, i, false);
       toks.push({ t: "num", v: "", value });
       i = end;
@@ -386,7 +508,17 @@ function tokenizePad(src: string): PTok[] {
     if (isAlpha(c)) {
       let j = i + 1;
       while (j < src.length && /[a-zA-Z0-9_]/.test(src[j])) j++;
-      toks.push({ t: "id", v: src.slice(i, j) });
+      const word = src.slice(i, j);
+      const lw = word.toLowerCase();
+      if (lw === "today" || lw === "tomorrow") {
+        const now = new Date();
+        let idx = dayIndexUTC(now.getFullYear(), now.getMonth() + 1, now.getDate());
+        if (lw === "tomorrow") idx += 1;
+        toks.push({ t: "num", v: "", value: { n: idx, isDate: true } });
+        i = j;
+        continue;
+      }
+      toks.push({ t: "id", v: word });
       i = j;
       continue;
     }
@@ -555,11 +687,13 @@ function evalExprLine(substituted: string): Value {
 }
 
 function sumValues(all: Value[]): Value {
-  if (!all.length) return { n: 0 };
+  // Dates aren't summable quantities — a total skips them entirely.
+  const summable = all.filter((v) => !v.isDate);
+  if (!summable.length) return { n: 0 };
   // In a mixed section the dollar lines are the answer and the unit lines are
   // workings, so a total only counts money once any money is present.
-  const money = all.filter((v) => v.currency);
-  const list = money.length ? money : all;
+  const money = summable.filter((v) => v.currency);
+  const list = money.length ? money : summable;
   const currencyCount = money.length;
   if (currencyCount === list.length) {
     return { n: list.reduce((s, v) => s + v.n, 0), currency: true };
@@ -668,7 +802,9 @@ export function evaluatePad(text: string): PadLine[] {
       }
 
       const substituted = substituteAll(exprTextRaw, vars, sortedNames(), ans, lineValues);
-      if (!name && !/\d/.test(substituted)) {
+      // "today"/"tomorrow" are valid date literals with no digits of their own —
+      // don't let the label heuristic (needs a digit) swallow a bare one.
+      if (!name && !/\d/.test(substituted) && !/\b(today|tomorrow)\b/i.test(substituted)) {
         out.push(toPadLine(raw, "label"));
         continue;
       }

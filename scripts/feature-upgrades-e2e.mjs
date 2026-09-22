@@ -55,7 +55,7 @@ try {
 
   await page.goto(`${BASE}/feeds/`, { waitUntil: 'domcontentloaded' })
   check('Feeds: daily summary and headline speech modes render', await page.locator('#speak-summary').count() === 1 && await page.locator('#speak-headlines').count() === 1)
-  check('Feeds: shared voice module loaded and attribution shown', await page.evaluate(() => Boolean(window.SiteVoice)) && (await page.locator('.voice-credit').count()) === 1)
+  check('Feeds: shared voice module loaded, no vendor credit shown', await page.evaluate(() => Boolean(window.SiteVoice)) && (await page.locator('.voice-credit').count()) === 0)
   check('Feeds: subscriptions can import and export locally', await page.locator('#feed-import-input').count() === 1 && await page.locator('#feed-export-btn').count() === 1)
 
   await page.goto(`${BASE}/radio/mini`, { waitUntil: 'domcontentloaded' })

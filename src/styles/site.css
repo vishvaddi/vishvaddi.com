@@ -455,7 +455,10 @@
 }
 .np-overlay, .tool textarea.np-input {
   margin: 0;
-  padding: 0.75rem 0.9rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  /* left gutter reserves room for the line-number column drawn by the overlay */
+  padding-left: calc(0.9rem + 2.2rem);
   font-family: var(--font-mono);
   font-size: 0.92rem;
   line-height: 1.6;
@@ -469,14 +472,39 @@
 .np-overlay {
   position: absolute;
   inset: 0;
+  padding-right: 0.9rem;
   color: var(--fg);
   pointer-events: none;
   z-index: 1;
 }
-.np-row { min-height: 1.6em; }
+.np-row {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  min-height: 1.6em;
+  /* fixed (not unitless) so the smaller-font line-number span keeps the same
+     row height as the code text instead of shrinking its own line box */
+  line-height: 1.472rem;
+}
+.np-linenum {
+  position: absolute;
+  top: 0;
+  left: -2.2rem;
+  width: 2.2rem;
+  box-sizing: border-box;
+  padding-right: 0.4rem;
+  text-align: right;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: inherit;
+  user-select: none;
+}
+.np-code { flex: 0 0 auto; }
 .tool textarea.np-input {
   position: relative;
   z-index: 2;
+  /* reserved so typing never runs under the result column the overlay draws */
+  padding-right: var(--np-res-w, 9rem);
   background: transparent;
   color: transparent;
   caret-color: var(--fg);
@@ -486,17 +514,36 @@
 .np-wrap.tall .np-overlay, .np-wrap.tall .tool textarea.np-input, .tool .np-wrap.tall textarea.np-input { height: 720px; }
 .pad-saved-row { margin-top: 0.4rem; }
 .pad-saved-row .pad-saved-select { width: auto; flex: 1 1 12rem; max-width: 20rem; }
+#pad-template { width: auto; flex: 0 1 11rem; }
 .pad-saved-row #pad-save-name { flex: 1 1 12rem; max-width: 20rem; }
 @media print {
   .np-wrap { border: 0; min-height: 0; }
   .tool textarea.np-input { display: none; }
   .np-overlay { position: static; height: auto; overflow: visible; padding: 0; }
+  /* the gutter is a screen-editing aid; on paper the left padding it relied on is gone */
+  .np-linenum { display: none; }
 }
 .tool textarea.np-input::selection { background: color-mix(in srgb, var(--site-accent) 35%, transparent); }
 .tok-var { color: var(--site-accent); font-weight: 600; }
 .tok-unit { color: var(--muted); }
 .tok-comment { color: var(--muted); font-style: italic; }
-.pad-result { color: var(--accent); font-weight: 600; }
+.pad-result {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--np-res-w, 9rem);
+  box-sizing: border-box;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--accent);
+  font-weight: 600;
+}
+.pad-result.pad-total {
+  font-weight: 700;
+  border-top: 1px solid var(--site-line-strong);
+}
 .pad-result.pad-error {
   color: color-mix(in srgb, red 55%, var(--muted));
   font-weight: 400;
@@ -514,6 +561,9 @@
   padding: 0.5rem 0.7rem; border: 1px solid var(--site-line-strong); border-radius: var(--radius-sm);
   background: var(--bg); color: var(--fg);
 }
+#pad-actions .pad-saved-select { flex: 0 1 12rem; max-width: 14rem; margin-left: auto; }
 @media (max-width: 760px) {
   .np-overlay, .tool textarea.np-input { height: 300px; font-size: 0.85rem; }
+  .np-row { line-height: 1.36rem; }
+  #pad-actions .pad-saved-select { margin-left: 0; }
 }

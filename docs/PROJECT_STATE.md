@@ -1,5 +1,11 @@
 # Project State
 
+## 2026-09-22 - Notepad value adds, Feeds credit removed (built, release check green, NOT deployed)
+
+- **Notepad:** result gutter (line numbers left, results in one right-aligned column, totals ruled), Copy table (TSV for Excel/Sheets), working-day date maths (`today`, `5/10/2026`, `1 Oct 2026`, `+ 45 wd`, `date2 - date1 [in wd]`, formatted `Mon 7 Dec 2026`, dates excluded from totals), Start-from templates (Feature wall, Labour day rate, GST check, Programme dates), Alt+click a line to insert `line N`. Syntax sheet and SEO entry updated.
+- **Feeds:** "Voices by ElevenLabs" credit removed (Reader still carries its own). E2e assertion updated to expect no credit.
+- **Deploy:** on Vish's word; live-verify `/site/notepad` (gutter, a `+ 10 wd` line), `/feeds`.
+
 ## 2026-09-21 - Site refresh phase 4 (built, release check green, NOT deployed)
 
 Phases 1–3 were deployed by Vish between 17/09 and 21/09 (live checks 21/09: `/site/span` 301s, hubs carry the resume strip and SVG glyphs).

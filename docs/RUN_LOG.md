@@ -846,3 +846,8 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Two Sonnet agents on disjoint files: page-scoped style token sweep (style blocks only) and share links + install chip (scripts/markup + one Base.astro line + global.css append). The first agent saw a studio e2e timeout mid-run caused by the second agent's not-yet-written install.js being referenced; the combined tree passed `release:check` cleanly afterwards.
 - Fable review of install.js and rate.ts: no defects found. Not deployed.
 
+## 2026-09-22 - Notepad value adds, Feeds credit (Claude Code, Sonnet agent + Fable review)
+
+- Vish: "do what you think is most useful and adds value for the notepad. remove note about elevenlabs in the feed section. what animations or graphics could we consider adding".
+- One Sonnet agent shipped all six notepad items; engine tests (dates, tonnes vs `t`, mixed units, every typing prefix < 5 ms) passed. Fable review: the `D/M/YYYY` rule already requires 1–2 digit day/month so `100/10/2026` stays arithmetic; added the missing day range check on the `1 Oct 2026` form; fixed the template select stretching full width; updated the Feeds e2e for the removed credit. `release:check` all green. Not deployed.
+

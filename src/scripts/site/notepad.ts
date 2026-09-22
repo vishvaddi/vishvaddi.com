@@ -22,6 +22,35 @@ labour = 6 hrs @ $85
 total
 quote = ans + gst`;
 
+const TEMPLATE_LABOUR_DAY_RATE = `# Labour day rate
+wage = $45
+super = wage * 12%
+overhead = wage * 18%
+cost = wage + super + overhead
+margin = cost * 15%
+rate per hour = cost + margin
+day rate = rate per hour * 8 hrs`;
+
+const TEMPLATE_GST_CHECK = `# GST check
+price = $1000
+inc = price + gst
+back = inc ex gst`;
+
+const TEMPLATE_PROGRAMME_DATES = `# Programme dates
+possession = 5/10/2026
+mobilisation = possession + 5 wd
+fitout complete = mobilisation + 20 wd
+handover = fitout complete + 45 wd
+handover - possession`;
+
+interface PadTemplate { label: string; text: string }
+const TEMPLATES: PadTemplate[] = [
+  { label: "Feature wall", text: STARTER },
+  { label: "Labour day rate", text: TEMPLATE_LABOUR_DAY_RATE },
+  { label: "GST check", text: TEMPLATE_GST_CHECK },
+  { label: "Programme dates", text: TEMPLATE_PROGRAMME_DATES },
+];
+
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -82,10 +111,13 @@ export function initNotepad(): void {
   const loadBtn = g<HTMLButtonElement>("pad-load");
   const deleteBtn = g<HTMLButtonElement>("pad-delete");
   const copyResultsBtn = g<HTMLButtonElement>("pad-copy-results");
+  const copyTableBtn = g<HTMLButtonElement>("pad-copy-table");
   const copyLinkBtn = g<HTMLButtonElement>("pad-copy-link");
   const clearBtn = g<HTMLButtonElement>("pad-clear");
   const printBtn = g<HTMLButtonElement>("pad-print");
   const btnRow = g<HTMLDivElement>("pad-actions");
+  const templateSelect = g<HTMLSelectElement>("pad-template");
+  const wrap = input.closest(".np-wrap") as HTMLElement | null;
   const confirmBar = g<HTMLDivElement>("pad-confirm");
   const confirmText = g<HTMLSpanElement>("pad-confirm-text");
   const confirmYes = g<HTMLButtonElement>("pad-confirm-yes");
@@ -108,19 +140,42 @@ export function initNotepad(): void {
     pendingAction = null;
   });
 
+  // Results line up in a fixed-width right column — sized to the longest
+  // result/error this render produces (monospace font, so 1ch is exact) and
+  // shared via a CSS var so the textarea's own right padding keeps typing
+  // clear of it (see the "Calculator notepad" block in site.css).
+  const updateResultColumnWidth = (lines: PadLine[]): void => {
+    let maxChars = 0;
+    for (const pl of lines) {
+      if (!pl) continue;
+      if ((pl.kind === "result" || pl.kind === "total") && pl.display) maxChars = Math.max(maxChars, pl.display.length);
+      else if (pl.kind === "error" && pl.error) maxChars = Math.max(maxChars, pl.error.length + 2);
+    }
+    (wrap ?? overlay).style.setProperty("--np-res-w", `max(9rem, calc(${maxChars + 1}ch + 0.9rem))`);
+  };
+
   const renderOverlay = (text: string, lines: PadLine[]): void => {
     const names = collectVarNames(text).sort((a, b) => b.length - a.length);
     const namePart = names.length ? names.map(escapeRegex).join("|") : "(?!x)x";
     const tokenRe = new RegExp(
-      `(\\b(?:${namePart})\\b)|((?<=[0-9])\\s?(?:sqm|cum|m²|m³|mm|cm|km|lm|kg|hrs|hr|min|m2|m3|ea|t|m|L|l)\\b)`,
+      `(\\b(?:${namePart})\\b)|((?<=[0-9])\\s?(?:sqm|cum|m²|m³|mm|cm|km|lm|kg|hrs|hr|min|m2|m3|ea|days|wd|t|m|L|l)\\b)`,
       "gi",
     );
+    updateResultColumnWidth(lines);
     overlay.textContent = "";
     const rawLines = text.split(/\r?\n/);
     rawLines.forEach((raw, i) => {
       const row = document.createElement("div");
       row.className = "np-row";
       const padLine = lines[i];
+
+      const num = document.createElement("span");
+      num.className = "np-linenum";
+      num.textContent = String(i + 1);
+      row.append(num);
+
+      const code = document.createElement("span");
+      code.className = "np-code";
 
       const cIdx = commentIndex(raw);
       const codePart = cIdx === -1 ? raw : raw.slice(0, cIdx);
@@ -130,35 +185,36 @@ export function initNotepad(): void {
       tokenRe.lastIndex = 0;
       let m: RegExpExecArray | null;
       while ((m = tokenRe.exec(codePart))) {
-        if (m.index > last) row.append(document.createTextNode(codePart.slice(last, m.index)));
+        if (m.index > last) code.append(document.createTextNode(codePart.slice(last, m.index)));
         const span = document.createElement("span");
         span.className = m[1] ? "tok-var" : "tok-unit";
         span.textContent = m[0];
-        row.append(span);
+        code.append(span);
         last = m.index + m[0].length;
       }
-      if (last < codePart.length) row.append(document.createTextNode(codePart.slice(last)));
+      if (last < codePart.length) code.append(document.createTextNode(codePart.slice(last)));
 
       if (commentPart) {
         const c = document.createElement("span");
         c.className = "tok-comment";
         c.textContent = commentPart;
-        row.append(c);
+        code.append(c);
       }
+      if (!code.childNodes.length) code.append(document.createTextNode(" "));
+      row.append(code);
 
       if (padLine && (padLine.kind === "result" || padLine.kind === "total") && padLine.display) {
         const r = document.createElement("span");
-        r.className = "pad-result";
-        r.textContent = "  " + padLine.display;
+        r.className = padLine.kind === "total" ? "pad-result pad-total" : "pad-result";
+        r.textContent = padLine.display;
         row.append(r);
       } else if (padLine && padLine.kind === "error") {
         const r = document.createElement("span");
         r.className = "pad-result pad-error";
-        r.textContent = "  ⚠ " + padLine.error;
+        r.textContent = "⚠ " + padLine.error;
         row.append(r);
       }
 
-      if (!row.childNodes.length) row.append(document.createTextNode(" "));
       overlay.append(row);
     });
     overlay.scrollTop = input.scrollTop;
@@ -176,6 +232,31 @@ export function initNotepad(): void {
   input.addEventListener("scroll", () => {
     overlay.scrollTop = input.scrollTop;
     overlay.scrollLeft = input.scrollLeft;
+  });
+
+  // Alt+click a line to insert "line N" at the caret — the overlay's result
+  // text is pointer-events:none so it can't be clicked directly. Geometry
+  // (not the post-click caret) gives the clicked line, so this can run on
+  // mousedown with preventDefault and leave the user's real caret untouched.
+  input.addEventListener("mousedown", (e) => {
+    if (!e.altKey) return;
+    e.preventDefault();
+    const style = getComputedStyle(input);
+    const paddingTop = parseFloat(style.paddingTop) || 0;
+    const lineHeightPx = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.6;
+    const rect = input.getBoundingClientRect();
+    const y = e.clientY - rect.top - paddingTop + input.scrollTop;
+    const totalLines = input.value.split(/\r?\n/).length;
+    const lineNo = Math.min(Math.max(0, Math.floor(y / lineHeightPx)), totalLines - 1) + 1;
+    const pos = input.selectionStart ?? input.value.length;
+    const before = input.value.slice(0, pos);
+    const after = input.value.slice(pos);
+    const insertion = `line ${lineNo}`;
+    input.value = before + insertion + after;
+    const newPos = pos + insertion.length;
+    input.focus();
+    input.setSelectionRange(newPos, newPos);
+    evaluate();
   });
 
   input.addEventListener("keydown", (e) => {
@@ -279,6 +360,13 @@ export function initNotepad(): void {
     try { await navigator.clipboard.writeText(text); } catch { /* clipboard is optional */ }
   });
 
+  copyTableBtn?.addEventListener("click", async () => {
+    const lines = evaluatePad(input.value);
+    const rawLines = input.value.split(/\r?\n/);
+    const tsv = rawLines.map((raw, i) => `${raw}\t${lines[i]?.display ?? ""}`).join("\n");
+    try { await navigator.clipboard.writeText(tsv); } catch { /* clipboard is optional */ }
+  });
+
   copyLinkBtn?.addEventListener("click", async () => {
     const url = `${location.origin}${location.pathname}#${toBase64Url(input.value)}`;
     try { await navigator.clipboard.writeText(url); } catch { /* clipboard is optional */ }
@@ -295,11 +383,32 @@ export function initNotepad(): void {
 
   const tallBtn = g<HTMLButtonElement>("pad-tall");
   tallBtn?.addEventListener("click", () => {
-    const wrap = input.closest(".np-wrap");
     const tall = wrap?.classList.toggle("tall") ?? false;
     tallBtn.setAttribute("aria-pressed", String(tall));
     tallBtn.textContent = tall ? "Shorter" : "Taller";
   });
+
+  if (templateSelect) {
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Start from…";
+    templateSelect.append(placeholder);
+    TEMPLATES.forEach((tpl, i) => {
+      const opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = tpl.label;
+      templateSelect.append(opt);
+    });
+    templateSelect.addEventListener("change", () => {
+      const idx = templateSelect.value ? parseInt(templateSelect.value, 10) : -1;
+      templateSelect.value = "";
+      const tpl = TEMPLATES[idx];
+      if (!tpl) return;
+      const apply = () => { input.value = tpl.text; evaluate(); };
+      if (input.value.trim()) askConfirm(`Replace the current pad with the "${tpl.label}" template?`, apply);
+      else apply();
+    });
+  }
 
   printBtn?.addEventListener("click", () => {
     brandedExport("notepad-print", () => window.print(), { anchor: btnRow ?? printBtn, print: true });

@@ -34,10 +34,12 @@ import "../../styles/site.css";
 
     <div class="btn-row no-print" id="pad-actions">
       <button type="button" class="btn" id="pad-copy-results">Copy results</button>
+      <button type="button" class="btn btn-ghost" id="pad-copy-table">Copy table</button>
       <button type="button" class="btn btn-ghost" id="pad-copy-link">Copy link</button>
       <button type="button" class="btn btn-ghost" id="pad-print">Print</button>
       <button type="button" class="btn btn-ghost" id="pad-clear">Clear</button>
       <button type="button" class="btn btn-ghost" id="pad-tall" aria-pressed="false">Taller</button>
+      <select id="pad-template" class="pad-saved-select" aria-label="Start from a template"></select>
     </div>
     <div class="btn-row no-print pad-saved-row">
       <select id="pad-saved" class="pad-saved-select" aria-label="Saved pads"></select>
@@ -57,9 +59,16 @@ import "../../styles/site.css";
       <p><code>12 m2 @ $45</code> — rate idiom: quantity at a unit price</p>
       <p><code>2400 mm + 1.2 m</code> — mixed units convert automatically</p>
       <p><code>x in m</code> — convert a value to another unit</p>
-      <p><code>total</code> / <code>subtotal</code> — sum the current section; <code>grand total</code> sums the whole pad</p>
+      <p><code>total</code> / <code>subtotal</code> — sum the current section; <code>grand total</code> sums the whole pad (dates aren't counted)</p>
       <p><code>+ 4500 deposit</code> / <code>- 1200 rent</code> — a section of these shows a running balance</p>
       <p><code># note</code> or <code>// note</code> — a comment; plain words with no number are a label</p>
+      <p><code>today</code> / <code>tomorrow</code> / <code>1/10/2026</code> / <code>1 Oct 2026</code> / <code>2026-10-01</code> — a date</p>
+      <p><code>date + 10 days</code> / <code>date - 3 days</code> — add or remove calendar days</p>
+      <p><code>date + 10 wd</code> (or <code>10 working days</code> / <code>10 business days</code>) — add working days, skipping weekends</p>
+      <p><code>date2 - date1</code> — days between two dates; add <code>in wd</code> to count working days instead</p>
+      <p>Alt+click a line to insert <code>line N</code> at your caret</p>
+      <p>Copy results includes each line's answer inline; Copy table copies a two-column TSV (line, result) that pastes straight into a spreadsheet</p>
+      <p>"Start from…" loads a starter pad — feature wall, labour day rate, GST check or programme dates</p>
     </details>
 
     <ToolIntro href="/site/notepad" />
