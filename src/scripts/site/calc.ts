@@ -1,6 +1,7 @@
 // Tiny declarative calculator framework for the /site tool pages.
 // Each calc is a spec; we render a form + live result. All output is set via
 // textContent (no innerHTML of computed/user data) — XSS-safe by construction.
+import { tickText } from "./tick";
 
 export interface Field {
   id: string;
@@ -71,27 +72,42 @@ export function mountCalcs(root: HTMLElement, specs: CalcSpec[]) {
     result.setAttribute("aria-live", "polite");
     sec.append(result);
 
+    // Row cells persist across recomputes (rather than being rebuilt from
+    // scratch) so a changed value can tick in place instead of just appearing.
+    let rowEls: { n: HTMLDivElement; l: HTMLDivElement }[] = [];
+
     const run = () => {
       const vals: Record<string, number> = {};
       for (const f of spec.fields) vals[f.id] = num(inputs[f.id].value);
       const o = spec.compute(vals);
-      result.textContent = "";
-      if (!o) return;
-      const grid = document.createElement("div");
-      grid.className = "stat-grid";
-      for (const [n, l] of o.rows) {
-        const d = document.createElement("div");
-        d.className = "stat";
-        const a = document.createElement("div");
-        a.className = "n";
-        a.textContent = n;
-        const b = document.createElement("div");
-        b.className = "l";
-        b.textContent = l;
-        d.append(a, b);
-        grid.append(d);
+      if (!o) {
+        result.textContent = "";
+        rowEls = [];
+        return;
       }
-      result.append(grid);
+      let grid = result.querySelector<HTMLDivElement>(".stat-grid");
+      if (!grid || rowEls.length !== o.rows.length) {
+        result.textContent = "";
+        grid = document.createElement("div");
+        grid.className = "stat-grid";
+        rowEls = o.rows.map(() => {
+          const d = document.createElement("div");
+          d.className = "stat";
+          const a = document.createElement("div");
+          a.className = "n";
+          const b = document.createElement("div");
+          b.className = "l";
+          d.append(a, b);
+          grid!.append(d);
+          return { n: a, l: b };
+        });
+        result.append(grid);
+      }
+      o.rows.forEach(([n, l], i) => {
+        rowEls[i].l.textContent = l;
+        tickText(rowEls[i].n, n);
+      });
+      result.querySelector(".warn")?.remove();
       if (o.warn) {
         const w = document.createElement("p");
         w.className = "warn";

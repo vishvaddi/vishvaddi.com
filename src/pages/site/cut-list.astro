@@ -72,6 +72,7 @@ import "../../styles/site.css";
 
   <script>
     import { packAdvanced, type CutPiece, type AdvancedBin, type LinearStock } from "../../scripts/site/binpack";
+    import { tickText } from "../../scripts/site/tick";
     import { brandedExport } from "../../scripts/site/export-brand";
 
     const q = <T extends Element>(s: string, r: ParentNode = document) =>
@@ -152,13 +153,23 @@ import "../../styles/site.css";
       return `${location.origin}${location.pathname}?d=${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
     }
 
+    // Tiles are rebuilt on every recompute; remembering the last value per label
+    // lets the fresh tile tick from it instead of snapping.
+    const lastStat = new Map<string, string>();
+    const pendingTicks: [HTMLDivElement, string][] = [];
     function stat(n: string, l: string) {
       const d = document.createElement("div");
       d.className = "stat";
-      const a = document.createElement("div"); a.className = "n"; a.textContent = n;
+      const a = document.createElement("div"); a.className = "n"; a.textContent = lastStat.get(l) ?? "";
       const b = document.createElement("div"); b.className = "l"; b.textContent = l;
       d.append(a, b);
+      pendingTicks.push([a, n]);
+      lastStat.set(l, n);
       return d;
+    }
+    function flushTicks() {
+      for (const [el, n] of pendingTicks) tickText(el, n);
+      pendingTicks.length = 0;
     }
 
     function barEl(bin: AdvancedBin) {
@@ -221,6 +232,7 @@ import "../../styles/site.css";
         stat(result.cost ? result.cost.toLocaleString("en-AU", { style: "currency", currency: "AUD" }) : "—", "stock cost"),
       );
       out.append(grid);
+      flushTicks();
 
       if (offcut <= 0.001 && bars > 0) {
         const z = document.createElement("p");
@@ -325,4 +337,19 @@ import "../../styles/site.css";
     }
     init();
   </script>
+
+  <style>
+    /* compute() rebuilds every .seg on each "input" keystroke, so this
+       replays per edit rather than only on first render — no --i is set
+       by binpack.ts today, so the fallback below is a flat, unstaggered 200ms. */
+    :global(.tool:not(:focus-within) .seg) {
+      transition: transform 200ms var(--ease) calc(var(--i, 0) * 30ms);
+    }
+    @starting-style {
+      :global(.seg) { transform: translateX(-100%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      :global(.seg) { transition: none; }
+    }
+  </style>
 </Base>

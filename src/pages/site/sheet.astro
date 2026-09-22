@@ -54,6 +54,7 @@ import "../../styles/site.css";
 
   <script>
     import { optimise2d, type Part2D, type Stock2D, type Pack2DOptions } from "../../scripts/site/binpack2d";
+    import { tickText } from "../../scripts/site/tick";
     import { auFmt } from "../../scripts/site/calc";
     import { brandedExport } from "../../scripts/site/export-brand";
 
@@ -156,11 +157,23 @@ import "../../styles/site.css";
       return `${location.origin}${location.pathname}?d=${encoded}`;
     }
 
+    // Tiles are rebuilt on every recompute; remembering the last value per label
+    // lets the fresh tile tick from it instead of snapping.
+    const lastStat = new Map<string, string>();
+    const pendingTicks: [HTMLDivElement, string][] = [];
     function stat(n: string, l: string) {
-      const d = document.createElement("div"); d.className = "stat";
-      const a = document.createElement("div"); a.className = "n"; a.textContent = n;
+      const d = document.createElement("div");
+      d.className = "stat";
+      const a = document.createElement("div"); a.className = "n"; a.textContent = lastStat.get(l) ?? "";
       const b = document.createElement("div"); b.className = "l"; b.textContent = l;
-      d.append(a, b); return d;
+      d.append(a, b);
+      pendingTicks.push([a, n]);
+      lastStat.set(l, n);
+      return d;
+    }
+    function flushTicks() {
+      for (const [el, n] of pendingTicks) tickText(el, n);
+      pendingTicks.length = 0;
     }
 
     function svgSheet(parts: any[], sw: number, sh: number) {
@@ -215,6 +228,7 @@ import "../../styles/site.css";
         stat(res.cost ? res.cost.toLocaleString("en-AU", { style: "currency", currency: "AUD" }) : "—", "stock cost"),
       );
       out.append(grid);
+      flushTicks();
 
       if (res.oversize.length) {
         const w = document.createElement("p");
@@ -292,4 +306,20 @@ import "../../styles/site.css";
     }
     init();
   </script>
+
+  <style>
+    /* compute() rebuilds every rect.part on each "input" keystroke, so this
+       replays per edit rather than only on first render. */
+    :global(.tool:not(:focus-within) .sheet-svg rect.part) {
+      transform-box: fill-box;
+      transform-origin: center;
+      transition: transform 240ms var(--ease), opacity 240ms var(--ease);
+    }
+    @starting-style {
+      :global(.sheet-svg rect.part) { transform: scale(0.96); opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      :global(.sheet-svg rect.part) { transition: none; }
+    }
+  </style>
 </Base>

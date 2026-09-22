@@ -36,8 +36,8 @@ import { TOOL_ICONS, TOOL_ICON_FALLBACK } from "../../data/tool-icons";
       <section class="site-tool-section" data-tool-group>
         <h2 class="site-group-title">{category}</h2>
         <ul class="tool-grid">
-          {AUDIO_TOOLS.filter((tool) => tool.category === category).map((tool) => (
-            <li data-tool-item data-search={`${tool.title} ${tool.aliases}`}>
+          {AUDIO_TOOLS.filter((tool) => tool.category === category).map((tool, i) => (
+            <li class="reveal" style={`--i: ${i}`} data-tool-item data-search={`${tool.title} ${tool.aliases}`}>
               <a class="tool-card" href={tool.href} data-tool={tool.href}>
                 <span class="tool-ico" aria-hidden="true" set:html={TOOL_ICONS[tool.href] ?? TOOL_ICON_FALLBACK} />
                 <span class="t">{tool.title}</span>

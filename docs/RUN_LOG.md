@@ -851,3 +851,8 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Vish: "do what you think is most useful and adds value for the notepad. remove note about elevenlabs in the feed section. what animations or graphics could we consider adding".
 - One Sonnet agent shipped all six notepad items; engine tests (dates, tonnes vs `t`, mixed units, every typing prefix < 5 ms) passed. Fable review: the `D/M/YYYY` rule already requires 1–2 digit day/month so `100/10/2026` stays arithmetic; added the missing day range check on the `1 Oct 2026` form; fixed the template select stretching full width; updated the Feeds e2e for the removed credit. `release:check` all green. Not deployed.
 
+## 2026-09-22 - Motion pass (Claude Code, three Sonnet agents + Fable review)
+
+- Agents on disjoint files: ticks (scripts + global.css), glyph draw-on + reactive grid (hubs, site.css, grid.js, Base.astro), bar entry animations (three page style blocks). Fable wired the Cut List/Sheet tiles the tick agent could not reach and added the focus guard to their segment animations.
+- Release check failed on materials-answers: the answer-page prefill dispatches input events and the e2e read the tile mid-tick. Fixed product-side with `instantTicks` around programmatic fills; test scripts untouched. Tick regex now handles negative numbers. Release check all green. Not deployed.
+

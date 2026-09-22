@@ -710,3 +710,15 @@ body.vv-palette-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .vv-install { animation: none; }
 }
+
+/* Number ticks (22/09/26) */
+.tick-live {
+  color: var(--accent);
+  transition: color 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tick-live {
+    transition: none;
+  }
+}

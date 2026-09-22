@@ -159,6 +159,40 @@ import "../../styles/site.css";
     .programme :global(.pg-phaselabel) { font-size: 9px; fill: var(--accent); font-family: var(--font-mono); }
     .programme :global(.pg-hist) { fill: var(--accent); opacity: 0.45; }
     .programme :global(.pg-pin) { font-size: 10px; }
+
+    /* renderTimeline() tears down and rebuilds the whole <svg> on every edit
+       commit, so every bar/milestone/link is a fresh element each time —
+       gate on the split staying out of focus so only the first paint (or a
+       re-render while nothing in the editor is focused) plays the entry. */
+    .programme :global(.prog-split:not(:focus-within) .pg-bar) {
+      transform-box: fill-box;
+      transform-origin: left center;
+      transition: transform 320ms var(--ease);
+    }
+    @starting-style {
+      .programme :global(.prog-split:not(:focus-within) .pg-bar) { transform: scaleX(0); }
+    }
+    .programme :global(.prog-split:not(:focus-within) .pg-milestone) {
+      transition: opacity 320ms var(--ease);
+    }
+    @starting-style {
+      .programme :global(.prog-split:not(:focus-within) .pg-milestone) { opacity: 0; }
+    }
+    .programme :global(.prog-split:not(:focus-within) .pg-link),
+    .programme :global(.prog-split:not(:focus-within) .pg-linkhead) {
+      transition: opacity 320ms var(--ease) 200ms;
+    }
+    @starting-style {
+      .programme :global(.prog-split:not(:focus-within) .pg-link),
+      .programme :global(.prog-split:not(:focus-within) .pg-linkhead) { opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .programme :global(.pg-bar),
+      .programme :global(.pg-milestone),
+      .programme :global(.pg-link),
+      .programme :global(.pg-linkhead) { transition: none; }
+    }
+
     :global(.prog-linkedit) { position: fixed; z-index: 60; display: flex; gap: 0.3rem; background: var(--bg); border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.4rem; box-shadow: 0 4px 18px rgba(0,0,0,0.25); }
     :global(.prog-linkedit select), :global(.prog-linkedit input) { background: var(--code-bg); border: 1px solid var(--rule); border-radius: var(--radius-sm); color: var(--fg); font: inherit; font-size: 0.8rem; padding: 0.2rem; width: 4rem; }
     :global(.prog-linkedit select) { width: auto; }

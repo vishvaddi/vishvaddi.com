@@ -15,8 +15,8 @@ const games = [
   <p>Small games, made slowly. More to come.</p>
 
   <ul class="game-grid">
-    {games.map((g) => (
-      <li class="reveal">
+    {games.map((g, i) => (
+      <li class="reveal" style={`--i: ${i}`}>
         <a class="game-card" href={g.href}>
           <span class="game-ico" aria-hidden="true" set:html={TOOL_ICONS[g.href] ?? TOOL_ICON_FALLBACK} />
           <span class="t">{g.title}</span>

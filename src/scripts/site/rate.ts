@@ -1,4 +1,5 @@
 import { auFmt } from "./calc";
+import { tickText } from "./tick";
 
 // Line-item rate build-up. Add as many lines as you like; pick each line's type
 // from a dropdown. No proprietary rates ship here; saved rates live only in
@@ -164,21 +165,33 @@ export function initRate() {
     const m = num(marginEl);
     return { sub, m, rate: sub * (1 + m / 100) };
   }
-  const stat = (val: string, label: string) => {
+  const stat = (label: string) => {
     const d = document.createElement("div");
     d.className = "stat";
-    const a = document.createElement("div"); a.className = "n"; a.textContent = val;
+    const a = document.createElement("div"); a.className = "n";
     const b = document.createElement("div"); b.className = "l"; b.textContent = label;
     d.append(a, b);
-    return d;
+    return { el: d, n: a };
   };
+  // Tiles persist across renders (fixed set of three) so a changed value ticks
+  // in place instead of the whole grid being torn down and rebuilt.
+  let tiles: { sub: HTMLDivElement; margin: HTMLDivElement; rate: HTMLDivElement } | null = null;
   function render() {
     const { sub, m, rate } = calc();
-    out!.textContent = "";
-    const grid = document.createElement("div");
-    grid.className = "stat-grid";
-    grid.append(stat("$" + auFmt(sub), "subtotal"), stat(auFmt(m) + "%", "margin"), stat("$" + auFmt(rate), "unit rate"));
-    out!.append(grid);
+    if (!tiles) {
+      out!.textContent = "";
+      const subTile = stat("subtotal");
+      const marginTile = stat("margin");
+      const rateTile = stat("unit rate");
+      const grid = document.createElement("div");
+      grid.className = "stat-grid";
+      grid.append(subTile.el, marginTile.el, rateTile.el);
+      out!.append(grid);
+      tiles = { sub: subTile.n, margin: marginTile.n, rate: rateTile.n };
+    }
+    tickText(tiles.sub, "$" + auFmt(sub));
+    tickText(tiles.margin, auFmt(m) + "%");
+    tickText(tiles.rate, "$" + auFmt(rate));
   }
 
   const load = (): Saved[] => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } };

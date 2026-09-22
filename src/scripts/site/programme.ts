@@ -9,6 +9,7 @@ import {
 } from './programme-model'
 import { createProgrammeTutorial } from './programme-tutorial'
 import { brandedExport, stampCanvas } from './export-brand'
+import { tickText } from './tick'
 
 const ZOOMS = [10, 20, 34]              // month / week / day feel
 const ROW_H = 30
@@ -645,16 +646,31 @@ export function initProgramme(el: HTMLElement): void {
     const totalHours = prog.tasks.reduce((a, t) => a + (t.hours ?? 0), 0)
     const critCount = [...sched.values()].filter(s => s.critical).length
 
+    const statSpan = (prefix: string, suffix: string) => {
+      const span = document.createElement('span')
+      if (prefix) span.append(document.createTextNode(prefix))
+      const strong = document.createElement('strong')
+      span.append(strong)
+      if (suffix) span.append(document.createTextNode(suffix))
+      return { span, strong }
+    }
     const stats = document.createElement('div')
     stats.className = 'prog-stats'
     stats.setAttribute('aria-live', 'polite')
-    stats.innerHTML = `
-      <span><strong>${finishIdx + 1}</strong> working days</span>
-      <span>finish <strong>${fmtAU(finishDate)}</strong></span>
-      <span><strong>${critCount}</strong> critical</span>
-      ${totalHours ? `<span><strong>${totalHours.toLocaleString()}</strong> labour hrs</span>` : ''}
-    `
+    const daysStat = statSpan('', ' working days')
+    const finishStat = statSpan('finish ', '')
+    const critStat = statSpan('', ' critical')
+    stats.append(daysStat.span, finishStat.span, critStat.span)
+    let hrsStat: ReturnType<typeof statSpan> | null = null
+    if (totalHours) {
+      hrsStat = statSpan('', ' labour hrs')
+      stats.append(hrsStat.span)
+    }
     el.appendChild(stats)
+    tickText(daysStat.strong, String(finishIdx + 1))
+    tickText(finishStat.strong, fmtAU(finishDate))
+    tickText(critStat.strong, String(critCount))
+    if (hrsStat) tickText(hrsStat.strong, totalHours.toLocaleString())
 
     // ---- split: table + timeline
     const split = document.createElement('div')

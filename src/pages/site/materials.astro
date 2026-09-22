@@ -80,6 +80,7 @@ import "../../styles/site.css";
 
   <script>
     import { mountCalcs, wireActions, type CalcSpec } from "../../scripts/site/calc";
+    import { instantTicks } from "../../scripts/site/tick";
     import {
       up, pct,
       paintNetArea, paintLitres,
@@ -720,11 +721,13 @@ import "../../styles/site.css";
       const groupIdx = groups.findIndex((g) => g.specs.some((s) => s.id === wantCalc));
       if (groupIdx >= 0) {
         if (groupIdx !== 0) buttons[groupIdx].click();
-        for (const [key, value] of params) {
-          if (key === "calc") continue;
-          const input = document.getElementById(`${wantCalc}-${key}`) as HTMLInputElement | null;
-          if (input) { input.value = value; input.dispatchEvent(new Event("input", { bubbles: true })); }
-        }
+        instantTicks(() => {
+          for (const [key, value] of params) {
+            if (key === "calc") continue;
+            const input = document.getElementById(`${wantCalc}-${key}`) as HTMLInputElement | null;
+            if (input) { input.value = value; input.dispatchEvent(new Event("input", { bubbles: true })); }
+          }
+        });
         document.getElementById(wantCalc)?.scrollIntoView({ block: "start" });
       }
     }

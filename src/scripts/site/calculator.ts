@@ -2,6 +2,7 @@
 // calc-engine.ts (shared with the Notepad). All DOM output is textContent —
 // XSS-safe.
 import { evaluate } from "./calc-engine";
+import { tickText } from "./tick";
 
 const fmt = (n: number) => {
   if (Number.isNaN(n)) return "NaN";
@@ -56,7 +57,7 @@ export function initCalculator() {
     const r = document.createElement("button");
     r.type = "button";
     r.className = "calc-out";
-    r.textContent = out;
+    tickText(r, out); // new node, empty previous text — tickText sets it immediately
     if (ok) {
       r.title = "Click to copy result";
       r.addEventListener("click", () => {

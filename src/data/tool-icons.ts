@@ -1,8 +1,14 @@
 // Inline SVG glyphs for the tool/game hub cards (set:html — these are our own
 // constants, never user data). 24x24, stroke-only, in the spirit of
 // Lucide/Feather so the hub reads as one icon system instead of mixed emoji.
+// pathLength="1" normalises every shape's stroke-dasharray/-dashoffset to the
+// 0-1 range regardless of its actual geometry, so the draw-on animation in
+// site.css doesn't need per-icon tuning.
+const withPathLength = (inner: string) =>
+  inner.replace(/<(path|circle|line|polyline|rect) /g, '<$1 pathLength="1" ')
+
 const svg = (inner: string) =>
-  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${withPathLength(inner)}</svg>`
 
 export const TOOL_ICON_FALLBACK = svg('<circle cx="12" cy="12" r="8"/>')
 

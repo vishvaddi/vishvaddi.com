@@ -567,3 +567,52 @@
   .np-row { line-height: 1.36rem; }
   #pad-actions .pad-saved-select { margin-left: 0; }
 }
+
+/* Motion: glyph draw-on + reactive grid (22/09/26) */
+
+/* Glyph draw-on: hub icons trace their stroke once when their card enters
+   view, staggered by --i (set inline per card in the hub templates). Scoped
+   to .reveal so an icon reused somewhere without the reveal wrapper still
+   renders fully drawn instead of stuck invisible. */
+@media (prefers-reduced-motion: no-preference) {
+  .reveal:not(.in) .tool-ico svg *,
+  .reveal:not(.in) .game-ico svg * {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+
+  .reveal.in .tool-ico svg *,
+  .reveal.in .game-ico svg * {
+    animation: vv-draw 600ms var(--ease) forwards;
+    animation-delay: calc(var(--i, 0) * 40ms);
+  }
+
+  @keyframes vv-draw {
+    to { stroke-dashoffset: 0; }
+  }
+}
+
+/* Reactive blueprint grid: a second graph-paper layer, masked to a soft
+   circle around the pointer (--mx/--my, set by grid.js), so the grid lines
+   read faintly brighter near the cursor. Fixed + viewport units to match the
+   pointer coordinates; z-index 0 keeps it under the rail/palette/install
+   chip (z-index 4/40/100) while still painting above ::before's z-index -1
+   backdrop layer. */
+.blueprint::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--site-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--site-line) 1px, transparent 1px);
+  background-size: 22px 22px;
+  opacity: 0.55;
+  -webkit-mask-image: radial-gradient(220px circle at var(--mx, -999px) var(--my, -999px), #000, transparent 70%);
+  mask-image: radial-gradient(220px circle at var(--mx, -999px) var(--my, -999px), #000, transparent 70%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blueprint::after { display: none; }
+}

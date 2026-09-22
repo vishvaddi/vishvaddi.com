@@ -1,5 +1,15 @@
 # Project State
 
+## 2026-09-22 - Motion pass (built, release check green, NOT deployed)
+
+Vish: "lets do all that" on the four motion items. All respect `prefers-reduced-motion`.
+
+- **Number ticks** (`src/scripts/site/tick.ts`, `tickText`): a changed result rolls to its new value over 260 ms with an accent flash; first paint, reduced motion, non-numeric text and programmatic fills (`instantTicks`) stay instant. Wired in `mountCalcs` (all spec calculators, which now keep their tiles across recomputes), the Pad calculator, Rate Builder tiles, Programme header stats, Cut List and Sheet stat tiles. Materials answer-page prefill runs inside `instantTicks` so the landing is exact.
+- **Glyph draw-on**: hub and games icons stroke themselves in once on reveal, staggered 40 ms per card (`pathLength="1"` added automatically in `tool-icons.ts`).
+- **Reactive blueprint grid**: `public/scripts/grid.js` writes `--mx/--my`; a fixed `.blueprint::after` grid layer masked by a 220 px radial gradient brightens the lines near the pointer. Off on touch devices and reduced motion.
+- **Bar entry animations** via `@starting-style`: Gantt bars grow from the left, milestones and links fade; Cut List segments slide in; Sheet parts scale in. Gated on `:not(:focus-within)` so typing never replays them.
+- **Deploy:** on Vish's word; live-verify `/site/`, `/site/charge-rate` (edit a field, watch the tiles tick), `/site/programme`, `/site/materials/paint/3x3m-room-2-4m-ceiling/` → change-the-numbers link lands exact.
+
 ## 2026-09-22 - Notepad value adds, Feeds credit removed (built, release check green, NOT deployed)
 
 - **Notepad:** result gutter (line numbers left, results in one right-aligned column, totals ruled), Copy table (TSV for Excel/Sheets), working-day date maths (`today`, `5/10/2026`, `1 Oct 2026`, `+ 45 wd`, `date2 - date1 [in wd]`, formatted `Mon 7 Dec 2026`, dates excluded from totals), Start-from templates (Feature wall, Labour day rate, GST check, Programme dates), Alt+click a line to insert `line N`. Syntax sheet and SEO entry updated.
