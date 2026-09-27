@@ -182,6 +182,15 @@ async function apiAllowed(request: Request, env: Env): Promise<boolean> {
 }
 
 const TILE_RE = /^\/api\/poi\/tiles\/(\d+)\/(\d+)\/(\d+)$/;
+
+// Sec-Fetch-Site is set by the browser, never by page script, so it reliably
+// says when another site's page is calling our proxies (a free CORS proxy for
+// them, our bill and upstream reputation). Requests without it (curl, bots,
+// Stripe's webhook) pass and stay under the per-IP limit.
+function crossSiteBrowserRequest(request: Request): boolean {
+  const site = request.headers.get("Sec-Fetch-Site");
+  return site !== null && site !== "same-origin" && site !== "none";
+}
 const UA = "vishvaddi.com field-survival tool (personal, low volume)";
 const MAX_FEED_BYTES = 2_000_000;
 const MAX_ICY_BYTES = 1_000_000;
@@ -489,6 +498,9 @@ const site = {
     // Rate-limit the outbound proxy endpoints per IP so they can't be abused to
     // run up usage, proxy traffic, or get the worker banned upstream. Map tiles
     // are excluded — panning fires many at once and they're served from cache.
+    if (path.startsWith("/api/") && crossSiteBrowserRequest(request)) {
+      return new Response("Cross-site requests are not accepted.", { status: 403, headers: { "Cache-Control": "no-store" } });
+    }
     if (path.startsWith("/api/") && !TILE_RE.test(path)) {
       if (!(await apiAllowed(request, env))) {
         return new Response("Too many requests — slow down and try again shortly.", {
@@ -686,7 +698,6 @@ const site = {
           headers: {
             "Content-Type": "text/plain; charset=utf-8",
             "Cache-Control": "public, max-age=86400",
-            "Access-Control-Allow-Origin": "*",
           },
         });
       } catch {
@@ -971,7 +982,6 @@ const site = {
           headers: {
             "Content-Type": contentType,
             "Cache-Control": "public, max-age=600",
-            "Access-Control-Allow-Origin": "*",
           },
         });
       } catch {
@@ -1001,34 +1011,6 @@ const site = {
         );
       } catch {
         return Response.json({ title: null }, { status: 504 });
-      }
-    }
-
-    // Reader book proxy — fetch Project Gutenberg plain text same-origin so the
-    // strict CSP stays default-src 'self'. Locked to gutenberg.org only.
-    if (path === "/api/book" && request.method === "GET") {
-      const target = publicHttpsUrl(url.searchParams.get("url") || "");
-      if (!target || (target.hostname !== "www.gutenberg.org" && target.hostname !== "gutenberg.org")) {
-        return new Response("bad url", { status: 400 });
-      }
-      try {
-        const upstream = await fetchPublic(target, {
-          headers: { "User-Agent": UA, "Accept": "text/plain" },
-          signal: AbortSignal.timeout(20000),
-          cf: { cacheTtl: 86400, cacheEverything: true },
-        } as RequestInit);
-        if (!upstream.ok) return new Response("upstream error", { status: 502 });
-        const body = await upstream.arrayBuffer();
-        return new Response(body, {
-          status: 200,
-          headers: {
-            "Content-Type": "text/plain; charset=utf-8",
-            "Cache-Control": "public, max-age=86400",
-            "Access-Control-Allow-Origin": "*",
-          },
-        });
-      } catch {
-        return new Response("fetch failed", { status: 504 });
       }
     }
 

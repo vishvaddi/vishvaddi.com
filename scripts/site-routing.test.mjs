@@ -65,3 +65,30 @@ test('the slashed page itself is served as-is', async () => {
   assert.equal(res.status, 200)
   assert.match(await res.text(), /Calculator/)
 })
+
+// Cross-site browser calls to the proxies are refused; direct and same-origin calls pass.
+const feedEnv = env(() => new Response(null, { status: 404 }))
+const stubFeed = () => {
+  const original = globalThis.fetch
+  globalThis.fetch = async () => new Response('<rss/>', { headers: { 'Content-Type': 'application/rss+xml' } })
+  return () => { globalThis.fetch = original }
+}
+
+test('another site cannot use /api/feed as a CORS proxy', async () => {
+  const restore = stubFeed()
+  try {
+    const res = await worker.fetch(request('/api/feed?url=https%3A%2F%2Fexample.org%2Frss', { 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'cors' }), feedEnv)
+    assert.equal(res.status, 403)
+  } finally { restore() }
+})
+
+test('same-origin and header-less calls to /api/feed pass and carry no CORS wildcard', async () => {
+  const restore = stubFeed()
+  try {
+    for (const headers of [{ 'Sec-Fetch-Site': 'same-origin' }, { 'Sec-Fetch-Site': 'none' }, {}]) {
+      const res = await worker.fetch(request('/api/feed?url=https%3A%2F%2Fexample.org%2Frss', headers), feedEnv)
+      assert.equal(res.status, 200, JSON.stringify(headers))
+      assert.equal(res.headers.get('Access-Control-Allow-Origin'), null)
+    }
+  } finally { restore() }
+})
