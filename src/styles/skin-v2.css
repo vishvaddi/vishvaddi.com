@@ -1,0 +1,204 @@
+/* Instrument-panel skin — the 25/09/26 rebrand brief (dark-first, one hot
+   accent, crisp type, motion that shows state). Scoped to html[data-skin="v2"]
+   during the staged rollout so every stage can be screenshot-diffed against
+   the current skin; stage G flips it to the default and deletes the old tokens.
+   Contrast (WCAG, recorded in docs/DECISIONS): dark text 16.7:1, muted 7.5:1,
+   faint 4.0:1, accent text 8.4:1; light text 17.6:1, muted 5.9:1, faint 3.6:1,
+   accent text 5.5:1. Nothing below 3:1 is used for text. */
+
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/geist-variable.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/geistmono-variable.woff2") format("woff2");
+}
+
+/* ── Tokens ─────────────────────────────────────────────────────────────── */
+html[data-skin="v2"] {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* dark (default) */
+  --bg: #0b0c0e;
+  --surface-1: #111317;
+  --surface-2: #171a1f;
+  --surface-3: #1e2228;
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: rgb(255 255 255 / 0.16);
+  --text: #ecedef;
+  --text-muted: #9ba1a8;
+  --text-faint: #6b7178;
+  --accent: #ff6a2b;
+  --accent-text: #ff8a55;
+  --accent-glow: rgb(255 106 43 / 0.35);
+  --accent-soft: rgb(255 106 43 / 0.12);
+  --data: #37d4ff;
+  --ok: #3ddc97;
+  --warn: #ffc24b;
+  --bad: #ff5a5f;
+  --shadow: 0 12px 32px rgb(0 0 0 / 0.45);
+
+  /* the existing token names the whole site already reads */
+  --fg: var(--text);
+  --muted: var(--text-muted);
+  --rule: var(--line);
+  --link-underline: var(--line-strong);
+  --code-bg: var(--surface-2);
+  --accent-dark: var(--accent-text);
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --control-h: 36px;
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.3, 1.4, 0.5, 1);
+  --t-fast: 120ms;
+  --t-base: 200ms;
+  --t-slow: 360ms;
+  --t-reveal: 600ms;
+  --ease: var(--ease-out);
+  --dur: var(--t-slow);
+  --dur-fast: var(--t-fast);
+
+  color-scheme: dark;
+}
+
+html[data-skin="v2"][data-theme="light"] {
+  --bg: #f5f5f2;
+  --surface-1: #ffffff;
+  --surface-2: #efefea;
+  --surface-3: #e6e6e0;
+  --line: rgb(0 0 0 / 0.09);
+  --line-strong: rgb(0 0 0 / 0.18);
+  --text: #0e0f11;
+  --text-muted: #5a5f66;
+  --text-faint: #7a7f86;
+  --accent: #d9480f;
+  --accent-text: #b33a0a;
+  --accent-glow: rgb(217 72 15 / 0.25);
+  --accent-soft: rgb(217 72 15 / 0.1);
+  --data: #0077a8;
+  --ok: #1e8e5a;
+  --warn: #9a6a00;
+  --bad: #c8323a;
+  --shadow: 0 12px 32px rgb(20 20 20 / 0.1);
+  color-scheme: light;
+}
+
+/* The tool skin's own tokens follow the shared ones. Specificity beats the
+   :root:not([data-theme="light"]) .blueprint rule in site.css. */
+:root[data-skin="v2"]:not([data-theme="light"]) .blueprint,
+:root[data-skin="v2"][data-theme="light"] .blueprint {
+  --site-accent: var(--accent);
+  --site-line: var(--line);
+  --site-line-strong: var(--line-strong);
+}
+
+/* ── Base elements ─────────────────────────────────────────────────────── */
+html[data-skin="v2"] body {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.55;
+  background: var(--bg);
+}
+
+/* Long-form pages keep the serif for reading; everything else is UI. */
+html[data-skin="v2"] main.long-form :is(p, li, blockquote, dd) {
+  font-family: var(--font-serif);
+  font-size: 1.06rem;
+  line-height: 1.65;
+}
+
+html[data-skin="v2"] :is(h1, h2, h3, h4) {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+html[data-skin="v2"] h1 { font-size: clamp(2rem, 1.45rem + 1.8vw, 3rem); letter-spacing: -0.03em; line-height: 1.08; }
+html[data-skin="v2"] h2 { font-size: 1.45rem; }
+html[data-skin="v2"] h3 { font-size: 1.125rem; }
+html[data-skin="v2"] .home-title { font-size: clamp(2.75rem, 1.6rem + 4.2vw, 5.5rem); letter-spacing: -0.035em; line-height: 1.02; }
+
+html[data-skin="v2"] a { text-decoration-color: var(--line-strong); }
+html[data-skin="v2"] a:hover { color: var(--accent-text); text-decoration-color: var(--accent-text); }
+html[data-skin="v2"] hr { border: 0; border-top: 1px solid var(--line); }
+html[data-skin="v2"] ::selection { background: var(--accent-soft); color: var(--text); }
+
+/* Eyebrows and rail labels: mono, uppercase, wide tracking. */
+html[data-skin="v2"] :is(.eyebrow, .blueprint .eyebrow, .site-nav-category, .rail-title, .radio-kicker, .prog-card-title, .vv-resume-title, .site-group-title) {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+html[data-skin="v2"] :is(.eyebrow, .blueprint .eyebrow) { color: var(--accent-text); }
+
+/* Readouts and code in mono with tabular figures. */
+html[data-skin="v2"] :is(code, kbd, pre, .mono, .stat .n, .tile .n, .tile-value, .np-result, .calc-result) {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+html[data-skin="v2"] :is(code, kbd) { background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 0.05em 0.35em; font-size: 0.9em; }
+
+/* Controls: one surface, one hairline, one focus ring (2px accent + 4px glow). */
+html[data-skin="v2"] :is(input, select, textarea) {
+  background: var(--surface-1);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+}
+html[data-skin="v2"] :is(input, select, textarea)::placeholder { color: var(--text-faint); }
+html[data-skin="v2"] button, html[data-skin="v2"] .btn {
+  font-family: var(--font-sans);
+  border-radius: var(--radius-sm);
+}
+html[data-skin="v2"] :is(input, select, textarea, button, summary, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 6px var(--accent-glow);
+}
+html[data-skin="v2"] button:active:not(:disabled) { transform: scale(0.98); }
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin="v2"] button:active:not(:disabled) { transform: none; }
+}
+
+/* Cards and panels sit on surface-1 with a hairline; hover lifts the line, not the card. */
+html[data-skin="v2"] :is(.home-card, .home-door, .tool-card, .vv-resume-card, .book-card, .health-card, .nav-more-menu, .vv-palette-panel, .site-quote, .tool-faq-item, .prog-card, .pro-upsell) {
+  background: var(--surface-1);
+  border-color: var(--line);
+}
+html[data-skin="v2"] :is(.home-card, .home-door, .tool-card, .vv-resume-card, .book-card):hover {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 1px var(--accent-soft), var(--shadow);
+}
+html[data-skin="v2"] .home-door:hover .home-door-main { border-bottom-color: var(--line); }
+html[data-skin="v2"] .home-door-links { background: var(--surface-2); }
+html[data-skin="v2"] .site-quote { color: var(--text-muted); }
+
+/* Blueprint grid on dark: lines at --line, pointer brightening from the motion pass stays. */
+html[data-skin="v2"] .blueprint::before { opacity: 0.5; }
+
+/* Thin scrollbars belong to the panel look. */
+html[data-skin="v2"] { scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
+html[data-skin="v2"] ::-webkit-scrollbar { width: 8px; height: 8px; }
+html[data-skin="v2"] ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 8px; }
+
+/* Print and exports keep paper styling: nothing here applies on paper. */
+@media print {
+  html[data-skin="v2"] { --bg: #fff; --fg: #111; --text: #111; --muted: #444; --text-muted: #444; --rule: #ccc; --line: #ccc; --code-bg: #f4f4f4; --surface-1: #fff; --surface-2: #f4f4f4; color-scheme: light; }
+  html[data-skin="v2"] body { background: #fff; }
+}

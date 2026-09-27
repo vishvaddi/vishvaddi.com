@@ -31,6 +31,9 @@ const {
 const here = Astro.url.pathname.replace(/\/$/, "");
 // Unpublished personal pages keep working at their URL but ask crawlers to skip them.
 const noindex = noindexProp || !isPublished(here || "/");
+// Reading pages keep the serif for body text under the v2 skin; tools and hubs are UI.
+const LONG_FORM = ["/about", "/work", "/now", "/blog", "/books", "/movies", "/music", "/notes", "/year", "/terms", "/privacy", "/prepping"];
+const longForm = LONG_FORM.some((p) => here === p || here.startsWith(p + "/")) && here !== "/prepping/tools";
 // Sheet and Notepad are modes of Cut List and Calculator, so the rail highlights the parent.
 const activeToolHref = here === "/site/sheet" ? "/site/cut-list" : here === "/site/notepad" ? "/site/calc" : here;
 // One rail component, two catalogues: /site tools and /audio tools share the markup.
@@ -204,7 +207,7 @@ const updatedFmt = updatedDate
       </nav>
       <hr />
     </header>}
-    <main>
+    <main class:list={[longForm && "long-form"]}>
       {showRail && (
         <>
           <nav class="site-rail" aria-label={rail.title}>
