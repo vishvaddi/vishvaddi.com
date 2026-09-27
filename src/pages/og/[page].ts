@@ -1,9 +1,9 @@
 import { OGImageRoute } from "astro-og-canvas";
 
 const pages = {
-  index: { title: "Vish Vaddi", description: "Estimator. Sydney." },
-  work: { title: "Work", description: "Retail and commercial fit-out estimating. Sydney." },
-  about: { title: "About", description: "Vish Vaddi — about." },
+  index: { title: "Vish Vaddi", description: "Tools for people who build things. Sydney." },
+  work: { title: "Work", description: "Fit-out estimating in Sydney, and the tools built around it." },
+  about: { title: "About", description: "Estimator, tool builder, Sydney." },
   now: { title: "Now", description: "What I'm focused on right now." },
   blog: { title: "Blog", description: "Longer writing." },
   music: { title: "Music", description: "What I'm listening to and producing." },

@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import sitemap from '@astrojs/sitemap';
+import { isPublished } from './src/data/pages.ts';
 
 /** @returns {import('vite').Plugin} */
 function localBookProxy() {
@@ -232,7 +233,8 @@ export default defineConfig({
   devToolbar: { enabled: false },
   // /site/lattice is deliberately unlisted — reachable only by direct URL.
   // fitness, periodic and triangle are noindex redirect stubs for old tool URLs.
-  integrations: [sitemap({ filter: (page) => !/\/site\/(lattice|fitness|periodic|triangle)(\/|$)/.test(new URL(page).pathname) && !page.includes('/offline') && !/\/(kitchen|money|training)(\/|$)/.test(new URL(page).pathname) })],
+  // Unpublished personal pages (src/data/pages.ts) are left out too.
+  integrations: [sitemap({ filter: (page) => !/\/site\/(lattice|fitness|periodic|triangle)(\/|$)/.test(new URL(page).pathname) && !page.includes('/offline') && !/\/(kitchen|money|training)(\/|$)/.test(new URL(page).pathname) && isPublished(new URL(page).pathname) })],
   vite: {
     plugins: [tailwindcss(), localBookProxy()],
     // Never inline client scripts. The strict CSP (script-src 'self' + a couple

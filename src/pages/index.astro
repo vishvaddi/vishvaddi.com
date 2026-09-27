@@ -1,51 +1,103 @@
 ---
 import Base from "../layouts/Base.astro";
+import { isPublished } from "../data/pages";
 
-// Private = owner-only (Life/Read/Logs nav groups); chrome.js hides
-const useful = [
-  { href: "/site", title: "Site tools", desc: "Construction calculators, cut lists, rate building, drawing and PDF utilities." },
-  { href: "/prepping/tools", title: "Prepping tools", desc: "Field calculators, get-home estimate, pack-weight lists, live map, weather and night-sky." },
-  { href: "/studio", title: "Studio", desc: "A browser drum machine, synth, mixer and audio exporter." },
-  { href: "/audio", title: "Audio tools", desc: "Track analysis, loudness and key, MIDI export, sample prep, ear training and more, all in the browser." },
-  { href: "/radio", title: "Radio", desc: "Australian and international live radio with stream metadata and track identification." },
-  { href: "/feeds", title: "Feeds", desc: "Major news, financial reporting, Australian and global construction, and The Conversation." },
-  { href: "/reader", title: "Reader", desc: "Free public-domain books with page turning, bookmarks and annotations." },
-  { href: "/kitchen", title: "Kitchen", desc: "Recipe database, fortnight meal plan and an aggregated shopping list.", private: true },
-  { href: "/money", title: "Money", desc: "Free budget, bank CSV import, net worth, holdings, debt payoff and projections tracker.", private: true },
-  { href: "/training", title: "Training", desc: "Programme, session log with RPE and rule-based progression.", private: true },
-  { href: "/games", title: "Games", desc: "Browser games and prototypes." },
+// Three front doors for three audiences (25/09/26 audit): the tools product,
+// the field/prepping side and the portfolio. Play sits in a quieter strip.
+const doors = [
+  {
+    href: "/site",
+    eyebrow: "Tools",
+    title: "Site, audio and studio tools",
+    desc: "Cut lists, programmes, rates, PDFs and material calculators for estimators and trades. Audio analysis and a browser music workstation. Free, no account.",
+    links: [["/site", "Site tools"], ["/audio", "Audio tools"], ["/studio", "Studio"], ["/pro", "Pro"]],
+  },
+  {
+    href: "/prepping",
+    eyebrow: "Field",
+    title: "Prepping and self-reliance",
+    desc: "Notes on bushcraft, gear and readiness, with field calculators, knots, weather and maps that work on a phone.",
+    links: [["/prepping", "Notes"], ["/prepping/tools", "Field tools"], ["/prepping/gear", "Gear lists"], ["/prepping/knots", "Knots"]],
+  },
+  {
+    href: "/work",
+    eyebrow: "Work",
+    title: "Estimating and how the tools came about",
+    desc: "Premium retail and commercial fit-out estimating in Sydney, the tooling built around it, and how to get in touch.",
+    links: [["/work", "Work"], ["/about", "About"], ["mailto:vishvaddi@gmail.com", "Email"]],
+  },
+] as const;
+
+const play = [
+  ["/games", "Games", "Four small browser games."],
+  ["/radio", "Radio", "Live Australian and world stations."],
+  ["/tv", "TV", "A channel-surfing set for the archive."],
+  ["/reader", "Reader", "Public-domain books, read or listened to."],
+  ["/feeds", "Feeds", "News, finance and construction headlines."],
+] as const;
+
+// Owner-only cards: the Worker strips [data-private] for anonymous visitors.
+const life = [
+  { href: "/kitchen", title: "Kitchen", desc: "Recipes, fortnight plan, shopping list." },
+  { href: "/money", title: "Money", desc: "Budget, bank import, net worth, debt payoff." },
+  { href: "/training", title: "Training", desc: "Programme, session log, progression." },
 ];
 
-const other: [string, string, boolean?][] = [
-  ["/prepping", "Prepping notes"],
-  ["/prepping/gear", "Gear lists"],
+const more: [string, string][] = ([
   ["/prepping/health", "Health & wellbeing"],
-  ["/tv", "TV"],
-  ["/blog", "Blog"],
-  ["/now", "Now"],
-  ["/about", "About"],
   ["/music", "Listening"],
+  ["/now", "Now"],
+  ["/blog", "Blog"],
   ["/movies", "Movies"],
   ["/books", "Books"],
   ["/notes", "Notes"],
-];
+] as [string, string][]).filter(([href]) => isPublished(href));
 ---
 
 <Base ogImage="/og/index.png">
-  <p class="home-intro">
-    Estimator in Sydney working across premium retail and commercial fit-out. I build practical tools for estimating, scope generation and project work.
-  </p>
+  <section class="home-hero" aria-labelledby="home-title">
+    <p class="eyebrow">Vish Vaddi · Sydney</p>
+    <h1 id="home-title" class="home-title">Tools for people who build things.</h1>
+    <p class="home-intro">
+      Estimator by day. I build free browser tools for site work, sound and
+      self-reliance, and keep them fast, private and simple to use.
+    </p>
+  </section>
 
   <section class="vv-resume" id="vv-resume" hidden aria-labelledby="vv-resume-title">
     <h2 id="vv-resume-title" class="vv-resume-title">Pick up where you left off</h2>
     <div class="vv-resume-grid" id="vv-resume-grid" data-scope="home"></div>
   </section>
 
-  <section class="home-section" aria-labelledby="useful-title">
-    <h2 id="useful-title">Useful now</h2>
-        <div class="home-grid">
-      {useful.map((item) => (
-        <a class="home-card reveal" href={item.href} data-private={"private" in item && item.private ? "" : undefined}>
+  <section class="home-doors" aria-label="Main sections">
+    {doors.map((door, i) => (
+      <article class="home-door reveal" style={`--i: ${i}`}>
+        <a class="home-door-main" href={door.href}>
+          <span class="eyebrow">{door.eyebrow}</span>
+          <strong>{door.title}</strong>
+          <span class="home-door-desc">{door.desc}</span>
+        </a>
+        <nav class="home-door-links" aria-label={`${door.eyebrow} pages`}>
+          {door.links.map(([href, label]) => <a href={href}>{label}</a>)}
+        </nav>
+      </article>
+    ))}
+  </section>
+
+  <section class="home-section home-play" aria-labelledby="play-title">
+    <h2 id="play-title">Play</h2>
+    <ul class="home-play-list">
+      {play.map(([href, title, desc]) => (
+        <li><a href={href}><strong>{title}</strong><span>{desc}</span></a></li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="home-section" aria-labelledby="life-title" data-private>
+    <h2 id="life-title">Life</h2>
+    <div class="home-grid">
+      {life.map((item) => (
+        <a class="home-card" href={item.href}>
           <strong>{item.title}</strong>
           <span>{item.desc}</span>
         </a>
@@ -53,15 +105,14 @@ const other: [string, string, boolean?][] = [
     </div>
   </section>
 
-  <section class="home-section" aria-labelledby="more-title">
-    <h2 id="more-title">More</h2>
-    <nav class="home-links" aria-label="More sections">
-      {other.map(([href, label]) => <a href={href}>{label}</a>)}
-    </nav>
-  </section>
-
-  <style>
-  </style>
+  {more.length > 0 && (
+    <section class="home-section" aria-labelledby="more-title">
+      <h2 id="more-title">More</h2>
+      <nav class="home-links" aria-label="More sections">
+        {more.map(([href, label]) => <a href={href}>{label}</a>)}
+      </nav>
+    </section>
+  )}
 
   <script src="/scripts/resume.js" defer></script>
 </Base>

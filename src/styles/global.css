@@ -249,10 +249,10 @@ header nav.topnav {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 0.4rem 1rem;
+  gap: 0.4rem 0.8rem;
   flex: 1;
   font-family: var(--font-sans);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 .navlinks a {
   text-decoration: none;
@@ -260,6 +260,13 @@ header nav.topnav {
 }
 .navlinks a:hover { color: var(--fg); }
 .navlinks a.active { color: var(--fg); font-weight: 600; }
+/* Phones: brand and the three buttons share the first row, the five doors get
+   a full row of their own instead of wrapping into three ragged lines. */
+@media (max-width: 640px) {
+  header nav.topnav { align-items: center; row-gap: 0.35rem; }
+  header nav.topnav .brand { margin-right: auto; }
+  header nav.topnav .navlinks { order: 5; flex-basis: 100%; gap: 0.3rem 0.75rem; }
+}
 
 .nav-more { position: relative; }
 .nav-more > summary {
@@ -455,6 +462,83 @@ header nav.topnav {
 .home-links a {
   color: var(--fg);
 }
+
+/* Homepage: hero + three doors (25/09/26 audit, 2.1). Restyled in the rebrand. */
+@media (min-width: 900px) {
+  body.home-page { max-width: 58rem; }
+  body.home-page .home-doors { grid-template-columns: repeat(3, 1fr); }
+}
+.home-hero { margin: 0 0 1.5rem; max-width: 44rem; }
+.home-hero .eyebrow { margin-bottom: 0.4rem; }
+.home-title {
+  font-family: var(--font-sans);
+  font-size: clamp(1.9rem, 1.3rem + 2.4vw, 2.75rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.75rem;
+}
+.home-hero .home-intro { margin-bottom: 0; font-size: 1.05rem; color: var(--muted); }
+.home-doors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: var(--gap-2);
+  margin-top: 2rem;
+}
+.home-door {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--bg);
+  overflow: hidden;
+}
+.home-door-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex: 1;
+  padding: 1rem 1rem 0.9rem;
+  color: var(--fg);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+}
+.home-door-main .eyebrow { margin: 0; }
+.home-door-main strong { font-family: var(--font-sans); font-size: 1.15rem; line-height: 1.25; }
+.home-door-desc { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+.home-door:hover { border-color: var(--accent); }
+.home-door:hover .home-door-main { border-bottom-color: var(--accent); }
+.home-door-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  padding: 0.6rem 1rem 0.7rem;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  background: var(--code-bg);
+}
+.home-door-links a { color: var(--fg); text-decoration: none; }
+.home-door-links a:hover { color: var(--accent); }
+.home-play-list {
+  list-style: none;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.5rem 1rem;
+}
+.home-play-list a {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.5rem 0;
+  color: var(--fg);
+  text-decoration: none;
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-sans);
+}
+.home-play-list a:hover strong { color: var(--accent); }
+.home-play-list strong { font-size: 0.95rem; }
+.home-play-list span { color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
 
 .ad-slot {
   display: grid;

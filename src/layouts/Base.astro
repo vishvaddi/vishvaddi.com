@@ -2,6 +2,7 @@
 import "../styles/global.css";
 import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../data/site-tools";
 import { AUDIO_TOOLS, AUDIO_TOOL_CATEGORIES } from "../data/audio-tools";
+import { isPublished } from "../data/pages";
 
 interface Props {
   title?: string;
@@ -17,17 +18,19 @@ interface Props {
 
 const {
   title = "Vish Vaddi",
-  description = "Vish Vaddi — estimator, builder, writer.",
+  description = "Vish Vaddi — estimator in Sydney; free browser tools for site work, sound and self-reliance.",
   ogImage = "/og/index.png",
   updatedDate,
   siteNav = false,
   audioNav = false,
-  noindex = false,
+  noindex: noindexProp = false,
   immersive = false,
   workspace = false,
 } = Astro.props;
 
 const here = Astro.url.pathname.replace(/\/$/, "");
+// Unpublished personal pages keep working at their URL but ask crawlers to skip them.
+const noindex = noindexProp || !isPublished(here || "/");
 // Sheet and Notepad are modes of Cut List and Calculator, so the rail highlights the parent.
 const activeToolHref = here === "/site/sheet" ? "/site/cut-list" : here === "/site/notepad" ? "/site/calc" : here;
 // One rail component, two catalogues: /site tools and /audio tools share the markup.
@@ -36,23 +39,30 @@ const rail = audioNav
   : { tools: SITE_TOOLS as readonly { href: string; title: string; shortTitle: string; aliases: string; category: string }[], categories: SITE_TOOL_CATEGORIES as readonly string[], hub: "/site", title: "Site tools" };
 const currentTool = rail.tools.find((tool) => tool.href === activeToolHref);
 
+// Three audiences, five doors (25/09/26 audit): Tools/Audio/Studio for the
+// product, Field for prepping, Work for the portfolio. Play and Logs live in More.
 const navPrimary: [string, string][] = [
   ["/site", "Tools"],
-  ["/prepping", "Prepping"],
+  ["/audio", "Audio"],
+  ["/studio", "Studio"],
+  ["/prepping", "Field"],
+  ["/work", "Work"],
 ];
 // "More" is grouped so the menu reads as a map, not a list. /music is the
 // listening log, so it is labelled by what it is to avoid two "Music" entries.
-// The site is public; chrome.js hides [data-private] (owner-only links such as
-// Lock site) for anyone without the vv_owner marker cookie.
-const navMoreGroups: { label: string | null; links: [string, string][]; private?: boolean; collapsed?: boolean }[] = [
-  { label: "Music", links: [["/studio", "Studio"], ["/audio", "Audio tools"], ["/radio", "Radio"]] },
-  { label: "Read", links: [["/feeds", "Feeds"], ["/reader", "Reader"]] },
+// The Worker strips [data-private] (owner-only links such as Lock site) for
+// anyone without an owner session; chrome.js hides them again client-side.
+// Unpublished pages (src/data/pages.ts) drop out of every group.
+const navMoreGroups: { label: string | null; links: [string, string][]; private?: boolean; collapsed?: boolean }[] = ([
+  { label: "Play", links: [["/games", "Games"], ["/radio", "Radio"], ["/tv", "TV"], ["/reader", "Reader"], ["/feeds", "Feeds"]] },
   // Life is hidden (owner-only) until it is developed further; the Worker 404s it for everyone else.
   { label: "Life", links: [["/kitchen", "Kitchen"], ["/money", "Money"], ["/training", "Training"]], private: true },
-  { label: null, links: [["/games", "Games"], ["/tv", "TV"], ["/pro", "Pro"], ["/about", "About"], ["/logout", "Lock site"]] },
+  { label: null, links: [["/pro", "Pro"], ["/about", "About"], ["/logout", "Lock site"]] },
   // Logs are dormant, so they sit behind a second disclosure instead of taking menu space.
-  { label: "Logs", links: [["/music", "Listening"], ["/movies", "Movies"], ["/books", "Books"], ["/notes", "Notes"]], collapsed: true },
-];
+  { label: "Logs", links: [["/music", "Listening"], ["/movies", "Movies"], ["/books", "Books"], ["/notes", "Notes"], ["/blog", "Blog"], ["/now", "Now"]], collapsed: true },
+] as { label: string | null; links: [string, string][]; private?: boolean; collapsed?: boolean }[])
+  .map((group) => ({ ...group, links: group.links.filter(([href]) => isPublished(href)) }))
+  .filter((group) => group.links.length > 0);
 const navMore: [string, string][] = navMoreGroups.flatMap((group) => group.links);
 
 // Command-palette index (Ctrl+K), built once server-side and shipped as a JSON
@@ -74,11 +84,11 @@ navMoreGroups
     if (href !== "/logout") addPalette(href, label, "Pages");
   }));
 ([
-  ["/studio", "Studio"],
-  ["/radio", "Radio"],
-  ["/reader", "Reader"],
-  ["/feeds", "Feeds"],
-  ["/prepping/tools", "Prepping tools"],
+  ["/prepping/tools", "Field tools"],
+  ["/prepping/gear", "Gear lists"],
+  ["/prepping/knots", "Knots"],
+  ["/privacy", "Privacy"],
+  ["/terms", "Terms"],
 ] as [string, string][]).forEach(([href, label]) => addPalette(href, label, "Pages"));
 // Games hub links to these but they aren't Astro pages under src/pages, so they
 // need listing by hand (kept in sync with src/pages/games/index.astro).
@@ -140,7 +150,7 @@ const updatedFmt = updatedDate
     <meta name="twitter:image" content={ogImageUrl} />
     <title>{fullTitle}</title>
   </head>
-  <body class:list={[immersive && "immersive-page", workspacePage && "workspace-page"]}>
+  <body class:list={[immersive && "immersive-page", workspacePage && "workspace-page", here === "" && "home-page"]}>
     {!immersive && <header>
       <nav class="topnav" aria-label="Primary">
         <a class="brand" href="/"><strong>Vish Vaddi</strong></a>
