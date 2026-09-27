@@ -63,10 +63,22 @@ import "../../styles/site.css";
     const ctx = canvas.getContext("2d")!;
 
     const css = (v: string) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+    let resizeTimer = 0;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => { if (lastDrawn) draw(lastDrawn.points, lastDrawn.currency); }, 120);
+    });
     const fmtDate = (t: number) => new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short" }).format(new Date(t * 1000));
 
+    let lastDrawn: { points: Point[]; currency: string } | null = null;
     function draw(points: Point[], currency: string) {
-      const W = canvas.width, H = canvas.height, pad = 44;
+      lastDrawn = { points, currency };
+      // Draw in CSS pixels at device resolution: the canvas is CSS-scaled to
+      // its column, so a fixed 900px bitmap made the axis labels unreadable on phones.
+      const dpr = window.devicePixelRatio || 1;
+      const W = canvas.clientWidth || 900, H = Math.round(W * 340 / 900), pad = 44;
+      canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
       if (points.length < 2) { status.textContent = "Not enough data."; return; }
       const xs = points.map((p) => p.t), ys = points.map((p) => p.c);
@@ -80,7 +92,7 @@ import "../../styles/site.css";
       const muted = css("--muted") || "#888";
 
       // axes + gridlines
-      ctx.strokeStyle = rule; ctx.lineWidth = 1; ctx.fillStyle = muted; ctx.font = "11px system-ui";
+      ctx.strokeStyle = rule; ctx.lineWidth = 1; ctx.fillStyle = muted; ctx.font = `${Math.max(11, W < 480 ? 11 : 12)}px ${css("--font-sans") || "system-ui"}`;
       for (let i = 0; i <= 4; i++) {
         const v = minY + (i / 4) * (maxY - minY), y = Y(v);
         ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad * 0.5, y); ctx.stroke(); ctx.globalAlpha = 1;

@@ -10,6 +10,8 @@ const pages = {
   movies: { title: "Movies", description: "Films I keep coming back to." },
   books: { title: "Books", description: "What I've been reading." },
   prepping: { title: "Prepping", description: "Bushcraft, survival, and self-sufficiency." },
+  games: { title: "Games", description: "Four small browser games. Nothing to install." },
+  studio: { title: "Studio", description: "VishAmp — a browser drum machine, synth, arranger and mixer." },
 };
 
 const route = await OGImageRoute({
