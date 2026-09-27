@@ -292,6 +292,9 @@
   background: var(--bg); color: var(--fg); font: 0.95rem var(--font-sans);
 }
 .pro-upsell-status { font-size: 0.8rem; color: var(--muted); }
+.pro-upsell-error { flex-basis: 100%; margin: 0.2rem 0 0; color: var(--fg); }
+.pro-plans-static { margin: 0 0 1rem; padding-left: 1.2rem; }
+.pro-plans-static li { margin: 0.2rem 0; }
 .pro-upsell-dismiss {
   display: block; margin-top: 0.6rem; padding: 0.2rem 0; background: none; border: none;
   color: var(--muted); font-size: 0.8rem; cursor: pointer;

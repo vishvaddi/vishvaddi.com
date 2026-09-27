@@ -241,6 +241,24 @@ try {
   await checkoutPage.close()
   await checkoutCtx.close()
 
+  // ── a failed checkout call shows an inline error with the email fallback (site audit 25/09/26, 1.6) ──
+  const failCtx = await browser.newContext({ viewport: { width: 390, height: 844 } })
+  await stubStatus(failCtx, { pro: false, source: null, configured: true })
+  await recordMetrics(failCtx)
+  await failCtx.route('**/api/pro/checkout', (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"stripe"}' }))
+  const failPage = await failCtx.newPage()
+  failPage.on('pageerror', (error) => errors.push(String(error)))
+  await failPage.goto(`${BASE}/pro/`, { waitUntil: 'domcontentloaded' })
+  const failBtn = failPage.locator('#pro-plans .pro-upsell-plans .pro-upsell-btn').first()
+  await failBtn.click()
+  await failPage.locator('#pro-plans .pro-upsell-error').waitFor({ timeout: 3000 }).catch(() => {})
+  const errText = (await failPage.locator('#pro-plans .pro-upsell-error').textContent().catch(() => '')) || ''
+  check('Checkout failure: inline error names the email fallback and the button re-enables', errText.includes('vishvaddi@gmail.com') && await failBtn.isEnabled())
+  const proHtml = await (await fetch(`${BASE}/pro/`)).text()
+  check('Pro prices are in the static HTML', proHtml.includes('A$100 a year') && proHtml.includes('A$20 a month') && proHtml.includes('A$5 for 7 days'))
+  await failPage.close()
+  await failCtx.close()
+
   check('Pro pages: console is clean', errors.length === 0, errors.slice(0, 2).join(' | '))
 } catch (error) {
   check('suite completed', false, String(error).slice(0, 240))

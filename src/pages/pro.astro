@@ -1,43 +1,45 @@
 ---
 import Base from "../layouts/Base.astro";
+import { PRO_PLANS, PRO_STATEMENT } from "../data/pro-plans";
 import "../styles/site.css";
 ---
 
 <Base
   title="Pro"
-  description="vishvaddi.com Pro — every tool and export stays free; Pro removes the footer from your PDFs, prints and images, and adds sync and Studio MP3/stem export."
+  description={`vishvaddi.com Pro — ${PRO_STATEMENT}`}
 >
   <div class="blueprint tool">
     <p class="eyebrow">Pro</p>
     <h1>Pro</h1>
-    <p>
-      Every tool, feature and export on this site is free, with no limits. Pro is
-      for people who send what they make to clients: clean exports without my
-      footer, plus sync across devices.
-    </p>
+    <p>{PRO_STATEMENT}</p>
 
     <h2>Free</h2>
     <p>
-      Every calculator, optimiser, tracker, dashboard and editor here, and every
-      export — PDFs, prints, images, CSV and project files — unlimited, no
-      account. PDFs, prints and images carry a small "Made free at
-      vishvaddi.com" footer; CSV and project files don't. Files never leave your
-      browser unless a page says otherwise.
+      Every calculator, optimiser, tracker, dashboard and editor here, with no
+      account and no limit on use. Client-facing exports — PDFs, prints and
+      images — are free and carry a small "Made free at vishvaddi.com" footer.
+      CSV, project files and Studio WAV masters are free with no footer. Files
+      never leave your browser unless a page says otherwise.
     </p>
 
     <h2>Pro adds</h2>
     <ul>
-      <li>PDFs, prints and images without the vishvaddi.com footer</li>
+      <li>Your name, line and logo on PDFs, prints and images instead of the vishvaddi.com footer</li>
       <li>Cross-device sync for tools with a "Sync across devices" toggle</li>
-      <li>MP3 and stem export in Studio — WAV master export stays free for everyone</li>
+      <li>MP3 and stem export in Studio</li>
       <li>MP3 download in Lo-fi and batch download in Audio Prep</li>
     </ul>
 
-    <div id="pro-plans"></div>
+    <h2>Plans</h2>
+    <div id="pro-plans">
+      <ul class="pro-plans-static">
+        {PRO_PLANS.map((p) => <li><strong>{p.price}</strong> — {p.note}</li>)}
+      </ul>
+    </div>
 
     <h2>Questions</h2>
     <p><strong>Cancel any time.</strong> Email vishvaddi@gmail.com to cancel a subscription, or use the manage-subscription link in your Stripe emails where one is included. The 7-day pass is a one-off payment, so there's nothing to cancel.</p>
-    <p><strong>Refunds.</strong> Within 14 days of your first payment, email <a href="mailto:vishvaddi@gmail.com">vishvaddi@gmail.com</a> for a full refund, no questions asked.</p>
+    <p><strong>Refunds.</strong> Within 14 days of any purchase, including a 7-day pass, email <a href="mailto:vishvaddi@gmail.com">vishvaddi@gmail.com</a> for a full refund, no questions asked. That's on top of your rights under the Australian Consumer Law.</p>
     <p><strong>Your data.</strong> Everything you make with these tools stays in your browser unless you turn sync on for a specific tool — Pro doesn't change that.</p>
 
     <p class="note-foot">See <a href="/terms">terms</a> and <a href="/privacy">privacy</a> for the rest. <a href="/site">← all tools</a></p>

@@ -9,15 +9,12 @@
 // answer in sessionStorage. A failed status fetch means "not Pro" — fail
 // closed — but never blocks the free tool underneath.
 
+import { PRO_PLANS, type Plan } from "../../data/pro-plans";
+
 const STATUS_KEY = "vv_pro_status";
 
-export type Plan = "year" | "month" | "pass";
-// Must match the Stripe prices wired to STRIPE_PRICE_* in wrangler.jsonc.
-const PLAN_BUTTONS: ReadonlyArray<[Plan, string]> = [
-  ["year", "Pro — A$100 / year"],
-  ["month", "A$20 / month"],
-  ["pass", "7-day pass — A$5"],
-];
+export type { Plan };
+const PLAN_BUTTONS: ReadonlyArray<[Plan, string]> = PRO_PLANS.map(({ plan, label }) => [plan, label]);
 const METRIC_ENDPOINT = "/api/metric";
 
 export interface ProStatus {
@@ -162,6 +159,12 @@ function planButton(plan: Plan, label: string): HTMLButtonElement {
   btn.addEventListener("click", () => {
     track("checkout_click");
     btn.setAttribute("disabled", "1");
+    clearCheckoutError(btn);
+    // A silent re-enable looked like nothing happened (site audit 25/09/26, 1.6).
+    const fail = () => {
+      btn.removeAttribute("disabled");
+      showCheckoutError(btn);
+    };
     fetch("/api/pro/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -170,11 +173,32 @@ function planButton(plan: Plan, label: string): HTMLButtonElement {
       .then((res) => res.json())
       .then((body: { url?: string }) => {
         if (body.url) location.assign(body.url);
-        else btn.removeAttribute("disabled");
+        else fail();
       })
-      .catch(() => btn.removeAttribute("disabled"));
+      .catch(fail);
   });
   return btn;
+}
+
+function checkoutErrorHost(btn: HTMLButtonElement): HTMLElement {
+  return btn.parentElement || btn;
+}
+
+function clearCheckoutError(btn: HTMLButtonElement): void {
+  checkoutErrorHost(btn).querySelector(".pro-upsell-error")?.remove();
+}
+
+function showCheckoutError(btn: HTMLButtonElement): void {
+  clearCheckoutError(btn);
+  const msg = document.createElement("p");
+  msg.className = "pro-upsell-status pro-upsell-error";
+  msg.setAttribute("role", "alert");
+  msg.append("Checkout didn't open. Try again, or email ");
+  const mail = document.createElement("a");
+  mail.href = "mailto:vishvaddi@gmail.com?subject=Pro%20checkout";
+  mail.textContent = "vishvaddi@gmail.com";
+  msg.append(mail, " and I'll set you up by hand.");
+  checkoutErrorHost(btn).append(msg);
 }
 
 function buildRestoreForm(onSuccess: () => void): HTMLDetailsElement {
