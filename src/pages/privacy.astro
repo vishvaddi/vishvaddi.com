@@ -2,12 +2,13 @@
 import Base from "../layouts/Base.astro";
 ---
 
-<Base title="Privacy" description="Privacy information for vishvaddi.com.">
+<Base title="Privacy" description="Privacy information for vishvaddi.com: what stays in your browser, which services a page talks to, and what Pro stores.">
   <h1>Privacy</h1>
   <p>
     Most tools on this site run locally in your browser. Files opened in the PDF
     editor, calculator inputs, game records and similar data are not uploaded unless
-    a page explicitly says otherwise.
+    a page explicitly says otherwise. This page lists every case where a page does
+    talk to a service, and what that service receives.
   </p>
 
   <h2>Local browser storage</h2>
@@ -17,10 +18,41 @@ import Base from "../layouts/Base.astro";
     browser settings.
   </p>
 
-  <h2>Analytics and hosting</h2>
+  <h2>Hosting and analytics</h2>
   <p>
     The site is hosted by Cloudflare and uses Cloudflare Web Analytics. Cloudflare
     may process basic request information needed to deliver and protect the site.
+  </p>
+
+  <h2>Services a page may contact</h2>
+  <p>
+    Each of these is used only on the page named, only when you use that feature,
+    and receives only what that feature needs. None of them receives your name or
+    email address from this site.
+  </p>
+  <ul>
+    <li><strong>ElevenLabs</strong> — Reader and Feeds "Listen". The passage or headline being read aloud is sent through this site's <code>/api/tts</code> proxy to ElevenLabs to make the audio; the audio is cached on Cloudflare by text so repeats aren't re-sent. If the voice budget is used up, the browser's own voice reads instead and nothing leaves the device.</li>
+    <li><strong>Project Gutenberg, Standard Ebooks and Gutendex</strong> — Reader. Your search terms and the book you open are fetched from these catalogues through this site's proxy.</li>
+    <li><strong>LibriVox and archive.org</strong> — Reader audiobooks. Searches go to LibriVox through this site's proxy; the recordings themselves are hosted on archive.org.</li>
+    <li><strong>Open-Meteo</strong> — Prepping weather and the standby screen. The forecast request carries a location: the Sydney default, a place you type, or your device position if you allow it.</li>
+    <li><strong>radio-browser.info and the stations' own stream hosts</strong> — Radio. Station searches go to radio-browser; pressing play connects your browser directly to the station's stream server, which sees your IP address like any radio app would.</li>
+    <li><strong>Windy</strong> — the embedded wind map on the prepping tools page loads inside a frame from windy.com and follows Windy's own privacy policy.</li>
+    <li><strong>YouTube (youtube-nocookie.com) and archive.org</strong> — TV. Videos play inside frames from those sites.</li>
+    <li><strong>Price tracker</strong> — quotes come from a market data proxy on this site; only the ticker symbols you choose are sent.</li>
+  </ul>
+
+  <h2>Microphone and location</h2>
+  <p>
+    The browser asks before either is used, and you can decline. <strong>Microphone:</strong>
+    the Audio metronome tuner, the Site Gauges sound meter and Studio's sampler
+    listen or record in your browser only; nothing is uploaded, and Studio
+    recordings stay in your project on your device. The <strong>Voice notes</strong> tool
+    uses your browser's built-in speech recognition for live transcription: in
+    Chrome and most browsers that means the audio is processed by the browser
+    vendor's speech service (Google, for Chrome) while you dictate. The transcript,
+    any optional audio capture and photos are saved only on your device.
+    <strong>Location:</strong> the prepping weather page can use your device position
+    for a local forecast, which is sent to Open-Meteo as coordinates and not stored.
   </p>
 
   <h2>Optional Deep Swarm cloud saves</h2>
