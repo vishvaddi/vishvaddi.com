@@ -121,7 +121,7 @@ const updatedFmt = updatedDate
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" data-skin={immersive ? undefined : "v2"}>
   <head>
     <script is:inline>
       (function () {
@@ -133,9 +133,9 @@ const updatedFmt = updatedDate
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fafaf7" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#161613" />
+    <meta name="theme-color" content={immersive ? "#161613" : "#0b0c0e"} />
     <meta name="description" content={description} />
+    {!immersive && <link rel="preload" href="/fonts/geist-variable.woff2" as="font" type="font/woff2" crossorigin />}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />

@@ -56,12 +56,50 @@ const more: [string, string][] = ([
 
 <Base ogImage="/og/index.png">
   <section class="home-hero" aria-labelledby="home-title">
-    <p class="eyebrow">Vish Vaddi · Sydney</p>
-    <h1 id="home-title" class="home-title">Tools for people who build things.</h1>
-    <p class="home-intro">
-      Estimator by day. I build free browser tools for site work, sound and
-      self-reliance, and keep them fast, private and simple to use.
-    </p>
+    <div class="home-hero-text">
+      <p class="eyebrow">Vish Vaddi · Sydney</p>
+      <h1 id="home-title" class="home-title">Tools for people who build things.</h1>
+      <p class="home-intro">
+        Estimator by day. I build free browser tools for site work, sound and
+        self-reliance, and keep them fast, private and simple to use.
+      </p>
+      <p class="home-sub">cut lists · programmes · rates · pdfs · audio · studio</p>
+    </div>
+    <div class="home-instrument" aria-hidden="true">
+      <svg viewBox="0 0 480 300" xmlns="http://www.w3.org/2000/svg">
+        <g data-layer="0.4">
+          <line class="grid-line" x1="0" y1="60" x2="480" y2="60" opacity="0.5" />
+          <line class="grid-line" x1="0" y1="120" x2="480" y2="120" opacity="0.5" />
+          <line class="grid-line" x1="0" y1="180" x2="480" y2="180" opacity="0.5" />
+          <line class="grid-line" x1="0" y1="240" x2="480" y2="240" opacity="0.5" />
+          <line class="grid-line" x1="60" y1="0" x2="60" y2="300" opacity="0.5" />
+          <line class="grid-line" x1="120" y1="0" x2="120" y2="300" opacity="0.5" />
+          <line class="grid-line" x1="180" y1="0" x2="180" y2="300" opacity="0.5" />
+          <line class="grid-line" x1="240" y1="0" x2="240" y2="300" opacity="0.5" />
+          <line class="grid-line" x1="300" y1="0" x2="300" y2="300" opacity="0.5" />
+          <line class="grid-line" x1="360" y1="0" x2="360" y2="300" opacity="0.5" />
+          <line class="grid-line" x1="420" y1="0" x2="420" y2="300" opacity="0.5" />
+        </g>
+        <g data-layer="1">
+          <!-- isometric joinery unit: carcass, two doors, plinth -->
+          <path class="wire draw" pathLength="1" style="--d: 100" d="M120 210 L120 90 L250 40 L380 90 L380 210 L250 260 Z" />
+          <path class="wire draw" pathLength="1" style="--d: 350" d="M120 90 L250 140 L380 90 M250 140 L250 260" />
+          <path class="wire draw" pathLength="1" style="--d: 600" d="M138 108 L138 196 L238 236 L238 150 Z M262 150 L262 236 L362 196 L362 108 Z" opacity="0.7" />
+          <path class="wire draw" pathLength="1" style="--d: 800" d="M120 210 L120 226 L250 276 L380 226 L380 210" opacity="0.55" />
+          <path class="wire draw" pathLength="1" style="--d: 900" d="M150 168 L150 178 M350 168 L350 178" />
+        </g>
+        <g data-layer="1.6">
+          <!-- dimension lines -->
+          <path class="dim draw" pathLength="1" style="--d: 1100" d="M96 90 L96 210 M90 90 L102 90 M90 210 L102 210" />
+          <text class="dim-label" x="72" y="154" text-anchor="middle" transform="rotate(-90 72 154)">2400</text>
+          <path class="dim draw" pathLength="1" style="--d: 1250" d="M250 284 L380 234 M244 278 L256 290 M374 228 L386 240" />
+          <text class="dim-label" x="326" y="278" text-anchor="middle">1200</text>
+          <text class="readout" x="120" y="24">SCALE 1:20 · MM</text>
+          <text class="readout" x="380" y="24" text-anchor="end">REV C</text>
+          <line class="sweep" x1="20" y1="8" x2="20" y2="292" />
+        </g>
+      </svg>
+    </div>
   </section>
 
   <section class="vv-resume" id="vv-resume" hidden aria-labelledby="vv-resume-title">
@@ -71,7 +109,7 @@ const more: [string, string][] = ([
 
   <section class="home-doors" aria-label="Main sections">
     {doors.map((door, i) => (
-      <article class="home-door reveal" style={`--i: ${i}`}>
+      <article class="home-door reveal" style={`--i: ${i}`} data-glow>
         <a class="home-door-main" href={door.href}>
           <span class="eyebrow">{door.eyebrow}</span>
           <strong>{door.title}</strong>
@@ -115,4 +153,5 @@ const more: [string, string][] = ([
   )}
 
   <script src="/scripts/resume.js" defer></script>
+  <script src="/scripts/hero.js" defer></script>
 </Base>

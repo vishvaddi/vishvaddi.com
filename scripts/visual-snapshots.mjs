@@ -40,6 +40,7 @@ try {
         if (!el) return false
         el.setAttribute('data-theme', t)
         if (s === 'v2') el.setAttribute('data-skin', 'v2')
+        else el.removeAttribute('data-skin')
         return true
       }
       if (!apply()) new MutationObserver((_, o) => { if (apply()) o.disconnect() }).observe(document, { childList: true })

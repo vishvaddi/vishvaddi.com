@@ -80,8 +80,45 @@
     return 0;
   }
 
+  var lastQuery = "";
+
+  // Wraps the matched characters of a title in <mark>: the substring when the
+  // query occurs whole, otherwise each in-order character (the subsequence match).
+  function highlight(title, q) {
+    var frag = document.createDocumentFragment();
+    if (!q) { frag.appendChild(document.createTextNode(title)); return frag; }
+    var lower = title.toLowerCase();
+    var idx = lower.indexOf(q);
+    if (idx !== -1) {
+      if (idx) frag.appendChild(document.createTextNode(title.slice(0, idx)));
+      var m = document.createElement("mark");
+      m.textContent = title.slice(idx, idx + q.length);
+      frag.appendChild(m);
+      if (idx + q.length < title.length) frag.appendChild(document.createTextNode(title.slice(idx + q.length)));
+      return frag;
+    }
+    var qi = 0;
+    var run = "";
+    var runMarked = false;
+    function flush() {
+      if (!run) return;
+      if (runMarked) { var mk = document.createElement("mark"); mk.textContent = run; frag.appendChild(mk); }
+      else frag.appendChild(document.createTextNode(run));
+      run = "";
+    }
+    for (var i = 0; i < title.length; i++) {
+      var hit = qi < q.length && lower[i] === q[qi];
+      if (hit) qi++;
+      if (hit !== runMarked) { flush(); runMarked = hit; }
+      run += title[i];
+    }
+    flush();
+    return frag;
+  }
+
   function search(query) {
     var q = query.trim().toLowerCase();
+    lastQuery = q;
     if (!q) {
       var recent = getRecent();
       var out = [];
@@ -135,7 +172,7 @@
 
       var title = document.createElement("span");
       title.className = "vv-palette-title";
-      title.textContent = item.title;
+      title.appendChild(highlight(item.title, item.group === "Recent" ? "" : lastQuery));
 
       var tag = document.createElement("span");
       tag.className = "vv-palette-tag";

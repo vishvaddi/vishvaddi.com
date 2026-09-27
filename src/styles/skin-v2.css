@@ -109,7 +109,8 @@ html[data-skin="v2"] body {
   font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
   line-height: 1.55;
-  background: var(--bg);
+  /* html carries --bg; a transparent body lets the grain layer cover the column too */
+  background: transparent;
 }
 
 /* Long-form pages keep the serif for reading; everything else is UI. */
@@ -191,6 +192,7 @@ html[data-skin="v2"] .site-quote { color: var(--text-muted); }
 
 /* Blueprint grid on dark: lines at --line, pointer brightening from the motion pass stays. */
 html[data-skin="v2"] .blueprint::before { opacity: 0.5; }
+html[data-skin="v2"][data-theme="light"] .blueprint::before { opacity: 0.3; }
 
 /* Thin scrollbars belong to the panel look. */
 html[data-skin="v2"] { scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
@@ -201,4 +203,196 @@ html[data-skin="v2"] ::-webkit-scrollbar-thumb { background: var(--line-strong);
 @media print {
   html[data-skin="v2"] { --bg: #fff; --fg: #111; --text: #111; --muted: #444; --text-muted: #444; --rule: #ccc; --line: #ccc; --code-bg: #f4f4f4; --surface-1: #fff; --surface-2: #f4f4f4; color-scheme: light; }
   html[data-skin="v2"] body { background: #fff; }
+}
+
+/* ── Stage B: chrome ───────────────────────────────────────────────────── */
+html[data-skin="v2"] body { --page-w: 38rem; }
+html[data-skin="v2"] body.home-page { --page-w: 58rem; }
+html[data-skin="v2"] body > header,
+html[data-skin="v2"] body.workspace-page > header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  box-sizing: border-box;
+  width: 100vw;
+  max-width: none;
+  margin: -3rem 0 2rem calc(50% - 50vw);
+  padding: 0.75rem max(1.5rem, calc((100vw - var(--page-w)) / 2));
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+  view-transition-name: site-nav;
+}
+html[data-skin="v2"] body > header > hr { display: none; }
+html[data-skin="v2"] body.workspace-page > header { margin-left: calc(50% - 50vw); }
+html[data-skin="v2"] .brand { font-weight: 650; letter-spacing: -0.01em; }
+html[data-skin="v2"] .navlinks a {
+  position: relative;
+  padding: 0.35rem 0;
+  color: var(--text-muted);
+}
+html[data-skin="v2"] .navlinks a.active { color: var(--text); font-weight: 500; view-transition-name: nav-active; }
+/* Active-section marker: a hairline that morphs between pages via the view transition. */
+html[data-skin="v2"] .navlinks a.active::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -0.35rem;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+html[data-skin="v2"] .nav-more > summary { color: var(--text-muted); padding: 0.35rem 0; }
+html[data-skin="v2"] .nav-more-menu {
+  background: color-mix(in srgb, var(--surface-1) 88%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-color: var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+html[data-skin="v2"] .nav-more-menu a:hover { background: var(--surface-2); color: var(--text); }
+html[data-skin="v2"] .nav-more-label { font-family: var(--font-mono); letter-spacing: 0.14em; color: var(--text-faint); }
+html[data-skin="v2"] .theme-toggle { color: var(--text-muted); border: 1px solid transparent; }
+html[data-skin="v2"] .theme-toggle:hover { color: var(--text); background: var(--surface-2); border-color: var(--line); }
+
+html[data-skin="v2"] body > footer p {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+html[data-skin="v2"] body > footer > hr { border-top-color: var(--line); }
+
+/* Command palette: glass panel, highlighted match characters. */
+html[data-skin="v2"] .vv-palette { background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+html[data-skin="v2"] .vv-palette-panel {
+  background: color-mix(in srgb, var(--surface-1) 86%, transparent);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  border-color: var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow), 0 0 0 1px var(--accent-soft);
+}
+html[data-skin="v2"] .vv-palette-input { border-bottom-color: var(--line); font-size: 1.1rem; }
+html[data-skin="v2"] .vv-palette-row.active { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
+html[data-skin="v2"] .vv-palette-tag { font-family: var(--font-mono); letter-spacing: 0.12em; color: var(--text-faint); }
+.vv-palette-title mark { background: none; color: inherit; font-weight: 650; text-decoration: underline; text-decoration-color: var(--accent, currentColor); text-underline-offset: 2px; }
+html[data-skin="v2"] .vv-palette-title mark { color: var(--accent-text); text-decoration: none; }
+
+html[data-skin="v2"] .vv-install {
+  background: color-mix(in srgb, var(--surface-1) 90%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+}
+
+/* ── Stage C: cross-page transitions, cards, grain, reveals, homepage ───── */
+@view-transition { navigation: auto; }
+html[data-skin="v2"] main h1:first-of-type { view-transition-name: page-title; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 200ms; animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1); }
+::view-transition-group(nav-active), ::view-transition-group(page-title) { animation-duration: 260ms; animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+
+/* Pointer-lit cards: grid.js writes --gx/--gy in card coordinates on [data-glow]. */
+html[data-skin="v2"] [data-glow] { position: relative; isolation: isolate; }
+html[data-skin="v2"] [data-glow]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(260px circle at var(--gx, -300px) var(--gy, -300px), var(--accent-soft), transparent 65%);
+  opacity: 0;
+  transition: opacity var(--t-base) var(--ease-out);
+}
+html[data-skin="v2"] [data-glow]:hover::after { opacity: 1; }
+@media (hover: none) { html[data-skin="v2"] [data-glow]::after { display: none; } }
+
+/* 3% grain over the surfaces: one fixed SVG turbulence layer, no image request. */
+html[data-skin="v2"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27160%27 height=%27160%27%3E%3Cfilter id=%27n%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.9%27 numOctaves=%272%27 stitchTiles=%27stitch%27/%3E%3C/filter%3E%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url(%23n)%27/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+html[data-skin="v2"][data-theme="light"] body::before { opacity: 0.05; }
+
+/* Scroll-driven stagger where supported; reveal.js remains the fallback. */
+@supports (animation-timeline: view()) {
+  html[data-skin="v2"] .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    animation: v2-reveal linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 35%;
+  }
+  @keyframes v2-reveal {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html[data-skin="v2"] .reveal { animation: none; }
+  }
+}
+
+/* Homepage hero: text beside the blueprint instrument. */
+html[data-skin="v2"] .home-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem 2.5rem;
+  align-items: center;
+  max-width: none;
+  margin: 0.5rem 0 2rem;
+}
+@media (min-width: 900px) {
+  html[data-skin="v2"] .home-hero { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); }
+}
+html[data-skin="v2"] .home-hero .home-intro { font-size: 1.1rem; max-width: 34rem; }
+html[data-skin="v2"] .home-sub {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  margin: 0.9rem 0 0;
+}
+@media (min-width: 700px) and (prefers-reduced-motion: no-preference) {
+  html[data-skin="v2"] .home-sub {
+    width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    border-right: 2px solid var(--accent);
+    animation: v2-type 2.2s steps(46, end) 0.5s forwards, v2-caret 1s step-end infinite;
+  }
+  @keyframes v2-type { to { width: 46ch; } }
+  @keyframes v2-caret { 50% { border-color: transparent; } }
+}
+.home-instrument { display: none; }
+html[data-skin="v2"] .home-instrument { display: block; width: 100%; max-width: 480px; margin: 0 auto; }
+html[data-skin="v2"] .home-instrument svg { width: 100%; height: auto; display: block; overflow: visible; }
+html[data-skin="v2"] .home-instrument [data-layer] { transition: transform var(--t-slow) var(--ease-out); will-change: transform; }
+html[data-skin="v2"] .home-instrument .grid-line { stroke: var(--line-strong); stroke-width: 1; }
+html[data-skin="v2"] .home-instrument .wire { stroke: var(--text); stroke-width: 1.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+html[data-skin="v2"] .home-instrument .dim { stroke: var(--accent); stroke-width: 1.25; fill: none; }
+html[data-skin="v2"] .home-instrument .dim-label { font-family: var(--font-mono); font-size: 11px; fill: var(--accent-text); letter-spacing: 0.08em; }
+html[data-skin="v2"] .home-instrument .readout { font-family: var(--font-mono); font-size: 9.5px; fill: var(--text-faint); letter-spacing: 0.14em; }
+html[data-skin="v2"] .home-instrument .sweep { stroke: var(--data); stroke-width: 1; opacity: 0.8; filter: drop-shadow(0 0 6px var(--data)); animation: v2-sweep 7s linear infinite; }
+html[data-skin="v2"] .home-instrument .draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: v2-draw var(--t-reveal) var(--ease-out) forwards; animation-delay: calc(var(--d, 0) * 1ms); }
+@keyframes v2-draw { to { stroke-dashoffset: 0; } }
+@keyframes v2-sweep { from { transform: translateX(0); } to { transform: translateX(440px); } }
+html[data-skin="v2"] .home-instrument.is-paused .sweep { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin="v2"] .home-instrument .draw { animation: none; stroke-dashoffset: 0; }
+  html[data-skin="v2"] .home-instrument .sweep { animation: none; opacity: 0.35; }
+  html[data-skin="v2"] .home-instrument [data-layer] { transform: none !important; }
 }
