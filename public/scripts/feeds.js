@@ -297,28 +297,49 @@
     status.textContent = "Loading...";
 
     var activeFeeds = feeds.filter(function (f) { return f.enabled !== false; });
-    var results = await Promise.allSettled(activeFeeds.map(function (f) { return fetchFeed(f); }));
     var all = [];
     var failed = 0;
-    results.forEach(function (r, i) {
-      if (r.status === "fulfilled") {
-        r.value.forEach(function (item) {
-          item._colour = colourForIndex(feeds.indexOf(activeFeeds[i]));
+    var done = 0;
+    var run = ++loadRun;
+    var paintTimer = 0;
+
+    // Sources render as they arrive (the slowest feed used to hold a blank
+    // "Loading..." for 5-8 s); repaints are coalesced so a burst of fast
+    // feeds doesn't re-sort the list a dozen times.
+    function paint(final) {
+      if (run !== loadRun) return;
+      clearTimeout(paintTimer);
+      paintTimer = setTimeout(function () {
+        if (run !== loadRun) return;
+        all.sort(function (a, b) { return b.date - a.date; });
+        renderDailySummary(all);
+        renderItems(all);
+        if (final) {
+          var now = new Date().toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
+          status.textContent =
+            all.length + " items · updated " + now + (failed ? " · " + failed + " feed(s) failed" : "");
+        } else {
+          status.textContent = all.length + " items · " + done + " of " + activeFeeds.length + " sources loaded…";
+        }
+      }, final ? 0 : 150);
+    }
+
+    await Promise.allSettled(activeFeeds.map(function (f) {
+      return fetchFeed(f).then(function (items) {
+        items.forEach(function (item) {
+          item._colour = colourForIndex(feeds.indexOf(f));
           all.push(item);
         });
-      } else {
+      }, function () {
         failed++;
-      }
-    });
-
-    all.sort(function (a, b) { return b.date - a.date; });
-    renderDailySummary(all);
-    renderItems(all);
-
-    var now = new Date().toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
-    status.textContent =
-      all.length + " items · updated " + now + (failed ? " · " + failed + " feed(s) failed" : "");
+      }).then(function () {
+        done++;
+        paint(false);
+      });
+    }));
+    paint(true);
   }
+  var loadRun = 0;
 
   $("feed-add-btn").addEventListener("click", function () {
     var input = $("feed-url-input");
