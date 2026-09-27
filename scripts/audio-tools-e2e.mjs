@@ -98,7 +98,8 @@ try {
   await page.goto(`${BASE}/audio/analyser/`, { waitUntil: 'domcontentloaded' })
   check('analyser: audio rail is shown with the hub link', await page.locator('.site-rail .site-nav-all[href="/audio"]').count() === 1)
   check('analyser: rail marks this tool active', (await page.locator('.site-rail a.active').textContent()) === 'Analyser')
-  check('analyser: nav More menu links the hub', await page.locator('.nav-more-menu a[href="/audio"]').count() === 1)
+  // Audio is a primary door since the 25/09/26 IA change, no longer a More-menu entry.
+  check('analyser: primary nav links the hub', await page.locator('.navlinks > a[href="/audio"]').count() === 1)
   await page.setInputFiles('#au-file-input', { name: 'probe.wav', mimeType: 'audio/wav', buffer: makeWav() })
   await page.waitForSelector('#au-results:not([hidden])', { timeout: 60000 })
   const wav = await readStats()

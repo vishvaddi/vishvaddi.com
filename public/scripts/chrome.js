@@ -6,6 +6,8 @@
   function effectiveTheme() {
     var set = document.documentElement.getAttribute("data-theme");
     if (set === "dark" || set === "light") return set;
+    // The instrument-panel skin is dark-first: no stored choice means dark.
+    if (document.documentElement.getAttribute("data-skin") === "v2") return "dark";
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
 
