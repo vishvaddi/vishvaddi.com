@@ -856,3 +856,11 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Agents on disjoint files: ticks (scripts + global.css), glyph draw-on + reactive grid (hubs, site.css, grid.js, Base.astro), bar entry animations (three page style blocks). Fable wired the Cut List/Sheet tiles the tick agent could not reach and added the focus guard to their segment animations.
 - Release check failed on materials-answers: the answer-page prefill dispatches input events and the e2e read the tile mid-tick. Fixed product-side with `instantTicks` around programmatic fills; test scripts untouched. Tick regex now handles negative numbers. Release check all green. Not deployed.
 
+## 2026-09-27 - Site audit filed, Phase 1 fixes (Claude Code, Fable)
+
+- Vish handed over the 25/09 work-PC audit; filed as `docs/SITE_AUDIT_2026-09-25.md`. Tree was clean apart from his untracked `docs/LATTICE_APP_BRIEF.md` (left alone); master = origin.
+- Live probe 27/09: `/api/gutenberg-opds?sort_order=downloads` returned 200 but took 8.0 s (four chained OPDS pages at ~2 s each); gutenberg.org direct 1.6 s, Gutendex 1.5 s. The 25/09 504 is therefore intermittent upstream slowness, not only cached errors — fixed by fan-out + fallbacks + `cacheTtlByStatus` regardless.
+- Worker changes verified with `wrangler dev --local-protocol https` (the PIN gate refuses plain http): 404 HTML body, 301 on `/site/calc`, zero `kitchen`/`data-private` in the anonymous homepage, single Cache-Control on `/_astro/*.css`, OPDS 100 items in 1.3 s. Radio header screenshotted at 1440/390 to confirm the kicker collision before restyling.
+- Grep showed `allorigins`, `thesportsdb`, `nullschool` and `adsbexchange` exist only in the CSP header — removed. Privacy copy was written from the code (getUserMedia/geolocation/SpeechRecognition call sites), not from the audit's list.
+- Gate: tsc 0, `astro check` 0/0, build, unit 96, auth 14, pro-e2e (incl. two new checks), seo-e2e, feature-upgrades-e2e all green. The full `release:check` run and the wrangler dev server were killed by Claude Code's low-memory reaper (1.3 GB free of 15 GB with Chrome/Edge open) and per its instruction were not restarted; life/money/kitchen/materials/audio/studio harnesses did not run this session. Not deployed.
+- Deferred with reasons in PROJECT_STATE: trailing-slash href sweep (1.4), Lattice sitemap listing (1.5).
