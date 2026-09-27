@@ -340,14 +340,16 @@ function standardEbooksNext(html: string, base: string): string | null {
   return url.hostname === "standardebooks.org" && url.pathname === "/ebooks" ? url.toString() : null;
 }
 
-async function fetchOpdsPage(target: string): Promise<{ items: unknown[]; next: string | null }> {
+async function fetchOpdsPage(target: string, timeoutMs = 20000): Promise<{ items: unknown[]; next: string | null }> {
   const upstream = await fetchPublic(publicHttpsUrl(target) || new URL(target), {
     headers: {
       "User-Agent": UA,
       "Accept": "application/atom+xml, application/xml, text/xml, text/plain;q=0.8",
     },
-    signal: AbortSignal.timeout(20000),
-    cf: { cacheTtl: 600, cacheEverything: true },
+    signal: AbortSignal.timeout(timeoutMs),
+    // Never edge-cache a Gutenberg error: with a plain cacheTtl a transient 5xx
+    // could be replayed for ten minutes (Reader 504 audit, 25/09/26).
+    cf: { cacheTtlByStatus: { "200-299": 600, "400-599": 0 }, cacheEverything: true },
   } as RequestInit);
   if (!upstream.ok) throw new Error("upstream error");
   const xml = await upstream.text();
@@ -356,6 +358,85 @@ async function fetchOpdsPage(target: string): Promise<{ items: unknown[]; next: 
     items: parseOpds(xml),
     next: next ? new URL(decodeHtmlEntities(next), target).toString() : null,
   };
+}
+
+// Gutenberg's search.opds pages 25 entries at a time (its own `next` links step
+// start_index by 25). The first request fans out instead of chaining, which
+// took ~8 s sequentially on the live site.
+const OPDS_PAGE_SIZE = 25;
+const OPDS_FIRST_TIMEOUT_MS = 8000;
+
+async function fetchOpdsFanOut(startUrl: string, pages: number): Promise<{ items: unknown[]; next: string | null }> {
+  const targets: string[] = [];
+  for (let i = 0; i < pages; i++) {
+    const u = new URL(startUrl);
+    const from = Math.max(1, parseInt(u.searchParams.get("start_index") || "1", 10) || 1);
+    u.searchParams.set("start_index", String(from + i * OPDS_PAGE_SIZE));
+    targets.push(u.toString());
+  }
+  const settled = await Promise.allSettled(targets.map((t) => fetchOpdsPage(t, OPDS_FIRST_TIMEOUT_MS)));
+  const first = settled[0];
+  if (first.status === "rejected") throw first.reason;
+  const items: unknown[] = [];
+  let next: string | null = null;
+  for (const page of settled) {
+    // A later page failing or running dry ends the list at what we have.
+    if (page.status === "rejected" || page.value.items.length === 0) break;
+    items.push(...page.value.items);
+    next = page.value.next;
+  }
+  return { items, next };
+}
+
+// Fallback for the default list when gutenberg.org is down or slow: Gutendex
+// mirrors the catalogue with the same item shape the Reader already reads.
+async function fetchGutendexPopular(): Promise<unknown[]> {
+  const upstream = await fetchPublic(new URL("https://gutendex.com/books/?sort=popular"), {
+    headers: { "User-Agent": UA, "Accept": "application/json" },
+    signal: AbortSignal.timeout(OPDS_FIRST_TIMEOUT_MS),
+    cf: { cacheTtlByStatus: { "200-299": 600, "400-599": 0 }, cacheEverything: true },
+  } as RequestInit);
+  if (!upstream.ok) throw new Error("upstream error");
+  const data = await upstream.json() as { results?: Array<{ id?: number; title?: string; authors?: Array<{ name?: string }> }> };
+  return (data.results || [])
+    .filter((b) => Number.isInteger(b.id) && (b.id as number) > 0)
+    .map((b) => ({
+      id: b.id,
+      title: b.title || `eBook ${b.id}`,
+      authors: (b.authors || []).filter((a) => a?.name).map((a) => ({ name: a.name })),
+      formats: {
+        "image/jpeg": `https://www.gutenberg.org/cache/epub/${b.id}/pg${b.id}.cover.medium.jpg`,
+        "text/plain; charset=utf-8": `https://www.gutenberg.org/cache/epub/${b.id}/pg${b.id}.txt`,
+      },
+    }));
+}
+
+// Last-good copy of the default list in the edge cache, served stale when both
+// live sources fail. `caches` is absent under node tests, hence the try/catch.
+const OPDS_LAST_GOOD_PATH = "/api/gutenberg-opds/last-good";
+
+async function readLastGoodOpds(origin: string): Promise<Response | null> {
+  try {
+    const hit = await edgeCache().match(new Request(origin + OPDS_LAST_GOOD_PATH));
+    if (!hit) return null;
+    return new Response(hit.body, {
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=60", "X-Reader-Source": "last-good" },
+    });
+  } catch {
+    return null;
+  }
+}
+
+function storeLastGoodOpds(origin: string, body: string, ctx?: { waitUntil(p: Promise<unknown>): void }): void {
+  try {
+    const put = edgeCache().put(
+      new Request(origin + OPDS_LAST_GOOD_PATH),
+      new Response(body, { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=2592000" } }),
+    ).catch(() => {});
+    if (ctx) ctx.waitUntil(put);
+  } catch {
+    // no Cache API (node tests); the live response is unaffected
+  }
 }
 
 async function readIcyTitle(upstream: Response): Promise<string | null> {
@@ -398,8 +479,10 @@ async function readIcyTitle(upstream: Response): Promise<string | null> {
   }
 }
 
+type WaitCtx = { waitUntil(p: Promise<unknown>): void };
+
 const site = {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx?: WaitCtx): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -666,21 +749,40 @@ const site = {
         startUrl = base.toString();
       }
 
+      const isDefaultList = !cursor && !query;
       try {
-        const results: unknown[] = [];
+        let results: unknown[] = [];
         let next: string | null = startUrl;
-        let pages = 0;
-        while (next && results.length < 100 && pages < 4) {
-          const page = await fetchOpdsPage(next);
-          results.push(...page.items);
-          next = page.next;
-          pages++;
+        if (cursor) {
+          let pages = 0;
+          while (next && results.length < 100 && pages < 4) {
+            const page = await fetchOpdsPage(next);
+            results.push(...page.items);
+            next = page.next;
+            pages++;
+          }
+        } else {
+          ({ items: results, next } = await fetchOpdsFanOut(startUrl, 4));
         }
-        return Response.json({ results: results.slice(0, 100), next }, {
-          headers: { "Cache-Control": "public, max-age=300" },
+        const body = JSON.stringify({ results: results.slice(0, 100), next });
+        if (isDefaultList && results.length) storeLastGoodOpds(url.origin, body, ctx);
+        return new Response(body, {
+          headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" },
         });
       } catch {
-        return Response.json({ results: [] }, { status: 504 });
+        if (!isDefaultList) return Response.json({ results: [] }, { status: 504 });
+      }
+      try {
+        const results = await fetchGutendexPopular();
+        if (!results.length) throw new Error("empty");
+        const body = JSON.stringify({ results: results.slice(0, 100), next: null });
+        storeLastGoodOpds(url.origin, body, ctx);
+        return new Response(body, {
+          headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300", "X-Reader-Source": "gutendex" },
+        });
+      } catch {
+        const stale = await readLastGoodOpds(url.origin);
+        return stale || Response.json({ results: [] }, { status: 504 });
       }
     }
 
@@ -968,7 +1070,7 @@ const RETIRED_TOOL_REDIRECTS: Record<string, string> = {
 };
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx?: WaitCtx): Promise<Response> {
     const url = new URL(request.url);
     // Old installations must receive the cache-retirement worker without signing in.
     if (url.pathname === "/sw.js" && ["GET", "HEAD"].includes(request.method)) {
@@ -978,17 +1080,51 @@ export default {
     if (redirectTarget) return Response.redirect(new URL(redirectTarget, url).toString(), 301);
     const denied = await pinGate(request, env);
     if (denied) return privateResponse(denied);
-    if (isOwnerOnlyPath(url.pathname) && !(await ownerSession(request, env))) {
-      const notFound = await env.ASSETS.fetch(new Request(new URL("/404", url)));
-      return privateResponse(new Response(notFound.ok ? notFound.body : "Not found", {
-        status: 404,
-        headers: { "Content-Type": notFound.ok ? notFound.headers.get("Content-Type") || "text/html; charset=utf-8" : "text/plain; charset=utf-8" },
-      }));
-    }
-    const response = await site.fetch(request, env);
+    const owner = await ownerSession(request, env);
+    if (isOwnerOnlyPath(url.pathname) && !owner) return privateResponse(await notFoundPage(env, url));
+    let response = await site.fetch(request, env, ctx);
+    // Static assets answer unknown pages with an empty 404 and an unslashed
+    // page path with a 307; a styled page and a permanent redirect are what
+    // visitors and crawlers should see (site audit 25/09/26, items 1.2 and 1.4).
+    if (response.status === 404 && !url.pathname.startsWith("/api/") && isNavigation(request)) response = await notFoundPage(env, url);
+    else if (response.status === 307) response = permanentSlashRedirect(response, url) || response;
+    // Owner-only links (Life tools, Lock site) are rendered into every page and
+    // hidden client-side; strip them server-side so crawlers and no-JS visitors
+    // never see links that 404 (item 1.8).
+    if (!owner) response = stripPrivateMarkup(response);
     // Public tool pages are meant to be found and cached; only the owner's
     // private pages and every gate response carry noindex + no-store.
-    if ((!siteLocked(env) || isPublicPath(url.pathname)) && !(await ownerSession(request, env))) return publicResponse(response);
+    if ((!siteLocked(env) || isPublicPath(url.pathname)) && !owner) return publicResponse(response);
     return privateResponse(response);
   },
 };
+
+function isNavigation(request: Request): boolean {
+  if (!["GET", "HEAD"].includes(request.method)) return false;
+  const dest = request.headers.get("Sec-Fetch-Dest");
+  if (dest) return dest === "document";
+  return (request.headers.get("Accept") || "").includes("text/html");
+}
+
+async function notFoundPage(env: Env, url: URL): Promise<Response> {
+  const notFound = await env.ASSETS.fetch(new Request(new URL("/404", url)));
+  return new Response(notFound.ok ? notFound.body : "Not found", {
+    status: 404,
+    headers: { "Content-Type": notFound.ok ? notFound.headers.get("Content-Type") || "text/html; charset=utf-8" : "text/plain; charset=utf-8" },
+  });
+}
+
+function permanentSlashRedirect(response: Response, url: URL): Response | null {
+  const location = response.headers.get("Location");
+  if (!location) return null;
+  const target = new URL(location, url);
+  if (target.origin !== url.origin || target.pathname !== `${url.pathname}/`) return null;
+  return Response.redirect(target.toString(), 301);
+}
+
+function stripPrivateMarkup(response: Response): Response {
+  if (!(response.headers.get("Content-Type") || "").includes("text/html")) return response;
+  const Rewriter = (globalThis as { HTMLRewriter?: new () => { on(selector: string, handlers: { element(el: { remove(): void }): void }): { transform(r: Response): Response } } }).HTMLRewriter;
+  if (!Rewriter) return response; // node tests; chrome.js still hides the links client-side
+  return new Rewriter().on("[data-private]", { element: (el) => el.remove() }).transform(response);
+}
