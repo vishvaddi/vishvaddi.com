@@ -517,3 +517,7 @@
     animation: none;
   }
 }
+
+/* "Elsewhere" channel: services that forbid embedding get a stand-in screen and a link. */
+.tv-off-link { margin-top: 0.7rem; padding: 0.45rem 0.9rem; border: 1px solid currentColor; border-radius: 6px; color: var(--accent, #ff6a2b); font-family: var(--font-mono, monospace); font-size: 0.72rem; letter-spacing: 0.14em; text-decoration: none; }
+.tv-off-link:hover { background: color-mix(in srgb, currentColor 12%, transparent); }

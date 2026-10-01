@@ -213,6 +213,216 @@
         },
       },
     },
+    {
+      number: "08",
+      name: "NEW RELEASES",
+      schedule: {
+        morning: {
+          title: "Rendel: Dark Vengeance",
+          year: "2017",
+          runtime: "1h 45m",
+          provider: "youtube",
+          id: "ra0vF8YSvps",
+          label: "Finnish vigilante action, free with ads",
+        },
+        afternoon: {
+          title: "Banger",
+          year: "2018",
+          runtime: "1h 23m",
+          provider: "youtube",
+          id: "ds_VNsWnqxs",
+          label: "Crime thriller, free with ads",
+        },
+        night: {
+          title: "Lair",
+          year: "2021",
+          runtime: "1h 30m",
+          provider: "youtube",
+          id: "_9uzCpsANQs",
+          label: "Possession horror, free with ads",
+        },
+      },
+    },
+    {
+      number: "09",
+      name: "FREE FEATURES",
+      schedule: {
+        morning: {
+          title: "A Birder's Guide to Everything",
+          year: "2013",
+          runtime: "1h 26m",
+          provider: "youtube",
+          id: "bopJV_Xk_Ls",
+          label: "Coming-of-age comedy with Ben Kingsley",
+        },
+        afternoon: {
+          title: "Halo 4: Forward Unto Dawn",
+          year: "2012",
+          runtime: "1h 31m",
+          provider: "youtube",
+          id: "eXPFCTYqCag",
+          label: "Sci-fi war feature",
+        },
+        night: {
+          title: "eXistenZ",
+          year: "1999",
+          runtime: "1h 37m",
+          provider: "youtube",
+          id: "36C74wcr9JI",
+          label: "Cronenberg's game-world thriller",
+        },
+      },
+    },
+    {
+      number: "10",
+      name: "NINETIES",
+      schedule: {
+        morning: {
+          title: "The Canterville Ghost",
+          year: "1996",
+          runtime: "1h 32m",
+          provider: "youtube",
+          id: "oWMJSl_ARSA",
+          label: "Patrick Stewart haunts a manor",
+        },
+        afternoon: {
+          title: "Call of the Wild",
+          year: "1994",
+          runtime: "1h 37m",
+          provider: "youtube",
+          id: "qDd3Wuliw3E",
+          label: "Jack London adventure",
+        },
+        night: {
+          title: "Fever",
+          year: "1999",
+          runtime: "1h 29m",
+          provider: "youtube",
+          id: "NG4UEfI2qes",
+          label: "Dark mystery with Teri Hatcher",
+        },
+      },
+    },
+    {
+      number: "11",
+      name: "DOCS",
+      schedule: {
+        morning: {
+          title: "Meet the Patels",
+          year: "2014",
+          runtime: "1h 28m",
+          provider: "youtube",
+          id: "QofdbUNmczo",
+          label: "Warm family documentary",
+        },
+        afternoon: {
+          title: "Nothing to Hide",
+          year: "2017",
+          runtime: "1h 26m",
+          provider: "archive",
+          id: "nothingtohidefilm",
+          label: "Surveillance and you, CC BY-NC",
+        },
+        night: {
+          title: "TPB AFK",
+          year: "2013",
+          runtime: "1h 22m",
+          provider: "archive",
+          id: "TpbAfkThePirateBayAwayFromKeyboard",
+          label: "The Pirate Bay trial, CC BY-NC",
+        },
+      },
+    },
+    {
+      number: "12",
+      name: "OPEN MOVIES",
+      schedule: {
+        morning: {
+          title: "Sintel",
+          year: "2010",
+          runtime: "15m",
+          provider: "archive",
+          id: "Sintel",
+          label: "Blender open movie, CC BY",
+        },
+        afternoon: {
+          title: "Tears of Steel",
+          year: "2012",
+          runtime: "12m",
+          provider: "archive",
+          id: "Tears-of-Steel",
+          label: "Blender live-action VFX short, CC BY",
+        },
+        night: {
+          title: "Cosmos Laundromat",
+          year: "2015",
+          runtime: "12m",
+          provider: "archive",
+          id: "CosmosLaundromatFirstCycle",
+          label: "Blender open movie, CC BY",
+        },
+      },
+    },
+    {
+      number: "13",
+      name: "INDIE / CC",
+      schedule: {
+        morning: {
+          title: "Sita Sings the Blues",
+          year: "2008",
+          runtime: "1h 22m",
+          provider: "archive",
+          id: "Sita_Sings_the_Blues",
+          label: "Nina Paley's animated Ramayana, public domain",
+        },
+        afternoon: {
+          title: "Star Wreck: In the Pirkinning",
+          year: "2005",
+          runtime: "1h 43m",
+          provider: "archive",
+          id: "StarWreckInThePirkining",
+          label: "Finnish fan-made space parody, CC BY-SA",
+        },
+        night: {
+          title: "Route 66: An American (bad) Dream",
+          year: "2006",
+          runtime: "1h 28m",
+          provider: "archive",
+          id: "Route_66_-_an_American_badDream",
+          label: "Road documentary, CC BY-NC",
+        },
+      },
+    },
+    {
+      number: "14",
+      name: "ELSEWHERE",
+      schedule: {
+        morning: {
+          title: "SBS On Demand · Movies",
+          year: "FREE",
+          runtime: "AU",
+          provider: "external",
+          id: "https://www.sbs.com.au/ondemand/movies",
+          label: "World cinema, free with ads",
+        },
+        afternoon: {
+          title: "ABC iview",
+          year: "FREE",
+          runtime: "AU",
+          provider: "external",
+          id: "https://iview.abc.net.au/",
+          label: "Australian drama and docs, free",
+        },
+        night: {
+          title: "Tubi",
+          year: "FREE",
+          runtime: "AU",
+          provider: "external",
+          id: "https://tubitv.com/",
+          label: "Thousands of films, free with ads",
+        },
+      },
+    },
   ];
   var CHANNELS = BASE_CHANNELS.slice();
 
@@ -369,7 +579,26 @@
     titleReadout.textContent = program.title.toUpperCase();
     metaReadout.textContent = program.year + " · " + program.runtime;
     player.title = program.title + " on CRT TV";
-    if (loadVideo) {
+    if (loadVideo && program.provider === "external") {
+      // Services that don't allow embedding get a stand-in screen and a link.
+      player.src = "about:blank";
+      player.hidden = true;
+      offScreen.hidden = false;
+      offScreen.innerHTML = "";
+      var strong = document.createElement("strong");
+      strong.textContent = "OPENS IN A NEW TAB";
+      var note = document.createElement("span");
+      note.textContent = program.label;
+      var link = document.createElement("a");
+      link.className = "tv-off-link";
+      link.href = program.id;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = "OPEN " + program.title.split(" · ")[0].toUpperCase();
+      offScreen.appendChild(strong);
+      offScreen.appendChild(note);
+      offScreen.appendChild(link);
+    } else if (loadVideo) {
       player.removeAttribute("srcdoc");
       player.src = embedUrl(program);
       player.hidden = false;
