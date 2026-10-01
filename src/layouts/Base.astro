@@ -32,7 +32,7 @@ const here = Astro.url.pathname.replace(/\/$/, "");
 // Unpublished personal pages keep working at their URL but ask crawlers to skip them.
 const noindex = noindexProp || !isPublished(here || "/");
 // Reading pages keep the serif for body text under the v2 skin; tools and hubs are UI.
-const LONG_FORM = ["/about", "/work", "/now", "/blog", "/books", "/movies", "/music", "/notes", "/year", "/terms", "/privacy", "/prepping"];
+const LONG_FORM = ["/about", "/now", "/blog", "/books", "/movies", "/music", "/notes", "/year", "/terms", "/privacy", "/prepping"];
 const longForm = LONG_FORM.some((p) => here === p || here.startsWith(p + "/")) && here !== "/prepping/tools";
 // Sheet and Notepad are modes of Cut List and Calculator, so the rail highlights the parent.
 const activeToolHref = here === "/site/sheet" ? "/site/cut-list" : here === "/site/notepad" ? "/site/calc" : here;
@@ -49,7 +49,6 @@ const navPrimary: [string, string][] = [
   ["/audio", "Audio"],
   ["/studio", "Studio"],
   ["/prepping", "Field"],
-  ["/work", "Work"],
 ];
 // "More" is grouped so the menu reads as a map, not a list. /music is the
 // listening log, so it is labelled by what it is to avoid two "Music" entries.

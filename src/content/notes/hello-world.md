@@ -16,7 +16,7 @@ about decisions, about resilience and attention. A `/now` page I actually
 update. No comments, no analytics that follow you around the rest of the
 internet, no cookie banner because there's nothing to consent to.
 
-If you're a recruiter or a client, [/work](/work) is for you. If you're here
+If you're a recruiter or a client, [/about](/about) is for you. If you're here
 because you found one of my notes, welcome — there's more on the way. If
 you're here because you also keep a vault and feel slightly weird about it,
 hello, you're in the right place.

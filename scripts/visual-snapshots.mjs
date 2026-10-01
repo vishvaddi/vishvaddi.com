@@ -11,7 +11,7 @@ const ROUTES = [
   '/', '/site/', '/site/calc/', '/site/programme/', '/site/cut-list/', '/site/pdf/',
   '/site/materials/paint/3x3m-room-2-4m-ceiling/', '/audio/', '/audio/analyser/',
   '/prepping/', '/prepping/tools/', '/radio/', '/feeds/', '/reader/', '/games/',
-  '/pro/', '/privacy/', '/404', '/offline/', '/work/',
+  '/pro/', '/privacy/', '/404', '/offline/', '/about/',
 ]
 const VIEWPORTS = [['phone', 390, 844], ['desk', 1440, 900]]
 const SKINS = ['v1', 'v2']
