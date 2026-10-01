@@ -1049,6 +1049,9 @@ const RETIRED_TOOL_REDIRECTS: Record<string, string> = {
   "/site/span/": "/site/materials#span",
   "/site/resources": "/site/quickref#links",
   "/site/resources/": "/site/quickref#links",
+  // Health and Fitness merged (01/10/26).
+  "/prepping/fitness": "/prepping/health",
+  "/prepping/fitness/": "/prepping/health",
 };
 
 export default {

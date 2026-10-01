@@ -1,56 +1,340 @@
 ---
 import Base from "../../layouts/Base.astro";
+import "../../styles/site.css";
 import "../../styles/prepping.css";
 ---
 
 <Base
-  title="Health & Wellbeing"
-  description="Practical fitness, nutrition, hydration and unit-conversion tools for maintaining physical capacity."
+  title="Health & Fitness"
+  description="Health and fitness for self-reliance — BMI, BMR/TDEE, body fat, one-rep max, macros and water intake calculators, plus bodyweight and food-energy converters. Runs entirely in your browser."
 >
   <nav class="prep-modes" aria-label="Prepping sections">
     <a href="/prepping">Guide</a>
-    <a href="/prepping/gear">Gear</a>
-    <a href="/prepping/health" class="active">Health</a>
     <a href="/prepping/tools">Field tools</a>
+    <a href="/prepping/gear">Gear</a>
     <a href="/prepping/pack">Pack list</a>
-    <a href="/prepping/science">Science</a>
-    <a href="/prepping/fitness">Fitness</a>
-    <a href="/prepping/planting">Planting</a>
-    <a href="/prepping/howto">How-to</a>
     <a href="/prepping/knots">Knots</a>
+    <a href="/prepping/howto">How-to</a>
+    <a href="/prepping/health" class="active">Health &amp; fitness</a>
+    <a href="/prepping/planting">Planting</a>
+    <a href="/prepping/science">Science</a>
   </nav>
 
-  <h1>Health &amp; wellbeing</h1>
-  <p>
-    Physical capacity is preventative infrastructure: strength, aerobic fitness,
-    nutrition, hydration and recovery reduce the chance that a small problem
-    becomes an emergency.
-  </p>
+  <div class="blueprint tool">
+    <h1>Health &amp; fitness</h1>
+    <p>
+      Physical capacity is preventative infrastructure: strength, aerobic fitness,
+      nutrition, hydration and recovery reduce the chance that a small problem
+      becomes an emergency. The calculators below update as you type and stay in
+      your browser. For sex, enter <strong>1 = male, 0 = female</strong>
+      (affects the BMR and body-fat formulas).
+    </p>
 
-  <div class="health-grid">
-    <a class="health-card" href="/site/fitness#bmi">
-      <strong>Body metrics</strong>
-      <span>BMI and tape-method body-fat estimates for rough trend tracking.</span>
-    </a>
-    <a class="health-card" href="/site/fitness#tdee">
-      <strong>Energy &amp; nutrition</strong>
-      <span>BMR, TDEE, calorie targets and macro splits.</span>
-    </a>
-    <a class="health-card" href="/site/fitness#orm">
-      <strong>Strength &amp; hydration</strong>
-      <span>One-rep max estimates and daily water requirements.</span>
-    </a>
-    <a class="health-card" href="/site/convert?type=Mass">
-      <strong>Bodyweight converter</strong>
-      <span>Convert between kilograms, pounds, ounces and stone.</span>
-    </a>
-    <a class="health-card" href="/site/convert?type=Energy">
-      <strong>Food energy converter</strong>
-      <span>Convert between kilojoules, kilocalories, calories and joules.</span>
-    </a>
+    <div class="health-grid">
+      <a class="health-card" href="/site/convert?type=Mass">
+        <strong>Bodyweight converter</strong>
+        <span>Kilograms, pounds, ounces and stone.</span>
+      </a>
+      <a class="health-card" href="/site/convert?type=Energy">
+        <strong>Food energy converter</strong>
+        <span>Kilojoules, kilocalories, calories and joules.</span>
+      </a>
+    </div>
+
+    <div class="fit-layout">
+      <nav class="fit-tabs no-print" id="fit-tabs" role="tablist" aria-label="Calculator sections"></nav>
+      <div id="calcs" class="fit-content"></div>
+    </div>
+
+    <div class="btn-row no-print">
+      <button type="button" class="btn" id="print">Save as PDF</button>
+      <button type="button" class="btn btn-ghost" id="email">Email to myself</button>
+    </div>
+    <p class="note-foot">Estimates for planning and trend tracking, not diagnosis or medical advice.</p>
   </div>
 
-  <p class="note-foot">
-    These are estimates for planning and trend tracking, not diagnosis or medical advice.
-  </p>
+  <style>
+    /* Sidebar section nav, same idea as the /site tools rail; collapses to
+       horizontal chips on small screens. */
+    .fit-layout { display: grid; grid-template-columns: 11rem 1fr; gap: 1.5rem; align-items: start; margin-top: 0.5rem; }
+    .fit-tabs { display: flex; flex-direction: column; gap: 0.25rem; position: sticky; top: 5rem; }
+    .fit-tab {
+      padding: 0.5rem 0.9rem; font-size: 0.9rem; font-family: var(--font-sans); cursor: pointer; text-align: left;
+      color: var(--muted); background: transparent; border: 1px solid transparent; border-left: 2px solid var(--rule); border-radius: 0;
+    }
+    .fit-tab:hover { color: var(--fg); }
+    .fit-tab.active { color: var(--fg); font-weight: 600; border-left-color: var(--fg); }
+    .fit-panel[hidden] { display: none; }
+    @media (max-width: 720px) {
+      .fit-layout { display: block; }
+      .fit-tabs { flex-direction: row; flex-wrap: wrap; gap: 0.4rem; position: static; margin-bottom: 1.25rem; }
+      .fit-tab { border: 1px solid var(--rule); border-radius: 999px; padding: 0.45rem 1rem; }
+      .fit-tab.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+    }
+  </style>
+
+  <script>
+    import { mountCalcs, wireActions, type CalcSpec } from "../../scripts/site/calc";
+
+    const f1 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 1 });
+    const f0 = (n: number) => n.toLocaleString("en-AU", { maximumFractionDigits: 0 });
+    const log10 = (n: number) => Math.log(n) / Math.LN10;
+    const bmiCat = (b: number) => (b < 18.5 ? "underweight" : b < 25 ? "healthy" : b < 30 ? "overweight" : "obese");
+
+    const specs: Record<string, CalcSpec> = {
+      bmi: {
+        id: "bmi", title: "Body Mass Index (BMI)",
+        blurb: "Weight relative to height. A rough screen, not a body-composition measure.",
+        fields: [
+          { id: "h", label: "Height (cm)", def: "178", min: "1", step: "0.5" },
+          { id: "w", label: "Weight (kg)", def: "80", min: "1", step: "0.1" },
+        ],
+        compute: (v) => {
+          const m = v.h / 100;
+          if (m <= 0) return null;
+          const bmi = v.w / (m * m);
+          return { rows: [[f1(bmi), "BMI"], [bmiCat(bmi), "category"]] };
+        },
+      },
+      bf: {
+        id: "bf", title: "Body fat (US Navy)",
+        blurb: "Tape method. Enter hip only for female; ignored for male.",
+        fields: [
+          { id: "sex", label: "Sex (1=M, 0=F)", def: "1", min: "0", step: "1" },
+          { id: "h", label: "Height (cm)", def: "178", min: "1", step: "0.5" },
+          { id: "neck", label: "Neck (cm)", def: "38", min: "1", step: "0.1" },
+          { id: "waist", label: "Waist (cm)", def: "85", min: "1", step: "0.1" },
+          { id: "hip", label: "Hip (cm, female)", def: "95", min: "0", step: "0.1" },
+        ],
+        compute: (v) => {
+          let bf: number;
+          if (v.sex >= 0.5) {
+            if (v.waist - v.neck <= 0) return null;
+            bf = 495 / (1.0324 - 0.19077 * log10(v.waist - v.neck) + 0.15456 * log10(v.h)) - 450;
+          } else {
+            if (v.waist + v.hip - v.neck <= 0) return null;
+            bf = 495 / (1.29579 - 0.35004 * log10(v.waist + v.hip - v.neck) + 0.221 * log10(v.h)) - 450;
+          }
+          if (!Number.isFinite(bf) || bf <= 0) return null;
+          return { rows: [[f1(bf) + " %", "body fat (est.)"]], warn: "Tape method ±3–4%. Calipers/DEXA are more accurate." };
+        },
+      },
+      tdee: {
+        id: "tdee", title: "BMR & daily energy (TDEE)",
+        blurb: "Mifflin–St Jeor. Activity: 1.2 sedentary, 1.375 light, 1.55 moderate, 1.725 hard, 1.9 athlete.",
+        fields: [
+          { id: "sex", label: "Sex (1=M, 0=F)", def: "1", min: "0", step: "1" },
+          { id: "age", label: "Age (years)", def: "33", min: "1", step: "1" },
+          { id: "h", label: "Height (cm)", def: "178", min: "1", step: "0.5" },
+          { id: "w", label: "Weight (kg)", def: "80", min: "1", step: "0.1" },
+          { id: "act", label: "Activity factor", def: "1.55", min: "1", step: "0.025" },
+        ],
+        compute: (v) => {
+          const bmr = 10 * v.w + 6.25 * v.h - 5 * v.age + (v.sex >= 0.5 ? 5 : -161);
+          if (bmr <= 0) return null;
+          const tdee = bmr * v.act;
+          return {
+            rows: [
+              [f0(bmr) + " kcal", "BMR (at rest)"],
+              [f0(tdee) + " kcal", "maintenance (TDEE)"],
+              [f0(tdee - 500) + " kcal", "~0.5 kg/wk loss"],
+              [f0(tdee + 300) + " kcal", "lean gain"],
+            ],
+          };
+        },
+      },
+      macros: {
+        id: "macros", title: "Macro split",
+        blurb: "Split a calorie target into grams. Protein/carbs 4 kcal/g, fat 9 kcal/g.",
+        fields: [
+          { id: "cal", label: "Daily calories", def: "2400", min: "0", step: "10" },
+          { id: "p", label: "Protein %", def: "30", min: "0", step: "1" },
+          { id: "c", label: "Carbs %", def: "40", min: "0", step: "1" },
+          { id: "f", label: "Fat %", def: "30", min: "0", step: "1" },
+        ],
+        compute: (v) => {
+          const sum = v.p + v.c + v.f;
+          return {
+            rows: [
+              [f0((v.cal * v.p) / 100 / 4) + " g", "protein"],
+              [f0((v.cal * v.c) / 100 / 4) + " g", "carbs"],
+              [f0((v.cal * v.f) / 100 / 9) + " g", "fat"],
+            ],
+            warn: Math.abs(sum - 100) > 0.5 ? `Percentages add to ${f0(sum)}% — should be 100%.` : undefined,
+          };
+        },
+      },
+      water: {
+        id: "water", title: "Daily water",
+        blurb: "Baseline hydration ≈ 35 mL per kg bodyweight. Add more for heat and training.",
+        fields: [
+          { id: "w", label: "Weight (kg)", def: "80", min: "1", step: "0.1" },
+          { id: "extra", label: "Training (extra mL)", def: "500", min: "0", step: "100" },
+        ],
+        compute: (v) => {
+          const ml = v.w * 35 + v.extra;
+          return { rows: [[f1(ml / 1000) + " L", "per day"], [f0(ml) + " mL", "total"]] };
+        },
+      },
+      orm: {
+        id: "orm", title: "One-rep max (1RM)",
+        blurb: "Estimated max from a sub-maximal set. Two common formulas.",
+        fields: [
+          { id: "w", label: "Weight lifted (kg)", def: "100", min: "0", step: "0.5" },
+          { id: "reps", label: "Reps performed", def: "5", min: "1", step: "1" },
+        ],
+        compute: (v) => {
+          if (v.reps < 1) return null;
+          const epley = v.w * (1 + v.reps / 30);
+          const brzycki = v.reps < 37 ? (v.w * 36) / (37 - v.reps) : NaN;
+          return {
+            rows: [
+              [f1(epley) + " kg", "1RM (Epley)"],
+              [Number.isFinite(brzycki) ? f1(brzycki) + " kg" : "—", "1RM (Brzycki)"],
+              [f1(epley * 0.8) + " kg", "~80% (working set)"],
+            ],
+            warn: v.reps > 12 ? "Estimates lose accuracy above ~10–12 reps." : undefined,
+          };
+        },
+      },
+      plates: {
+        id: "plates", title: "Plate loading",
+        blurb: "Which plates go on each side of the bar. Standard pairs: 25, 20, 15, 10, 5, 2.5, 1.25 kg.",
+        fields: [
+          { id: "target", label: "Target weight (kg)", def: "100", min: "0", step: "0.5" },
+          { id: "bar", label: "Bar weight (kg)", def: "20", min: "0", step: "0.5" },
+        ],
+        compute: (v) => {
+          let side = (v.target - v.bar) / 2;
+          if (side < 0) return { rows: [["—", "target is lighter than the bar"]] };
+          const out: string[] = [];
+          for (const p of [25, 20, 15, 10, 5, 2.5, 1.25]) {
+            let n = 0;
+            while (side >= p - 1e-9) { side -= p; n++; }
+            if (n) out.push(`${n}× ${p}`);
+          }
+          const loaded = v.target - side * 2;
+          return {
+            rows: [
+              [out.join(", ") || "empty bar", "per side"],
+              [f1(loaded) + " kg", "actual loaded weight"],
+            ],
+            warn: side > 0.01 ? `Short by ${f1(side * 2)} kg — smallest pair is 1.25 kg.` : undefined,
+          };
+        },
+      },
+      standards: {
+        id: "standards", title: "Strength standards",
+        blurb: "Your lift relative to bodyweight, rated. Lift: 1 = squat, 2 = bench, 3 = deadlift, 4 = overhead press.",
+        fields: [
+          { id: "lift", label: "Lift (1–4)", def: "1", min: "1", step: "1" },
+          { id: "bw", label: "Bodyweight (kg)", def: "80", min: "1", step: "0.5" },
+          { id: "orm", label: "1RM (kg)", def: "100", min: "0", step: "0.5" },
+        ],
+        compute: (v) => {
+          // xBW thresholds: [novice, intermediate, advanced, elite]
+          const bands: Record<number, { name: string; t: number[] }> = {
+            1: { name: "Squat", t: [1.0, 1.5, 2.0, 2.5] },
+            2: { name: "Bench", t: [0.75, 1.0, 1.5, 2.0] },
+            3: { name: "Deadlift", t: [1.25, 1.75, 2.5, 3.0] },
+            4: { name: "OHP", t: [0.5, 0.75, 1.0, 1.25] },
+          };
+          const b = bands[Math.round(v.lift)];
+          if (!b || v.bw <= 0) return null;
+          const ratio = v.orm / v.bw;
+          const names = ["untrained", "novice", "intermediate", "advanced", "elite"];
+          let level = 0;
+          b.t.forEach((t) => { if (ratio >= t) level++; });
+          const next = level < 4 ? `${f1(b.t[level] * v.bw)} kg (${names[level + 1]})` : "—";
+          return {
+            rows: [
+              [f1(ratio) + "× BW", b.name + " ratio"],
+              [names[level], "level"],
+              [next, "next milestone"],
+            ],
+            warn: "Rough male barbell standards; adjust expectations for age, sex and history.",
+          };
+        },
+      },
+      pace: {
+        id: "pace", title: "Running pace",
+        blurb: "Pace and speed from distance and time.",
+        fields: [
+          { id: "km", label: "Distance (km)", def: "5", min: "0.1", step: "0.1" },
+          { id: "min", label: "Time (minutes)", def: "27", min: "0.1", step: "0.5" },
+        ],
+        compute: (v) => {
+          if (v.km <= 0 || v.min <= 0) return null;
+          const paceMin = v.min / v.km;
+          const mm = Math.floor(paceMin);
+          const ss = Math.round((paceMin - mm) * 60);
+          return {
+            rows: [
+              [`${mm}:${String(ss).padStart(2, "0")} /km`, "pace"],
+              [f1((v.km / v.min) * 60) + " km/h", "speed"],
+              [`${Math.floor((paceMin * 10) / 60)}:${String(Math.round((paceMin * 10) % 60)).padStart(2, "0")}`, "10 km at this pace (h:mm)"],
+            ],
+          };
+        },
+      },
+      hrzones: {
+        id: "hrzones", title: "Heart-rate zones (Karvonen)",
+        blurb: "Training zones from heart-rate reserve. Max HR estimated as 208 − 0.7 × age (Tanaka) if unknown.",
+        fields: [
+          { id: "age", label: "Age (years)", def: "34", min: "1", step: "1" },
+          { id: "rhr", label: "Resting HR (bpm)", def: "60", min: "20", step: "1" },
+        ],
+        compute: (v) => {
+          const max = 208 - 0.7 * v.age;
+          const hrr = max - v.rhr;
+          if (hrr <= 0) return null;
+          const z = (lo: number, hi: number) => `${f0(v.rhr + hrr * lo)}–${f0(v.rhr + hrr * hi)} bpm`;
+          return {
+            rows: [
+              [f0(max) + " bpm", "est. max HR"],
+              [z(0.5, 0.6), "Z1 recovery"],
+              [z(0.6, 0.7), "Z2 endurance (most volume here)"],
+              [z(0.7, 0.8), "Z3 tempo"],
+              [z(0.8, 0.9), "Z4 threshold"],
+              [z(0.9, 1.0), "Z5 max"],
+            ],
+          };
+        },
+      },
+    };
+
+    const tabs: { name: string; ids: string[] }[] = [
+      { name: "Body", ids: ["bmi", "bf"] },
+      { name: "Energy & food", ids: ["tdee", "macros", "water"] },
+      { name: "Strength", ids: ["orm", "plates", "standards"] },
+      { name: "Cardio", ids: ["pace", "hrzones"] },
+    ];
+
+    const root = document.getElementById("calcs")!;
+    const tabBar = document.getElementById("fit-tabs")!;
+    const panels: HTMLElement[] = [];
+    const buttons: HTMLButtonElement[] = [];
+
+    tabs.forEach((t, i) => {
+      const panel = document.createElement("div");
+      panel.className = "fit-panel";
+      panel.hidden = i !== 0;
+      mountCalcs(panel, t.ids.map((id) => specs[id]));
+      root.append(panel);
+      panels.push(panel);
+
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "fit-tab" + (i === 0 ? " active" : "");
+      b.textContent = t.name;
+      b.addEventListener("click", () => {
+        panels.forEach((p, j) => (p.hidden = j !== i));
+        buttons.forEach((btn, j) => btn.classList.toggle("active", j === i));
+      });
+      tabBar.append(b);
+      buttons.push(b);
+    });
+
+    wireActions(root, "Fitness & nutrition");
+  </script>
 </Base>
