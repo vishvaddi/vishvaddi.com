@@ -1,5 +1,9 @@
 # Project State
 
+## 2026-10-01 (cont.) - Nav order Tools · Field · Studio · Audio; 2D sheet is the default Cut List (built, pushed, NOT deployed)
+
+Catalogue href for Cut List Optimizer is `/site/sheet` (icon and problem/promise keyed to it too); `activeToolHref` maps `/site/cut-list` → `/site/sheet` for the rail; Sheet · 2D tab first on both pages. seo/feature/pro harnesses green.
+
 ## 2026-10-01 (cont.) - Labels + reach: Health, Estimate/Project/Site, Everything directory, All nav item, header search — DEPLOYED with round 3 (palettes, prepping merge, site map)
 
 "Health" everywhere; site-tool categories renamed and regrouped (cut list and price tracker under Estimate, PDF toolkit under Project). Reach plan: sidebar dropped; instead a homepage "Everything" directory of every site/audio/field page (from the catalogues + new `src/data/field-sections.ts`), "All" in the primary nav → `/sitemap`, and the palette opener is a visible "Find a tool… Ctrl K" field. seo/feature/audio harnesses green, screenshots reviewed.
