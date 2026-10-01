@@ -28,12 +28,13 @@ const doors = [
   },
 ] as const;
 
-const play = [
+// "Smoko" (Vish, 01/10/26): the things here for a break, most useful first.
+const smoko = [
   ["/games", "Games", "Four small browser games."],
-  ["/radio", "Radio", "Live Australian and world stations."],
-  ["/tv", "TV", "A channel-surfing set for the archive."],
-  ["/reader", "Reader", "Public-domain books, read or listened to."],
-  ["/feeds", "Feeds", "News, finance and construction headlines."],
+  ["/radio", "Radio", "Hundreds of live stations, local and worldwide."],
+  ["/feeds", "Feeds", "News, finance and construction headlines in one place."],
+  ["/reader", "Reader", "Free books, read or listened to."],
+  ["/tv", "TV", "Free films, old and new, on a channel-surfing set."],
 ] as const;
 
 // Owner-only cards: the Worker strips [data-private] for anonymous visitors.
@@ -57,47 +58,27 @@ const more: [string, string][] = ([
 <Base ogImage="/og/index.png">
   <section class="home-hero" aria-labelledby="home-title">
     <div class="home-hero-text">
-      <p class="eyebrow">Vish Vaddi · Sydney</p>
-      <h1 id="home-title" class="home-title">Tools for people who build things.</h1>
+      <p class="eyebrow">Sydney</p>
+      <h1 id="home-title" class="home-title">Vish Vaddi. Estimator. I&nbsp;make small free&nbsp;tools.</h1>
       <p class="home-intro">
-        Estimator by day. I build free browser tools for site work, sound and
-        self-reliance, and keep them fast, private and simple to use.
+        Most of these started as a spreadsheet that kept breaking. They run in
+        your browser, cost nothing, and your data stays on your device.
       </p>
       <p class="home-sub">cut lists · programmes · rates · pdfs · audio · studio</p>
     </div>
     <div class="home-instrument" aria-hidden="true">
       <svg viewBox="0 0 480 300" xmlns="http://www.w3.org/2000/svg">
-        <g data-layer="0.4">
-          <line class="grid-line" x1="0" y1="60" x2="480" y2="60" opacity="0.5" />
-          <line class="grid-line" x1="0" y1="120" x2="480" y2="120" opacity="0.5" />
-          <line class="grid-line" x1="0" y1="180" x2="480" y2="180" opacity="0.5" />
-          <line class="grid-line" x1="0" y1="240" x2="480" y2="240" opacity="0.5" />
-          <line class="grid-line" x1="60" y1="0" x2="60" y2="300" opacity="0.5" />
-          <line class="grid-line" x1="120" y1="0" x2="120" y2="300" opacity="0.5" />
-          <line class="grid-line" x1="180" y1="0" x2="180" y2="300" opacity="0.5" />
-          <line class="grid-line" x1="240" y1="0" x2="240" y2="300" opacity="0.5" />
-          <line class="grid-line" x1="300" y1="0" x2="300" y2="300" opacity="0.5" />
-          <line class="grid-line" x1="360" y1="0" x2="360" y2="300" opacity="0.5" />
-          <line class="grid-line" x1="420" y1="0" x2="420" y2="300" opacity="0.5" />
+        <defs><clipPath id="hero-clip"><rect x="0" y="24" width="480" height="232" /></clipPath></defs>
+        <g clip-path="url(#hero-clip)">
+          <line class="iso" x1="0" y1="-400" x2="480" y2="-123" /><line class="iso" x1="0" y1="-400" x2="480" y2="-677" /><line class="iso" x1="0" y1="-364" x2="480" y2="-87" /><line class="iso" x1="0" y1="-364" x2="480" y2="-641" /><line class="iso" x1="0" y1="-328" x2="480" y2="-51" /><line class="iso" x1="0" y1="-328" x2="480" y2="-605" /><line class="iso" x1="0" y1="-292" x2="480" y2="-15" /><line class="iso" x1="0" y1="-292" x2="480" y2="-569" /><line class="iso" x1="0" y1="-256" x2="480" y2="21" /><line class="iso" x1="0" y1="-256" x2="480" y2="-533" /><line class="iso" x1="0" y1="-220" x2="480" y2="57" /><line class="iso" x1="0" y1="-220" x2="480" y2="-497" /><line class="iso" x1="0" y1="-184" x2="480" y2="93" /><line class="iso" x1="0" y1="-184" x2="480" y2="-461" /><line class="iso" x1="0" y1="-148" x2="480" y2="129" /><line class="iso" x1="0" y1="-148" x2="480" y2="-425" /><line class="iso" x1="0" y1="-112" x2="480" y2="165" /><line class="iso" x1="0" y1="-112" x2="480" y2="-389" /><line class="iso" x1="0" y1="-76" x2="480" y2="201" /><line class="iso" x1="0" y1="-76" x2="480" y2="-353" /><line class="iso" x1="0" y1="-40" x2="480" y2="237" /><line class="iso" x1="0" y1="-40" x2="480" y2="-317" /><line class="iso" x1="0" y1="-4" x2="480" y2="273" /><line class="iso" x1="0" y1="-4" x2="480" y2="-281" /><line class="iso" x1="0" y1="32" x2="480" y2="309" /><line class="iso" x1="0" y1="32" x2="480" y2="-245" /><line class="iso" x1="0" y1="68" x2="480" y2="345" /><line class="iso" x1="0" y1="68" x2="480" y2="-209" /><line class="iso" x1="0" y1="104" x2="480" y2="381" /><line class="iso" x1="0" y1="104" x2="480" y2="-173" /><line class="iso" x1="0" y1="140" x2="480" y2="417" /><line class="iso" x1="0" y1="140" x2="480" y2="-137" /><line class="iso" x1="0" y1="176" x2="480" y2="453" /><line class="iso" x1="0" y1="176" x2="480" y2="-101" /><line class="iso" x1="0" y1="212" x2="480" y2="489" /><line class="iso" x1="0" y1="212" x2="480" y2="-65" /><line class="iso" x1="0" y1="248" x2="480" y2="525" /><line class="iso" x1="0" y1="248" x2="480" y2="-29" /><line class="iso" x1="0" y1="284" x2="480" y2="561" /><line class="iso" x1="0" y1="284" x2="480" y2="7" /><line class="iso" x1="0" y1="320" x2="480" y2="597" /><line class="iso" x1="0" y1="320" x2="480" y2="43" /><line class="iso" x1="0" y1="356" x2="480" y2="633" /><line class="iso" x1="0" y1="356" x2="480" y2="79" /><line class="iso" x1="0" y1="392" x2="480" y2="669" /><line class="iso" x1="0" y1="392" x2="480" y2="115" /><line class="iso" x1="0" y1="428" x2="480" y2="705" /><line class="iso" x1="0" y1="428" x2="480" y2="151" /><line class="iso" x1="0" y1="464" x2="480" y2="741" /><line class="iso" x1="0" y1="464" x2="480" y2="187" /><line class="iso" x1="0" y1="500" x2="480" y2="777" /><line class="iso" x1="0" y1="500" x2="480" y2="223" /><line class="iso" x1="0" y1="536" x2="480" y2="813" /><line class="iso" x1="0" y1="536" x2="480" y2="259" /><line class="iso" x1="0" y1="572" x2="480" y2="849" /><line class="iso" x1="0" y1="572" x2="480" y2="295" /><line class="iso" x1="0" y1="608" x2="480" y2="885" /><line class="iso" x1="0" y1="608" x2="480" y2="331" /><line class="iso" x1="0" y1="644" x2="480" y2="921" /><line class="iso" x1="0" y1="644" x2="480" y2="367" /><line class="iso" x1="0" y1="680" x2="480" y2="957" /><line class="iso" x1="0" y1="680" x2="480" y2="403" />
+          <rect class="sweep-band" x="-60" y="0" width="56" height="256" />
+          <line class="sweep" x1="0" y1="0" x2="0" y2="256" />
         </g>
-        <g data-layer="1">
-          <!-- isometric joinery unit: carcass, two doors, plinth -->
-          <path class="wire draw" pathLength="1" style="--d: 100" d="M120 210 L120 90 L250 40 L380 90 L380 210 L250 260 Z" />
-          <path class="wire draw" pathLength="1" style="--d: 350" d="M120 90 L250 140 L380 90 M250 140 L250 260" />
-          <path class="wire draw" pathLength="1" style="--d: 600" d="M138 108 L138 196 L238 236 L238 150 Z M262 150 L262 236 L362 196 L362 108 Z" opacity="0.7" />
-          <path class="wire draw" pathLength="1" style="--d: 800" d="M120 210 L120 226 L250 276 L380 226 L380 210" opacity="0.55" />
-          <path class="wire draw" pathLength="1" style="--d: 900" d="M150 168 L150 178 M350 168 L350 178" />
-        </g>
-        <g data-layer="1.6">
-          <!-- dimension lines -->
-          <path class="dim draw" pathLength="1" style="--d: 1100" d="M96 90 L96 210 M90 90 L102 90 M90 210 L102 210" />
-          <text class="dim-label" x="72" y="154" text-anchor="middle" transform="rotate(-90 72 154)">2400</text>
-          <path class="dim draw" pathLength="1" style="--d: 1250" d="M250 284 L380 234 M244 278 L256 290 M374 228 L386 240" />
-          <text class="dim-label" x="326" y="278" text-anchor="middle">1200</text>
-          <text class="readout" x="120" y="24">SCALE 1:20 · MM</text>
-          <text class="readout" x="380" y="24" text-anchor="end">REV C</text>
-          <line class="sweep" x1="20" y1="8" x2="20" y2="292" />
-        </g>
+        <line class="rule" x1="40" y1="274" x2="440" y2="274" />
+        <line class="tick" x1="40" y1="262" x2="40" y2="274" /><text class="readout" x="40" y="290" text-anchor="middle">0</text><line class="tick" x1="60" y1="268" x2="60" y2="274" /><line class="tick" x1="80" y1="268" x2="80" y2="274" /><line class="tick" x1="100" y1="268" x2="100" y2="274" /><line class="tick" x1="120" y1="268" x2="120" y2="274" /><line class="tick" x1="140" y1="262" x2="140" y2="274" /><text class="readout" x="140" y="290" text-anchor="middle">600</text><line class="tick" x1="160" y1="268" x2="160" y2="274" /><line class="tick" x1="180" y1="268" x2="180" y2="274" /><line class="tick" x1="200" y1="268" x2="200" y2="274" /><line class="tick" x1="220" y1="268" x2="220" y2="274" /><line class="tick" x1="240" y1="262" x2="240" y2="274" /><text class="readout" x="240" y="290" text-anchor="middle">1200</text><line class="tick" x1="260" y1="268" x2="260" y2="274" /><line class="tick" x1="280" y1="268" x2="280" y2="274" /><line class="tick" x1="300" y1="268" x2="300" y2="274" /><line class="tick" x1="320" y1="268" x2="320" y2="274" /><line class="tick" x1="340" y1="262" x2="340" y2="274" /><text class="readout" x="340" y="290" text-anchor="middle">1800</text><line class="tick" x1="360" y1="268" x2="360" y2="274" /><line class="tick" x1="380" y1="268" x2="380" y2="274" /><line class="tick" x1="400" y1="268" x2="400" y2="274" /><line class="tick" x1="420" y1="268" x2="420" y2="274" /><line class="tick" x1="440" y1="262" x2="440" y2="274" /><text class="readout" x="440" y="290" text-anchor="middle">2400</text>
+        <text class="readout" x="0" y="14">SCAN · 1:20 · MM</text>
+        <circle class="live-dot" cx="432" cy="10" r="3" />
+        <text class="readout" x="480" y="14" text-anchor="end">LIVE</text>
       </svg>
     </div>
   </section>
@@ -122,10 +103,10 @@ const more: [string, string][] = ([
     ))}
   </section>
 
-  <section class="home-section home-play" aria-labelledby="play-title">
-    <h2 id="play-title">Play</h2>
+  <section class="home-section home-play" aria-labelledby="smoko-title">
+    <h2 id="smoko-title">Smoko</h2>
     <ul class="home-play-list">
-      {play.map(([href, title, desc]) => (
+      {smoko.map(([href, title, desc]) => (
         <li><a href={href}><strong>{title}</strong><span>{desc}</span></a></li>
       ))}
     </ul>

@@ -56,7 +56,7 @@ const navPrimary: [string, string][] = [
 // anyone without an owner session; chrome.js hides them again client-side.
 // Unpublished pages (src/data/pages.ts) drop out of every group.
 const navMoreGroups: { label: string | null; links: [string, string][]; private?: boolean; collapsed?: boolean }[] = ([
-  { label: "Play", links: [["/games", "Games"], ["/radio", "Radio"], ["/tv", "TV"], ["/reader", "Reader"], ["/feeds", "Feeds"]] },
+  { label: "Smoko", links: [["/games", "Games"], ["/radio", "Radio"], ["/feeds", "Feeds"], ["/reader", "Reader"], ["/tv", "TV"]] },
   // Life is hidden (owner-only) until it is developed further; the Worker 404s it for everyone else.
   { label: "Life", links: [["/kitchen", "Kitchen"], ["/money", "Money"], ["/training", "Training"]], private: true },
   { label: null, links: [["/pro", "Pro"], ["/about", "About"], ["/logout", "Lock site"]] },

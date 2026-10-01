@@ -129,7 +129,7 @@ html[data-skin="v2"] :is(h1, h2, h3, h4) {
 html[data-skin="v2"] h1 { font-size: clamp(2rem, 1.45rem + 1.8vw, 3rem); letter-spacing: -0.03em; line-height: 1.08; }
 html[data-skin="v2"] h2 { font-size: 1.45rem; }
 html[data-skin="v2"] h3 { font-size: 1.125rem; }
-html[data-skin="v2"] .home-title { font-size: clamp(2.75rem, 1.6rem + 4.2vw, 5.5rem); letter-spacing: -0.035em; line-height: 1.02; }
+html[data-skin="v2"] .home-title { font-size: clamp(2rem, 1.3rem + 2.4vw, 3.4rem); letter-spacing: -0.03em; line-height: 1.08; max-width: 16ch; }
 
 html[data-skin="v2"] a { text-decoration-color: var(--line-strong); }
 html[data-skin="v2"] a:hover { color: var(--accent-text); text-decoration-color: var(--accent-text); }
@@ -366,33 +366,26 @@ html[data-skin="v2"] .home-sub {
   color: var(--text-faint);
   margin: 0.9rem 0 0;
 }
-@media (min-width: 700px) and (prefers-reduced-motion: no-preference) {
-  html[data-skin="v2"] .home-sub {
-    width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    border-right: 2px solid var(--accent);
-    animation: v2-type 2.2s steps(46, end) 0.5s forwards, v2-caret 1s step-end infinite;
-  }
-  @keyframes v2-type { to { width: 46ch; } }
-  @keyframes v2-caret { 50% { border-color: transparent; } }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-skin="v2"] .home-sub { animation: v2-fade var(--t-reveal) var(--ease-out) 0.35s both; }
+  @keyframes v2-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 }
 .home-instrument { display: none; }
 html[data-skin="v2"] .home-instrument { display: block; width: 100%; max-width: 480px; margin: 0 auto; }
 html[data-skin="v2"] .home-instrument svg { width: 100%; height: auto; display: block; overflow: visible; }
-html[data-skin="v2"] .home-instrument [data-layer] { transition: transform var(--t-slow) var(--ease-out); will-change: transform; }
-html[data-skin="v2"] .home-instrument .grid-line { stroke: var(--line-strong); stroke-width: 1; }
-html[data-skin="v2"] .home-instrument .wire { stroke: var(--text); stroke-width: 1.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
-html[data-skin="v2"] .home-instrument .dim { stroke: var(--accent); stroke-width: 1.25; fill: none; }
-html[data-skin="v2"] .home-instrument .dim-label { font-family: var(--font-mono); font-size: 11px; fill: var(--accent-text); letter-spacing: 0.08em; }
+/* A measurement sweep over an isometric grid: nothing to misalign, nothing to parallax. */
+html[data-skin="v2"] .home-instrument .iso { stroke: var(--text-faint); stroke-width: 1; opacity: 0.45; }
+html[data-skin="v2"] .home-instrument .rule { stroke: var(--text-muted); stroke-width: 1; }
+html[data-skin="v2"] .home-instrument .tick { stroke: var(--text-faint); stroke-width: 1; }
 html[data-skin="v2"] .home-instrument .readout { font-family: var(--font-mono); font-size: 9.5px; fill: var(--text-faint); letter-spacing: 0.14em; }
-html[data-skin="v2"] .home-instrument .sweep { stroke: var(--data); stroke-width: 1; opacity: 0.8; filter: drop-shadow(0 0 6px var(--data)); animation: v2-sweep 7s linear infinite; }
-html[data-skin="v2"] .home-instrument .draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: v2-draw var(--t-reveal) var(--ease-out) forwards; animation-delay: calc(var(--d, 0) * 1ms); }
-@keyframes v2-draw { to { stroke-dashoffset: 0; } }
-@keyframes v2-sweep { from { transform: translateX(0); } to { transform: translateX(440px); } }
-html[data-skin="v2"] .home-instrument.is-paused .sweep { animation-play-state: paused; }
+html[data-skin="v2"] .home-instrument .live-dot { fill: var(--ok); animation: v2-blink 2s steps(1, end) infinite; }
+html[data-skin="v2"] .home-instrument .sweep { stroke: var(--data); stroke-width: 1.25; filter: drop-shadow(0 0 6px var(--data)); animation: v2-sweep 9s linear infinite; }
+html[data-skin="v2"] .home-instrument .sweep-band { fill: var(--data); opacity: 0.08; animation: v2-sweep 9s linear infinite; }
+@keyframes v2-sweep { from { transform: translateX(0); } to { transform: translateX(540px); } }
+@keyframes v2-blink { 50% { opacity: 0.25; } }
+html[data-skin="v2"] .home-instrument.is-paused :is(.sweep, .sweep-band, .live-dot) { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) {
-  html[data-skin="v2"] .home-instrument .draw { animation: none; stroke-dashoffset: 0; }
-  html[data-skin="v2"] .home-instrument .sweep { animation: none; opacity: 0.35; }
-  html[data-skin="v2"] .home-instrument [data-layer] { transform: none !important; }
+  html[data-skin="v2"] .home-instrument :is(.sweep, .sweep-band, .live-dot) { animation: none; }
+  html[data-skin="v2"] .home-instrument .sweep { transform: translateX(200px); opacity: 0.5; }
+  html[data-skin="v2"] .home-instrument .sweep-band { transform: translateX(200px); }
 }
