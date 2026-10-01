@@ -1,5 +1,12 @@
 # Project State
 
+## 2026-10-01 (cont.) - Doors trimmed, Prepping merge + reorder, Radio/TV retro-cyberpunk, site map (built, pushed `3730eab`, NOT deployed)
+
+- **Home:** Tools door links Calculator / Cut list / Programme / Pro (no audio links; Audio is a nav door); Field door quick links Field tools / Health & fitness / Planting / Knots; Studio door Studio / Pro / Listening. The More section is gone; `/sitemap/` is a human-readable map built from the tool catalogues, the prepping list, Smoko and `isPublished`, linked in the footer and the palette.
+- **Prepping:** Health and Fitness merged into `/prepping/health` (health intro + converters grid + the fitness calculators). `/prepping/fitness` and `/site/fitness` 301 there (Worker `RETIRED_TOOL_REDIRECTS`). Section nav on all nine pages: Guide, Field tools, Gear, Pack list, Knots, How-to, Health & fitness, Planting, Science.
+- **TV:** Elsewhere channel and the external provider removed; 13 embed-only channels. **Radio + TV palette:** regex remap of every hex/rgba in `radio.astro` and `tv.css` to navy graphite (#0a0e1a…#2a3458), cyan #37d4ff and magenta #ff2d95, plus neon halos and scanlines. Mapping lives in the session scratch script; the colours are now literal in those two files.
+- **Gate:** build, seo/feature/life harnesses, routing + auth unit tests green; screenshots of radio, tv, prepping, sitemap reviewed.
+
 ## 2026-10-01 (cont.) - Hero stripped to the name — DEPLOYED `da5f63a5` with the Smoko / Radio / TV round
 
 Vish: heading "Vish Vaddi.", tagline "Estimator", no scanning graphic, no tool-list sub-line. `hero.js` and the instrument SVG are gone; the hero is one column. seo/feature harnesses green.
