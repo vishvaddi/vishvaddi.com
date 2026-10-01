@@ -1,5 +1,15 @@
 # Project State
 
+## 2026-10-01 (cont.) - Front page rework, Radio ×45, TV ×2 (built, pushed `dce0a57`, NOT deployed)
+
+Vish's decisions on the plan: TV option c (YouTube free-film channels + archive.org CC/indie + open-elsewhere links), heading "Vish Vaddi. Estimator. I make small free tools.", strip named "Smoko", sweep-only hero graphic, fade-in instead of typing.
+
+- **Home (`9658d1b`):** humble heading + intro ("Most of these started as a spreadsheet that kept breaking…"), fade-in sub-line, instrument is a measurement sweep over an isometric grid with a mm ruler (no object, no parallax — the old box's dimensions drifted on the deeper layer), `hero.js` only pauses offscreen. Strip is **Smoko**: Games, Radio, Feeds, Reader, TV; the More menu group matches.
+- **Radio (`d377f83`):** radio-browser `search?is_https=true&hidebroken=true&order=votes` — 400 AU + 800 world requested, ~229 AU + ~670 world survive the HTTPS/non-HLS/dedupe filters (116 countries). WORLD filter button, `GB LIVE`-style source tag, country searchable. Directory status reads "N AU + M WORLD CHANNELS LOADED".
+- **TV (`dce0a57`):** channels 08–14 added: New Releases, Free Features, Nineties (Popcornflix / FilmRise official YouTube uploads — every id checked with `py -m yt_dlp` from this AU IP: public, embeddable, no age limit), Docs (Meet the Patels, Nothing to Hide, TPB AFK), Open Movies (Sintel, Tears of Steel, Cosmos Laundromat), Indie / CC (Sita Sings the Blues, Star Wreck, Route 66), and **Elsewhere**: SBS On Demand, ABC iview and Tubi open in a new tab from a stand-in screen (`provider: "external"`), since none allow embedding. Caveat: YouTube catalogue titles can be pulled by the uploader; re-run the yt-dlp check before each deploy that touches TV (a script for that is the obvious next step).
+- **Gate:** build, seo/feature/life harnesses green, both scripts parse, built-site browser run: 915 station rows, 14 TV channels, Elsewhere screen links to Tubi, no page errors; home/phone screenshots reviewed.
+- **Deploy:** on Vish's word — `npm run build && npx wrangler deploy`, then live-check `/`, `/radio/` directory count, `/tv/` CH 14.
+
 ## 2026-10-01 - Work section removed, Studio is the third door (DEPLOYED `adde3aba`)
 
 Vish: "remove the work section of the website. put studio there instead". `/work` page and content deleted (404 now, out of the sitemap), Work left the primary nav (Tools · Audio · Studio · Field), homepage doors are Tools (site + audio), Field, Studio; About and the draft hello-world note no longer link to /work; OG card dropped. seo and feature harnesses green; live-verified. The Work-copy approval item is closed.

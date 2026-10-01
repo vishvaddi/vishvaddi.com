@@ -876,3 +876,11 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 ## 2026-10-01 - Work -> Studio door (Claude Code, Fable)
 
 - One commit (`c5aa55a`): page + content removed, nav and doors updated, two inbound links retargeted to /about, snapshot route swapped. Build, seo-e2e, feature-upgrades-e2e green; deployed `adde3aba`; live nav/doors/sitemap/404 checked and a live screenshot reviewed.
+
+## 2026-10-01 (cont.) - Front page rework, Radio, TV (Claude Code, Fable)
+
+- Planned first with five decisions (ND format); Vish answered c / a / "Smoko" / b / b.
+- TV sourcing: Prime/Tubi/SBS/ABC forbid embedding, so they are link-out programs. YouTube candidates came from `py -m yt_dlp --flat-playlist` on @Popcornflix and @FilmRiseMovies (duration ≥ 80 min), then a per-video print of playable_in_embed/availability/age_limit; all 16 passed. archive.org ids and licences came from advancedsearch (Blender CC BY, Sita CC0, Star Wreck CC BY-SA, docs CC BY-NC).
+- Radio: topvote/400 only yielded 112 usable world stations (http streams dominate); the `search` endpoint with `is_https=true` gave 1101/1200 usable, capped at 800 for payload (~1 MB).
+- First heading render at 5.5rem was five lines and loud; reduced to 3.4rem max with a 16ch measure. Instrument readout strip clipped clear of the sweep band.
+- Not deployed: Vish did not say so this turn.
