@@ -145,3 +145,6 @@ export const TOOL_ICONS: Record<string, string> = {
     '<path d="M4 11.5a8.5 8.5 0 018.5 8.5"/><path d="M4 5.5A14.5 14.5 0 0118.5 20"/>'
   ),
 }
+
+// The Cut List catalogue entry opens the 2D sheet page; both URLs share the glyph.
+TOOL_ICONS['/site/sheet'] = TOOL_ICONS['/site/cut-list'];

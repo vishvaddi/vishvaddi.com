@@ -35,7 +35,8 @@ const noindex = noindexProp || !isPublished(here || "/");
 const LONG_FORM = ["/about", "/now", "/blog", "/books", "/movies", "/music", "/notes", "/year", "/terms", "/privacy", "/prepping"];
 const longForm = LONG_FORM.some((p) => here === p || here.startsWith(p + "/")) && here !== "/prepping/tools";
 // Sheet and Notepad are modes of Cut List and Calculator, so the rail highlights the parent.
-const activeToolHref = here === "/site/sheet" ? "/site/cut-list" : here === "/site/notepad" ? "/site/calc" : here;
+// 2D sheet nesting is the default Cut List mode (Vish, 01/10/26); the linear page is its sibling.
+const activeToolHref = here === "/site/cut-list" ? "/site/sheet" : here === "/site/notepad" ? "/site/calc" : here;
 // One rail component, two catalogues: /site tools and /audio tools share the markup.
 const rail = audioNav
   ? { tools: AUDIO_TOOLS as readonly { href: string; title: string; shortTitle: string; aliases: string; category: string }[], categories: AUDIO_TOOL_CATEGORIES as readonly string[], hub: "/audio", title: "Audio tools" }
@@ -46,9 +47,9 @@ const currentTool = rail.tools.find((tool) => tool.href === activeToolHref);
 // product, Field for prepping, Work for the portfolio. Play and Logs live in More.
 const navPrimary: [string, string][] = [
   ["/site", "Tools"],
-  ["/audio", "Audio"],
-  ["/studio", "Studio"],
   ["/prepping", "Field"],
+  ["/studio", "Studio"],
+  ["/audio", "Audio"],
   ["/sitemap", "All"],
 ];
 // "More" is grouped so the menu reads as a map, not a list. /music is the
