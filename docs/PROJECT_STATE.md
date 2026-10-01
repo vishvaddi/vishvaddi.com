@@ -1,5 +1,9 @@
 # Project State
 
+## 2026-10-01 (cont.) - Hero stripped to the name (built, pushed, NOT deployed)
+
+Vish: heading "Vish Vaddi.", tagline "Estimator", no scanning graphic, no tool-list sub-line. `hero.js` and the instrument SVG are gone; the hero is one column. seo/feature harnesses green.
+
 ## 2026-10-01 (cont.) - Front page rework, Radio ×45, TV ×2 (built, pushed `dce0a57`, NOT deployed)
 
 Vish's decisions on the plan: TV option c (YouTube free-film channels + archive.org CC/indie + open-elsewhere links), heading "Vish Vaddi. Estimator. I make small free tools.", strip named "Smoko", sweep-only hero graphic, fade-in instead of typing.

@@ -884,3 +884,4 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Radio: topvote/400 only yielded 112 usable world stations (http streams dominate); the `search` endpoint with `is_https=true` gave 1101/1200 usable, capped at 800 for payload (~1 MB).
 - First heading render at 5.5rem was five lines and loud; reduced to 3.4rem max with a 16ch measure. Instrument readout strip clipped clear of the sweep band.
 - Not deployed: Vish did not say so this turn.
+- Later: hero reduced to name + "Estimator" at Vish's request; instrument, sub-line and hero.js removed. Not deployed.
