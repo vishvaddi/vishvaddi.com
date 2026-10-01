@@ -19,7 +19,12 @@ var CURATED_STATIONS = [
   { name: "SBS PopAsia", url: "https://sbs-ice.streamguys1.com/sbs-popasia-sbs-web", tags: "asian pop australia", source: "AU", category: "music" },
 ];
 
-var API = "https://de1.api.radio-browser.info/json/stations/bycountrycodeexact/AU?limit=100&order=votes&reverse=true&hidebroken=true";
+// radio-browser.info directory: the most-voted Australian stations plus the
+// most-voted stations worldwide (AU ones in that list are dropped as duplicates).
+var API_BASE = "https://de1.api.radio-browser.info/json/stations/";
+// is_https: browsers block http streams from an https page, so ask only for usable ones.
+var API_AU = API_BASE + "search?countrycode=AU&is_https=true&hidebroken=true&order=votes&reverse=true&limit=400";
+var API_WORLD = API_BASE + "search?is_https=true&hidebroken=true&order=votes&reverse=true&limit=800";
 
 var audio = document.getElementById("radio-audio");
 var lcdStation = document.getElementById("lcd-station");
@@ -240,9 +245,10 @@ function stationMatches(station, query) {
   if (activeFilter === "preset" && !station.preset) return false;
   if (activeFilter === "favourite" && !favouriteUrls.has(normaliseKey(station.url))) return false;
   if (activeFilter === "au" && !station.isAu) return false;
+  if (activeFilter === "world" && station.isAu) return false;
   if (["music", "talk", "chill"].includes(activeFilter) && station.category !== activeFilter) return false;
   if (!query) return true;
-  return (station.name + " " + station.tags + " " + station.source).toLowerCase().includes(query);
+  return (station.name + " " + station.tags + " " + station.source + " " + (station.country || "")).toLowerCase().includes(query);
 }
 
 function createSignalBars() {
@@ -502,44 +508,56 @@ function renderPresets() {
   });
 }
 
-/* ── Live Australian directory ── */
+/* ── Live directory: Australia first, then the world ── */
+async function fetchDirectory(url) {
+  var response = await fetch(url);
+  if (!response.ok) throw new Error("Directory returned " + response.status);
+  return response.json();
+}
+
+function normaliseDirectory(stations, seenUrls, seenNames, auOnly) {
+  return stations.reduce(function(result, station) {
+    var url = station.url_resolved || station.url || "";
+    var name = String(station.name || "").trim();
+    var code = String(station.countrycode || "").toUpperCase();
+    var isAu = code === "AU";
+    if (auOnly !== isAu) return result;
+    var urlKey = normaliseKey(url);
+    var nameKey = normaliseKey(name);
+    if (!name || !/^https:\/\//i.test(url) || /\.m3u8(\?|$)/i.test(url)) return result;
+    if (seenUrls.has(urlKey) || seenNames.has(nameKey)) return result;
+    seenUrls.add(urlKey);
+    seenNames.add(nameKey);
+
+    var tags = String(station.tags || "").split(",").filter(Boolean).slice(0, 3).join(" ");
+    result.push({
+      name: name,
+      url: url,
+      tags: tags,
+      source: isAu ? "AU LIVE" : (code || "WORLD") + " LIVE",
+      country: String(station.country || ""),
+      category: inferCategory(name, tags),
+      isAu: isAu,
+    });
+    return result;
+  }, []);
+}
+
 async function loadStations() {
-  try {
-    var response = await fetch(API);
-    if (!response.ok) throw new Error("Directory returned " + response.status);
-    var stations = await response.json();
-    var seenUrls = new Set(CURATED_STATIONS.map(function(station) { return normaliseKey(station.url); }));
-    var seenNames = new Set(CURATED_STATIONS.map(function(station) { return normaliseKey(station.name); }));
-
-    directoryStations = stations.reduce(function(result, station) {
-      var url = station.url_resolved || station.url || "";
-      var name = String(station.name || "").trim();
-      var urlKey = normaliseKey(url);
-      var nameKey = normaliseKey(name);
-      if (!name || !/^https:\/\//i.test(url) || /\.m3u8(\?|$)/i.test(url)) return result;
-      if (seenUrls.has(urlKey) || seenNames.has(nameKey)) return result;
-      seenUrls.add(urlKey);
-      seenNames.add(nameKey);
-
-      var tags = String(station.tags || "").split(",").filter(Boolean).slice(0, 3).join(" ");
-      result.push({
-        name: name,
-        url: url,
-        tags: tags,
-        source: "AU LIVE",
-        category: inferCategory(name, tags),
-        isAu: true,
-      });
-      return result;
-    }, []);
-
-    directoryStatus.textContent = directoryStations.length + " AU CHANNELS LOADED";
-    directoryStatus.className = "station-directory-status ready";
-    renderStationList();
-  } catch (_) {
-    directoryStatus.textContent = "AU DIRECTORY OFFLINE / CURATED CHANNELS READY";
+  var seenUrls = new Set(CURATED_STATIONS.map(function(station) { return normaliseKey(station.url); }));
+  var seenNames = new Set(CURATED_STATIONS.map(function(station) { return normaliseKey(station.name); }));
+  var results = await Promise.allSettled([fetchDirectory(API_AU), fetchDirectory(API_WORLD)]);
+  var au = results[0].status === "fulfilled" ? normaliseDirectory(results[0].value, seenUrls, seenNames, true) : [];
+  var world = results[1].status === "fulfilled" ? normaliseDirectory(results[1].value, seenUrls, seenNames, false) : [];
+  directoryStations = au.concat(world);
+  if (!directoryStations.length) {
+    directoryStatus.textContent = "DIRECTORY OFFLINE / CURATED CHANNELS READY";
     directoryStatus.className = "station-directory-status error";
+    return;
   }
+  directoryStatus.textContent = au.length + " AU + " + world.length + " WORLD CHANNELS LOADED";
+  directoryStatus.className = "station-directory-status ready";
+  renderStationList();
 }
 
 function restoreStation() {
