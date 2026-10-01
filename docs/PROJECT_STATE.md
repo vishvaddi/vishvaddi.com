@@ -1,5 +1,9 @@
 # Project State
 
+## 2026-10-01 - Work section removed, Studio is the third door (DEPLOYED `adde3aba`)
+
+Vish: "remove the work section of the website. put studio there instead". `/work` page and content deleted (404 now, out of the sitemap), Work left the primary nav (Tools · Audio · Studio · Field), homepage doors are Tools (site + audio), Field, Studio; About and the draft hello-world note no longer link to /work; OG card dropped. seo and feature harnesses green; live-verified. The Work-copy approval item is closed.
+
 ## 2026-09-27 (cont.) - DEPLOYED: Phases 0–2, security batch, Feeds, and the instrument-panel rebrand
 
 Vish: "deploy and keep going. consider further fixes ensuring mine and others privacy and security is top priority. ease of use and functionality as well, consider how we can improve the aesthetics."

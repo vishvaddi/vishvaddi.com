@@ -872,3 +872,7 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Phase 2 built from the plan; screenshots at 1440/390 both themes drove two fixes (homepage widened to 58rem for three doors, phone nav on two rows). Deployed `48ea7ffa`.
 - Rebrand: contrast computed in Python before choosing tokens (light faint bumped to #7A7F86, accent text split from accent). Snapshot script needed `bypassCSP` and a MutationObserver because Chrome runs init scripts before `<html>` exists. Header first rendered at the 38rem column on workspace pages → full-bleed with `--page-w`. Body made transparent so the grain covers the column (Radio showed a lighter band). Deployed `2e9a5c01`; live Playwright pass clean except the Cloudflare-injected analytics beacon now blocked by the CSP (dashboard toggle, noted in PROJECT_STATE).
 - Heredocs with apostrophes fail in this shell; long file writes went through the Write tool.
+
+## 2026-10-01 - Work -> Studio door (Claude Code, Fable)
+
+- One commit (`c5aa55a`): page + content removed, nav and doors updated, two inbound links retargeted to /about, snapshot route swapped. Build, seo-e2e, feature-upgrades-e2e green; deployed `adde3aba`; live nav/doors/sitemap/404 checked and a live screenshot reviewed.
