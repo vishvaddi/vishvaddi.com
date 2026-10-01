@@ -1,6 +1,6 @@
 # Project State
 
-## 2026-10-01 (cont.) - Hero stripped to the name (built, pushed, NOT deployed)
+## 2026-10-01 (cont.) - Hero stripped to the name — DEPLOYED `da5f63a5` with the Smoko / Radio / TV round
 
 Vish: heading "Vish Vaddi.", tagline "Estimator", no scanning graphic, no tool-list sub-line. `hero.js` and the instrument SVG are gone; the hero is one column. seo/feature harnesses green.
 

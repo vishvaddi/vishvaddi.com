@@ -885,3 +885,4 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - First heading render at 5.5rem was five lines and loud; reduced to 3.4rem max with a 16ch measure. Instrument readout strip clipped clear of the sweep band.
 - Not deployed: Vish did not say so this turn.
 - Later: hero reduced to name + "Estimator" at Vish's request; instrument, sub-line and hero.js removed. Not deployed.
+- Deployed `da5f63a5` on Vish's word from `cb375d7`; live: h1 "Vish Vaddi.", no instrument, Smoko strip, tv.js 14 channels, radio.js HTTPS directory.
