@@ -3,6 +3,7 @@ import Base from "../layouts/Base.astro";
 import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../data/site-tools";
 import { AUDIO_TOOLS } from "../data/audio-tools";
 import { isPublished } from "../data/pages";
+import { FIELD_SECTIONS } from "../data/field-sections";
 
 // Human-readable site map (Vish, 01/10/26). Reads the same catalogues and the
 // published registry as the nav, so it cannot drift from them.
@@ -11,11 +12,7 @@ const groups: { title: string; links: Link[] }[] = [
   { title: "Site tools", links: SITE_TOOL_CATEGORIES.flatMap((c) => SITE_TOOLS.filter((t) => t.category === c).map((t): Link => [t.href, t.title])) },
   { title: "Audio tools", links: AUDIO_TOOLS.map((t): Link => [t.href, t.title]) },
   { title: "Studio", links: [["/studio", "VishAmp Studio"], ["/pro", "Pro"]] },
-  {
-    title: "Field",
-    links: [["/prepping", "Prepping guide"], ["/prepping/tools", "Field tools"], ["/prepping/gear", "Gear"], ["/prepping/pack", "Pack list"],
-      ["/prepping/knots", "Knots"], ["/prepping/howto", "How-to"], ["/prepping/health", "Health"], ["/prepping/planting", "Planting"], ["/prepping/science", "Science"]],
-  },
+  { title: "Field", links: FIELD_SECTIONS.map(([h, l]): Link => [h, l]) },
   { title: "Smoko", links: [["/games", "Games"], ["/games/deep-swarm/", "Deep Swarm"], ["/games/last-cast/", "Last Cast"], ["/games/carromancy/", "Carromancy"], ["/games/big2", "Big 2"], ["/radio", "Radio"], ["/feeds", "Feeds"], ["/reader", "Reader"], ["/tv", "TV"]] },
   { title: "Logs", links: ([["/music", "Listening"], ["/movies", "Movies"], ["/books", "Books"], ["/notes", "Notes"], ["/blog", "Blog"], ["/now", "Now"]] as Link[]).filter(([h]) => isPublished(h)) },
   { title: "About this site", links: [["/about", "About"], ["/privacy", "Privacy"], ["/terms", "Terms"], ["/sitemap-index.xml", "XML sitemap (for crawlers)"]] },

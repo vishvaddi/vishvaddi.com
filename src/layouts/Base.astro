@@ -49,6 +49,7 @@ const navPrimary: [string, string][] = [
   ["/audio", "Audio"],
   ["/studio", "Studio"],
   ["/prepping", "Field"],
+  ["/sitemap", "All"],
 ];
 // "More" is grouped so the menu reads as a map, not a list. /music is the
 // listening log, so it is labelled by what it is to avoid two "Music" entries.
@@ -186,11 +187,11 @@ const updatedFmt = updatedDate
         </div>
         <button
           type="button"
-          class="theme-toggle"
+          class="theme-toggle nav-search"
           id="palette-toggle"
-          aria-label="Go to (Ctrl+K)"
-          title="Go to (Ctrl+K)"
-        >⌕</button>
+          aria-label="Find a tool or page (Ctrl+K)"
+          title="Find a tool or page (Ctrl+K)"
+        ><span aria-hidden="true">⌕</span><span class="nav-search-text">Find a tool…</span><kbd class="nav-search-kbd" aria-hidden="true">Ctrl K</kbd></button>
         <button
           type="button"
           class="theme-toggle"

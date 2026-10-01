@@ -1,5 +1,16 @@
 ---
 import Base from "../layouts/Base.astro";
+import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../data/site-tools";
+import { AUDIO_TOOLS } from "../data/audio-tools";
+import { FIELD_SECTIONS } from "../data/field-sections";
+
+// "Everything" directory: every tool one click from the front page, built from
+// the same catalogues as the rail and the site map so it cannot drift.
+const directory: { title: string; links: [string, string][] }[] = [
+  ...SITE_TOOL_CATEGORIES.map((c) => ({ title: c, links: SITE_TOOLS.filter((t) => t.category === c).map((t): [string, string] => [t.href, t.shortTitle]) })),
+  { title: "Audio", links: AUDIO_TOOLS.map((t): [string, string] => [t.href, t.shortTitle]) },
+  { title: "Field", links: FIELD_SECTIONS.map(([h, l]): [string, string] => [h, l]) },
+];
 
 // Three front doors for three audiences (25/09/26 audit): the tools product,
 // the field/prepping side and the portfolio. Play sits in a quieter strip.
@@ -70,6 +81,20 @@ const life = [
         </nav>
       </article>
     ))}
+  </section>
+
+  <section class="home-section home-dir" aria-labelledby="dir-title">
+    <h2 id="dir-title">Everything</h2>
+    <div class="home-dir-grid">
+      {directory.map((col) => (
+        <section class="home-dir-col">
+          <h3>{col.title}</h3>
+          <ul>
+            {col.links.map(([href, label]) => <li><a href={href}>{label}</a></li>)}
+          </ul>
+        </section>
+      ))}
+    </div>
   </section>
 
   <section class="home-section home-play" aria-labelledby="smoko-title">

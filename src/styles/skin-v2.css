@@ -146,6 +146,7 @@ html[data-skin="v2"] :is(.eyebrow, .blueprint .eyebrow, .site-nav-category, .rai
   color: var(--text-faint);
 }
 html[data-skin="v2"] :is(.eyebrow, .blueprint .eyebrow) { color: var(--accent-text); }
+html[data-skin="v2"] .home-dir-col h3 { font-family: var(--font-mono); font-size: 0.68rem; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-faint); }
 
 /* Readouts and code in mono with tabular figures. */
 html[data-skin="v2"] :is(code, kbd, pre, .mono, .stat .n, .tile .n, .tile-value, .np-result, .calc-result) {
@@ -256,6 +257,9 @@ html[data-skin="v2"] .nav-more-menu a:hover { background: var(--surface-2); colo
 html[data-skin="v2"] .nav-more-label { font-family: var(--font-mono); letter-spacing: 0.14em; color: var(--text-faint); }
 html[data-skin="v2"] .theme-toggle { color: var(--text-muted); border: 1px solid transparent; }
 html[data-skin="v2"] .theme-toggle:hover { color: var(--text); background: var(--surface-2); border-color: var(--line); }
+html[data-skin="v2"] .nav-search { background: var(--surface-1); border-color: var(--line-strong); color: var(--text-muted); border-radius: var(--radius-sm); }
+html[data-skin="v2"] .nav-search:hover { border-color: var(--accent); color: var(--text); }
+html[data-skin="v2"] .nav-search-kbd { border-color: var(--line); color: var(--text-faint); }
 
 html[data-skin="v2"] body > footer p {
   font-family: var(--font-mono);
