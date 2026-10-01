@@ -1,5 +1,9 @@
 # Project State
 
+## 2026-10-01 (cont.) - Labels + reach: Health, Estimate/Project/Site, Everything directory, All nav item, header search (built, pushed, NOT deployed)
+
+"Health" everywhere; site-tool categories renamed and regrouped (cut list and price tracker under Estimate, PDF toolkit under Project). Reach plan: sidebar dropped; instead a homepage "Everything" directory of every site/audio/field page (from the catalogues + new `src/data/field-sections.ts`), "All" in the primary nav → `/sitemap`, and the palette opener is a visible "Find a tool… Ctrl K" field. seo/feature/audio harnesses green, screenshots reviewed.
+
 ## 2026-10-01 (cont.) - Doors trimmed, Prepping merge + reorder, Radio/TV retro-cyberpunk, site map (built, pushed `3730eab`, NOT deployed)
 
 - **Home:** Tools door links Calculator / Cut list / Programme / Pro (no audio links; Audio is a nav door); Field door quick links Field tools / Health & fitness / Planting / Knots; Studio door Studio / Pro / Listening. The More section is gone; `/sitemap/` is a human-readable map built from the tool catalogues, the prepping list, Smoko and `isPublished`, linked in the footer and the palette.

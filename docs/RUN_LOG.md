@@ -887,3 +887,4 @@ The auth page used `Referrer-Policy: no-referrer`, which makes Chromium send `Or
 - Later: hero reduced to name + "Estimator" at Vish's request; instrument, sub-line and hero.js removed. Not deployed.
 - Deployed `da5f63a5` on Vish's word from `cb375d7`; live: h1 "Vish Vaddi.", no instrument, Smoko strip, tv.js 14 channels, radio.js HTTPS directory.
 - Round 3 (01/10): batch script hit a missing-.astro bug mid-run; trimmed the already-applied steps and re-ran the rest rather than reverting. Palette change done as a hex/rgba mapping table over the two files (29 radio colours, ~45 TV colours) rather than hand edits.
+- Reach round (01/10): directory column headings needed a skin-level rule (the v2 heading rule outranked the page class). site-tools-responsive-e2e takes a live URL, not `dist`; not part of release:check.
