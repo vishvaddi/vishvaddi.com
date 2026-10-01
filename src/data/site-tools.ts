@@ -1,8 +1,7 @@
 export const SITE_TOOL_CATEGORIES = [
-  'Estimate & price',
-  'Plan & procure',
-  'Site & records',
-  'Documents & reference',
+  'Estimate',
+  'Project',
+  'Site',
 ] as const
 
 export type SiteToolCategory = typeof SITE_TOOL_CATEGORIES[number]
@@ -21,22 +20,22 @@ export interface SiteTool {
 }
 
 const RAW_SITE_TOOLS: Omit<SiteTool, 'problem' | 'promise'>[] = [
-  { href: '/site/calc', title: 'Calculator', shortTitle: 'Calculator', icon: '🧮', description: 'Expression pad and a takeoff notepad: variables, units, GST, percentages, running totals.', category: 'Estimate & price', aliases: 'maths arithmetic percentage formula notepad tape soulver calctape takeoff estimate notes', quick: true },
-  { href: '/site/convert', title: 'Unit Converter', shortTitle: 'Converter', icon: '🔁', description: 'Metric, imperial, pressure, data and live currency conversion.', category: 'Estimate & price', aliases: 'mm inches metres feet aud usd temperature', quick: true },
-  { href: '/site/materials', title: 'Material Calculators', shortTitle: 'Materials', icon: '🧱', description: 'Paint, tiles, plasterboard, concrete, footings, timber and roofing quantities.', category: 'Estimate & price', aliases: 'quantity takeoff paint tile concrete plasterboard footing weight density board feet timber sheathing roof tiles bricks blocks span joist rafter ceiling member timber' },
-  { href: '/site/geometry', title: 'Geometry & Setout', shortTitle: 'Geometry', icon: '📐', description: 'Feet-inch maths, square check, rafters, stairs, arcs, mitres and volumes.', category: 'Estimate & price', aliases: 'setout trig triangle roof stair area fall rafter hip valley jack compound mitre crown feet inches fraction dms polygon cylinder cone construction master' },
-  { href: '/site/rate', title: 'Rate Builder', shortTitle: 'Rate Builder', icon: '💰', description: 'Build unit rates from material, labour, plant and margin.', category: 'Estimate & price', aliases: 'estimate costing labour material plant margin' },
-  { href: '/site/charge-rate', title: 'Charge-Out Rate', shortTitle: 'Charge-Out', icon: '⏱️', description: 'Calculate an hourly charge from wages, overhead and margin.', category: 'Estimate & price', aliases: 'hourly wage super billable overhead' },
-  { href: '/site/prices', title: 'Materials Price Tracker', shortTitle: 'Price Tracker', icon: '📈', description: 'Commodity and AUD/USD trend charts for estimate context.', category: 'Documents & reference', aliases: 'copper aluminium lumber steel diesel exchange' },
-  { href: '/site/programme', title: 'Programme Builder', shortTitle: 'Programme', icon: '📊', description: 'Critical-path programmes, baselines, procurement and Gantt exports.', category: 'Plan & procure', aliases: 'gantt cpm schedule timeline project manager', quick: true },
-  { href: '/site/cut-list', title: 'Cut List Optimizer', shortTitle: 'Cut List', icon: '✂️', description: 'Optimise linear stock and sheet layouts with practical cut plans.', category: 'Plan & procure', aliases: 'nesting sheet timber panel offcut waste', quick: true },
-  { href: '/site/lattice', title: 'Lattice', shortTitle: 'Lattice', icon: '▦', description: 'Nested work breakdowns, estimating grids and project notes.', category: 'Plan & procure', aliases: 'wbs breakdown spreadsheet rollup hierarchy' },
-  { href: '/site/records', title: 'Site Records', shortTitle: 'Site Records', icon: '🗂️', description: 'Variations, punch lists, deliveries, contacts and daily logs.', category: 'Site & records', aliases: 'project manager variation defect diary delivery contact' },
-  { href: '/site/voice', title: 'Voice Notes', shortTitle: 'Voice Notes', icon: '🎙️', description: 'Record and transcribe hands-free site notes.', category: 'Site & records', aliases: 'speech audio transcription site notes' },
-  { href: '/site/sketch', title: 'Sketchpad', shortTitle: 'Sketchpad', icon: '✏️', description: 'Quick site marks and mark-ups with PNG export.', category: 'Site & records', aliases: 'draw markup annotate plan' },
-  { href: '/site/gauges', title: 'Phone Tools', shortTitle: 'Phone Tools', icon: '📱', description: 'Spirit level, angle finder and sound meter.', category: 'Site & records', aliases: 'sensor level inclinometer decibel android' },
-  { href: '/site/pdf', title: 'PDF Toolkit', shortTitle: 'PDF Toolkit', icon: '📄', description: 'Merge, split, organise, mark up and issue PDF documents.', category: 'Documents & reference', aliases: 'editor merge split compress sign watermark pages', quick: true },
-  { href: '/site/quickref', title: 'Reference', shortTitle: 'Reference', icon: '📐', description: 'Searchable site dimensions, rules of thumb, standards and NCC links.', category: 'Documents & reference', aliases: 'stairs barriers heights falls courses ncc standards australia links reference' },
+  { href: '/site/calc', title: 'Calculator', shortTitle: 'Calculator', icon: '🧮', description: 'Expression pad and a takeoff notepad: variables, units, GST, percentages, running totals.', category: 'Estimate', aliases: 'maths arithmetic percentage formula notepad tape soulver calctape takeoff estimate notes', quick: true },
+  { href: '/site/convert', title: 'Unit Converter', shortTitle: 'Converter', icon: '🔁', description: 'Metric, imperial, pressure, data and live currency conversion.', category: 'Estimate', aliases: 'mm inches metres feet aud usd temperature', quick: true },
+  { href: '/site/materials', title: 'Material Calculators', shortTitle: 'Materials', icon: '🧱', description: 'Paint, tiles, plasterboard, concrete, footings, timber and roofing quantities.', category: 'Estimate', aliases: 'quantity takeoff paint tile concrete plasterboard footing weight density board feet timber sheathing roof tiles bricks blocks span joist rafter ceiling member timber' },
+  { href: '/site/geometry', title: 'Geometry & Setout', shortTitle: 'Geometry', icon: '📐', description: 'Feet-inch maths, square check, rafters, stairs, arcs, mitres and volumes.', category: 'Estimate', aliases: 'setout trig triangle roof stair area fall rafter hip valley jack compound mitre crown feet inches fraction dms polygon cylinder cone construction master' },
+  { href: '/site/rate', title: 'Rate Builder', shortTitle: 'Rate Builder', icon: '💰', description: 'Build unit rates from material, labour, plant and margin.', category: 'Estimate', aliases: 'estimate costing labour material plant margin' },
+  { href: '/site/charge-rate', title: 'Charge-Out Rate', shortTitle: 'Charge-Out', icon: '⏱️', description: 'Calculate an hourly charge from wages, overhead and margin.', category: 'Estimate', aliases: 'hourly wage super billable overhead' },
+  { href: '/site/cut-list', title: 'Cut List Optimizer', shortTitle: 'Cut List', icon: '✂️', description: 'Optimise linear stock and sheet layouts with practical cut plans.', category: 'Estimate', aliases: 'nesting sheet timber panel offcut waste', quick: true },
+  { href: '/site/prices', title: 'Materials Price Tracker', shortTitle: 'Price Tracker', icon: '📈', description: 'Commodity and AUD/USD trend charts for estimate context.', category: 'Estimate', aliases: 'copper aluminium lumber steel diesel exchange' },
+  { href: '/site/programme', title: 'Programme Builder', shortTitle: 'Programme', icon: '📊', description: 'Critical-path programmes, baselines, procurement and Gantt exports.', category: 'Project', aliases: 'gantt cpm schedule timeline project manager', quick: true },
+  { href: '/site/lattice', title: 'Lattice', shortTitle: 'Lattice', icon: '▦', description: 'Nested work breakdowns, estimating grids and project notes.', category: 'Project', aliases: 'wbs breakdown spreadsheet rollup hierarchy' },
+  { href: '/site/records', title: 'Site Records', shortTitle: 'Site Records', icon: '🗂️', description: 'Variations, punch lists, deliveries, contacts and daily logs.', category: 'Site', aliases: 'project manager variation defect diary delivery contact' },
+  { href: '/site/voice', title: 'Voice Notes', shortTitle: 'Voice Notes', icon: '🎙️', description: 'Record and transcribe hands-free site notes.', category: 'Site', aliases: 'speech audio transcription site notes' },
+  { href: '/site/sketch', title: 'Sketchpad', shortTitle: 'Sketchpad', icon: '✏️', description: 'Quick site marks and mark-ups with PNG export.', category: 'Site', aliases: 'draw markup annotate plan' },
+  { href: '/site/gauges', title: 'Phone Tools', shortTitle: 'Phone Tools', icon: '📱', description: 'Spirit level, angle finder and sound meter.', category: 'Site', aliases: 'sensor level inclinometer decibel android' },
+  { href: '/site/pdf', title: 'PDF Toolkit', shortTitle: 'PDF Toolkit', icon: '📄', description: 'Merge, split, organise, mark up and issue PDF documents.', category: 'Project', aliases: 'editor merge split compress sign watermark pages', quick: true },
+  { href: '/site/quickref', title: 'Reference', shortTitle: 'Reference', icon: '📐', description: 'Searchable site dimensions, rules of thumb, standards and NCC links.', category: 'Site', aliases: 'stairs barriers heights falls courses ncc standards australia links reference' },
 ]
 
 const POSITIONING: Record<string, [problem: string, promise: string]> = {
