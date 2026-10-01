@@ -1,0 +1,47 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE_TOOLS, SITE_TOOL_CATEGORIES } from "../data/site-tools";
+import { AUDIO_TOOLS } from "../data/audio-tools";
+import { isPublished } from "../data/pages";
+
+// Human-readable site map (Vish, 01/10/26). Reads the same catalogues and the
+// published registry as the nav, so it cannot drift from them.
+type Link = [string, string];
+const groups: { title: string; links: Link[] }[] = [
+  { title: "Site tools", links: SITE_TOOL_CATEGORIES.flatMap((c) => SITE_TOOLS.filter((t) => t.category === c).map((t): Link => [t.href, t.title])) },
+  { title: "Audio tools", links: AUDIO_TOOLS.map((t): Link => [t.href, t.title]) },
+  { title: "Studio", links: [["/studio", "VishAmp Studio"], ["/pro", "Pro"]] },
+  {
+    title: "Field",
+    links: [["/prepping", "Prepping guide"], ["/prepping/tools", "Field tools"], ["/prepping/gear", "Gear"], ["/prepping/pack", "Pack list"],
+      ["/prepping/knots", "Knots"], ["/prepping/howto", "How-to"], ["/prepping/health", "Health & fitness"], ["/prepping/planting", "Planting"], ["/prepping/science", "Science"]],
+  },
+  { title: "Smoko", links: [["/games", "Games"], ["/games/deep-swarm/", "Deep Swarm"], ["/games/last-cast/", "Last Cast"], ["/games/carromancy/", "Carromancy"], ["/games/big2", "Big 2"], ["/radio", "Radio"], ["/feeds", "Feeds"], ["/reader", "Reader"], ["/tv", "TV"]] },
+  { title: "Logs", links: ([["/music", "Listening"], ["/movies", "Movies"], ["/books", "Books"], ["/notes", "Notes"], ["/blog", "Blog"], ["/now", "Now"]] as Link[]).filter(([h]) => isPublished(h)) },
+  { title: "About this site", links: [["/about", "About"], ["/privacy", "Privacy"], ["/terms", "Terms"], ["/sitemap-index.xml", "XML sitemap (for crawlers)"]] },
+].filter((g) => g.links.length > 0);
+---
+
+<Base title="Site map" description="Every page on vishvaddi.com, grouped the way the site is organised.">
+  <h1>Site map</h1>
+  <p>Every page, grouped the way the site is organised. Ctrl+K opens the same list as a search.</p>
+  <div class="sitemap-grid">
+    {groups.map((g) => (
+      <section class="sitemap-group">
+        <h2>{g.title}</h2>
+        <ul>
+          {g.links.map(([href, label]) => <li><a href={href}>{label}</a></li>)}
+        </ul>
+      </section>
+    ))}
+  </div>
+
+  <style>
+    .sitemap-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1.25rem 2rem; margin-top: 1.5rem; }
+    .sitemap-group h2 { margin: 0 0 0.5rem; font-size: 0.72rem; font-family: var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+    .sitemap-group ul { list-style: none; margin: 0; padding: 0; }
+    .sitemap-group li { margin: 0.2rem 0; font-family: var(--font-sans); }
+    .sitemap-group a { text-decoration: none; }
+    .sitemap-group a:hover { text-decoration: underline; }
+  </style>
+</Base>

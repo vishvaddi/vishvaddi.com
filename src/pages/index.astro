@@ -1,6 +1,5 @@
 ---
 import Base from "../layouts/Base.astro";
-import { isPublished } from "../data/pages";
 
 // Three front doors for three audiences (25/09/26 audit): the tools product,
 // the field/prepping side and the portfolio. Play sits in a quieter strip.
@@ -8,23 +7,23 @@ const doors = [
   {
     href: "/site",
     eyebrow: "Tools",
-    title: "Site and audio tools",
-    desc: "Cut lists, programmes, rates, PDFs and material calculators for estimators and trades, plus audio analysis and prep. Free, no account.",
-    links: [["/site", "Site tools"], ["/audio", "Audio tools"], ["/pro", "Pro"]],
+    title: "Site tools",
+    desc: "Cut lists, programmes, rates, PDFs and material calculators for estimators and trades. Free, no account.",
+    links: [["/site/calc", "Calculator"], ["/site/cut-list", "Cut list"], ["/site/programme", "Programme"], ["/pro", "Pro"]],
   },
   {
     href: "/prepping",
     eyebrow: "Field",
     title: "Prepping and self-reliance",
     desc: "Notes on bushcraft, gear and readiness, with field calculators, knots, weather and maps that work on a phone.",
-    links: [["/prepping", "Notes"], ["/prepping/tools", "Field tools"], ["/prepping/gear", "Gear lists"], ["/prepping/knots", "Knots"]],
+    links: [["/prepping/tools", "Field tools"], ["/prepping/health", "Health & fitness"], ["/prepping/planting", "Planting"], ["/prepping/knots", "Knots"]],
   },
   {
     href: "/studio",
     eyebrow: "Studio",
     title: "VishAmp browser studio",
     desc: "A drum machine, sample pads, wavetable synth, clip arranger, mixer and DJ decks that run entirely in the browser. WAV export is free; Pro adds MP3 and stems.",
-    links: [["/studio", "Open Studio"], ["/audio", "Audio tools"], ["/music", "Listening"]],
+    links: [["/studio", "Open Studio"], ["/pro", "Pro"], ["/music", "Listening"]],
   },
 ] as const;
 
@@ -43,16 +42,6 @@ const life = [
   { href: "/money", title: "Money", desc: "Budget, bank import, net worth, debt payoff." },
   { href: "/training", title: "Training", desc: "Programme, session log, progression." },
 ];
-
-const more: [string, string][] = ([
-  ["/prepping/health", "Health & wellbeing"],
-  ["/music", "Listening"],
-  ["/now", "Now"],
-  ["/blog", "Blog"],
-  ["/movies", "Movies"],
-  ["/books", "Books"],
-  ["/notes", "Notes"],
-] as [string, string][]).filter(([href]) => isPublished(href));
 ---
 
 <Base ogImage="/og/index.png">
@@ -104,14 +93,6 @@ const more: [string, string][] = ([
     </div>
   </section>
 
-  {more.length > 0 && (
-    <section class="home-section" aria-labelledby="more-title">
-      <h2 id="more-title">More</h2>
-      <nav class="home-links" aria-label="More sections">
-        {more.map(([href, label]) => <a href={href}>{label}</a>)}
-      </nav>
-    </section>
-  )}
 
   <script src="/scripts/resume.js" defer></script>
 </Base>

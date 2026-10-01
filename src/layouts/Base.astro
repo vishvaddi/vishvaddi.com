@@ -91,6 +91,7 @@ navMoreGroups
   ["/prepping/knots", "Knots"],
   ["/privacy", "Privacy"],
   ["/terms", "Terms"],
+  ["/sitemap", "Site map"],
 ] as [string, string][]).forEach(([href, label]) => addPalette(href, label, "Pages"));
 // Games hub links to these but they aren't Astro pages under src/pages, so they
 // need listing by hand (kept in sync with src/pages/games/index.astro).
@@ -282,7 +283,7 @@ const updatedFmt = updatedDate
       <p style="font-size: 0.875rem; color: var(--muted);">
         © {new Date().getFullYear()} Vish Vaddi · Sydney ·
         <a href="mailto:vishvaddi@gmail.com">vishvaddi@gmail.com</a> ·
-        <a href="/privacy">Privacy</a> · <a href="/logout" data-private>Lock site</a>
+        <a href="/privacy">Privacy</a> · <a href="/sitemap">Site map</a> · <a href="/logout" data-private>Lock site</a>
       </p>
     </footer>}
     {!immersive && (
