@@ -160,7 +160,7 @@ import Base from "../layouts/Base.astro";
 <style is:global>
   .radio-kicker {
     margin: -0.6rem 0 0.9rem;
-    color: var(--muted, #8e867a);
+    color: var(--muted, #7f8aa3);
     font-family: var(--font-mono, monospace);
     font-size: 0.65rem;
     letter-spacing: 0.14em;
@@ -170,15 +170,18 @@ import Base from "../layouts/Base.astro";
   .radio-cabinet {
     position: relative;
     background:
-      linear-gradient(160deg, rgba(255,180,50,0.025), transparent 35%),
-      linear-gradient(160deg, #1e1408, #130d04);
+      linear-gradient(160deg, rgba(55,212,255, 0.025), transparent 35%),
+      linear-gradient(160deg, #121a2e, #0a0e1a);
     border-radius: 16px;
     max-width: 540px;
+    /* retro-cyberpunk: neon halo and faint scanlines over the cabinet */
+    box-shadow: 0 0 0 1px #2a3458, 0 8px 40px rgba(0,0,0,0.7), 0 0 48px rgba(55,212,255,0.10), 0 0 90px rgba(255,45,149,0.06), inset 0 1px 0 rgba(55,212,255,0.07);
+    background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px), linear-gradient(160deg, rgba(55,212,255,0.04), transparent 35%), linear-gradient(160deg, #121a2e, #0a0e1a);
     margin: 1.5rem auto;
     box-shadow:
-      0 0 0 1px #3a2008,
+      0 0 0 1px #2a3458,
       0 8px 40px rgba(0,0,0,0.7),
-      inset 0 1px 0 rgba(255,180,50,0.07);
+      inset 0 1px 0 rgba(55,212,255, 0.07);
     padding: 18px 20px 16px;
   }
 
@@ -186,7 +189,7 @@ import Base from "../layouts/Base.astro";
     display: flex;
     justify-content: space-between;
     margin: -2px 1px 9px;
-    color: rgba(200,137,10,0.52);
+    color: rgba(55,212,255, 0.52);
     font: 600 0.55rem/1 monospace;
     letter-spacing: 0.18em;
   }
@@ -205,10 +208,10 @@ import Base from "../layouts/Base.astro";
     width: 120px;
     min-height: 80px;
     border-radius: 6px;
-    border: 1px solid #2a1a08;
+    border: 1px solid #1f2742;
     background:
-      radial-gradient(circle, rgba(120,80,20,0.55) 1.5px, transparent 1.5px),
-      #0c0804;
+      radial-gradient(circle, rgba(55,212,255, 0.55) 1.5px, transparent 1.5px),
+      #0a0d18;
     background-size: 12px 12px;
     background-position: 6px 6px;
     box-shadow: inset 0 2px 6px rgba(0,0,0,0.6);
@@ -217,8 +220,8 @@ import Base from "../layouts/Base.astro";
   /* ── LCD display ── */
   .lcd-display {
     flex: 1;
-    background: #020a02;
-    border: 1px solid #0d1a0d;
+    background: #0a0516;
+    border: 1px solid #2a1040;
     border-radius: 6px;
     padding: 10px 14px;
     box-shadow: inset 0 2px 10px rgba(0,0,0,0.8);
@@ -230,8 +233,8 @@ import Base from "../layouts/Base.astro";
   }
 
   .lcd-station {
-    color: #2dff4a;
-    text-shadow: 0 0 10px rgba(45,255,74,0.5);
+    color: #ff2d95;
+    text-shadow: 0 0 10px rgba(255,45,149, 0.5);
     font-family: monospace;
     font-size: 0.9rem;
     white-space: nowrap;
@@ -253,9 +256,9 @@ import Base from "../layouts/Base.astro";
     gap: 10px;
     margin: 8px 0 10px;
     padding: 7px 8px;
-    border: 1px solid #2c1a07;
+    border: 1px solid #1f2742;
     border-radius: 6px;
-    background: rgba(3, 10, 3, 0.72);
+    background: rgba(10,5,22, 0.72);
     box-shadow: inset 0 1px 5px rgba(0,0,0,0.55);
   }
 
@@ -265,7 +268,7 @@ import Base from "../layouts/Base.astro";
 
   .track-id-label {
     display: block;
-    color: rgba(45,255,74,0.42);
+    color: rgba(255,45,149, 0.42);
     font: 700 0.55rem/1 monospace;
     letter-spacing: 0.16em;
     margin-bottom: 3px;
@@ -277,8 +280,8 @@ import Base from "../layouts/Base.astro";
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: #2dff4a;
-    text-shadow: 0 0 8px rgba(45,255,74,0.35);
+    color: #ff2d95;
+    text-shadow: 0 0 8px rgba(255,45,149, 0.35);
     font: 700 0.72rem/1.2 monospace;
     letter-spacing: 0.04em;
   }
@@ -290,20 +293,20 @@ import Base from "../layouts/Base.astro";
   }
 
   .track-id-btn {
-    border: 1px solid #573004;
+    border: 1px solid #2a3458;
     border-radius: 4px;
-    background: linear-gradient(180deg, #2c1905, #130b02);
-    color: #e2a83a;
+    background: linear-gradient(180deg, #161c33, #0a0e1a);
+    color: #1fb6e6;
     cursor: pointer;
     font: 700 0.62rem/1 monospace;
     letter-spacing: 0.09em;
     padding: 0.45rem 0.5rem;
-    box-shadow: inset 0 1px 0 rgba(255,180,50,0.12);
+    box-shadow: inset 0 1px 0 rgba(55,212,255, 0.12);
   }
 
   .track-id-btn:hover {
-    border-color: #a85d0b;
-    color: #ffd17a;
+    border-color: #2ec5f5;
+    color: #a6ecff;
   }
 
   .track-id-btn:disabled {
@@ -314,7 +317,7 @@ import Base from "../layouts/Base.astro";
   .lcd-status {
     font-family: monospace;
     font-size: 0.65rem;
-    color: rgba(45,255,74,0.55);
+    color: rgba(255,45,149, 0.55);
     letter-spacing: 0.08em;
     flex-shrink: 0;
   }
@@ -322,7 +325,7 @@ import Base from "../layouts/Base.astro";
   .lcd-signal {
     font-family: monospace;
     font-size: 0.6rem;
-    color: rgba(45,255,74,0.4);
+    color: rgba(255,45,149, 0.4);
     letter-spacing: 0.05em;
     flex-shrink: 0;
   }
@@ -340,8 +343,8 @@ import Base from "../layouts/Base.astro";
     display: block;
     width: 3px;
     border-radius: 1px;
-    background: #2dff4a;
-    box-shadow: 0 0 3px rgba(45,255,74,0.4);
+    background: #ff2d95;
+    box-shadow: 0 0 3px rgba(255,45,149, 0.4);
     height: 3px;
     transition: height 0.1s ease-out;
   }
@@ -361,20 +364,20 @@ import Base from "../layouts/Base.astro";
   .tuner-freq-labels span {
     font-family: monospace;
     font-size: 0.6rem;
-    color: rgba(200,137,10,0.4);
+    color: rgba(55,212,255, 0.4);
     letter-spacing: 0.03em;
   }
 
   .tuner-fm-label {
-    color: rgba(200,137,10,0.55) !important;
+    color: rgba(55,212,255, 0.55) !important;
   }
 
   .tuner-track {
     position: relative;
-    background: #0a0604;
+    background: #070a12;
     border-radius: 4px;
     height: 22px;
-    border: 1px solid #2a1a08;
+    border: 1px solid #1f2742;
     overflow: hidden;
   }
 
@@ -391,13 +394,13 @@ import Base from "../layouts/Base.astro";
     display: block;
     width: 1px;
     height: 5px;
-    background: rgba(200,137,10,0.25);
+    background: rgba(55,212,255, 0.25);
     margin-bottom: 2px;
   }
 
   .tick.tall {
     height: 9px;
-    background: rgba(200,137,10,0.4);
+    background: rgba(55,212,255, 0.4);
   }
 
   .tuner-needle {
@@ -405,8 +408,8 @@ import Base from "../layouts/Base.astro";
     top: 0;
     bottom: 0;
     width: 2px;
-    background: linear-gradient(to bottom, #ffb432, #c8890a);
-    box-shadow: 0 0 6px rgba(255,180,50,0.8);
+    background: linear-gradient(to bottom, #37d4ff, #1fb6e6);
+    box-shadow: 0 0 6px rgba(55,212,255, 0.8);
     border-radius: 1px;
     left: 50%;
     transform: translateX(-50%);
@@ -427,10 +430,10 @@ import Base from "../layouts/Base.astro";
     flex: 1;
     min-width: 0;
     padding: 8px 6px;
-    border: 1px solid #3d2510;
+    border: 1px solid #243050;
     border-radius: 8px;
-    background: linear-gradient(to bottom, #291808, #1a0f04);
-    color: rgba(255,180,50,0.65);
+    background: linear-gradient(to bottom, #161c33, #0d1222);
+    color: rgba(55,212,255, 0.65);
     font: 0.7rem/1.3 monospace;
     text-align: center;
     cursor: pointer;
@@ -439,16 +442,16 @@ import Base from "../layouts/Base.astro";
 
   .preset-btn:hover,
   .preset-btn:focus-visible {
-    color: #ffb432;
-    border-color: #6a4020;
+    color: #37d4ff;
+    border-color: #3a4a7a;
     outline: none;
   }
 
   .preset-btn:active { transform: translateY(1px); }
   .preset-btn.active {
-    color: #ffb432;
-    border-color: #6a4020;
-    box-shadow: 0 0 10px rgba(255,180,50,0.25);
+    color: #37d4ff;
+    border-color: #3a4a7a;
+    box-shadow: 0 0 10px rgba(55,212,255, 0.25);
   }
 
   /* ── Controls row ── */
@@ -461,14 +464,14 @@ import Base from "../layouts/Base.astro";
   .vol-label {
     font-family: monospace;
     font-size: 0.6rem;
-    color: rgba(200,137,10,0.5);
+    color: rgba(55,212,255, 0.5);
     letter-spacing: 0.1em;
     flex-shrink: 0;
   }
 
   .vol-slider {
     flex: 1;
-    accent-color: #c8890a;
+    accent-color: #1fb6e6;
     cursor: pointer;
   }
 
@@ -477,8 +480,8 @@ import Base from "../layouts/Base.astro";
     height: 34px;
     border-radius: 50%;
     background: none;
-    border: 1.5px solid rgba(255,180,50,0.55);
-    color: rgba(255,180,50,0.8);
+    border: 1.5px solid rgba(55,212,255, 0.55);
+    color: rgba(55,212,255, 0.8);
     font-size: 0.85rem;
     cursor: pointer;
     display: flex;
@@ -489,29 +492,29 @@ import Base from "../layouts/Base.astro";
   }
 
   .play-btn:hover {
-    border-color: #ffb432;
-    color: #ffb432;
-    box-shadow: 0 0 8px rgba(255,180,50,0.3);
+    border-color: #37d4ff;
+    color: #37d4ff;
+    box-shadow: 0 0 8px rgba(55,212,255, 0.3);
   }
 
   .radio-action-btn {
     width: 34px;
     height: 34px;
     flex: 0 0 34px;
-    border: 1px solid #573004;
+    border: 1px solid #2a3458;
     border-radius: 7px;
-    background: linear-gradient(180deg, #2c1905, #130b02);
-    color: rgba(255,180,50,0.78);
+    background: linear-gradient(180deg, #161c33, #0a0e1a);
+    color: rgba(55,212,255, 0.78);
     cursor: pointer;
     font: 700 1rem/1 monospace;
   }
   .radio-action-btn:hover,
   .radio-action-btn:focus-visible,
   .radio-action-btn[aria-pressed="true"] {
-    border-color: #a85d0b;
-    color: #ffd17a;
+    border-color: #2ec5f5;
+    color: #a6ecff;
     outline: none;
-    box-shadow: 0 0 8px rgba(255,180,50,0.2);
+    box-shadow: 0 0 8px rgba(55,212,255, 0.2);
   }
 
   /* ── Tune row ── */
@@ -531,13 +534,13 @@ import Base from "../layouts/Base.astro";
     width: 100%;
     min-width: 0;
     padding: 7px 9px;
-    border: 1px solid #3d2510;
+    border: 1px solid #243050;
     border-radius: 5px;
     background:
-      linear-gradient(180deg, rgba(255,180,50,0.035), transparent),
-      #0c0804;
+      linear-gradient(180deg, rgba(55,212,255, 0.035), transparent),
+      #0a0d18;
     box-shadow: inset 0 1px 4px rgba(0,0,0,0.7);
-    color: rgba(255,180,50,0.85);
+    color: rgba(55,212,255, 0.85);
     cursor: pointer;
     text-align: left;
   }
@@ -545,7 +548,7 @@ import Base from "../layouts/Base.astro";
   .station-toggle:hover,
   .station-toggle:focus-visible,
   .station-toggle[aria-expanded="true"] {
-    border-color: #6a4020;
+    border-color: #3a4a7a;
     outline: none;
   }
 
@@ -553,13 +556,13 @@ import Base from "../layouts/Base.astro";
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: #6e4107;
+    background: #2f3f6e;
     box-shadow: inset 0 0 2px rgba(0,0,0,0.8);
   }
 
   .station-toggle.has-station .station-toggle-led {
-    background: #ffb432;
-    box-shadow: 0 0 7px rgba(255,180,50,0.7);
+    background: #37d4ff;
+    box-shadow: 0 0 7px rgba(55,212,255, 0.7);
   }
 
   .station-toggle-copy {
@@ -570,14 +573,14 @@ import Base from "../layouts/Base.astro";
   }
 
   .station-toggle-label {
-    color: rgba(200,137,10,0.44);
+    color: rgba(55,212,255, 0.44);
     font: 0.5rem/1 monospace;
     letter-spacing: 0.12em;
   }
 
   .station-toggle-name {
     min-width: 0;
-    color: #ffb432;
+    color: #37d4ff;
     font: 0.72rem/1.25 monospace;
     letter-spacing: 0.03em;
     white-space: nowrap;
@@ -586,7 +589,7 @@ import Base from "../layouts/Base.astro";
   }
 
   .station-count {
-    color: rgba(200,137,10,0.58);
+    color: rgba(55,212,255, 0.58);
     font: 0.58rem/1 monospace;
     letter-spacing: 0.08em;
     white-space: nowrap;
@@ -595,8 +598,8 @@ import Base from "../layouts/Base.astro";
   .station-toggle-chevron {
     width: 7px;
     height: 7px;
-    border-right: 1px solid rgba(255,180,50,0.65);
-    border-bottom: 1px solid rgba(255,180,50,0.65);
+    border-right: 1px solid rgba(55,212,255, 0.65);
+    border-bottom: 1px solid rgba(55,212,255, 0.65);
     transform: rotate(45deg) translateY(-2px);
     transition: transform 0.18s;
   }
@@ -608,11 +611,11 @@ import Base from "../layouts/Base.astro";
   .station-bay {
     margin-top: 9px;
     overflow: hidden;
-    border: 1px solid #3d2510;
+    border: 1px solid #243050;
     border-radius: 7px;
     background:
-      repeating-linear-gradient(0deg, rgba(255,180,50,0.012) 0, rgba(255,180,50,0.012) 1px, transparent 1px, transparent 3px),
-      #090603;
+      repeating-linear-gradient(0deg, rgba(55,212,255, 0.012) 0, rgba(55,212,255, 0.012) 1px, transparent 1px, transparent 3px),
+      #070a12;
     box-shadow: inset 0 2px 8px rgba(0,0,0,0.72);
   }
 
@@ -622,7 +625,7 @@ import Base from "../layouts/Base.astro";
     display: flex;
     gap: 7px;
     padding: 8px;
-    border-bottom: 1px solid rgba(61,37,16,0.65);
+    border-bottom: 1px solid rgba(42,52,88, 0.65);
   }
 
   .station-search-wrap {
@@ -637,7 +640,7 @@ import Base from "../layouts/Base.astro";
     left: 9px;
     width: 8px;
     height: 8px;
-    border: 1px solid rgba(200,137,10,0.55);
+    border: 1px solid rgba(55,212,255, 0.55);
     border-radius: 50%;
     transform: translateY(-60%);
     pointer-events: none;
@@ -649,34 +652,34 @@ import Base from "../layouts/Base.astro";
     right: -4px;
     bottom: -3px;
     width: 5px;
-    border-top: 1px solid rgba(200,137,10,0.55);
+    border-top: 1px solid rgba(55,212,255, 0.55);
     transform: rotate(45deg);
     transform-origin: left;
   }
 
   .station-search {
     width: 100%;
-    border: 1px solid #2f1c0c;
+    border: 1px solid #1f2742;
     border-radius: 4px;
-    background: #050302;
-    color: #ffb432;
+    background: #05070e;
+    color: #37d4ff;
     padding: 7px 8px 7px 26px;
     font: 0.65rem/1 monospace;
     letter-spacing: 0.05em;
   }
 
-  .station-search::placeholder { color: rgba(200,137,10,0.35); }
+  .station-search::placeholder { color: rgba(55,212,255, 0.35); }
   .station-search:focus {
-    border-color: #6a4020;
+    border-color: #3a4a7a;
     outline: none;
-    box-shadow: 0 0 0 1px rgba(255,180,50,0.08);
+    box-shadow: 0 0 0 1px rgba(55,212,255, 0.08);
   }
 
   .station-close {
-    border: 1px solid #2f1c0c;
+    border: 1px solid #1f2742;
     border-radius: 4px;
-    background: #130b04;
-    color: rgba(200,137,10,0.56);
+    background: #0d1222;
+    color: rgba(55,212,255, 0.56);
     padding: 0 9px;
     font: 0.55rem/1 monospace;
     letter-spacing: 0.08em;
@@ -685,8 +688,8 @@ import Base from "../layouts/Base.astro";
 
   .station-close:hover,
   .station-close:focus-visible {
-    color: #ffb432;
-    border-color: #6a4020;
+    color: #37d4ff;
+    border-color: #3a4a7a;
     outline: none;
   }
 
@@ -695,16 +698,16 @@ import Base from "../layouts/Base.astro";
     gap: 4px;
     padding: 7px 8px;
     overflow-x: auto;
-    border-bottom: 1px solid rgba(61,37,16,0.5);
+    border-bottom: 1px solid rgba(42,52,88, 0.5);
     scrollbar-width: thin;
   }
 
   .station-filter {
     flex: 0 0 auto;
-    border: 1px solid #2f1c0c;
+    border: 1px solid #1f2742;
     border-radius: 999px;
     background: transparent;
-    color: rgba(200,137,10,0.46);
+    color: rgba(55,212,255, 0.46);
     padding: 4px 8px 3px;
     font: 0.52rem/1 monospace;
     letter-spacing: 0.08em;
@@ -714,12 +717,12 @@ import Base from "../layouts/Base.astro";
   .station-filter:hover,
   .station-filter:focus-visible,
   .station-filter.active {
-    border-color: #6a4020;
-    color: #ffb432;
+    border-color: #3a4a7a;
+    color: #37d4ff;
     outline: none;
   }
 
-  .station-filter.active { background: rgba(255,180,50,0.07); }
+  .station-filter.active { background: rgba(55,212,255, 0.07); }
 
   .station-list-head,
   .station-row {
@@ -731,7 +734,7 @@ import Base from "../layouts/Base.astro";
 
   .station-list-head {
     padding: 6px 9px 5px;
-    color: rgba(200,137,10,0.32);
+    color: rgba(55,212,255, 0.32);
     font: 0.48rem/1 monospace;
     letter-spacing: 0.1em;
   }
@@ -742,7 +745,7 @@ import Base from "../layouts/Base.astro";
     max-height: 270px;
     overflow-y: auto;
     overscroll-behavior: contain;
-    scrollbar-color: #4c2d12 #090603;
+    scrollbar-color: #2a3458 #070a12;
     scrollbar-width: thin;
   }
 
@@ -751,31 +754,31 @@ import Base from "../layouts/Base.astro";
     min-width: 0;
     padding: 7px 9px;
     border: 0;
-    border-top: 1px solid rgba(61,37,16,0.35);
+    border-top: 1px solid rgba(42,52,88, 0.35);
     background: transparent;
-    color: rgba(255,180,50,0.72);
+    color: rgba(55,212,255, 0.72);
     text-align: left;
     cursor: pointer;
   }
 
   .station-row:hover,
   .station-row:focus-visible {
-    background: rgba(255,180,50,0.055);
-    color: #ffb432;
+    background: rgba(55,212,255, 0.055);
+    color: #37d4ff;
     outline: none;
   }
 
   .station-row.active {
-    background: linear-gradient(90deg, rgba(255,180,50,0.11), rgba(255,180,50,0.02));
-    color: #ffb432;
+    background: linear-gradient(90deg, rgba(55,212,255, 0.11), rgba(55,212,255, 0.02));
+    color: #37d4ff;
   }
 
   .station-channel {
-    color: rgba(200,137,10,0.38);
+    color: rgba(55,212,255, 0.38);
     font: 0.58rem/1 monospace;
   }
 
-  .station-row.active .station-channel { color: #ffb432; }
+  .station-row.active .station-channel { color: #37d4ff; }
 
   .station-row-copy {
     display: flex;
@@ -793,7 +796,7 @@ import Base from "../layouts/Base.astro";
 
   .station-row-meta {
     overflow: hidden;
-    color: rgba(200,137,10,0.36);
+    color: rgba(55,212,255, 0.36);
     font: 0.51rem/1.1 monospace;
     letter-spacing: 0.04em;
     text-overflow: ellipsis;
@@ -811,7 +814,7 @@ import Base from "../layouts/Base.astro";
 
   .station-signal span {
     width: 2px;
-    background: rgba(200,137,10,0.38);
+    background: rgba(55,212,255, 0.38);
   }
 
   .station-signal span:nth-child(1) { height: 3px; }
@@ -819,20 +822,20 @@ import Base from "../layouts/Base.astro";
   .station-signal span:nth-child(3) { height: 8px; }
   .station-signal span:nth-child(4) { height: 11px; }
   .station-row:hover .station-signal span,
-  .station-row.active .station-signal span { background: #ffb432; }
+  .station-row.active .station-signal span { background: #37d4ff; }
 
   .station-empty,
   .station-directory-status {
     padding: 10px;
-    border-top: 1px solid rgba(61,37,16,0.35);
-    color: rgba(200,137,10,0.38);
+    border-top: 1px solid rgba(42,52,88, 0.35);
+    color: rgba(55,212,255, 0.38);
     font: 0.55rem/1 monospace;
     letter-spacing: 0.08em;
     text-align: center;
   }
 
-  .station-directory-status.ready { color: rgba(45,255,74,0.42); }
-  .station-directory-status.error { color: rgba(255,121,64,0.62); }
+  .station-directory-status.ready { color: rgba(255,45,149, 0.42); }
+  .station-directory-status.error { color: rgba(255,106,43, 0.62); }
 
   .sr-only {
     position: absolute;

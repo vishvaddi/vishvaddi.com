@@ -393,36 +393,6 @@
         },
       },
     },
-    {
-      number: "14",
-      name: "ELSEWHERE",
-      schedule: {
-        morning: {
-          title: "SBS On Demand · Movies",
-          year: "FREE",
-          runtime: "AU",
-          provider: "external",
-          id: "https://www.sbs.com.au/ondemand/movies",
-          label: "World cinema, free with ads",
-        },
-        afternoon: {
-          title: "ABC iview",
-          year: "FREE",
-          runtime: "AU",
-          provider: "external",
-          id: "https://iview.abc.net.au/",
-          label: "Australian drama and docs, free",
-        },
-        night: {
-          title: "Tubi",
-          year: "FREE",
-          runtime: "AU",
-          provider: "external",
-          id: "https://tubitv.com/",
-          label: "Thousands of films, free with ads",
-        },
-      },
-    },
   ];
   var CHANNELS = BASE_CHANNELS.slice();
 
@@ -579,26 +549,7 @@
     titleReadout.textContent = program.title.toUpperCase();
     metaReadout.textContent = program.year + " · " + program.runtime;
     player.title = program.title + " on CRT TV";
-    if (loadVideo && program.provider === "external") {
-      // Services that don't allow embedding get a stand-in screen and a link.
-      player.src = "about:blank";
-      player.hidden = true;
-      offScreen.hidden = false;
-      offScreen.innerHTML = "";
-      var strong = document.createElement("strong");
-      strong.textContent = "OPENS IN A NEW TAB";
-      var note = document.createElement("span");
-      note.textContent = program.label;
-      var link = document.createElement("a");
-      link.className = "tv-off-link";
-      link.href = program.id;
-      link.target = "_blank";
-      link.rel = "noopener";
-      link.textContent = "OPEN " + program.title.split(" · ")[0].toUpperCase();
-      offScreen.appendChild(strong);
-      offScreen.appendChild(note);
-      offScreen.appendChild(link);
-    } else if (loadVideo) {
+    if (loadVideo) {
       player.removeAttribute("srcdoc");
       player.src = embedUrl(program);
       player.hidden = false;

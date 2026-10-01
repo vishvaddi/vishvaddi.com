@@ -1,6 +1,6 @@
 .tv-page {
   font-family: var(--font-sans);
-  color: #e1dbcf;
+  color: #dfe6ff;
 }
 
 .tv-intro {
@@ -11,35 +11,35 @@
   margin: 0.15rem 0 0.5rem;
   font-size: clamp(2rem, 8vw, 3.8rem);
   letter-spacing: -0.055em;
-  color: #f1ede4;
+  color: #eef2ff;
 }
 
 .tv-intro > p:last-child {
   max-width: 38rem;
   margin: 0;
-  color: #a39a8b;
+  color: #7f8aa3;
 }
 
 .tv-eyebrow,
 .tv-guide-label {
   margin: 0;
-  color: #b28f55;
+  color: #ff2d95;
   font: 700 0.68rem/1.2 var(--font-mono);
   letter-spacing: 0.17em;
 }
 
 .tv-set {
-  --cabinet-hi: #3b3630;
-  --cabinet: #24211d;
-  --cabinet-deep: #13110f;
-  --cabinet-trim: #5a5349;
-  --crt-green: #c9ffd8;
-  --crt-amber: #d8c18a;
-  --crt-glow: rgba(201, 255, 216, 0.12);
+  --cabinet-hi: #1c2340;
+  --cabinet: #0f1326;
+  --cabinet-deep: #070914;
+  --cabinet-trim: #2a3458;
+  --crt-green: #37d4ff;
+  --crt-amber: #ff2d95;
+  --crt-glow: rgba(55,212,255, 0.12);
   position: relative;
   margin: 1.6rem 0 1.25rem;
   padding: 1rem 1rem 0.85rem;
-  border: 1px solid #1a1815;
+  border: 1px solid #111733;
   border-radius: 1.35rem;
   background:
     radial-gradient(circle at 18% 4%, rgba(255, 255, 255, 0.08), transparent 30%),
@@ -56,7 +56,7 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0 0.3rem 0.75rem;
-  color: #b9ae9d;
+  color: #9aa6c7;
   font-family: var(--font-mono);
 }
 
@@ -66,7 +66,7 @@
 }
 
 .tv-nameplate span {
-  color: #8d8475;
+  color: #6f7a99;
   font-size: 0.52rem;
   letter-spacing: 0.12em;
 }
@@ -79,12 +79,12 @@
 
 .tv-screen-shell {
   padding: 0.72rem;
-  border: 1px solid #12110f;
+  border: 1px solid #0b0f20;
   border-radius: 2rem;
   background:
-    linear-gradient(145deg, #171513, #25221d 48%, #0d0c0a);
+    linear-gradient(145deg, #0f1326, #1a2140 48%, #070914);
   box-shadow:
-    inset 0 0 0 3px #38342f,
+    inset 0 0 0 3px #243050,
     inset 0 0.5rem 1rem rgba(0, 0, 0, 0.64);
 }
 
@@ -92,11 +92,11 @@
   position: relative;
   aspect-ratio: 4 / 3;
   overflow: hidden;
-  border: 2px solid #050505;
+  border: 2px solid #03040a;
   border-radius: 12% / 10%;
   background:
-    radial-gradient(circle at 50% 45%, rgba(40, 70, 52, 0.34), transparent 24%),
-    radial-gradient(circle at 50% 50%, #0a0f0c 0%, #040505 70%);
+    radial-gradient(circle at 50% 45%, rgba(55,212,255, 0.34), transparent 24%),
+    radial-gradient(circle at 50% 50%, #070b16 0%, #03040a 70%);
   box-shadow:
     inset 0 0 4rem rgba(0, 0, 0, 0.92),
     0 0 0 1px rgba(255, 255, 255, 0.04);
@@ -118,11 +118,11 @@
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  color: rgba(201, 255, 216, 0.62);
+  color: rgba(55,212,255, 0.62);
   font-family: var(--font-mono);
   letter-spacing: 0.16em;
   text-align: center;
-  text-shadow: 0 0 0.75rem rgba(120, 255, 160, 0.22);
+  text-shadow: 0 0 0.75rem rgba(55,212,255, 0.22);
 }
 
 .tv-off[hidden] {
@@ -141,8 +141,8 @@
   width: 0.46rem;
   height: 0.46rem;
   border-radius: 50%;
-  background: #9dfab3;
-  box-shadow: 0 0 1rem rgba(157, 250, 179, 0.55);
+  background: #37d4ff;
+  box-shadow: 0 0 1rem rgba(55,212,255, 0.55);
   animation: tv-standby 1.7s ease-in-out infinite;
 }
 
@@ -175,9 +175,9 @@
   min-height: 4.4rem;
   padding: 0.68rem;
   overflow: hidden;
-  border: 1px solid #171510;
+  border: 1px solid #111733;
   border-radius: 0.42rem;
-  background: #0a0f0b;
+  background: #070b16;
   box-shadow: inset 0 0.22rem 0.8rem rgba(0, 0, 0, 0.86);
   font-family: var(--font-mono);
 }
@@ -202,22 +202,22 @@
   color: var(--crt-green);
   font-size: 0.68rem;
   letter-spacing: 0.05em;
-  text-shadow: 0 0 0.5rem rgba(160, 255, 185, 0.26);
+  text-shadow: 0 0 0.5rem rgba(55,212,255, 0.26);
 }
 
 .tv-readout small {
-  color: rgba(201, 255, 216, 0.48);
+  color: rgba(55,212,255, 0.48);
   font-size: 0.48rem;
 }
 
 .tv-speaker {
   flex: 1;
   min-height: 5rem;
-  border: 1px solid #25211b;
+  border: 1px solid #1f2742;
   border-radius: 0.56rem;
   background:
     radial-gradient(circle, rgba(10, 10, 9, 0.95) 1.2px, transparent 1.4px),
-    #2f2a24;
+    #121a2e;
   background-position: 0.22rem 0.22rem;
   background-size: 0.55rem 0.55rem;
   box-shadow: inset 0 0.18rem 0.75rem rgba(0, 0, 0, 0.48);
@@ -230,13 +230,13 @@
 
 .tv-controls button {
   min-height: 2.1rem;
-  border: 1px solid #171510;
+  border: 1px solid #111733;
   border-radius: 0.38rem;
-  background: linear-gradient(#4c463f, #26231f);
+  background: linear-gradient(#243050, #121a2e);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     0 2px 3px rgba(0, 0, 0, 0.28);
-  color: #ddd3c2;
+  color: #cfd8ff;
   cursor: pointer;
   font: 700 0.52rem/1 var(--font-mono);
   letter-spacing: 0.08em;
@@ -244,7 +244,7 @@
 
 .tv-controls button:hover,
 .tv-controls button:focus-visible {
-  border-color: #c19a62;
+  border-color: #37d4ff;
   color: #fff;
   outline: none;
 }
@@ -271,13 +271,13 @@
   width: 0.42rem;
   height: 0.42rem;
   border-radius: 50%;
-  background: #5d130d;
+  background: #3a0d2a;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 .tv-power.active span {
-  background: #e2b05a;
-  box-shadow: 0 0 0.65rem rgba(226, 176, 90, 0.84);
+  background: #ff2d95;
+  box-shadow: 0 0 0.65rem rgba(255,45,149, 0.84);
 }
 
 .tv-vents {
@@ -298,7 +298,7 @@
 .tv-news {
   margin-top: 1rem;
   overflow: hidden;
-  border: 1px solid #26231d;
+  border: 1px solid #1f2742;
   border-radius: 0.78rem;
   background: rgba(10, 9, 8, 0.3);
 }
@@ -316,19 +316,19 @@
 .tv-guide-heading h2,
 .tv-news-head h2 {
   margin: 0.15rem 0 0;
-  color: #f1ede4;
+  color: #eef2ff;
 }
 
 .tv-guide-heading > span,
 .tv-news-head > span {
-  color: #938a7c;
+  color: #7f8aa3;
   font: 600 0.64rem/1.35 var(--font-mono);
   letter-spacing: 0.08em;
   text-align: right;
 }
 
 .tv-guide-list {
-  border-top: 1px solid #2a2721;
+  border-top: 1px solid #1f2742;
 }
 
 .tv-guide-item {
@@ -339,9 +339,9 @@
   width: 100%;
   padding: 0.85rem 1rem;
   border: 0;
-  border-bottom: 1px solid #2a2721;
+  border-bottom: 1px solid #1f2742;
   background: transparent;
-  color: #e1dbcf;
+  color: #dfe6ff;
   cursor: pointer;
   text-align: left;
 }
@@ -353,24 +353,24 @@
 .tv-guide-item:hover,
 .tv-guide-item:focus-visible,
 .tv-guide-item.active {
-  background: rgba(226, 176, 90, 0.06);
+  background: rgba(255,45,149, 0.06);
   outline: none;
 }
 
 .tv-guide-item.active {
-  box-shadow: inset 3px 0 #c19a62;
+  box-shadow: inset 3px 0 #37d4ff;
 }
 
 .tv-guide-channel,
 .tv-guide-play {
-  color: #9c9283;
+  color: #7f8aa3;
   font: 700 0.62rem/1 var(--font-mono);
   letter-spacing: 0.08em;
 }
 
 .tv-guide-item.active .tv-guide-channel,
 .tv-guide-item.active .tv-guide-play {
-  color: #d7b26b;
+  color: #37d4ff;
 }
 
 .tv-guide-copy {
@@ -389,7 +389,7 @@
 
 .tv-guide-copy small {
   overflow: hidden;
-  color: #998f82;
+  color: #7f8aa3;
   font: 0.7rem/1.35 var(--font-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -397,12 +397,12 @@
 
 .tv-news-card {
   padding: 1rem;
-  border-top: 1px solid #2a2721;
+  border-top: 1px solid #1f2742;
 }
 
 .tv-news-status {
   margin: 0;
-  color: #b0a797;
+  color: #9aa6c7;
   font: 0.8rem/1.6 var(--font-sans);
 }
 
@@ -414,7 +414,7 @@
 
 .tv-news-summary {
   margin: 0 0 0.9rem;
-  color: #ece7dd;
+  color: #eef2ff;
   font-size: 0.93rem;
   line-height: 1.65;
 }
@@ -429,20 +429,20 @@
 
 .tv-news-list li {
   padding: 0.55rem 0.65rem;
-  border: 1px solid #2a2721;
+  border: 1px solid #1f2742;
   border-radius: 0.45rem;
   background: rgba(255, 255, 255, 0.02);
-  color: #d4c9ba;
+  color: #c3cdee;
   font: 0.8rem/1.4 var(--font-sans);
 }
 
 .tv-news-list strong {
-  color: #f1ede4;
+  color: #eef2ff;
 }
 
 .tv-news-foot {
   margin-top: 0.75rem;
-  color: #8f8577;
+  color: #7f8aa3;
   font: 0.72rem/1.5 var(--font-mono);
 }
 
@@ -518,6 +518,6 @@
   }
 }
 
-/* "Elsewhere" channel: services that forbid embedding get a stand-in screen and a link. */
-.tv-off-link { margin-top: 0.7rem; padding: 0.45rem 0.9rem; border: 1px solid currentColor; border-radius: 6px; color: var(--accent, #ff6a2b); font-family: var(--font-mono, monospace); font-size: 0.72rem; letter-spacing: 0.14em; text-decoration: none; }
-.tv-off-link:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+/* retro-cyberpunk: neon halo on the set and a chromatic edge on the glass */
+.tv-set { box-shadow: 0 1.6rem 3.8rem rgba(0, 0, 0, 0.5), 0 0 60px rgba(55, 212, 255, 0.08), 0 0 120px rgba(255, 45, 149, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+.tv-glass { box-shadow: inset 0 0 1.8rem rgba(0, 0, 0, 0.45), inset 2px 0 0 rgba(255, 45, 149, 0.18), inset -2px 0 0 rgba(55, 212, 255, 0.18); }
