@@ -1,6 +1,6 @@
 # Project State
 
-## 2026-10-01 (cont.) - Nav order Tools · Field · Studio · Audio; 2D sheet is the default Cut List (built, pushed, NOT deployed)
+## 2026-10-01 (cont.) - Nav order Tools · Field · Studio · Audio; 2D sheet is the default Cut List — DEPLOYED 02/10
 
 Catalogue href for Cut List Optimizer is `/site/sheet` (icon and problem/promise keyed to it too); `activeToolHref` maps `/site/cut-list` → `/site/sheet` for the rail; Sheet · 2D tab first on both pages. seo/feature/pro harnesses green.
 
