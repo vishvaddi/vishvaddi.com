@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build && node scripts/optimize-og.mjs",
+    "deploy": "npm run build && wrangler deploy",
     "check": "astro check",
     "test:release-gate": "node --test scripts/release-check.test.mjs",
     "test:auth": "node --experimental-strip-types --test scripts/auth.test.mjs",
@@ -37,6 +38,7 @@
     "@types/leaflet": "^1.9.21",
     "playwright-core": "^1.61.1",
     "typescript": "^6.0.3",
-    "workbox-build": "^7.4.1"
+    "workbox-build": "^7.4.1",
+    "wrangler": "^4.147.0"
   }
 }
