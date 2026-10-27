@@ -1,5 +1,11 @@
 # Run Log
 
+## 2026-10-27 — Combinator deployment
+
+- On explicit instruction, fast-forwarded origin/master to tested `5ec3e21`, rebuilt in the clean isolated worktree and deployed Cloudflare version `e6ef2447-b5d8-412b-886f-ec1595fc0d8a`.
+- Wrangler and Chrome needed execution outside the sandbox for filesystem/network access. No permission settings were changed.
+- Live Combinator checks passed, including Studio handoff/insertion/undo/persistence, only Use Your Heart factory template, macros, stop, phone layouts, practice and calculator scenarios. Homepage, tools hub and sitemap return 200. vvDeck and the main checkout's unrelated file were untouched.
+
 ## 2026-10-27 — Studio Combinator, music practice and investment schedules
 
 - Worked in isolated `feat/musical-combinator` worktree from `dfdce72`; left the main checkout's untracked Lattice brief and Claude's vvDeck work untouched.

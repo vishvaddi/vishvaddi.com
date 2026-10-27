@@ -1,12 +1,12 @@
 # Project State
 
-## 2026-10-27 — Musical Combinator and Use Your Heart (built, NOT deployed)
+## 2026-10-27 — Musical Combinator and Use Your Heart (DEPLOYED)
 
 Branch `feat/musical-combinator` adds a shared key/scale workspace to Studio and `/audio/chords/`: chord pads, inversions, voicings, arpeggiator, editable pattern insertion, piano/fretboard, circle of fifths and four performance macros. Existing saved songs remain available. The only factory template is **Use Your Heart — Interlude Study**, an editable 111.5 BPM instrumental approximation of the supplied SWV reference; no recording or vocals ship with it.
 
 Ear training now has eight exercise types, timed sessions and mistake review. `/site/investment/` compares AUD contribution schedules against savings-only with explicit brokerage and return assumptions; the shared catalogue exposes it in navigation/search. Worker, service worker, credentials and vvDeck are unchanged.
 
-Validation: full `release:check` passed, including Studio, audio, financial model and new Combinator browser coverage. Final accessibility/result-state polish was rebuilt and checked separately. Existing dependency advisories remain; dependencies were not upgraded in this feature change. Deployment requires Vish's explicit instruction, then promotion to master, a clean pushed build and live smoke checks.
+Validation: full `release:check` passed, including Studio, audio, financial model and new Combinator browser coverage. Final accessibility/result-state polish was rebuilt and checked separately. Existing dependency advisories remain; dependencies were not upgraded in this feature change. Deployed on Vish's explicit instruction from clean, pushed master commit `5ec3e21`; Cloudflare version `e6ef2447-b5d8-412b-886f-ec1595fc0d8a`. Live Combinator browser checks passed: handoff, editable patterns, persistence, macros, stop, phone layouts, practice and investment schedules. Homepage, tools hub and sitemap return 200.
 
 ## 2026-10-03 - wrangler pinned
 
