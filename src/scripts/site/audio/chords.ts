@@ -5,6 +5,8 @@ import { PPQ, encodeMidi } from "./smf";
 import type { MidiTrack } from "./smf";
 import { NOTE_NAMES, PROGRESSIONS, SCALES, camelot, diatonicChord, invert, midiName, nameChord, pc, relativeKey, romanNumeral, scaleById, scalePitchClasses, voice } from "./theory";
 import type { Voicing } from "./theory";
+import { buildCombinator } from './combinator';
+import { musicalState } from './combinator-model';
 
 interface Slot { degree: number; inversion: number; bars: number }
 interface LabState { root: number; scale: string; octave: number; bpm: number; size: 3 | 4; voicing: Voicing; slots: Slot[] }
@@ -18,7 +20,12 @@ export function initChordLab(): void {
   if (!rootSel || !scaleSel) return;
 
   const state: LabState = { root: 0, scale: "major", octave: 4, bpm: 120, size: 3, voicing: "close", slots: [] };
-  try { Object.assign(state, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch { /* fresh start */ }
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE) || '{}'), safe = musicalState(saved);
+    Object.assign(state, { root: safe.root, scale: safe.scale, octave: safe.octave, size: safe.size, voicing: safe.voicing });
+    state.bpm = typeof saved.bpm === 'number' && Number.isFinite(saved.bpm) ? Math.max(40, Math.min(240, saved.bpm)) : 120;
+    if (Array.isArray(saved.slots)) state.slots = saved.slots.filter((s: Slot) => s && Number.isInteger(s.degree) && s.degree >= 0 && s.degree < scaleById(state.scale).steps.length && Number.isInteger(s.inversion) && s.inversion >= 0 && s.inversion < state.size && [.5, 1, 2, 4].includes(s.bars)).slice(0, 64);
+  } catch { /* fresh start */ }
   const persist = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch { /* private mode */ } };
 
   NOTE_NAMES.forEach((n, i) => rootSel.add(new Option(n, String(i))));
@@ -31,6 +38,8 @@ export function initChordLab(): void {
 
   // ── sound ──
   let ctx: AudioContext | null = null, master: GainNode | null = null;
+  const sounding = new Set<OscillatorNode>();
+  const silence = () => { sounding.forEach(o => { try { o.stop(); } catch { /* Already ended. */ } }); sounding.clear(); };
   const audio = (): AudioContext => {
     if (!ctx) {
       ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
@@ -52,7 +61,7 @@ export function initChordLab(): void {
       [0, -7, 7].forEach((cents) => {
         const o = a.createOscillator(); o.type = cents ? "sawtooth" : "triangle"; o.frequency.value = f; o.detune.value = cents;
         const g = a.createGain(); g.gain.value = cents ? 0.35 : 0.6;
-        o.connect(g).connect(filt); o.start(when); o.stop(when + seconds + 0.05);
+        o.connect(g).connect(filt); sounding.add(o); o.onended = () => { sounding.delete(o); o.disconnect(); g.disconnect(); }; o.start(when); o.stop(when + seconds + 0.05);
       });
       filt.connect(env).connect(master as GainNode);
     });
@@ -88,8 +97,10 @@ export function initChordLab(): void {
       r.setAttribute("x", String(x)); r.setAttribute("y", "0"); r.setAttribute("width", String(w)); r.setAttribute("height", String(h)); r.setAttribute("rx", "0.6");
       r.setAttribute("class", `ch-key ${black ? "black" : "white"}${on ? " on" : ""}${root ? " root" : ""}`);
       r.setAttribute("data-midi", String(m));
+      r.setAttribute('role', 'button'); r.setAttribute('tabindex', '0'); r.setAttribute('aria-label', `Play ${midiName(m)}`);
       const t = document.createElementNS(ns, "title"); t.textContent = midiName(m); r.append(t);
       r.addEventListener("pointerdown", () => { playChord([m], audio().currentTime, 0.6, 0.3); });
+      r.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); playChord([m], audio().currentTime, .6, .3); } });
       svg.append(r);
     };
     whites.forEach((m) => key(m, xOfWhite.get(m) as number, whiteW - 0.35, 40, false));
@@ -140,6 +151,7 @@ export function initChordLab(): void {
   let playing = false, timer = 0, nextTime = 0, slotIndex = 0;
   const playBtn = $<HTMLButtonElement>("ch-play");
   function stop(): void {
+    silence();
     playing = false; window.clearTimeout(timer); playBtn.textContent = "▶ Play"; playBtn.setAttribute("aria-pressed", "false");
     document.querySelectorAll(".ch-slot.playing").forEach((n) => n.classList.remove("playing"));
   }
@@ -192,6 +204,7 @@ export function initChordLab(): void {
   });
 
   // ── wiring ──
+  let explorer: ReturnType<typeof buildCombinator> | undefined;
   const refresh = () => { renderScale(); renderChords(); renderProgression(); persist(); };
   rootSel.addEventListener("change", () => { state.root = Number(rootSel.value); refresh(); });
   scaleSel.addEventListener("change", () => { state.scale = scaleSel.value; state.slots = state.slots.filter((s) => s.degree < scale().steps.length); refresh(); });
@@ -207,4 +220,25 @@ export function initChordLab(): void {
   });
   $("ch-clear").addEventListener("click", () => { stop(); state.slots = []; refresh(); });
   refresh();
+  let exploration = musicalState({ ...state, degrees: state.slots.length ? state.slots.map(s => s.degree) : undefined });
+  try { exploration = musicalState(JSON.parse(localStorage.getItem('vv_audio_explorer_v1') || JSON.stringify(exploration))); } catch { /* Keep defaults. */ }
+  explorer = buildCombinator({
+    get: () => exploration,
+    save: next => {
+      exploration = next; Object.assign(state, { root: next.root, scale: next.scale, octave: next.octave, size: next.size, voicing: next.voicing });
+      state.slots = next.degrees.map(degree => ({ degree, inversion: next.inversion, bars: 1 }));
+      rootSel.value = String(state.root); scaleSel.value = state.scale; octSel.value = String(state.octave); sizeSel.value = String(state.size); voicingSel.value = state.voicing;
+      refresh(); try { localStorage.setItem('vv_audio_explorer_v1', JSON.stringify(next)); } catch { /* Storage may be disabled. */ }
+    },
+    clock: () => audio().currentTime,
+    tempo: () => state.bpm,
+    play: (midi, when, seconds) => playChord([midi], when, Math.max(.1, seconds)),
+    silence: stop,
+  });
+  document.getElementById('ch-explorer')?.append(explorer.root);
+  for (const field of [rootSel, scaleSel, octSel, sizeSel, voicingSel, presetSel]) field.addEventListener('change', () => {
+    exploration = musicalState({ ...exploration, ...state, degrees: state.slots.map(s => s.degree) }); explorer?.refresh();
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
+  window.addEventListener('pagehide', stop);
 }

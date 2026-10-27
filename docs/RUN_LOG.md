@@ -1,5 +1,13 @@
 # Run Log
 
+## 2026-10-27 — Studio Combinator, music practice and investment schedules
+
+- Worked in isolated `feat/musical-combinator` worktree from `dfdce72`; left the main checkout's untracked Lattice brief and Claude's vvDeck work untouched.
+- Added shared musical controls, playable pads, arpeggiation, fretboard, fifths, Studio note insertion/dragging, persisted macros, practice sessions and an AUD investment-frequency comparison. Removed other factory templates; retained user songs and blank-project creation.
+- Reference audio was analysed only in temporary local files. The shipped Use Your Heart study is a synthesised approximation, not an exact transcription or bundled recording.
+- Full release suite passed. Updated obsolete Studio test expectations for the new template's tempo, populated lanes and section names; checked clip undo/redo, state reload, mobile overflow and calculator identities.
+- Pre-existing sitemap tuple typing prevented check and was corrected. Existing npm audit advisories remain outside this change. No deployment performed: explicit current-turn deployment authorisation is required.
+
 ## 2026-09-06 — Demo songs re-cut to reference styles; MIDNIGHT ACID removed
 
 - WESTSIDE replaces BLOCK PARTY as the first-boot project: G-funk at 92 BPM in G minor — long 808-style kick, clap doubling every snare, straight 8th hats with an open-hat lift, sub bass on the chord roots with octave bounces, off-beat Keys stabs, and a sine whistle lead with slow portamento and delayed vibrato. Seven scenes, 32 cycles (64 real bars).

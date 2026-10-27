@@ -14,7 +14,7 @@ for (const ex of EXERCISES) {
       if (!q.choices.includes(q.answer)) { ok = false; detail = `${view}: answer ${q.answer} not in choices`; break }
       if (new Set(q.choices).size !== q.choices.length) { ok = false; detail = `${view}: duplicate choices`; break }
       if (q.choices.length < 4) { ok = false; detail = `${view}: only ${q.choices.length} choices`; break }
-      if (view !== 'ear' && !q.notes.length) { ok = false; detail = `${view}: no notes to draw`; break }
+      if (view !== 'ear' && !q.notes.length && q.signature === undefined) { ok = false; detail = `${view}: no notes or signature to draw`; break }
       if (view === 'ear' && !q.audio) { ok = false; detail = 'ear question without audio'; break }
       if (ex.id === 'interval' || ex.id === 'intervalEar') {
         const semis = Math.abs(q.notes[1] - q.notes[0])

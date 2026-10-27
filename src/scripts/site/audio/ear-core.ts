@@ -2,6 +2,8 @@
 // source they return a Question the page renders and grades. Kept free of
 // DOM and audio so a node run can check every exercise's logic.
 
+import { SCALES, NOTE_NAMES } from './theory.ts';
+
 export type View = "staff" | "keyboard" | "fretboard" | "ear";
 export type Rng = () => number;
 
@@ -31,6 +33,7 @@ export interface Question {
   view: View;
   audio?: { kind: "notes"; notes: number[]; mode: "melodic" | "harmonic"; gapMs: number } | { kind: "eq"; band: number; boostDb: number } | { kind: "rhythm"; cells: boolean[]; cellMs: number };
   rhythmChoices?: boolean[][];
+  signature?: number;
 }
 
 export const INTERVALS: Record<number, [string, string]> = { 1: ["m2", "minor 2nd"], 2: ["M2", "major 2nd"], 3: ["m3", "minor 3rd"], 4: ["M3", "major 3rd"], 5: ["P4", "perfect 4th"], 6: ["TT", "tritone"], 7: ["P5", "perfect 5th"], 8: ["m6", "minor 6th"], 9: ["M6", "major 6th"], 10: ["m7", "minor 7th"], 11: ["M7", "major 7th"], 12: ["P8", "octave"] };
@@ -140,6 +143,36 @@ export const EXERCISES: Array<{ id: string; name: string; views: View[]; make: (
     },
   },
 ];
+
+EXERCISES.push({
+  id: 'scale', name: 'Scale ID', views: ['ear', 'keyboard'],
+  make: (_s, view, rng) => {
+    const options = SCALES.filter(s => ['major', 'minor', 'harmonicMinor', 'dorian', 'mixolydian', 'majorPentatonic', 'minorPentatonic', 'blues'].includes(s.id));
+    const scale = pick(options, rng), root = 48 + Math.floor(rng() * 12), notes = [...scale.steps, 12].map(n => root + n);
+    return { exercise: 'scale', prompt: 'Identify the scale, played upwards from its root.', notes, choices: options.map(s => s.name), answer: scale.name, explain: `${NOTE_NAMES[root % 12]} ${scale.name}: ${scale.steps.join(', ')} semitones from the root.`, view, audio: { kind: 'notes', notes, mode: 'melodic', gapMs: 300 } };
+  },
+}, {
+  id: 'keySignature', name: 'Key signature', views: ['staff'],
+  make: (_s, view, rng) => {
+    const signatures = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
+    const signature = pick(signatures, rng), names = ['D♭', 'A♭', 'E♭', 'B♭', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F♯'];
+    return { exercise: 'keySignature', prompt: 'Which major key has this signature?', notes: [], signature, choices: names.map(n => `${n} major`), answer: `${names[signature + 5]} major`, explain: `${signature === 0 ? 'No sharps or flats' : `${Math.abs(signature)} ${signature > 0 ? 'sharps' : 'flats'}`} = ${names[signature + 5]} major.`, view };
+  },
+});
+
+export function safeEarSettings(value: unknown): Settings {
+  const v = value && typeof value === 'object' ? value as Partial<Settings> : {};
+  const list = <T>(values: unknown, allowed: T[], fallback: T[]) => Array.isArray(values) && values.some(x => allowed.includes(x)) ? [...new Set(values.filter(x => allowed.includes(x)))] as T[] : [...fallback];
+  return {
+    clef: v.clef === 'bass' ? 'bass' : 'treble', accidentals: v.accidentals === true,
+    intervals: list(v.intervals, Object.keys(INTERVALS).map(Number), DEFAULT_SETTINGS.intervals),
+    chords: list(v.chords, Object.keys(CHORDS), DEFAULT_SETTINGS.chords), inversions: v.inversions === true,
+    melodic: ['asc', 'desc', 'both', 'harmonic'].includes(v.melodic!) ? v.melodic! : 'both',
+    eqBands: list(v.eqBands, DEFAULT_SETTINGS.eqBands, DEFAULT_SETTINGS.eqBands),
+    eqBoostDb: typeof v.eqBoostDb === 'number' && Number.isFinite(v.eqBoostDb) ? Math.max(2, Math.min(15, v.eqBoostDb)) : 9,
+    rhythmDensity: v.rhythmDensity === 1 || v.rhythmDensity === 3 ? v.rhythmDensity : 2,
+  };
+}
 
 export const exerciseById = (id: string) => EXERCISES.find((e) => e.id === id) ?? EXERCISES[0];
 

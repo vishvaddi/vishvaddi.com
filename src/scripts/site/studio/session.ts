@@ -10,7 +10,8 @@ import type { TrackId, ArrangeTrackId, ArrangeBlock, AudioArrangeClip, Automatio
 import { saveAll, projectState, applyProject } from "./persistence";
 import { el, btn, help, download, askText, readAsDataUrl } from "./helpers";
 import { ctx, playhead, SCENE_COLORS } from "./ctx";
-import { buildDemo, DEMO_TITLES } from "./demos";
+import { buildDemo, DEMO_TITLES, DEMO_NOTES } from "./demos";
+import type { DemoTitle } from './demos';
 
 export interface SessionView {
   song: HTMLElement;
@@ -30,49 +31,8 @@ export function blankProject(): Record<string, unknown> {
   return state;
 }
 
-export function quickBeatProject(): Record<string, unknown> {
-  const state = factorySong("QUICK BEAT") as Record<string, unknown> & { arrangement: Record<string, ArrangeBlock[]>; title: string; bpm: number };
-  state.title = "Quick Beat"; state.bpm = 120;
-  state.arrangement = {
-    drums: state.arrangement.drums.slice(0, 1), pads: state.arrangement.pads.slice(0, 1),
-    bass: [], lead: [], harmony: [],
-  };
-  return state;
-}
-
-/** Demo projects live in demos.ts; this legacy generator only backs QUICK BEAT now. */
 export function factorySong(name: string): Record<string, unknown> {
-  const demo = buildDemo(name, JSON.parse(FACTORY_BASE) as Record<string, unknown>);
-  if (demo) return demo;
-  const state = JSON.parse(FACTORY_BASE) as Record<string, unknown> & {
-    pats: number[][][]; vels: number[][][]; synthLaneNotes: Record<string, Array<Array<Record<string, unknown>>>>;
-    arrangement: Record<string, ArrangeBlock[]>; bpm: number; title: string; padEvents: Array<Array<Record<string, unknown>>>;
-  };
-  state.title = name;
-  state.pats = Array.from({ length: SCENES }, () => Array.from({ length: 8 }, () => Array(STEPS).fill(0)));
-  state.vels = Array.from({ length: SCENES }, () => Array.from({ length: 8 }, () => Array(STEPS).fill(96)));
-  state.padEvents = Array.from({ length: SCENES }, () => []);
-  const put = (scene: number, row: number, steps: number[]) => steps.forEach((step) => { state.pats[scene][row][step] = 1; });
-  [0, 1, 2, 3].forEach((scene) => {
-    put(scene, 0, [0, 6, 8, 14]);
-    put(scene, 1, [4, 12]); put(scene, 2, [2, 6, 10, 14]);
-    if (scene % 2) put(scene, 3, [7, 15]);
-  });
-  const note = (noteName: string, step: number, len = 1, accent = false, slide = false) => ({ note: noteName, step, len, vel: accent ? 116 : 94, accent, slide });
-  state.synthLaneNotes = { bass: Array.from({ length: SCENES }, () => []), lead: Array.from({ length: SCENES }, () => []), harmony: Array.from({ length: SCENES }, () => []) };
-  state.synthLaneNotes.bass[0] = [note("C3", 0, 2, true), note("C3", 3), note("D#3", 6, 1, false, true), note("G3", 10), note("A#2", 14)];
-  state.synthLaneNotes.bass[1] = [note("F2", 0, 2, true), note("F2", 4), note("G#2", 8, 1, false, true), note("C3", 12)];
-  state.synthLaneNotes.lead[2] = [note("C4", 0), note("D#4", 2), note("G4", 4, 2, true), note("A#4", 8), note("G4", 12, 2)];
-  state.synthLaneNotes.harmony[3] = [note("C4", 0, 16)];
-  const makeBlocks = () => [0, 1, 2, 3].map((scene, index) => ({
-    id: `factory-${name.toLowerCase().replace(/\s+/g, "-")}-${index}-${Math.random().toString(36).slice(2, 7)}`,
-    scene, bars: 1, startBar: index,
-    offset: 0, loop: true,
-    automation: index === 2 ? [{ lane: "lead" as const, param: "cutoff" as const, from: .2, to: .9 }] : [],
-  }));
-  state.arrangement = { drums: makeBlocks(), pads: makeBlocks(), bass: makeBlocks(), lead: makeBlocks(), harmony: makeBlocks() };
-  state.bpm = 92;
-  return state;
+  return buildDemo(name, JSON.parse(FACTORY_BASE) as Record<string, unknown>) ?? blankProject();
 }
 
 export function buildSession(): SessionView {
@@ -500,6 +460,14 @@ export function buildSession(): SessionView {
   const songKey = "vv_studio_user_songs"; let songs: Record<string, Record<string, unknown>> = {};
   try { songs = JSON.parse(localStorage.getItem(songKey) || "{}"); } catch { songs = {}; }
   const factorySongs = [...DEMO_TITLES];
+  const templateInfo = el('p', 'wa-template-info');
+  const showTemplateInfo = () => {
+    templateInfo.replaceChildren();
+    const info = DEMO_NOTES[songSel.value.replace('factory:', '') as DemoTitle];
+    if (!info || !songSel.value.startsWith('factory:')) return;
+    templateInfo.append(document.createTextNode(info.description + ' '));
+    const link = document.createElement('a'); link.href = info.reference; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'Listen to reference'; templateInfo.append(link);
+  };
   const songSel = document.createElement("select"); songSel.setAttribute("aria-label", "Saved song");
   const refreshSongs = () => {
     const current = songSel.value; songSel.replaceChildren();
@@ -540,7 +508,9 @@ export function buildSession(): SessionView {
     songInput.value = "";
   });
   refreshSongs();
+  songSel.addEventListener('change', showTemplateInfo); showTemplateInfo();
   songLibrary.append(el("span", "wa-lbl", "SONGS"), songSel, loadSongBtn, saveSongBtn, deleteSongBtn, exportSongBtn, importSongBtn, songInput);
+  songLibrary.append(templateInfo);
 
   const sectionBtn = btn("＋ Section", "wa-btn-sm");
   help(sectionBtn, "Name this bar of the song — Intro, Drop, Break. Flags show on the ruler; click one to jump there.");

@@ -4,6 +4,8 @@
 // LFOs are real oscillator nodes wired into AudioParams, and wavetable
 // position morphs by crossfading two oscillators on adjacent table frames.
 
+import type { MusicalState } from '../audio/combinator-model';
+
 export interface OscPatch {
   table: string;
   pos: number;      // 0–1 across the table's frames
@@ -36,6 +38,8 @@ export interface PerformancePatch {
   scaleRoot?: number;    // pitch class 0–11
   diatonic?: boolean;    // chord lock follows the scale degree instead of a fixed shape
   inversion?: number;    // 0–3
+  musical?: MusicalState;
+  musicalMacros?: number[];
 }
 export interface VPatch {
   osc1: OscPatch;

@@ -14,6 +14,13 @@ import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./c
 import { showVelocityPopup } from "./velpopup";
 import { buildKeys, setKeysLatch } from "./keys";
 import type { KeyMods } from "./keys";
+import { buildCombinator } from '../audio/combinator';
+import { musicalState } from '../audio/combinator-model';
+import type { MusicalNote } from '../audio/combinator-model';
+import { patternDivisions, SYNTH_LANE_LABELS } from './state';
+import { applyFxState, initDelay, initReverb } from './engine';
+import type { VoiceHandle } from './vsynth';
+import '../../../styles/musical.css';
 import { buildRoll, laneIdentity } from "./roll";
 import { buildXYField } from "./xyfield";
 import { SCALES, NOTE_NAMES as THEORY_NOTE_NAMES, quantiseToScale, diatonicChordFrom, invert as invertChord } from "../audio/theory";
@@ -46,6 +53,7 @@ export interface SynthUI {
   scope: HTMLElement;
   /** chord player card — side column filler (H) */
   chordPanel: HTMLElement;
+  combinatorPanel: HTMLElement;
 }
 
 // Stacked wavetable wireframe (Serum-style): the table's slices drawn as
@@ -770,6 +778,61 @@ export function buildSynth(): SynthUI {
   const chordPanel = el("div", "wa-xy-wrap");
   chordPanel.append(el("div", "wa-fx-title", "LEADR PLAY"), el("div", "wa-performance-hint", "ONE KEY → CHORD → PHRASE"), performanceGrid, el("div", "wa-performance-divider"), chordRow);
 
+  let musicalVoices: Array<{ handle: VoiceHandle; until: number }> = [];
+  const insertMusicalPattern = (notes: MusicalNote[], beats: number): string => {
+    if (!notes.length) return 'Add a chord first.';
+    const division = patternDivisions[clip.sel] || 4;
+    const existing = synthLaneNotes[activeSynth.lane][clip.sel];
+    const start = existing.length ? Math.ceil(Math.max(...existing.map(n => n.step + n.len)) / (division * 4)) * division * 4 : 0;
+    if (start + beats * division > 256) return 'This scene is full. Choose an empty scene before adding the pattern.';
+    ctx.checkpoint();
+    notes.forEach(n => existing.push({ note: midiToNote(n.midi), step: start + n.beat * division, len: n.duration * division, vel: 100 }));
+    patternLengths[clip.sel] = Math.max(patternLengths[clip.sel], start + beats * division);
+    paintRoll(); ctx.paintSession(); saveAll();
+    return `Added ${beats / 4} bars to ${SYNTH_LANE_LABELS[activeSynth.lane]} · scene ${SCENE_LABELS[clip.sel]}. Existing notes kept. Open Notes, then Add to song.`;
+  };
+  const combinator = buildCombinator({
+    get: () => perfSettings().musical ?? { root: perfSettings().scaleRoot, scale: perfSettings().scale },
+    save: state => {
+      ctx.checkpoint(); perfSettings().musical = state;
+      perfSettings().scaleRoot = state.root; perfSettings().scale = state.scale;
+      saveAll();
+    },
+    tempo: () => transport.bpm,
+    clock: () => { ensureNodes(); return ac().currentTime; },
+    play: (midi, when, seconds) => {
+      ensureNodes(); musicalVoices = musicalVoices.filter(v => v.until > ac().currentTime);
+      musicalVoices.push({ handle: playNote(ac(), engine.synthGain!, vsynthPatch, midiToNote(midi), 90, when, seconds), until: when + seconds + vsynthPatch.env1.r + .2 });
+    },
+    silence: () => { musicalVoices.forEach(v => v.handle.stop()); musicalVoices = []; },
+    insert: insertMusicalPattern,
+    macroValues: () => perfSettings().musicalMacros ?? [0, 0, 0, 0],
+    macro: (name, value) => {
+      ensureNodes(); ctx.checkpoint();
+      const state = musicalState(perfSettings().musical);
+      if (name === 'Movement') { state.rate = value < .33 ? 1 : value < .67 ? .5 : .25; state.swing = value * .6; vsynthPatch.lfo1.rate = .25 + value * 7.75; }
+      if (name === 'Space') { fx.reverb = value * .5; fx.delayMix = value * .35; initReverb(fx.reverb); initDelay(); }
+      if (name === 'Brightness') { vsynthPatch.filter.cutoff = 200 * Math.pow(80, value); vsynthPatch.filter.env2 = value * .5; }
+      if (name === 'Width') { vsynthPatch.osc1.unison = 1 + Math.round(value * 5); vsynthPatch.osc1.detune = value * 30; }
+      perfSettings().musical = state; (perfSettings().musicalMacros ??= [0, 0, 0, 0])[['Movement', 'Space', 'Brightness', 'Width'].indexOf(name)] = value;
+      applyFxState(); saveAll();
+    },
+  });
+  const combinatorPanel = el('div', 'wa-combinator-host'); combinatorPanel.append(combinator.root);
+  pianoRoll.addEventListener('dragover', e => { if (e.dataTransfer?.types.includes('application/x-vishamp-pattern')) e.preventDefault(); });
+  pianoRoll.addEventListener('drop', e => {
+    const raw = e.dataTransfer?.getData('application/x-vishamp-pattern'); if (!raw || raw.length > 100000) return; e.preventDefault();
+    try {
+      const data = JSON.parse(raw);
+      if (!Array.isArray(data.notes) || data.notes.length > 1024 || !Number.isFinite(data.beats) || data.beats <= 0 || data.beats > 64) return;
+      if (!data.notes.every((n: MusicalNote) => Number.isInteger(n.midi) && n.midi >= 0 && n.midi <= 127 && Number.isFinite(n.beat) && n.beat >= 0 && Number.isFinite(n.duration) && n.duration > 0 && n.beat + n.duration <= data.beats)) return;
+      insertMusicalPattern(data.notes, data.beats);
+    } catch { /* Foreign drops cannot alter a project. */ }
+  });
+  window.addEventListener('vv-musical-stop', combinator.stop);
+  window.addEventListener('vv-synth-lane-change', () => combinator.refresh());
+  window.addEventListener('vv-musical-refresh', () => combinator.refresh());
+
 
   // ── XY morph field + performance (xyfield.ts, F) ──
   const xy = buildXYField({
@@ -795,6 +858,6 @@ export function buildSynth(): SynthUI {
     presetRow, pianoRoll, keysHeader,
     xyPanel: xy.root,
     scope: scopeCanvas,
-    chordPanel,
+    chordPanel, combinatorPanel,
   };
 }

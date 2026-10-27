@@ -87,6 +87,7 @@
 .wa-song-library { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .wa-song-library > .wa-lbl { display: none; }
 .wa-song-library > select { grid-column: 1 / -1; }
+.wa-template-info { grid-column: 1 / -1; color: var(--wa-muted); font-size: var(--wa-fs-xs); line-height: 1.5; margin: 4px 0; }
 .wa-song-library > .wa-btn-sm { min-width: 0; padding: 0 6px; }
 /* timeline */
 .wa-chainstrip.wa-arrange-lanes {

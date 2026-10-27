@@ -1,5 +1,13 @@
 # Project State
 
+## 2026-10-27 — Musical Combinator and Use Your Heart (built, NOT deployed)
+
+Branch `feat/musical-combinator` adds a shared key/scale workspace to Studio and `/audio/chords/`: chord pads, inversions, voicings, arpeggiator, editable pattern insertion, piano/fretboard, circle of fifths and four performance macros. Existing saved songs remain available. The only factory template is **Use Your Heart — Interlude Study**, an editable 111.5 BPM instrumental approximation of the supplied SWV reference; no recording or vocals ship with it.
+
+Ear training now has eight exercise types, timed sessions and mistake review. `/site/investment/` compares AUD contribution schedules against savings-only with explicit brokerage and return assumptions; the shared catalogue exposes it in navigation/search. Worker, service worker, credentials and vvDeck are unchanged.
+
+Validation: full `release:check` passed, including Studio, audio, financial model and new Combinator browser coverage. Final accessibility/result-state polish was rebuilt and checked separately. Existing dependency advisories remain; dependencies were not upgraded in this feature change. Deployment requires Vish's explicit instruction, then promotion to master, a clean pushed build and live smoke checks.
+
 ## 2026-10-03 - wrangler pinned
 
 `wrangler` is a devDependency and `npm run deploy` = build + deploy. Live version `a53ff450` (02/10) carries everything through the nav-order / 2D-cut-list change; master `9584e98` adds only the pin.

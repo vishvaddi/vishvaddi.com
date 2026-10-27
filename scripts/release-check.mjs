@@ -22,6 +22,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     process.exitCode = runSteps([
       [process.execPath, '--test', 'scripts/release-check.test.mjs'],
       [process.execPath, '--experimental-strip-types', '--test', 'scripts/auth.test.mjs'],
+      [process.execPath, '--experimental-strip-types', '--test', 'scripts/combinator-model.test.mjs'],
+      [process.execPath, '--experimental-strip-types', 'scripts/audio-ear-check.mjs'],
       [process.execPath, '--experimental-strip-types', '--test', 'scripts/pro-api.test.mjs', 'scripts/store-api.test.mjs', 'scripts/training-model.test.mjs', 'scripts/albums-model.test.mjs', 'scripts/voice-text.test.mjs', 'scripts/money-model.test.mjs', 'scripts/kitchen-model.test.mjs', 'scripts/recipe-jsonld.test.mjs', 'scripts/market-proxy.test.mjs', 'scripts/reader-proxy.test.mjs', 'scripts/site-routing.test.mjs'],
       [process.execPath, npm, 'run', 'check'],
       [process.execPath, npm, 'run', 'build'],
@@ -34,6 +36,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       [process.execPath, 'scripts/materials-answers-e2e.mjs', 'dist'],
       [process.execPath, 'scripts/audio-tools-e2e.mjs', 'dist'],
       [process.execPath, 'scripts/studio-e2e.mjs', 'dist'],
+      [process.execPath, 'scripts/combinator-e2e.mjs'],
     ], { cwd: fileURLToPath(new URL('../', import.meta.url)) })
   }
 }

@@ -1,0 +1,78 @@
+---
+import Base from '../../layouts/Base.astro';
+import '../../styles/site.css';
+import '../../styles/audio.css';
+import '../../styles/musical.css';
+---
+<Base title="Investment Frequency Calculator — AUD" description="Compare brokerage and time invested for weekly, fortnightly or monthly savings. Browser-only scenario modelling in Australian dollars." siteNav>
+  <div class="blueprint tool">
+    <p class="eyebrow"><a href="/site/">Tools</a> / Finance</p>
+    <h1>Investment frequency</h1>
+    <p>Compare buying each payday with saving for a larger parcel. All amounts are AUD; calculations stay in this browser.</p>
+    <form id="investment" class="musical">
+      <div class="musical-controls">
+        <label>Savings per payday ($)<input name="contribution" type="number" value="200" min="0.01" max="1000000" step="any" required /></label>
+        <label>Payday frequency<select name="periods"><option value="52">Weekly</option><option value="26" selected>Fortnightly</option><option value="12">Monthly</option></select></label>
+        <label>Savings interest (% p.a.)<input name="savingsRate" type="number" value="4" min="-99.99" max="100" step="any" required /></label>
+        <label>Assumed investment return (% p.a.)<input name="returnRate" type="number" value="7" min="-99.99" max="100" step="any" required /></label>
+        <label>Brokerage per purchase ($)<input name="brokerage" type="number" value="5" min="0" max="100000" step="any" required /></label>
+        <label>Compare over (years)<input name="years" type="number" value="10" min="1" max="50" step="1" required /></label>
+      </div>
+      <div class="musical-actions"><button type="submit">Compare schedules</button><button type="reset">Reset example</button><button type="button" id="investment-share">Copy scenario link</button></div>
+      <p id="investment-status" role="status"></p>
+    </form>
+    <h2 id="investment-summary">Comparison</h2>
+    <p id="investment-detail"></p>
+    <div id="investment-table" style="overflow-x:auto"><table class="au-table"><thead><tr><th>Buy every</th><th>Typical savings parcel*</th><th>Purchases</th><th>Brokerage paid</th><th>Investments + cash</th></tr></thead><tbody id="investment-results"></tbody></table></div>
+    <details><summary>Assumptions & method</summary>
+      <p>Contributions arrive at the end of each equal pay period. Cash and investments compound at constant effective annual rates. On a scheduled purchase date, all cash is invested after subtracting brokerage, only if cash exceeds the fee. Uninvested cash remains in the final total. Monthly means twelve equal periods per year, not exact calendar dates.</p>
+      <p>The comparison covers every whole-payday interval up to one year, plus keeping everything in savings. The highest projected balance is only the best of these schedules under your inputs and horizon. Rates are illustrative assumptions, not forecasts. Tax, inflation, trading spreads, market movements and other fees are excluded. *Parcel column shows contributions only; actual purchases include accrued cash interest.</p>
+      <p>This is a mathematical scenario tool, not a recommendation to invest or select a product. Inspired by <a href="https://investcalc.github.io/">InvestCalc</a>; this version compares a finite horizon and an explicit savings-only baseline.</p>
+    </details>
+  </div>
+  <script>
+    import { investmentSchedules } from '../../scripts/site/investment-model';
+    import type { InvestmentInput } from '../../scripts/site/investment-model';
+    const form = document.querySelector<HTMLFormElement>('#investment')!;
+    const status = document.querySelector<HTMLElement>('#investment-status')!;
+    const keys = ['contribution', 'periods', 'savingsRate', 'returnRate', 'brokerage', 'years'] as const;
+    const input = () => Object.fromEntries(keys.map(key => [key, Number((form.elements.namedItem(key) as HTMLInputElement).value)])) as unknown as InvestmentInput;
+    const money = (n: number) => n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 });
+    function render() {
+      if (!form.reportValidity()) return;
+      try {
+        const v = input(), results = investmentSchedules(v), best = results.reduce((a, b) => b.total > a.total + .005 ? b : a);
+        document.querySelector<HTMLElement>('#investment-table')!.hidden = false;
+        const periodName = v.periods === 52 ? 'week' : v.periods === 26 ? 'fortnight' : 'month';
+        const label = (interval: number) => interval === 0 ? 'Savings only' : `${interval} ${periodName}${interval === 1 ? '' : 's'}`;
+        document.querySelector('#investment-summary')!.textContent = `Highest modelled balance: ${label(best.interval)}`;
+        document.querySelector('#investment-detail')!.textContent = `${money(best.total)} after ${v.years} years; ${money(best.fees)} brokerage; ${money(best.cash)} remains in cash. Difference from buying each payday: ${money(best.total - results[1].total)}.`;
+        const body = document.querySelector('#investment-results')!; body.replaceChildren();
+        results.forEach(r => {
+          const row = document.createElement('tr');
+          [label(r.interval) + (r === best ? ' · highest' : ''), r.interval ? money(v.contribution * r.interval) : '—', String(r.purchases), money(r.fees), money(r.total)].forEach(text => { const td = document.createElement('td'); td.textContent = text; row.append(td); }); body.append(row);
+        }); status.textContent = 'Updated. Changing inputs does not save or share them.';
+      } catch (e) { status.textContent = e instanceof Error ? e.message : 'Check your inputs.'; }
+    }
+    form.addEventListener('submit', e => { e.preventDefault(); render(); });
+    form.addEventListener('input', () => {
+      document.querySelector<HTMLElement>('#investment-table')!.hidden = true;
+      document.querySelector('#investment-summary')!.textContent = 'Inputs changed — compare schedules again';
+      document.querySelector('#investment-detail')!.textContent = '';
+    });
+    form.addEventListener('reset', () => { history.replaceState(null, '', location.pathname); setTimeout(render, 0); });
+    document.querySelector('#investment-share')!.addEventListener('click', async () => {
+      if (!form.reportValidity()) return;
+      const url = new URL(location.href); url.hash = new URLSearchParams(keys.map(key => [key, String(input()[key])])).toString();
+      try { await navigator.clipboard.writeText(url.href); status.textContent = 'Scenario copied. Anyone with this link can see these inputs.'; }
+      catch { status.textContent = 'Clipboard unavailable; no scenario was shared.'; }
+    });
+    const params = new URLSearchParams(location.hash.slice(1));
+    if (keys.some(k => params.has(k))) {
+      const candidate = { ...input(), ...Object.fromEntries(keys.filter(k => params.has(k)).map(k => [k, Number(params.get(k))])) };
+      try { investmentSchedules(candidate); keys.forEach(k => { (form.elements.namedItem(k) as HTMLInputElement).value = String(candidate[k]); }); }
+      catch { status.textContent = 'Invalid scenario link. Showing the example.'; }
+    }
+    render();
+  </script>
+</Base>

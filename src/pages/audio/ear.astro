@@ -7,26 +7,33 @@ import "../../styles/audio.css";
 
 <Base
   title="Ear Training — free interval, chord & EQ drills (AU)"
-  description="Six ear-training exercises: note, interval and chord ID on staff, keyboard and fretboard, EQ band ear training and rhythm dictation. Free."
+  description="Eight music drills including notes, intervals, chords, scales, key signatures, EQ and rhythm. Five-minute sessions and local progress."
   audioNav
 >
   <div class="blueprint tool">
     <p class="eyebrow"><a href="/audio" style="color:inherit;text-decoration:none">Audio</a> / Ear training</p>
     <h1>Ear Training</h1>
     <p>
-      The musictheory.net drills, plus the two the free web never had: hearing
-      which EQ band moved and writing down a rhythm. Pick an exercise, answer
+      Practise notes, intervals, chords, scales and key signatures, hear EQ
+      changes and identify rhythms. Pick an exercise, answer
       with the buttons or keys 1–9, Enter for next, R to replay.
     </p>
 
     <div class="ear-tabs" id="ear-tabs" role="tablist"></div>
     <div class="ear-views" id="ear-views" hidden></div>
+    <div class="btn-row">
+      <button type="button" class="btn" id="ear-session">Start five-minute session</button>
+      <button type="button" class="btn btn-ghost" id="ear-review">Review mistakes</button>
+      <button type="button" class="btn btn-ghost" id="ear-silence">Sound off</button>
+      <span id="ear-session-status" role="status"></span>
+    </div>
+    <details><summary>Accuracy by topic · stored on this device</summary><p id="ear-topics"></p></details>
 
     <section class="ear-card">
       <p class="ear-prompt" id="ear-prompt"></p>
       <div class="ear-stage" id="ear-stage"></div>
       <div class="ear-choices" id="ear-choices"></div>
-      <p class="ear-feedback" id="ear-feedback"></p>
+      <p class="ear-feedback" id="ear-feedback" role="status"></p>
       <div class="btn-row">
         <button type="button" class="btn" id="ear-next" hidden>Next →</button>
         <button type="button" class="btn btn-ghost btn-sm" id="ear-replay">Replay (R)</button>

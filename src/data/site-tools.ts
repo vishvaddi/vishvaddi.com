@@ -2,6 +2,7 @@ export const SITE_TOOL_CATEGORIES = [
   'Estimate',
   'Project',
   'Site',
+  'Finance',
 ] as const
 
 export type SiteToolCategory = typeof SITE_TOOL_CATEGORIES[number]
@@ -20,6 +21,7 @@ export interface SiteTool {
 }
 
 const RAW_SITE_TOOLS: Omit<SiteTool, 'problem' | 'promise'>[] = [
+  { href: '/site/investment', title: 'Investment Frequency', shortTitle: 'Investing', icon: '📈', description: 'Compare purchase intervals, brokerage and savings interest with a finite-horizon AUD calculator.', category: 'Finance', aliases: 'invest investment brokerage shares etf savings frequency fortnight compound calculator' },
   { href: '/site/calc', title: 'Calculator', shortTitle: 'Calculator', icon: '🧮', description: 'Expression pad and a takeoff notepad: variables, units, GST, percentages, running totals.', category: 'Estimate', aliases: 'maths arithmetic percentage formula notepad tape soulver calctape takeoff estimate notes', quick: true },
   { href: '/site/convert', title: 'Unit Converter', shortTitle: 'Converter', icon: '🔁', description: 'Metric, imperial, pressure, data and live currency conversion.', category: 'Estimate', aliases: 'mm inches metres feet aud usd temperature', quick: true },
   { href: '/site/materials', title: 'Material Calculators', shortTitle: 'Materials', icon: '🧱', description: 'Paint, tiles, plasterboard, concrete, footings, timber and roofing quantities.', category: 'Estimate', aliases: 'quantity takeoff paint tile concrete plasterboard footing weight density board feet timber sheathing roof tiles bricks blocks span joist rafter ceiling member timber' },
@@ -39,6 +41,7 @@ const RAW_SITE_TOOLS: Omit<SiteTool, 'problem' | 'promise'>[] = [
 ]
 
 const POSITIONING: Record<string, [problem: string, promise: string]> = {
+  '/site/investment': ['Small purchases cost brokerage; waiting leaves cash outside the market.', 'Compare whole-payday purchase schedules and a savings-only baseline using your own assumptions.'],
   '/site/calc': ['Site maths and takeoff workings get lost across separate steps and scraps of paper.', 'Keep expressions, variables and traceable running totals in one place — a quick Pad or a full takeoff Notepad.'],
   '/site/convert': ['Unit and currency conversions interrupt estimating flow.', 'Convert construction units and live currencies in one place.'],
   '/site/materials': ['Manual quantity formulas invite omissions and rework.', 'Calculate common trade materials with practical waste allowances.'],

@@ -33,12 +33,12 @@ const RAW_AUDIO_TOOLS: Omit<AudioTool, 'problem' | 'promise'>[] = [
 ]
 
 const POSITIONING: Record<string, [problem: string, promise: string]> = {
-  '/audio/chords': ['Which chords belong in this key is a lookup you keep re-doing mid-session.', 'Hear every diatonic chord, build and loop a progression, export it as MIDI.'],
+  '/audio/chords': ['Looking up notes and chords interrupts a musical idea.', 'Explore piano, fretboard and fifths; play chord pads and arpeggios, then open the setup in Studio.'],
   '/audio/prep': ['Every sample needs the same five fixes before it is usable, and a DAW makes you do them one at a time.', 'Set the recipe once and run every file through it, then download WAV or MP3.'],
   '/audio/bpm': ['Delay, LFO and reverb times get worked out on a phone calculator mid-session.', 'Type or tap a tempo and read every note value, reverb starting point and length conversion at once.'],
   '/audio/metronome': ['Practice tools on phones come wrapped in ads and drift.', 'A sample-accurate metronome with polyrhythms and a tuner that never records.'],
   '/audio/lofi': ['Getting a sample to sound like an old tape or a phone means stacking five plugins by hand.', 'Pick a character, turn one knob, blend it in, download.'],
-  '/audio/ear': ['Reading and hearing drills live in paid apps, and none of them teach you to hear an EQ move.', 'Six exercises with staff, keyboard and fretboard views, streak tracking and a link that saves the exact drill.'],
+  '/audio/ear': ['It is hard to know which reading and listening skills need more practice.', 'Eight exercises, five-minute sessions, mistake review, topic accuracy and shareable settings.'],
   '/audio/analyser': ['Mastering decisions get made on meters you have to pay for or plugins you have to open a DAW to see.', 'Drop a file and read tempo, key, loudness, peaks, width and how far you are from each platform target.'],
 }
 

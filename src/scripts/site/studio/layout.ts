@@ -21,6 +21,7 @@ export interface LayoutPanels {
   xyPanel: HTMLElement;
   scope: HTMLElement;
   chordPanel: HTMLElement;
+  combinatorPanel: HTMLElement;
   synthPanel: HTMLElement;          // patch editor (roll/keys and properties are separate surfaces)
   synthInspector: HTMLElement;
   sessionGrid: HTMLElement;
@@ -166,6 +167,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   const synthBar = el("div", "wa-subtabs");
   const rollTab = btn("Notes", "wa-subtab");
   const patchTab = btn("Sound", "wa-subtab");
+  const combinatorTab = btn('Combinator', 'wa-subtab');
   const keyboardBtn = btn("Keyboard", "wa-btn-sm wa-keyboard-toggle");
   const addSynthBtn = btn("Add to song", "wa-btn-sm wa-add-song");
   const synthPropsBtn = btn("Properties", "wa-btn-sm wa-synth-properties-toggle");
@@ -173,12 +175,12 @@ export function buildLayout(p: LayoutPanels): Layout {
   help(patchTab, "Choose a preset or shape the essential sound controls.");
   addSynthBtn.addEventListener("click", () => p.addCurrentToSong("synth"));
   synthPropsBtn.addEventListener("click", () => soundPage.classList.toggle("show-inspector"));
-  synthBar.append(rollTab, patchTab, el("span", "wa-toolbar-spacer"), keyboardBtn, synthPropsBtn, addSynthBtn);
+  synthBar.append(rollTab, patchTab, combinatorTab, el("span", "wa-toolbar-spacer"), keyboardBtn, synthPropsBtn, addSynthBtn);
   const soundHost = el("div", "wa-sound-host");
   soundHost.append(p.synthPanel);
   p.synthPanel.hidden = false;
   const synthViewHost = el("div", "wa-synth-viewhost");
-  synthViewHost.append(p.pianoRoll, soundHost);
+  synthViewHost.append(p.pianoRoll, soundHost, p.combinatorPanel);
   const synthMain = el("div", "wa-synth-main");
   const synthSide = p.synthInspector;
   synthSide.classList.add("wa-synth-side", "wa-inspector-pane");
@@ -228,7 +230,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   p.keysHeader.classList.add("wa-device-dock");
   p.synthKeys.classList.add("wa-device-dock");
   soundPage.append(synthBar, synthMain, p.keysHeader, p.synthKeys);
-  let synthView: "roll" | "patch" = localStorage.getItem("vv_studio_synthview") === "patch" ? "patch" : "roll";
+  let synthView: "roll" | "patch" | 'combinator' = location.hash.includes('music=') || localStorage.getItem('vv_studio_synthview') === 'combinator' ? 'combinator' : localStorage.getItem("vv_studio_synthview") === "patch" ? "patch" : "roll";
   const keyboardPreference = () => localStorage.getItem(`vv_studio_keyboard_${synthView}`);
   let keyboardVisible = keyboardPreference() ? keyboardPreference() !== "hidden" : false;
   const paintKeyboard = () => {
@@ -244,6 +246,10 @@ export function buildLayout(p: LayoutPanels): Layout {
   const paintSynthView = () => {
     rollTab.classList.toggle("active", synthView === "roll");
     patchTab.classList.toggle("active", synthView === "patch");
+    combinatorTab.classList.toggle('active', synthView === 'combinator');
+    p.combinatorPanel.hidden = synthView !== 'combinator';
+    if (synthView === 'combinator') window.dispatchEvent(new Event('vv-musical-refresh'));
+    else window.dispatchEvent(new Event('vv-musical-stop'));
     p.pianoRoll.style.display = synthView === "roll" ? "" : "none";
     soundHost.style.display = synthView === "patch" ? "" : "none";
     soundPage.dataset.view = synthView;
@@ -253,7 +259,9 @@ export function buildLayout(p: LayoutPanels): Layout {
     localStorage.setItem("vv_studio_synthview", synthView);
   };
   rollTab.addEventListener("click", () => { synthView = "roll"; paintSynthView(); });
+  rollTab.addEventListener('dragenter', () => { synthView = 'roll'; paintSynthView(); });
   patchTab.addEventListener("click", () => { synthView = "patch"; paintSynthView(); });
+  combinatorTab.addEventListener('click', () => { synthView = 'combinator'; paintSynthView(); });
   paintSynthView();
 
   // SONG stays out of the way until an idea needs structure.
@@ -325,6 +333,7 @@ export function buildLayout(p: LayoutPanels): Layout {
   const intentButtons = new Map<"make" | "arrange" | "dj", HTMLButtonElement>();
 
   function setMode(next: ModeId, workspace?: WorkspaceId): void {
+    if (next !== 'synth') window.dispatchEvent(new Event('vv-musical-stop'));
     activeMode = next;
     if ((["drums", "pads", "synth"] as ModeId[]).includes(next)) lastEditMode = next;
     closeOverlays();
@@ -418,7 +427,7 @@ export function buildLayout(p: LayoutPanels): Layout {
     menuGroup("View", [browserToggle, inspectorToggle, deviceToggle, menuAction("Interface scale", p.cycleScale), menuAction("Full screen", p.toggleFullscreen)]),
     menuGroup("Help", [menuAction("Help & shortcuts", p.openTutorial)]),
   );
-  setMode(activeMode);
+  setMode(location.hash.includes('music=') ? 'synth' : activeMode);
 
   // tutorial nav proxies — composite actions per tour stop:
   // 0 pads/perform+inspector · 1 pads/chop · 2 pads/steps · 3 synth/roll · 4 song · 5 mix · 6 synth/patch · 7 dj

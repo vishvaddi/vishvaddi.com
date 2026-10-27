@@ -232,6 +232,7 @@ export function buildPlayback(deps: PlaybackDeps): void {
     schedTimer = window.setInterval(scheduler, 25);
   });
   deps.stopBtn.addEventListener("click", () => {
+    window.dispatchEvent(new Event('vv-musical-stop'));
     playhead.playing = false; if (schedTimer) { clearInterval(schedTimer); schedTimer = 0; }
     if (playhead.lastHi >= 0) for (let r = 0; r < 8; r++) deps.cells[r][playhead.lastHi].classList.remove("play");
     deps.rollPlayheadBar.classList.remove("on");

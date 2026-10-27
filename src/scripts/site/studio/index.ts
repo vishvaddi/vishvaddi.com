@@ -33,7 +33,7 @@ import { initTooltips } from "./tooltip";
 import { buildKeys, highlightKey } from "./keys";
 import { buildProjectExport } from "./render";
 import { buildLaneInspector } from "./laneui";
-import { buildSession, factorySong, blankProject, quickBeatProject } from "./session";
+import { buildSession, factorySong, blankProject } from "./session";
 import { buildMixer } from "./mixerui";
 import { ctx, playhead, gridRepainters, isGridLine, stepsPerGridLine } from "./ctx";
 import { setCellOpacity, showVelPopup, showVelocityPopup } from "./velpopup";
@@ -68,7 +68,7 @@ export async function initStudio(): Promise<void> {
   const hasSaved = !!(localStorage.getItem("vv_studio_v2") || localStorage.getItem("vv_studio_pattern"));
   if (pending) applyProject(pending);
   else if (hasSaved) loadAll();
-  else applyProject(factorySong("WESTSIDE"));
+  else applyProject(factorySong("USE YOUR HEART — INTERLUDE STUDY"));
   sampleData.forEach((data, r) => { if (data) void hydrateSample(r); });
 
   // ── Tooltips ── delegated hover/focus rendering of [data-help] — see tooltip.ts
@@ -95,6 +95,7 @@ export async function initStudio(): Promise<void> {
   powerBtn.setAttribute("aria-pressed", String(mixState.power));
   let syncMixerMaster = (_value: number): void => {};
   powerBtn.addEventListener("click", () => {
+    window.dispatchEvent(new Event('vv-musical-stop'));
     ensureNodes();
     mixState.power = !mixState.power;
     powerBtn.classList.toggle("on", mixState.power);
@@ -245,8 +246,7 @@ export async function initStudio(): Promise<void> {
   // the resample feature can take renderBuffer directly)
   const { panel: exp, renderSel, renderBuffer } = buildProjectExport({
     blank: blankProject,
-    quick: quickBeatProject,
-    demo: () => factorySong("WESTSIDE"),
+    demo: () => factorySong("USE YOUR HEART — INTERLUDE STUDY"),
   });
   ctx.renderSel = renderSel;
   ctx.renderBuffer = (mode) => renderBuffer(mode);
@@ -319,7 +319,7 @@ export async function initStudio(): Promise<void> {
   const layout = buildLayout({
     shell: win,
     beat, mpcPanel, padSeqPanel, padGrid, pianoRoll, synthKeys,
-    keysHeader: synth.keysHeader, synthPanel, synthInspector: synth.synthInspector, xyPanel: synth.xyPanel, scope: synth.scope, chordPanel: synth.chordPanel,
+    keysHeader: synth.keysHeader, synthPanel, synthInspector: synth.synthInspector, xyPanel: synth.xyPanel, scope: synth.scope, chordPanel: synth.chordPanel, combinatorPanel: synth.combinatorPanel,
     sessionGrid, launchStatus, song, djPanel: dj.root, mixer: mixer.root, devicePanel,
     chop, inspector, laneInspector, loadSelectedSample, loadBreak, addCurrentToSong, openProjectMenu, openTutorial: () => tutorialBtn.click(),
     cycleScale: () => densityBtn.click(), toggleFullscreen: () => fsBtn.click(), togglePower: () => powerBtn.click(),
@@ -376,6 +376,7 @@ export async function initStudio(): Promise<void> {
     updateRecChip();
   }
   function refreshVisibleState(): void {
+    window.dispatchEvent(new Event('vv-musical-refresh'));
     selectScene(clip.sel);
     arrangeLanePaints.forEach((fn) => fn());
     paintMpcPads(); paintEventLane(); applyFxState(); renderPatchEditor();
@@ -408,6 +409,7 @@ export async function initStudio(): Promise<void> {
     undoBtn.disabled = false; redoBtn.disabled = redoStack.length === 0;
   });
   function setBpm(v: number): void {
+    window.dispatchEvent(new Event('vv-musical-stop'));
     transport.bpm = Math.max(40, Math.min(240, Math.round(v) || transport.bpm));
     bpmInput.value = String(transport.bpm); lcdBpm.textContent = `${transport.bpm} BPM`; engine.applyFxState(); saveAll();
   }

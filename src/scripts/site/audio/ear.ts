@@ -1,7 +1,7 @@
 // Ear-training page: renders questions from ear-core.ts on a staff, keyboard
 // or fretboard (or plays them), grades answers, keeps per-exercise stats and
 // shares settings through the URL hash so a link can act as a customiser.
-import { CLEF_BASE_STEP, DEFAULT_SETTINGS, EXERCISES, EQ_LABELS, INTERVALS, CHORDS, PITCH_LABELS, TUNING, exerciseById, fretPositions, mulberry32, staffNote } from "./ear-core";
+import { CLEF_BASE_STEP, DEFAULT_SETTINGS, EXERCISES, EQ_LABELS, INTERVALS, CHORDS, PITCH_LABELS, TUNING, exerciseById, fretPositions, mulberry32, staffNote, safeEarSettings } from "./ear-core";
 import type { Question, Rng, Settings, View } from "./ear-core";
 
 const STATS_KEY = "vv_audio_ear_stats_v1";
@@ -18,7 +18,7 @@ export function initEar(): void {
   // ── settings + share link ──
   const settings: Settings = { ...DEFAULT_SETTINGS, intervals: [...DEFAULT_SETTINGS.intervals], chords: [...DEFAULT_SETTINGS.chords], eqBands: [...DEFAULT_SETTINGS.eqBands] };
   const params = new URLSearchParams(location.hash.slice(1));
-  try { const shared = params.get("s"); if (shared) Object.assign(settings, JSON.parse(decodeURIComponent(escape(atob(shared))))); } catch { /* bad link, defaults stand */ }
+  try { const shared = params.get("s"); if (shared && shared.length < 8000) Object.assign(settings, safeEarSettings(JSON.parse(decodeURIComponent(escape(atob(shared)))))); } catch { /* bad link, defaults stand */ }
   let exerciseId = params.get("x") && EXERCISES.some((e) => e.id === params.get("x")) ? (params.get("x") as string) : "note";
   let view: View = (params.get("v") as View) || exerciseById(exerciseId).views[0];
   const seedParam = Number(params.get("seed"));
@@ -33,22 +33,29 @@ export function initEar(): void {
 
   // ── stats ──
   let stats: Record<string, Stats> = {};
-  try { stats = JSON.parse(localStorage.getItem(STATS_KEY) || "{}"); } catch { /* fresh */ }
+  try {
+    const saved = JSON.parse(localStorage.getItem(STATS_KEY) || '{}');
+    for (const ex of EXERCISES) { const s = saved?.[ex.id]; if (s && ['asked', 'correct', 'streak', 'best'].every(k => Number.isInteger(s[k]) && s[k] >= 0) && s.correct <= s.asked) stats[ex.id] = s; }
+  } catch { /* fresh */ }
   const stat = (): Stats => (stats[exerciseId] ??= { asked: 0, correct: 0, streak: 0, best: 0 });
   const paintStats = () => {
     const s = stat();
     $("ear-stats").textContent = s.asked ? `${s.correct}/${s.asked} · ${Math.round((100 * s.correct) / s.asked)}% · streak ${s.streak} · best ${s.best}` : "No answers yet";
+    $('ear-topics').textContent = EXERCISES.map(e => { const t = stats[e.id]; return `${e.name}: ${t?.asked ? `${Math.round(t.correct / t.asked * 100)}% (${t.correct}/${t.asked})` : 'not started'}`; }).join(' · ');
   };
   const saveStats = () => { try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch { /* ignore */ } };
 
   // ── audio ──
   let ctx: AudioContext | null = null;
+  const sources = new Set<AudioScheduledSourceNode>();
+  const trackSource = (source: AudioScheduledSourceNode) => { sources.add(source); source.onended = () => { sources.delete(source); source.disconnect(); }; };
+  const silence = () => { sources.forEach(s => { try { s.stop(); } catch { /* Already ended. */ } }); sources.clear(); };
   const audio = (): AudioContext => { ctx ??= new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)(); if (ctx.state === "suspended") void ctx.resume(); return ctx; };
   const tone = (midi: number, when: number, seconds: number, level = 0.22) => {
     const a = audio(), o = a.createOscillator(), g = a.createGain(), f = 440 * Math.pow(2, (midi - 69) / 12);
     o.type = "triangle"; o.frequency.value = f;
     g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(level, when + 0.01); g.gain.setValueAtTime(level, when + seconds - 0.08); g.gain.linearRampToValueAtTime(0, when + seconds);
-    o.connect(g).connect(a.destination); o.start(when); o.stop(when + seconds + 0.02);
+    o.connect(g).connect(a.destination); trackSource(o); o.start(when); o.stop(when + seconds + 0.02);
   };
   let pinkBuffer: AudioBuffer | null = null;
   const pink = (a: AudioContext): AudioBuffer => {
@@ -58,8 +65,9 @@ export function initEar(): void {
     for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1; b0 = 0.99765 * b0 + w * 0.099046; b1 = 0.963 * b1 + w * 0.2965164; b2 = 0.57 * b2 + w * 1.0526913; d[i] = (b0 + b1 + b2 + w * 0.1848) * 0.08; }
     return (pinkBuffer = buf);
   };
-  const click = (when: number, hz: number, level: number) => { const a = audio(), o = a.createOscillator(), g = a.createGain(); o.type = "square"; o.frequency.value = hz; g.gain.setValueAtTime(level, when); g.gain.exponentialRampToValueAtTime(0.0001, when + 0.04); o.connect(g).connect(a.destination); o.start(when); o.stop(when + 0.05); };
+  const click = (when: number, hz: number, level: number) => { const a = audio(), o = a.createOscillator(), g = a.createGain(); o.type = "square"; o.frequency.value = hz; g.gain.setValueAtTime(level, when); g.gain.exponentialRampToValueAtTime(0.0001, when + 0.04); o.connect(g).connect(a.destination); trackSource(o); o.start(when); o.stop(when + 0.05); };
   function playQuestion(q: Question): void {
+    silence();
     if (!q.audio) return;
     const a = audio(), t0 = a.currentTime + 0.05;
     if (q.audio.kind === "notes") {
@@ -69,7 +77,7 @@ export function initEar(): void {
       const src = a.createBufferSource(); src.buffer = pink(a); src.loop = true;
       const eq = a.createBiquadFilter(); eq.type = "peaking"; eq.frequency.value = q.audio.band; eq.Q.value = 1.4; eq.gain.setValueAtTime(0, t0); eq.gain.setValueAtTime(q.audio.boostDb, t0 + 1.2);
       const g = a.createGain(); g.gain.setValueAtTime(1, t0); g.gain.setValueAtTime(0, t0 + 1.15); g.gain.setValueAtTime(1, t0 + 1.25); g.gain.setValueAtTime(0, t0 + 2.4);
-      src.connect(eq).connect(g).connect(a.destination); src.start(t0); src.stop(t0 + 2.5);
+      src.connect(eq).connect(g).connect(a.destination); trackSource(src); src.start(t0); src.stop(t0 + 2.5);
     } else {
       const cell = q.audio.cellMs / 1000, beats = q.audio.cells.length === 16 ? 4 : 4, beatLen = (cell * q.audio.cells.length) / beats;
       for (let b = 0; b < beats; b++) click(t0 + b * beatLen, b === 0 ? 1500 : 1000, 0.35);          // count-in
@@ -134,12 +142,49 @@ export function initEar(): void {
 
   // ── question flow ──
   let current: Question | null = null, answered = false;
+  let nextTimer = 0, sessionEnd = 0, sessionAsked = 0, sessionCorrect = 0, reviewing = false;
+  const mistakes: Question[] = [];
+  const sessionStatus = $('ear-session-status');
+  const sessionButton = $<HTMLButtonElement>('ear-session');
+  function finishSession() {
+    sessionEnd = 0; window.clearTimeout(nextTimer); silence();
+    sessionStatus.textContent = `Session complete: ${sessionCorrect}/${sessionAsked} correct. Review mistakes or continue practising.`;
+    sessionButton.textContent = 'Start five-minute session';
+  }
+  sessionButton.addEventListener('click', () => {
+    if (sessionEnd) { finishSession(); return; }
+    sessionAsked = 0; sessionCorrect = 0; sessionEnd = Date.now() + 300000;
+    sessionButton.textContent = 'Finish session'; sessionStatus.textContent = '5:00 remaining'; next();
+  });
+  const sessionTimer = window.setInterval(() => {
+    if (!sessionEnd) return;
+    const seconds = Math.max(0, Math.ceil((sessionEnd - Date.now()) / 1000));
+    if (!seconds) { finishSession(); return; }
+    sessionStatus.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} remaining · ${sessionCorrect}/${sessionAsked}`;
+  }, 1000);
+  $('ear-review').addEventListener('click', () => { if (!mistakes.length) { sessionStatus.textContent = 'No mistakes in this visit yet.'; return; } reviewing = true; next(); });
+  $('ear-silence').addEventListener('click', silence);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { silence(); window.clearTimeout(nextTimer); } });
+  window.addEventListener('pagehide', () => { silence(); window.clearInterval(sessionTimer); window.clearTimeout(nextTimer); });
   function next(): void {
+    window.clearTimeout(nextTimer); silence();
     const ex = exerciseById(exerciseId);
     if (!ex.views.includes(view)) view = ex.views[0];
-    current = ex.make(settings, view, rng); answered = false;
+    current = reviewing && mistakes.length ? mistakes.shift()! : ex.make(settings, view, rng); answered = false;
+    if (reviewing) { exerciseId = current.exercise; view = current.view; if (!mistakes.length) reviewing = false; }
+    tabs.querySelectorAll<HTMLElement>('.ear-tab').forEach(t => t.classList.toggle('active', t.dataset.exercise === exerciseId));
+    paintViews(); paintStats();
     prompt.textContent = current.prompt; feedback.textContent = ""; feedback.className = "ear-feedback";
     if (view === "staff") drawStaff(current.notes); else if (view === "keyboard") drawKeyboard(current.notes); else if (view === "fretboard") drawFretboard(current.notes); else drawEar(current);
+    if (current.signature !== undefined) {
+      const svg = stage.querySelector('svg')!;
+      const sequence = current.signature > 0 ? [77, 72, 79, 74, 69, 76, 71] : [71, 76, 69, 74, 67, 72, 65];
+      for (let i = 0; i < Math.abs(current.signature); i++) {
+        const note = sequence[i] - (settings.clef === 'bass' ? 24 : 0), y = 90 - (staffNote(note).step - CLEF_BASE_STEP[settings.clef]) * 5;
+        const mark = svgEl('text', { x: 80 + i * 20, y: y + 5, class: 'ear-accidental' }); mark.textContent = current.signature > 0 ? '♯' : '♭'; svg.append(mark);
+      }
+      if (current.signature === 0) { const mark = svgEl('text', { x: 100, y: 125 }); mark.textContent = 'No sharps or flats'; svg.append(mark); }
+    }
     choices.replaceChildren();
     current.choices.forEach((c, i) => {
       const b = document.createElement("button"); b.type = "button"; b.className = "btn btn-ghost ear-choice"; b.dataset.choice = c;
@@ -155,6 +200,8 @@ export function initEar(): void {
     if (!current || answered) return;
     answered = true;
     const s = stat(), ok = choice === current.answer;
+    if (sessionEnd) { sessionAsked++; if (ok) sessionCorrect++; }
+    if (!ok && mistakes.length < 50) mistakes.push(structuredClone(current));
     s.asked++; if (ok) { s.correct++; s.streak++; s.best = Math.max(s.best, s.streak); } else s.streak = 0;
     saveStats(); paintStats();
     feedback.textContent = ok ? `Correct — ${current.explain}` : `Not quite: it was ${current.answer}. ${current.explain}`;
@@ -162,7 +209,7 @@ export function initEar(): void {
     button.classList.add(ok ? "right" : "wrong");
     if (!ok) choices.querySelectorAll<HTMLButtonElement>(".ear-choice").forEach((b) => { if (b.dataset.choice === current!.answer) b.classList.add("right"); });
     $("ear-next").hidden = false;
-    if (ok) window.setTimeout(() => { if (answered && current) next(); }, 900);
+    if (ok) nextTimer = window.setTimeout(() => { if (answered && current) next(); }, 1500);
   }
   let autoplay = true;
 
@@ -181,7 +228,7 @@ export function initEar(): void {
   $("ear-next").addEventListener("click", next);
   $("ear-replay").addEventListener("click", () => current && playQuestion(current));
   window.addEventListener("keydown", (e) => {
-    if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "SELECT") return;
+    if (['INPUT', 'SELECT', 'BUTTON', 'SUMMARY', 'A'].includes((e.target as HTMLElement).tagName)) return;
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (answered) next(); else if (current?.audio) playQuestion(current); return; }
     if (e.key.toLowerCase() === "r" && current) { playQuestion(current); return; }
     const n = Number(e.key); if (n >= 1 && n <= 9) { const b = choices.querySelectorAll<HTMLButtonElement>(".ear-choice")[n - 1]; b?.click(); }

@@ -23,7 +23,7 @@ export interface ProjectExport {
   renderBuffer: (mode: "pattern" | "song", onlyTrack?: TrackId | null) => Promise<AudioBuffer>;
 }
 
-export function buildProjectExport(projects: { blank: () => Record<string, unknown>; quick: () => Record<string, unknown>; demo: () => Record<string, unknown> }): ProjectExport {
+export function buildProjectExport(projects: { blank: () => Record<string, unknown>; demo: () => Record<string, unknown> }): ProjectExport {
   const exp = el("div", "wa-panel");
   const expRow = el("div", "wa-export");
   const renderSel = document.createElement("select");
@@ -39,13 +39,13 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
   expRow.append(el("span", "wa-lbl", "Render"), renderSel, wavBtn, mp3Btn, stemsBtn, midiBtn, expStatus);
   const projectRow = el("div", "wa-export");
   const saveProjectBtn = btn("Save project"), loadProjectBtn = btn("Open project");
-  const quickProjectBtn = btn("Quick beat", "wa-btn-sm"), newProjectBtn = btn("New song", "wa-btn-sm"), demoProjectBtn = btn("Starter song", "wa-btn-sm");
+  const newProjectBtn = btn("New song", "wa-btn-sm"), demoProjectBtn = btn("Use Your Heart", "wa-btn-sm");
   help(saveProjectBtn, "Download an editable project containing patterns, settings and embedded samples.");
   help(loadProjectBtn, "Open a previously saved editable Studio project.");
   const projectInput = document.createElement("input"); projectInput.type = "file"; projectInput.accept = ".json,application/json"; projectInput.hidden = true;
   help(newProjectBtn, "Replace the current project with a clean blank studio.");
-  help(demoProjectBtn, "Reload the editable WESTSIDE starter project.");
-  projectRow.append(quickProjectBtn, newProjectBtn, demoProjectBtn, saveProjectBtn, loadProjectBtn, projectInput);
+  help(demoProjectBtn, "Reload the editable USE YOUR HEART — INTERLUDE STUDY starter project.");
+  projectRow.append(newProjectBtn, demoProjectBtn, saveProjectBtn, loadProjectBtn, projectInput);
   exp.append(
     el("p", "wa-help", "Audio export includes drums and sequenced synth. Project files preserve editable patterns, song order, sounds and tempo."),
     expRow,
@@ -191,9 +191,8 @@ export function buildProjectExport(projects: { blank: () => Record<string, unkno
     ctx.checkpoint(); applyProject(JSON.parse(JSON.stringify(state)) as Record<string, unknown>);
     ctx.refreshVisibleState(); saveAll(); expStatus.textContent = `${label} loaded`;
   };
-  quickProjectBtn.addEventListener("click", () => replaceProject(projects.quick(), "Start a quick beat"));
   newProjectBtn.addEventListener("click", () => replaceProject(projects.blank(), "Start a new song"));
-  demoProjectBtn.addEventListener("click", () => replaceProject(projects.demo(), "Reload WESTSIDE"));
+  demoProjectBtn.addEventListener("click", () => replaceProject(projects.demo(), "Reload USE YOUR HEART — INTERLUDE STUDY"));
   loadProjectBtn.addEventListener("click", () => projectInput.click());
   projectInput.addEventListener("change", async () => {
     const file = projectInput.files?.[0]; if (!file) return;

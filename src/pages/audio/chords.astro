@@ -3,6 +3,7 @@ import Base from "../../layouts/Base.astro";
 import ToolIntro from "../../components/ToolIntro.astro";
 import "../../styles/site.css";
 import "../../styles/audio.css";
+import "../../styles/musical.css";
 ---
 
 <Base
@@ -19,6 +20,8 @@ import "../../styles/audio.css";
       MIDI into your DAW.
     </p>
 
+    <div id="ch-explorer"></div>
+    <details><summary>Progression editor & MIDI export</summary>
     <div class="ch-controls">
       <label>Root <select id="ch-root"></select></label>
       <label>Scale <select id="ch-scale"></select></label>
@@ -65,6 +68,7 @@ import "../../styles/audio.css";
         Presets switch the scale to major or minor when they need to; numerals follow the scale's own chord qualities, so a pentatonic "chord" is whatever stacking every other scale tone gives you.
       </p>
     </section>
+    </details>
   </div>
 
   <script>
